@@ -30,6 +30,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use crate::calendar::caldav::{self, Object, RemoteCalendar};
 use crate::carddav::client::{credentials_may_follow, starting_point_for, Transport, Written};
 
+pub mod account_lists;
 pub mod exchange;
 pub mod vtodo;
 
@@ -90,9 +91,10 @@ pub(crate) fn migrate_recurrence(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// The collections a server offers. Every calendar collection is listed:
-/// which ones accept tasks is not asked of the server here, and one that
-/// does not is reported by the first sync.
+/// The collections a server offers. Every calendar collection is listed
+/// for a list linked by hand: which ones hold tasks is not asked here, and
+/// one that takes none is reported by the first sync. The lists that come
+/// with an account are the ones `account_lists::classify` picks (ADR-0070).
 pub fn discover(transport: &dyn Transport, server: &str) -> Result<Vec<RemoteCalendar>> {
     caldav::discover(transport, server)
 }
@@ -376,6 +378,21 @@ struct Known {
 }
 
 fn reconcile(conn: &Connection, binding: &Binding, objects: &[Object], now: i64, report: &mut Report) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    reconcile_in(&tx, binding, objects, now, report)?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// [`reconcile`] inside the caller's transaction: the first read of an
+/// account's list creates the list and its tasks in one (ADR-0070, §3).
+pub(crate) fn reconcile_in(
+    tx: &Connection,
+    binding: &Binding,
+    objects: &[Object],
+    now: i64,
+    report: &mut Report,
+) -> Result<()> {
     // Every object is read before anything is written: one that cannot be
     // read fails the whole read, as one that did not come back does.
     let mut parsed = Vec::with_capacity(objects.len());
@@ -384,7 +401,6 @@ fn reconcile(conn: &Connection, binding: &Binding, objects: &[Object], now: i64,
             .with_context(|| format!("the task at {} could not be read; the last complete copy is kept", object.href))?;
         parsed.push((object, todo));
     }
-    let tx = conn.unchecked_transaction()?;
     let known: HashMap<String, Known> = {
         let mut stmt =
             tx.prepare("SELECT remote_href, id, remote_etag, pending, conflict FROM tasks WHERE list_id = ?1 AND remote_href <> ''")?;
@@ -397,7 +413,7 @@ fn reconcile(conn: &Connection, binding: &Binding, objects: &[Object], now: i64,
     for (object, todo) in &parsed {
         seen.insert(object.href.as_str());
         let Some(local) = known.get(&object.href) else {
-            insert_server_copy(&tx, &binding.list_id, object, todo, now)?;
+            insert_server_copy(tx, &binding.list_id, object, todo, now)?;
             report.pulled += 1;
             continue;
         };
@@ -405,10 +421,10 @@ fn reconcile(conn: &Connection, binding: &Binding, objects: &[Object], now: i64,
             continue;
         }
         if local.pending.is_empty() {
-            take_server_copy(&tx, local.id, object, todo, now)?;
+            take_server_copy(tx, local.id, object, todo, now)?;
             report.pulled += 1;
         } else if local.conflict != "changed" {
-            mark_conflict(&tx, local.id, "changed")?;
+            mark_conflict(tx, local.id, "changed")?;
             report.conflicts += 1;
         }
     }
@@ -422,11 +438,10 @@ fn reconcile(conn: &Connection, binding: &Binding, objects: &[Object], now: i64,
         } else if local.etag.is_empty() && local.conflict.is_empty() {
             // New here and not on the server yet: it is sent next time.
         } else if local.conflict != "deleted" {
-            mark_conflict(&tx, local.id, "deleted")?;
+            mark_conflict(tx, local.id, "deleted")?;
             report.conflicts += 1;
         }
     }
-    tx.commit()?;
     Ok(())
 }
 

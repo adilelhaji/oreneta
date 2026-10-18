@@ -177,6 +177,17 @@ fan 28 px (decisió D9, aprovada el 2026-10-17 i registrada a #288). Proves unit
 proves de l'entrada de producció, en anglès i en àrab, amb axe sense cap infracció sobre
 els menús. Cap fila no canvia d'estat (SET-08, SET-27, #37):
 l'evidència nativa de Windows i la dels lectors de pantalla continuen pendents.
+El 2026-10-18 (#281, ADR-0070) SET-20 va incorporar les llistes de tasques que arriben amb
+el compte, com els calendaris: la carpeta Tasques d'un compte d'Exchange i les col·leccions
+de tasques d'un servidor CalDAV que s'afegeix a un compte (les que només admeten tasques, i
+les que admeten esdeveniments i tasques, o no ho diuen, si ja en tenen alguna). Cada llista es llegeix
+sencera i després es crea, en una transacció que torna a comprovar que el compte existeix i
+que la llista encara és pendent. Una llista que no s'ha llegit no es mostra mai com a «Cap
+tasca». Una llista suprimida queda declinada i no torna. En actualitzar, les llistes dels
+comptes existents s'activen una vegada, amb un avís («Treu-la», «D'acord»); una llista
+suprimida abans d'aquesta versió pot tornar una vegada (decisió 1 del propietari). Està
+provat amb respostes CalDAV i SOAP enregistrades i amb Radicale. SET-20 es manté `partial`
+(falten Google Tasks i To Do de Graph), i l'evidència nativa de Windows continua pendent.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|

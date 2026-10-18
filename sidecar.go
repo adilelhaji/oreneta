@@ -499,9 +499,14 @@ func sidecarCallTimeout(method string) time.Duration {
 	// it gets the same budget as a folder sync rather than the default.
 	case "calendar.events":
 		return 30 * time.Second
+	// CalDAV discovery also asks each collection that takes events and tasks
+	// whether it holds a task (ADR-0070), one request each, bounded by the
+	// core at 30s.
+	case "caldav.discover":
+		return 3 * time.Minute
 	// Discovery walks principal, home set and collections on a server that
 	// may be slow; each request is bounded by the core at 30s.
-	case "caldav.discover", "caldav.add", "carddav.discover", "rules.serverStatus", "rules.serverPush", "rules.serverRemove",
+	case "caldav.add", "carddav.discover", "rules.serverStatus", "rules.serverPush", "rules.serverRemove",
 		"tasks.caldavDiscover", "tasks.caldavAdd", "tasks.exchangeAdd", "tasks.resolveConflict":
 		return 60 * time.Second
 	// Every bound task list, one change at a time, each request bounded by

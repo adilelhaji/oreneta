@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-libra
 import { SidebarAgenda, untilNextDay } from './SidebarAgenda'
 import { accounts$ } from '../../states/accounts'
 import { calendar$, type CalendarEvent } from '../../states/calendar'
-import type { Task } from '../../states/tasks'
+import { tasks$, type Task } from '../../states/tasks'
 import { ui$ } from '../../states/ui'
 
 const at = (day: number, hour = 0, minute = 0, second = 0) => new Date(2026, 9, day, hour, minute, second).getTime()
@@ -66,6 +66,7 @@ beforeEach(() => {
         task(2, at(16), { title: 'Book flights', thread_id: 'work#INBOX#t9', linked: true, note: 'window seat' }),
       ],
     }),
+    'tasks.lists': () => ({ lists: [], account_lists: [] }),
   }
   ;(window as any).go = {
     main: {
@@ -88,6 +89,7 @@ afterEach(() => {
   calendar$.viewing.set(null)
   ui$.module.set('mail')
   ui$.taskEditor.set(null)
+  tasks$.accountLists.set([])
 })
 
 describe('sidebar agenda widget (#212)', () => {
@@ -241,5 +243,67 @@ describe('sidebar agenda widget (#212)', () => {
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull())
     screen.unmount()
     expect(listeners['calendar.syncError']).toBeUndefined()
+  })
+})
+
+// ADR-0070: the lists that come with an account.
+const waiting = {
+  account: 'work',
+  source: 'ews',
+  state: 'pending',
+  list_id: '',
+  adopted: false,
+  notified: true,
+  last_error: '',
+  kind: 'ews',
+  url: '',
+}
+const added = {
+  ...waiting,
+  source: 'caldav:https://dav.example/ana/tasks/',
+  state: 'linked',
+  list_id: 'list:dav',
+  notified: false,
+  kind: 'caldav',
+  url: 'https://dav.example/ana/tasks/',
+}
+
+describe('sidebar agenda and the accounts’ task lists (ADR-0070)', () => {
+  it('says the week may be incomplete while an account’s tasks have not been read', async () => {
+    replies['tasks.lists'] = () => ({ lists: [], account_lists: [waiting] })
+    const screen = render(<SidebarAgenda now={() => NOW} />)
+    await waitFor(() => expect(screen.getByText('Design review')).toBeTruthy())
+    expect(screen.getByRole('status').textContent).toContain('have not been read yet')
+  })
+
+  it('shows the upgrade’s notice with “Remove it” and “OK”, and reads again when a list arrives', async () => {
+    const listeners: Record<string, () => void> = {}
+    ;(window as any).runtime = {
+      EventsOn: (name: string, callback: () => void) => {
+        listeners[name] = callback
+        return () => delete listeners[name]
+      },
+    }
+    replies['tasks.lists'] = () => ({ lists: [{ id: 'list:dav', name: 'Feina', position: 1, open: 0 }], account_lists: [added] })
+    replies['tasks.acknowledgeAccountList'] = () => ({ ok: true })
+    const screen = render(<SidebarAgenda now={() => NOW} />)
+    await waitFor(() => expect(screen.getByText(/The list Feina of me@work\.test was added on its own/)).toBeTruthy())
+    expect(screen.getByRole('button', { name: 'Remove it' })).toBeTruthy()
+    replies['tasks.lists'] = () => ({ lists: [{ id: 'list:dav', name: 'Feina', position: 1, open: 0 }], account_lists: [{ ...added, notified: true }] })
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }))
+    await waitFor(() => expect(requests.some((r) => r.command === 'tasks.acknowledgeAccountList')).toBe(true))
+    expect(requests.find((r) => r.command === 'tasks.acknowledgeAccountList')!.payload).toEqual({
+      account: 'work',
+      source: added.source,
+    })
+    await waitFor(() => expect(screen.queryByText(/was added on its own/)).toBeNull())
+    // A list read behind the sidebar: the week is read again.
+    const before = requests.filter((r) => r.command === 'tasks.list').length
+    replies['tasks.list'] = () => ({ tasks: [task(9, at(16), { title: 'From the account' })] })
+    act(() => listeners['tasks.changed']())
+    await waitFor(() => expect(screen.getByText('From the account')).toBeTruthy())
+    expect(requests.filter((r) => r.command === 'tasks.list').length).toBeGreaterThan(before)
+    screen.unmount()
+    expect(listeners['tasks.changed']).toBeUndefined()
   })
 })

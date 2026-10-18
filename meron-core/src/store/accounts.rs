@@ -351,6 +351,12 @@ pub fn upsert_account(
     meta: &AccountMeta,
     creds: &Creds,
 ) -> Result<()> {
+    // A new Exchange account's task list arrives with it, as its calendars
+    // do (ADR-0070, §3): its entry is written in the same transaction. The
+    // caller may hold a transaction of its own, which this then joins.
+    let own = conn.is_autocommit().then(|| conn.unchecked_transaction()).transpose()?;
+    let new_exchange = creds.is_ews()
+        && !conn.prepare("SELECT 1 FROM accounts WHERE id = ?1")?.exists(params![id])?;
     let now = now_unix();
     conn.execute(
         "INSERT INTO accounts(id, engine, provider, email, display_name, avatar_url, config, created_at, updated_at, sender_name, sort_order, prefs)
@@ -389,6 +395,12 @@ pub fn upsert_account(
             if meta.engine == "mail" { crate::mail_check::new_account_prefs() } else { "{}".to_string() },
         ],
     )?;
+    if new_exchange {
+        crate::task_sync::account_lists::add_exchange(conn, id, now)?;
+    }
+    if let Some(own) = own {
+        own.commit()?;
+    }
     Ok(())
 }
 
@@ -872,6 +884,9 @@ pub const REMOVED_WITH_ACCOUNT: &[(&str, &str)] = &[
     ("ews_folder_paths", "account"),
     // Exchange folder moves whose answer was lost, until a listing settles them.
     ("ews_uncertain_moves", "account"),
+    // The task lists that came with the account (ADR-0070); their lists are
+    // removed before this, by `account_lists::forget_account`.
+    ("account_task_lists", "account"),
 ];
 
 /// What the person wrote, kept when the account is removed (ADR-0011): an
@@ -888,6 +903,9 @@ pub struct AccountRemoval {
     /// Keychain entries of the account's CalDAV calendars (ADR-0018), also
     /// the caller's to delete.
     pub calendar_secrets: Vec<String>,
+    /// Keychain entries of the task lists that came with the account and of
+    /// the ones waiting for a first read (ADR-0070), also the caller's.
+    pub task_secrets: Vec<String>,
     pub kept_drafts: i64,
     pub kept_scheduled: i64,
     pub kept_attempts: i64,
@@ -916,7 +934,10 @@ pub fn delete_account(conn: &Connection, id: &str) -> Result<AccountRemoval> {
             OR person_id IN (SELECT id FROM people WHERE account = ?1)",
         params![id],
     )?;
-    // Task lists kept in the account's Tasks folder go with it (ADR-0058).
+    // Task lists kept in the account's Tasks folder go with it (ADR-0058),
+    // and the lists of its CalDAV servers that came on their own, with the
+    // passwords waiting for a first read; adopted lists stay (ADR-0070).
+    removal.task_secrets = crate::task_sync::account_lists::forget_account(&tx, id)?;
     crate::task_sync::exchange::forget_account(&tx, id)?;
     // A person's addresses and numbers have no account column of their own.
     for child in ["person_emails", "person_phones"] {

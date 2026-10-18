@@ -3757,7 +3757,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 65);
+    assert_eq!(version, 66);
 
     for table in [
         "accounts",
@@ -3789,6 +3789,8 @@ fn run_migrations_creates_schema_and_bumps_version() {
         "spam_triggers",
         "spam_judgments",
         "tasks",
+        // The task lists that come with an account (ADR-0070).
+        "account_task_lists",
     ] {
         let exists = conn
             .query_row(
@@ -3807,7 +3809,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 65);
+    assert_eq!(version, 66);
 }
 
 #[test]
@@ -3835,7 +3837,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 65);
+    assert_eq!(version, 66);
 
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -3935,7 +3937,7 @@ fn upgrade_from_main_v30_preserves_label_links_and_adds_tasks_and_spam() {
     assert!(conn.prepare("SELECT spam FROM messages").is_ok());
     assert!(conn.prepare("SELECT in_bar FROM labels").is_ok());
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-    assert_eq!(version, 65);
+    assert_eq!(version, 66);
 }
 
 #[test]
@@ -5121,6 +5123,48 @@ fn proxy_test_creds(proxy: crate::proxy::ProxyChoice) -> crate::imap::Creds {
         delegate_account_id: String::new(),
         target_mailbox: String::new(),
     }
+}
+
+/// ADR-0070, §3: a new Exchange account's task list waits for its first read
+/// from the same transaction as the account, with no upgrade notice; editing
+/// the account later brings nothing back, and an IMAP account has none.
+#[test]
+fn a_new_exchange_account_comes_with_its_task_list_waiting() {
+    use crate::task_sync::account_lists::{decline, entry, EWS};
+    let conn = test_conn();
+    let meta = AccountMeta {
+        engine: "mail".to_string(),
+        provider: "exchange".to_string(),
+        email: "ana@corp.example.com".to_string(),
+        display_name: "Ana".to_string(),
+        avatar_url: String::new(),
+        sender_name: String::new(),
+    };
+    let mut ews = proxy_test_creds(crate::proxy::ProxyChoice::default());
+    ews.ews_url = "https://mail.corp.example.com/EWS/Exchange.asmx".to_string();
+    upsert_account(&conn, "ana", &meta, &ews).unwrap();
+    let waiting = entry(&conn, "ana", EWS).unwrap().unwrap();
+    assert_eq!((waiting.state.as_str(), waiting.notified), ("pending", true));
+
+    decline(&conn, "ana", EWS, 5).unwrap();
+    upsert_account(&conn, "ana", &meta, &ews).unwrap();
+    assert_eq!(entry(&conn, "ana", EWS).unwrap().unwrap().state, "declined", "an edit does not undo a decline");
+
+    upsert_account(&conn, "imap", &meta, &proxy_test_creds(crate::proxy::ProxyChoice::default())).unwrap();
+    assert!(entry(&conn, "imap", EWS).unwrap().is_none());
+
+    // Inside a caller's transaction it joins it: rolled back, nothing stays.
+    {
+        let tx = conn.unchecked_transaction().unwrap();
+        upsert_account(&tx, "bo", &meta, &ews).unwrap();
+        assert!(entry(&tx, "bo", EWS).unwrap().is_some());
+    }
+    assert!(entry(&conn, "bo", EWS).unwrap().is_none());
+    assert!(stored_creds_opt(&conn, "bo").is_none());
+}
+
+fn stored_creds_opt(conn: &Connection, id: &str) -> Option<crate::imap::Creds> {
+    load_accounts(conn).unwrap().into_iter().find(|(account, _)| account == id).map(|(_, creds)| creds)
 }
 
 fn stored_creds(conn: &Connection, id: &str) -> crate::imap::Creds {

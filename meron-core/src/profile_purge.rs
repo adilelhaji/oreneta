@@ -52,6 +52,8 @@ pub fn secret_names(conn: &Connection) -> Result<Vec<String>> {
     names.extend(
         column(conn, "SELECT id FROM task_lists WHERE remote_url <> ''")?.iter().map(|id| crate::task_sync::secret_key(id)),
     );
+    // Passwords of an account's CalDAV lists waiting for a first read (ADR-0070).
+    names.extend(crate::task_sync::account_lists::pending_secret_keys(conn)?);
     names.push(crate::backup_schedule::SECRET_KEY.to_string());
     names.sort();
     names.dedup();
@@ -123,6 +125,21 @@ mod tests {
         assert!(!names.contains(&crate::task_sync::secret_key("mail")), "a local list has no password");
     }
 
+    /// ADR-0070: the password of an account's CalDAV list waiting for its
+    /// first read is the profile's too.
+    #[test]
+    fn a_password_waiting_for_a_first_read_is_named() {
+        let conn = crate::store::open_in_memory_for_test().unwrap();
+        let source = crate::task_sync::account_lists::collection_source("https://dav.example/ana/tasks/").unwrap();
+        conn.execute(
+            "INSERT INTO account_task_lists(account, source, state) VALUES('a@x.cat', ?1, 'pending')",
+            rusqlite::params![source],
+        )
+        .unwrap();
+        let names = secret_names(&conn).unwrap();
+        assert!(names.contains(&crate::task_sync::account_lists::pending_secret_key("a@x.cat", &source)), "{names:?}");
+    }
+
     /// The start-up sweep (ADR-0063) moves what a purge would delete, Graph's
     /// records included, so no entry is left behind under `meron`.
     #[test]
@@ -172,7 +189,7 @@ mod tests {
         let main = include_str!("main.rs");
         let writes = main.matches("secrets::store(").count();
         assert_eq!(
-            writes, 13,
+            writes, 16,
             "a secret is written somewhere new: name it in profile_purge::secret_names, then update this count"
         );
         let graph = include_str!("graph/auth.rs").matches("graph_record_store(").count();

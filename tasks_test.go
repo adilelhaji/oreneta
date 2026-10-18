@@ -109,3 +109,16 @@ func TestTasksDeleteRejectsAMissingId(t *testing.T) {
 		t.Fatal("want an error for a missing id")
 	}
 }
+
+// ADR-0070: «No l'afegeixis», «Treu-la» and «D'acord» on an account's task
+// list go to the core as they are, which keeps them in the profile.
+func TestInvokeRoutesAccountTaskListAnswers(t *testing.T) {
+	for _, method := range []string{"tasks.declineAccountList", "tasks.acknowledgeAccountList"} {
+		app, writer := newMailHandlerTestApp(t, sidecarResponsePlan{Result: map[string]any{"ok": true}})
+		payload := map[string]any{"account": "me@corp.example", "source": "ews"}
+		if _, err := app.invoke(method, payload); err != nil {
+			t.Fatalf("%s: %v", method, err)
+		}
+		assertCall(t, writer.calls[0], method, payload)
+	}
+}

@@ -456,3 +456,174 @@ fn ews_task_is_never_written_without_the_version_it_was_read_at() {
     assert_eq!(nowhere.update_task("T1", "", &Fields::default(), &fields, 0).unwrap(), ListWrite::Conflict);
     assert_eq!(nowhere.delete_task("T1", "").unwrap(), ListWrite::Conflict);
 }
+
+// ---- The account's list arrives with it (ADR-0070) ----------------------------
+
+use crate::task_sync::account_lists::{self, Linked, Mode, EWS};
+
+/// A store holding a new Exchange account, whose list waits for its first read.
+fn new_account() -> Mutex<Connection> {
+    let conn = crate::store::open_in_memory_for_test().unwrap();
+    conn.execute(
+        "INSERT INTO accounts(id, email, config) VALUES(?1, ?1, '{\"ews_url\":\"https://mail.example.org/EWS/Exchange.asmx\"}')",
+        params![ACCOUNT],
+    )
+    .unwrap();
+    account_lists::add_exchange(&conn, ACCOUNT, 1).unwrap();
+    Mutex::new(conn)
+}
+
+fn entry_of(db: &Mutex<Connection>) -> Option<account_lists::Entry> {
+    account_lists::entry(&db.lock().unwrap(), ACCOUNT, EWS).unwrap()
+}
+
+fn lists_of(db: &Mutex<Connection>) -> Vec<(String, String, String)> {
+    let conn = db.lock().unwrap();
+    let mut stmt = conn.prepare("SELECT id, name, ews_account FROM task_lists WHERE id <> 'mail' ORDER BY position").unwrap();
+    stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?))).unwrap().collect::<rusqlite::Result<_>>().unwrap()
+}
+
+#[test]
+fn ews_account_list_arrives_with_its_tasks_read_whole() {
+    let db = new_account();
+    let entry = entry_of(&db).unwrap();
+    assert_eq!((entry.state.as_str(), entry.notified), ("pending", true), "a new account never shows the upgrade's notice");
+    let (url, server) = serve(read(&[("T1", plain("T1", "ck1", "Informe")), ("T2", plain("T2", "ck2", "Factura")), ("T3", plain("T3", "ck3", "Viatge"))]));
+    let Linked::Made(list) = link_account(&db, &client(url), ACCOUNT, Mode::Retry, 10).unwrap() else { panic!("not made") };
+    server.join().unwrap();
+    assert_eq!(lists_of(&db), [(list.clone(), ACCOUNT.to_string(), ACCOUNT.to_string())]);
+    assert_eq!(rows(&db).len(), 3, "every task of the folder, at once");
+    let entry = entry_of(&db).unwrap();
+    assert_eq!((entry.state.as_str(), entry.list_id.as_str(), entry.notified), ("linked", list.as_str(), true));
+    // Read again, it waits for nothing: no second list, no request.
+    let (url, server) = serve(Vec::new());
+    assert_eq!(link_account(&db, &client(url), ACCOUNT, Mode::Retry, 20).unwrap(), Linked::Discarded);
+    assert!(server.join().unwrap().is_empty());
+    assert_eq!(lists_of(&db).len(), 1);
+}
+
+#[test]
+fn ews_account_list_that_cannot_be_read_is_not_made_and_waits_with_the_reason() {
+    let db = new_account();
+    let (url, server) = serve(vec![Step::Reply(error_response("FindItem", "ErrorAccessDenied", "Access is denied."))]);
+    let error = link_account(&db, &client(url), ACCOUNT, Mode::Retry, 10).expect_err("refused");
+    server.join().unwrap();
+    assert!(format!("{error:#}").contains("ErrorAccessDenied"));
+    assert!(lists_of(&db).is_empty(), "no list made before the read, none left after it failed");
+    let entry = entry_of(&db).unwrap();
+    assert_eq!(entry.state, "pending");
+    assert!(entry.last_error.contains("ErrorAccessDenied"), "{}", entry.last_error);
+    // Tried again (on opening Tasks), it is read and linked.
+    let (url, server) = serve(read(&[("T1", plain("T1", "ck1", "Informe"))]));
+    assert!(matches!(link_account(&db, &client(url), ACCOUNT, Mode::Retry, 20).unwrap(), Linked::Made(_)));
+    server.join().unwrap();
+    let entry = entry_of(&db).unwrap();
+    assert_eq!((entry.state.as_str(), entry.last_error.as_str()), ("linked", ""));
+}
+
+/// As `serve`, running `meanwhile` once the first request is in and before
+/// it is answered: what the person does while a read is on the network.
+fn serve_meanwhile(steps: Vec<Step>, meanwhile: impl FnOnce() + Send + 'static) -> (String, std::thread::JoinHandle<()>) {
+    use std::io::{Read as _, Write as _};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    let handle = std::thread::spawn(move || {
+        let mut meanwhile = Some(meanwhile);
+        for step in steps {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut request = Vec::new();
+            let mut chunk = [0u8; 4096];
+            loop {
+                let n = stream.read(&mut chunk).expect("read");
+                if n == 0 {
+                    break;
+                }
+                request.extend_from_slice(&chunk[..n]);
+                if let Some(pos) = request.windows(4).position(|w| w == b"\r\n\r\n") {
+                    let headers = String::from_utf8_lossy(&request[..pos]).to_lowercase();
+                    let length = headers
+                        .lines()
+                        .find_map(|line| line.strip_prefix("content-length:"))
+                        .and_then(|value| value.trim().parse::<usize>().ok())
+                        .unwrap_or(0);
+                    while request.len() < pos + 4 + length {
+                        let n = stream.read(&mut chunk).expect("read body");
+                        if n == 0 {
+                            break;
+                        }
+                        request.extend_from_slice(&chunk[..n]);
+                    }
+                    break;
+                }
+            }
+            if let Some(run) = meanwhile.take() {
+                run();
+            }
+            if let Step::Reply(body) = step {
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/xml; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                stream.write_all(response.as_bytes()).expect("write");
+            }
+        }
+    });
+    (format!("http://{addr}"), handle)
+}
+
+#[test]
+fn ews_account_list_declined_during_its_read_is_not_written() {
+    // The read is on the network; the person chooses «No l'afegeixis»
+    // meanwhile. The read ends, and writes nothing.
+    let db = std::sync::Arc::new(new_account());
+    let person = db.clone();
+    let (url, server) = serve_meanwhile(read(&[("T1", plain("T1", "ck1", "Informe"))]), move || {
+        account_lists::decline(&person.lock().unwrap(), ACCOUNT, EWS, 5).unwrap();
+    });
+    let outcome = link_account(&db, &client(url), ACCOUNT, Mode::Retry, 10).unwrap();
+    server.join().unwrap();
+    assert_eq!(outcome, Linked::Discarded);
+    assert!(lists_of(&db).is_empty());
+    assert_eq!(entry_of(&db).unwrap().state, "declined", "a late read never undoes a decline");
+}
+
+#[test]
+fn ews_account_list_of_an_account_removed_during_its_read_is_not_written() {
+    let db = std::sync::Arc::new(new_account());
+    let person = db.clone();
+    let (url, server) = serve_meanwhile(read(&[("T1", plain("T1", "ck1", "Informe"))]), move || {
+        crate::store::delete_account(&person.lock().unwrap(), ACCOUNT).unwrap();
+    });
+    let outcome = link_account(&db, &client(url), ACCOUNT, Mode::Retry, 10).unwrap();
+    server.join().unwrap();
+    assert_eq!(outcome, Linked::Discarded);
+    assert!(lists_of(&db).is_empty(), "nothing of a removed account comes back");
+    assert!(entry_of(&db).is_none());
+}
+
+#[test]
+fn ews_account_list_declined_is_added_again_by_hand_and_a_failure_keeps_it_declined() {
+    let db = new_account();
+    account_lists::decline(&db.lock().unwrap(), ACCOUNT, EWS, 5).unwrap();
+    // A waiting read never brings it back.
+    let (url, server) = serve(Vec::new());
+    assert_eq!(link_account(&db, &client(url), ACCOUNT, Mode::Retry, 10).unwrap(), Linked::Discarded);
+    assert!(server.join().unwrap().is_empty(), "a declined list is never read again");
+
+    let (url, server) = serve(vec![Step::Reply(error_response("FindItem", "ErrorAccessDenied", "Access is denied."))]);
+    assert!(link_account(&db, &client(url), ACCOUNT, Mode::ByHand, 20).is_err());
+    server.join().unwrap();
+    let entry = entry_of(&db).unwrap();
+    assert_eq!((entry.state.as_str(), entry.last_error.as_str()), ("declined", ""), "the dialog says why, the entry stays");
+    assert!(lists_of(&db).is_empty());
+
+    let (url, server) = serve(read(&[("T1", plain("T1", "ck1", "Informe"))]));
+    let Linked::Made(list) = link_account(&db, &client(url), ACCOUNT, Mode::ByHand, 30).unwrap() else { panic!("not made") };
+    server.join().unwrap();
+    assert_eq!(entry_of(&db).unwrap().list_id, list);
+    // Deleting it declines it again, and the account's deletion takes it.
+    account_lists::delete_list(&db.lock().unwrap(), &list, 40).unwrap();
+    assert_eq!(entry_of(&db).unwrap().state, "declined");
+    assert!(lists_of(&db).is_empty());
+}

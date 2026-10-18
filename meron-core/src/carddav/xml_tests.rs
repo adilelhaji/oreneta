@@ -140,3 +140,56 @@ fn a_truncated_document_yields_what_it_managed_to_read() {
     assert_eq!(parsed.len(), 1);
     assert_eq!(parsed[0].prop("displayname"), Some("A"));
 }
+
+/// An answer with nothing in it, as Radicale writes it for a query that
+/// matches nothing, is complete: an empty collection is empty, not cut off.
+#[test]
+fn an_empty_multistatus_written_as_one_element_is_complete() {
+    for body in [
+        r#"<?xml version='1.0' encoding='utf-8'?>
+<multistatus xmlns="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav" />"#,
+        r#"<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"></d:multistatus>"#,
+    ] {
+        assert!(parse_multistatus_complete(body).unwrap().is_empty(), "{body}");
+    }
+    // A single element that is not the multistatus is still not an answer.
+    assert!(parse_multistatus_complete(r#"<?xml version="1.0"?><d:error xmlns:d="DAV:"/>"#).is_err());
+}
+
+/// ADR-0070: which components a calendar collection takes, as Nextcloud,
+/// Radicale and others write it, and the property left out.
+#[test]
+fn reads_the_components_a_calendar_collection_takes() {
+    let body = r#"<?xml version="1.0"?>
+<D:multistatus xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:response>
+    <D:href>/ana/tasks/</D:href>
+    <D:propstat>
+      <D:prop><C:supported-calendar-component-set><C:comp name="VTODO"/></C:supported-calendar-component-set></D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>
+  <D:response>
+    <D:href>/ana/personal/</D:href>
+    <D:propstat>
+      <D:prop><C:supported-calendar-component-set><C:comp name="VEVENT"></C:comp><C:comp name="vtodo"/><C:comp name="VTODO"/></C:supported-calendar-component-set></D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>
+  <D:response>
+    <D:href>/ana/plain/</D:href>
+    <D:propstat>
+      <D:prop><D:displayname>Plain</D:displayname></D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+    <D:propstat>
+      <D:prop><C:supported-calendar-component-set/></D:prop>
+      <D:status>HTTP/1.1 404 Not Found</D:status>
+    </D:propstat>
+  </D:response>
+</D:multistatus>"#;
+    let parsed = parse_multistatus(body).unwrap();
+    assert_eq!(parsed[0].components, Some(vec!["VTODO".to_string()]));
+    assert_eq!(parsed[1].components, Some(vec!["VEVENT".to_string(), "VTODO".to_string()]), "upper-cased, once each");
+    assert_eq!(parsed[2].components, None, "a property the server does not have names no component");
+}

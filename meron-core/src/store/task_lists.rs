@@ -102,17 +102,29 @@ pub fn lists(conn: &Connection) -> Result<Vec<TaskList>> {
 }
 
 pub fn create_list(conn: &Connection, name: &str, now: i64) -> Result<String> {
+    let id = new_list_id();
+    create_list_with_id(conn, &id, name, now)?;
+    Ok(id)
+}
+
+/// The id a new list gets.
+pub fn new_list_id() -> String {
+    format!("list:{}", uuid::Uuid::new_v4())
+}
+
+/// A new list under an id chosen before: an account's CalDAV list has its
+/// password kept under its id before the list exists (ADR-0070, §3).
+pub fn create_list_with_id(conn: &Connection, id: &str, name: &str, now: i64) -> Result<()> {
     let name = name.trim();
     if name.is_empty() {
         bail!("a list needs a name");
     }
-    let id = format!("list:{}", uuid::Uuid::new_v4());
     let position: i64 = conn.query_row("SELECT COALESCE(MAX(position), 0) + 1 FROM task_lists", [], |r| r.get(0))?;
     conn.execute(
         "INSERT INTO task_lists(id, name, position, created_at) VALUES(?1, ?2, ?3, ?4)",
         params![id, name, position, now],
     )?;
-    Ok(id)
+    Ok(())
 }
 
 pub fn rename_list(conn: &Connection, id: &str, name: &str) -> Result<()> {

@@ -66,6 +66,29 @@ export type RemoteTaskCollection = { url: string; name: string; color?: string |
 
 export type TaskListSync = { id: string; ok: boolean; error?: string }
 
+/**
+ * A task list that comes with an account (ADR-0070): an Exchange account's
+ * Tasks folder, a CalDAV collection of a server added to an account, or the
+ * mark of a server listed again once after the upgrade.
+ */
+export type AccountTaskList = {
+  account: string
+  source: string
+  /** `pending`: not read yet, or its last read failed (`last_error`). */
+  state: 'pending' | 'linked' | 'declined' | 'scanned'
+  /** The list, when it is `linked`. */
+  list_id: string
+  /** A list linked by hand before (ADR-0039), not tied to the account. */
+  adopted: boolean
+  /** Whether the person confirmed the upgrade's notice; false only for a
+   * list the upgrade added on its own. */
+  notified: boolean
+  last_error: string
+  kind: 'ews' | 'caldav' | 'caldav-server' | 'unknown'
+  /** The collection's address, or the server's origin; empty for Exchange. */
+  url: string
+}
+
 /** The fields a task is written with (ADR-0013). */
 export type TaskFields = {
   list_id: string
@@ -88,6 +111,8 @@ export const tasks$ = observable({
   /** Whether the list currently includes finished tasks. */
   includeCompleted: false,
   lists: [] as TaskList[],
+  /** What the accounts' task lists are doing (ADR-0070). */
+  accountLists: [] as AccountTaskList[],
   /** Which list is shown: 'all', or a list's id. */
   selectedList: 'all',
   search: '',
@@ -113,10 +138,95 @@ export function taskTitle(task: Task): string {
 
 export async function loadTaskLists() {
   try {
-    const res = await invoke<{ lists?: TaskList[] }>('tasks.lists', {})
+    const res = await invoke<{ lists?: TaskList[]; account_lists?: AccountTaskList[] }>('tasks.lists', {})
     tasks$.lists.set(res?.lists ?? [])
+    tasks$.accountLists.set(res?.account_lists ?? [])
   } catch {
     // Unreadable lists are not no lists; what was shown stays.
+  }
+}
+
+/** The accounts' lists and servers still waiting for a read: never shown as
+ * lists with no tasks (ADR-0070, §3). */
+export function waitingAccountLists(entries: AccountTaskList[]): AccountTaskList[] {
+  return entries.filter((entry) => entry.state === 'pending')
+}
+
+/** Lists the upgrade added on their own, whose notice waits for «Treu-la»
+ * or «D'acord» (ADR-0070, §4). */
+export function upgradeNotices(entries: AccountTaskList[]): AccountTaskList[] {
+  return entries.filter((entry) => entry.state === 'linked' && !entry.notified && !!entry.list_id)
+}
+
+/** What «Afegeix una llista» offers: the accounts' declined lists. */
+export function declinedAccountLists(entries: AccountTaskList[]): AccountTaskList[] {
+  return entries.filter((entry) => entry.state === 'declined' && (entry.kind === 'ews' || entry.kind === 'caldav'))
+}
+
+/** The account entry of a list, when it came with one. */
+export function accountEntryOf(entries: AccountTaskList[], listId: string): AccountTaskList | undefined {
+  return entries.find((entry) => entry.state === 'linked' && entry.list_id === listId)
+}
+
+/** A name for a collection the interface knows only by its address. */
+export function collectionName(url: string): string {
+  try {
+    const parts = new URL(url).pathname.split('/').filter(Boolean)
+    return decodeURIComponent(parts[parts.length - 1] ?? url)
+  } catch {
+    return url
+  }
+}
+
+/** «No l'afegeixis» and «Treu-la»: declined, and never read again. */
+export async function declineAccountList(entry: Pick<AccountTaskList, 'account' | 'source'>) {
+  try {
+    await invoke('tasks.declineAccountList', { account: entry.account, source: entry.source })
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : t('tasks.saveFailed'), 'error')
+  }
+  await Promise.all([loadTaskLists(), loadTasks()])
+  if (!tasks$.lists.get().some((list) => list.id === tasks$.selectedList.get())) tasks$.selectedList.set('all')
+}
+
+/** «D'acord» on the upgrade's notice, kept in the profile. */
+export async function acknowledgeAccountList(entry: Pick<AccountTaskList, 'account' | 'source'>) {
+  try {
+    await invoke('tasks.acknowledgeAccountList', { account: entry.account, source: entry.source })
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : t('tasks.saveFailed'), 'error')
+  }
+  await loadTaskLists()
+}
+
+/**
+ * «Afegeix una llista» on a declined list of an account (ADR-0070, §5): read
+ * first, made after. A CalDAV one signs in with a calendar of the same
+ * server and user unless a password is given. Throws why it could not be.
+ */
+export async function addAccountListAgain(entry: AccountTaskList, password?: string): Promise<string> {
+  const res =
+    entry.kind === 'ews'
+      ? await invoke<{ id?: string }>('tasks.exchangeAdd', { account: entry.account })
+      : await invoke<{ id?: string }>('tasks.caldavAdd', {
+          account: entry.account,
+          url: entry.url,
+          ...(password ? { password } : {}),
+        })
+  await Promise.all([loadTaskLists(), loadTasks()])
+  if (res?.id) tasks$.selectedList.set(res.id)
+  return res?.id ?? ''
+}
+
+/**
+ * Reads the lists again when the core says one of an account's lists is
+ * here (`tasks.changed`), even with Tasks open. Returns the unsubscribe.
+ */
+export function onTaskListsChanged(handler: () => void): () => void {
+  const eventsOn = (window as any).runtime?.EventsOn
+  const off = eventsOn?.('tasks.changed', handler)
+  return () => {
+    if (typeof off === 'function') off()
   }
 }
 
@@ -306,28 +416,20 @@ export async function addCalDavTaskList(input: {
 }
 
 /**
- * Keeps an Exchange account's Tasks folder as a list (ADR-0058), read once
- * before it is added. Returns the new list's id, or throws why it could not
- * be read.
- */
-export async function addExchangeTaskList(account: string, name: string): Promise<string> {
-  const res = await invoke<{ id?: string }>('tasks.exchangeAdd', { account, name })
-  await Promise.all([loadTaskLists(), loadTasks()])
-  if (res?.id) tasks$.selectedList.set(res.id)
-  return res?.id ?? ''
-}
-
-/**
- * Syncs one list kept on a server, or every one. A failure is kept on the
- * list (`last_error`) and shown there; it is not a toast, since opening the
- * Tasks view offline is not something to interrupt anyone about.
+ * Syncs one list kept on a server, or every one; every one also reads the
+ * accounts' lists that wait (ADR-0070). A failure is kept on the list
+ * (`last_error`) or the entry and shown there; it is not a toast, since
+ * opening the Tasks view offline is not something to interrupt anyone about.
  */
 export async function syncTaskLists(listId?: string): Promise<TaskListSync[]> {
   tasks$.syncing.set(true)
   try {
-    const res = await invoke<{ lists?: TaskListSync[] }>('tasks.sync', listId ? { list_id: listId } : {})
+    const res = await invoke<{ lists?: TaskListSync[]; accounts?: unknown[] }>(
+      'tasks.sync',
+      listId ? { list_id: listId } : {},
+    )
     const results = res?.lists ?? []
-    if (results.length > 0) await Promise.all([loadTaskLists(), loadTasks()])
+    if (results.length > 0 || (res?.accounts ?? []).length > 0) await Promise.all([loadTaskLists(), loadTasks()])
     return results
   } catch (error) {
     if (listId)
