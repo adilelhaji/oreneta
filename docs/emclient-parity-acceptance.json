@@ -104,6 +104,14 @@
           {
             "sha": "d5a8f977513fe8f412fb60cefc41a27f95fa8f75",
             "result": "https://github.com/adilelhaji/oreneta/actions/runs/34327478903"
+          },
+          {
+            "sha": "7d1d3f7b2fc59db86390f5214a3aa836446bfb3e",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "7d1d3f7b2fc59db86390f5214a3aa836446bfb3e",
+            "result": "frontend/src/lib/regions.test.ts"
           }
         ],
         "native": [],
@@ -136,6 +144,10 @@
           },
           {
             "sha": "11af73db33e86be3da90036aaf5dbfdc89770879",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "7d1d3f7b2fc59db86390f5214a3aa836446bfb3e",
             "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
@@ -252,7 +264,7 @@
       "section": "General/Shortcuts; Swipe",
       "outcome": "Custom shortcuts and touch actions without accidental destructive gestures",
       "status": "partial",
-      "present": "Keyboard shortcuts can be reassigned in the shortcuts dialog, including zoom; no touch/swipe actions exist",
+      "present": "Keyboard shortcuts can be reassigned in the shortcuts dialog, including zoom and the F6 / Shift+F6 region shortcuts (#306, ADR-0068; whether F6 reaches the page in WebView2 and WebKitGTK is pending native N4 evidence); no touch/swipe actions exist",
       "code": "frontend/src/lib/shortcuts.ts",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -265,6 +277,14 @@
           {
             "sha": "11af73db33e86be3da90036aaf5dbfdc89770879",
             "result": "frontend/src/lib/shortcuts.test.ts"
+          },
+          {
+            "sha": "7d1d3f7b2fc59db86390f5214a3aa836446bfb3e",
+            "result": "frontend/src/lib/shortcuts.test.ts"
+          },
+          {
+            "sha": "7d1d3f7b2fc59db86390f5214a3aa836446bfb3e",
+            "result": "frontend/src/lib/regions.test.ts"
           }
         ],
         "native": [],
@@ -584,7 +604,7 @@
       "section": "Mail/Templates and Signatures; QuickText",
       "outcome": "Templates, account signatures and safe placeholder expansion",
       "status": "implemented-unverified",
-      "present": "Templates with escaped plain text (#40), per-account signatures and searchable QuickText with placeholders and a cursor mark (#88) are implemented and tested; native evidence pending",
+      "present": "Templates with escaped plain text (#40), per-account signatures and searchable QuickText with placeholders and a cursor mark (#88) are implemented and tested; a per-account choice of where the signature goes in replies and forwards (with the person's own text, above or below the quoted original, #277) is implemented and tested; native evidence pending",
       "code": "frontend/src/lib/placeholders.ts",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -609,6 +629,18 @@
           {
             "sha": "fe72de7c777718b2649969d18d40be84b96bfd0c",
             "result": "frontend/src/components/dialog/SignatureSettingsCard.test.tsx"
+          },
+          {
+            "sha": "cdf054e2fd7f2d0720c6e7d0603c2ad3b47774e8",
+            "result": "frontend/src/states/replyForwardCompose.test.ts"
+          },
+          {
+            "sha": "cdf054e2fd7f2d0720c6e7d0603c2ad3b47774e8",
+            "result": "frontend/src/components/dialog/SignatureSettingsCard.test.tsx"
+          },
+          {
+            "sha": "cdf054e2fd7f2d0720c6e7d0603c2ad3b47774e8",
+            "result": "frontend/src/components/composer/Composer.test.tsx"
           }
         ],
         "native": [],
@@ -1301,6 +1333,10 @@
           {
             "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
             "result": "frontend/src/lib/paneResize.test.ts"
+          },
+          {
+            "sha": "7d1d3f7b2fc59db86390f5214a3aa836446bfb3e",
+            "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
         "native": [],
@@ -1396,7 +1432,7 @@
       "section": "General/Language",
       "outcome": "Full locale coverage, long labels, RTL/CJK and native input",
       "status": "partial",
-      "present": "Interface catalogued in 19 languages including Arabic, Japanese and Chinese, with placeholder parity checks and remaining English strings translated. Arabic lays the interface out right to left (#226, ADR-0061): logical sides guarded by a test, mirrored icons, menus and arrow keys in reading order; subjects, names, addresses, bodies and composers keep their own direction; received mail gets per-block direction and outgoing mail declares its right-to-left blocks. Production-entry checks in Arabic cover the mailbox, reader and composer at 600/1024/1440 px in light and dark at 100% and the app's 200% zoom, and people, tasks, notes, calendar, chat and settings at 600/1024 px in light and dark, with axe; plus a context menu at the right edge and switching back to English. Remaining: native IME and native Windows (N4) evidence, kanban column dragging in right to left checked natively, a per-paragraph direction override in the composer, and lines mixing interface and people's text outside the reviewed screens",
+      "present": "Interface catalogued in 19 languages including Arabic, Japanese and Chinese, with placeholder parity checks and remaining English strings translated. Arabic lays the interface out right to left (#226, ADR-0061): logical sides guarded by a test, mirrored icons, menus and arrow keys in reading order; subjects, names, addresses, bodies and composers keep their own direction; received mail gets per-block direction and outgoing mail declares its right-to-left blocks. Production-entry checks in Arabic cover the mailbox, reader and composer at 600/1024/1440 px in light and dark at 100% and the app's 200% zoom, and people, tasks, notes, calendar, chat and settings at 600/1024 px in light and dark, with axe; plus a context menu at the right edge and switching back to English; F6 / Shift+F6 go round the regions in the same order as in English, and the axe region rules pass on the mailbox and every module (#306). Remaining: native IME and native Windows (N4) evidence, kanban column dragging in right to left checked natively, a per-paragraph direction override in the composer, and lines mixing interface and people's text outside the reviewed screens",
       "code": "scripts/i18n/catalog.ts",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -1444,6 +1480,10 @@
           },
           {
             "sha": "d4c50d840cf51cf7e8513b83b80dd6fcee8ba711",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "7d1d3f7b2fc59db86390f5214a3aa836446bfb3e",
             "result": "frontend/e2e/startup.e2e.ts"
           }
         ],

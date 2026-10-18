@@ -135,6 +135,7 @@ export function ConversationDetailsPanel({
       <aside
         ref={asideRef}
         data-details-panel
+        data-region="sidebar"
         data-layout={beside ? 'beside' : 'overlay'}
         style={{ '--details-panel-width': `${width}px` } as CSSProperties}
         className={`flex w-[var(--details-panel-width)] shrink-0 flex-col border-s border-border bg-header animate-slide-in-end ${

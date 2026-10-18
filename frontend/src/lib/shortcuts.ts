@@ -41,13 +41,22 @@ export type ShortcutId =
   | 'view.zoomIn'
   | 'view.zoomOut'
   | 'view.zoomReset'
+  | 'pane.next'
+  | 'pane.prev'
   | RailShortcutId
 
+/** F1–F12: keys that never type text (ADR-0068 §6). */
+export function isFunctionKey(key: string): boolean {
+  return /^F([1-9]|1[0-2])$/.test(key)
+}
+
 /** True for single-key shortcuts (no ⌘/Ctrl/Alt). These only fire when the user
- * isn't typing and no modal is open — so they don't hijack text entry. */
+ * isn't typing and no modal is open — so they don't hijack text entry. F1–F12
+ * type no text, so a chord on one of them is not bare: it works while typing,
+ * like a ⌘/Ctrl chord. */
 export function isBareShortcut(id: ShortcutId): boolean {
   const chord = shortcutChord(id)
-  return !chord.mod && !chord.alt
+  return !chord.mod && !chord.alt && !isFunctionKey(chord.key)
 }
 
 export type Chord = {
@@ -87,6 +96,9 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutId, Chord> = {
   'view.zoomIn': { mod: true, key: '=' },
   'view.zoomOut': { mod: true, key: '-' },
   'view.zoomReset': { mod: true, key: '0' },
+  // From one region of the window to the next and back (ADR-0068 §6).
+  'pane.next': { key: 'F6' },
+  'pane.prev': { shift: true, key: 'F6' },
   // Gmail-style single-key thread shortcuts (only when not typing).
   'thread.next': { key: 'j' },
   'thread.prev': { key: 'k' },
@@ -249,6 +261,8 @@ export const SHORTCUT_LABELS: Record<ShortcutId, string> = {
   'view.zoomIn': 'Make everything larger',
   'view.zoomOut': 'Make everything smaller',
   'view.zoomReset': 'Reset size',
+  'pane.next': 'Next region',
+  'pane.prev': 'Previous region',
   'thread.next': 'Next thread',
   'thread.prev': 'Previous thread',
   'thread.archive': 'Archive thread',
@@ -278,7 +292,10 @@ export const SHORTCUT_GROUPS: { title: string; ids: ShortcutId[] }[] = [
     title: 'Mail',
     ids: ['compose.new', 'reply.focus', 'compose.replyFull', 'mail.sync', 'search.thread', 'search.global'],
   },
-  { title: 'View', ids: ['view.toggle', 'tab.close', 'view.zoomIn', 'view.zoomOut', 'view.zoomReset'] },
+  {
+    title: 'View',
+    ids: ['view.toggle', 'tab.close', 'view.zoomIn', 'view.zoomOut', 'view.zoomReset', 'pane.next', 'pane.prev'],
+  },
   // Every rail slot gets a row, so all nine are visible and rebindable.
   { title: 'Side navigation', ids: [...RAIL_SHORTCUT_IDS] },
 ]
