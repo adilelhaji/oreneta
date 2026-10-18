@@ -3475,10 +3475,21 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "chat.subscribe" | "chat.answerSubscription" => {
             let account = req_str(p, "account")?;
             let jid = req_str(p, "jid")?.trim().to_lowercase();
-            anyhow::ensure!(
-                jid.split_once('@').is_some_and(|(local, domain)| !local.is_empty() && domain.contains('.') && !domain.contains('/')),
-                "an address looks like name@server.example"
-            );
+            // Denying, or no longer letting someone see the status, goes to any
+            // address the roster may hold (a gateway, a server without dots,
+            // ADR-0064); asking and allowing need a person's address.
+            let denying = req.method == "chat.answerSubscription" && p.get("allow").and_then(Value::as_bool) == Some(false);
+            if denying {
+                anyhow::ensure!(
+                    !jid.is_empty() && jid.parse::<tokio_xmpp::parsers::jid::BareJid>().is_ok(),
+                    "this is not a chat address"
+                );
+            } else {
+                anyhow::ensure!(
+                    jid.split_once('@').is_some_and(|(local, domain)| !local.is_empty() && domain.contains('.') && !domain.contains('/')),
+                    "an address looks like name@server.example"
+                );
+            }
             // Asked only on a live connection: nothing waits to go out later.
             let online = chat_status().lock().unwrap().get(&account).is_some_and(|s| s["state"] == "online");
             anyhow::ensure!(online, "this chat account is not connected; nothing was sent");
@@ -3507,6 +3518,22 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let live = chat_live().lock().unwrap().get(&account).cloned();
             let list = live.map(|live| live.lock().unwrap().occupants.list(&room)).unwrap_or_default();
             Ok(serde_json::to_value(list)?)
+        }
+        // Muting one conversation (ADR-0064): no system notification from
+        // it, while it still counts as unread. Who may see the person's
+        // status comes with `chat.presence` (`allowed`), and withdrawing a
+        // permission is `chat.answerSubscription` with `allow: false`.
+        "chat.muted" => {
+            let account = req_str(p, "account")?;
+            Ok(json!({ "muted": meron_core::chat::mute::muted(&engine.db.lock().unwrap(), &account)? }))
+        }
+        "chat.mute" => {
+            let account = req_str(p, "account")?;
+            let conversation = req_str(p, "conversation")?;
+            let muted = p.get("muted").and_then(Value::as_bool).context("missing muted")?;
+            meron_core::chat::account(&engine.db.lock().unwrap(), &account)?;
+            let list = meron_core::chat::mute::set_muted(&engine.db.lock().unwrap(), &account, &conversation, muted)?;
+            Ok(json!({ "muted": list }))
         }
         // Group chats (ADR-0044): joined by the person, joined again on each
         // connection, left by the person.
@@ -3549,9 +3576,10 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "chat.leave" => {
             let account = req_str(p, "account")?;
             let room = req_str(p, "room")?;
-            if let Some(joined) = meron_core::chat::room(&engine.db.lock().unwrap(), &account, &room)? {
+            // The nickname alone: listing the rooms also counts their mentions.
+            if let Some(nick) = meron_core::chat::room_nick(&engine.db.lock().unwrap(), &account, &room)? {
                 if let Some(tx) = chat_sessions().lock().unwrap().get(&account) {
-                    let _ = tx.send(meron_core::chat::xmpp::Command::Leave { room: room.clone(), nick: joined.nick });
+                    let _ = tx.send(meron_core::chat::xmpp::Command::Leave { room: room.clone(), nick });
                 }
             }
             meron_core::chat::leave_room(&engine.db.lock().unwrap(), &account, &room)?;
@@ -3568,7 +3596,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let room = req_str(p, "room")?;
             let db = engine.db.lock().unwrap();
             meron_core::chat::dismiss_invitation(&db, &account, &room)?;
-            if meron_core::chat::room(&db, &account, &room)?.is_none() {
+            if meron_core::chat::room_nick(&db, &account, &room)?.is_none() {
                 let _ = secrets::delete(&meron_core::chat::room_secret_key(&account, &room));
             }
             Ok(json!({ "ok": true }))
@@ -3587,7 +3615,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let meta = std::fs::metadata(&path).context("the file cannot be read")?;
             anyhow::ensure!(meta.is_file(), "only a file can be sent");
             let name = path.file_name().and_then(|n| n.to_str()).context("the file has no name")?.to_string();
-            let group = meron_core::chat::room(&engine.db.lock().unwrap(), &account, &conversation)?.is_some();
+            let group = meron_core::chat::room_nick(&engine.db.lock().unwrap(), &account, &conversation)?.is_some();
             let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
             let upload = meron_core::chat::xmpp::Upload {
                 id: upload_id.clone(),

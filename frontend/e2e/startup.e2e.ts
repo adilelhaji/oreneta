@@ -1325,6 +1325,8 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         // Group chats and their invitations (ADR-0044).
         'chat.rooms': [],
         'chat.invitations': [],
+        // Muted conversations (ADR-0064).
+        'chat.muted': { muted: [] },
         'cloud.providers': [
           { id: 'nextcloud', name: 'Nextcloud', usable: true },
           { id: 'owncloud', name: 'ownCloud', usable: true },
