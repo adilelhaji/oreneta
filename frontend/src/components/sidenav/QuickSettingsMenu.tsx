@@ -22,6 +22,7 @@ import { syncMail } from '../../states/mail'
 import { openCommandPalette, ui$, type AppModule } from '../../states/ui'
 import { formatShortcut, isMac, type ShortcutId } from '../../lib/shortcuts'
 import { MenuItem } from '../menu/MenuItem'
+import { MenuList, MenuSeparator } from '../menu/Menu'
 import { pauseNotifications, resumeNotifications, type PauseChoice } from '../../states/notifications'
 import { useQuietState } from './QuietIndicator'
 import { menuLeft } from '../../lib/direction'
@@ -75,7 +76,10 @@ export function QuickSettingsMenu({
           onClose()
         }}
       />
-      <div
+      <MenuList
+        label={t('common.more')}
+        autoFocus
+        onClose={onClose}
         className="fixed z-50 overflow-y-auto rounded-control border border-border bg-chats p-2 shadow-overlay animate-fade-in text-primary"
         style={{
           width: menuWidth,
@@ -110,7 +114,7 @@ export function QuickSettingsMenu({
             }}
           />
         ))}
-        <div className="my-1 border-t border-border" />
+        <MenuSeparator />
         <MenuItem
           icon={<SquareChevronRight size={14} className="text-secondary" strokeWidth={1.75} />}
           label={t('palette.label')}
@@ -148,7 +152,7 @@ export function QuickSettingsMenu({
           onClick={() => syncMail()}
         />
         {/* Do not disturb (ADR-0049): the same choices as Settings and the tray. */}
-        <div className="my-1 border-t border-border" />
+        <MenuSeparator />
         {quiet.quiet ? (
           <MenuItem
             icon={<Bell size={14} className="text-secondary" strokeWidth={1.75} />}
@@ -177,7 +181,7 @@ export function QuickSettingsMenu({
             />
           ))
         )}
-        <div className="my-1 border-t border-border" />
+        <MenuSeparator />
         <MenuItem
           icon={<Settings size={14} className="text-secondary" strokeWidth={1.75} />}
           label={t('settings.label')}
@@ -195,7 +199,7 @@ export function QuickSettingsMenu({
             onClose()
           }}
         />
-      </div>
+      </MenuList>
     </>
   )
 }

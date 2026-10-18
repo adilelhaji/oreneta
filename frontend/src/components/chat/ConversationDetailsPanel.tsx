@@ -335,6 +335,7 @@ export function ConversationDetailsPanel({
         <FloatingContextMenu
           x={personMenu.x}
           y={personMenu.y}
+          label={personMenu.person.name || personMenu.person.email}
           onClose={() => setPersonMenu(null)}
           overlay
           overlayClassName="fixed inset-0 z-[80]"

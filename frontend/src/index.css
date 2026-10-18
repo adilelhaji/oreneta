@@ -236,7 +236,7 @@
 .folder-color-swatch:hover {
   background: var(--me-bg-hover);
 }
-.folder-color-swatch[aria-pressed='true'] {
+.folder-color-swatch[aria-checked='true'] {
   box-shadow: 0 0 0 2px var(--me-accent);
 }
 .mail-navigation [data-drop-target='ok'] {
@@ -553,6 +553,12 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
   outline-offset: 0;
+}
+/* Menu rows draw the ring inside themselves: the menu's padding would clip one
+   outside, and the neighbouring rows would cover it (#289). Outside a layer,
+   like the rule above, so it wins over it. */
+[role^='menuitem']:focus-visible {
+  outline-offset: -2px;
 }
 
 /* Enable the native right-click menu (cut/copy/paste) on text fields. Wails

@@ -13,8 +13,9 @@ export type RegionKind = (typeof REGION_ORDER)[number]
 
 const REGION_SELECTOR = '[data-region]'
 
-// What Tab can reach, before visibility and inertness are checked.
-const TABBABLE = [
+// What Tab can reach, before visibility and inertness are checked. Also where
+// a menu closed by Tab moves on from its opener (lib/menuKeyboard.ts, #289).
+export const TABBABLE = [
   'a[href]',
   'button:not([disabled])',
   'input:not([disabled]):not([type="hidden"])',

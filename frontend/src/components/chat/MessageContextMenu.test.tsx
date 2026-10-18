@@ -42,7 +42,7 @@ describe("a message's own Print message (SET-05)", () => {
     const view = render(
       <MessageContextMenu state={{ x: 0, y: 0, message: older }} isRSS={false} onClose={() => (closed += 1)} />,
     )
-    fireEvent.click(view.getByRole('button', { name: 'Print message…' }))
+    fireEvent.click(view.getByRole('menuitem', { name: 'Print message…' }))
     expect(closed).toBe(1)
     const page = new DOMParser().parseFromString(document.querySelector('iframe')?.srcdoc ?? '', 'text/html')
     expect([...page.querySelectorAll('.message .body')].map((body) => body.textContent?.trim())).toEqual(['First'])
@@ -57,6 +57,7 @@ describe("a message's own Print message (SET-05)", () => {
         onClose={() => undefined}
       />,
     )
-    expect(view.queryByRole('button', { name: 'Print message…' })).toBeNull()
+    expect(view.getByRole('menu', { name: 'Thursday' })).toBeTruthy()
+    expect(view.queryByRole('menuitem', { name: 'Print message…' })).toBeNull()
   })
 })

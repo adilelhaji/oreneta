@@ -4,6 +4,7 @@ import { useTranslation } from '../../lib/i18n'
 import { priorityReason, setSenderPriority, type PriorityVerdict } from '../../states/priority'
 import { ui$ } from '../../states/ui'
 import { MenuItem } from '../menu/MenuItem'
+import { MenuGroup } from '../menu/Menu'
 
 /**
  * Why this conversation is where the priority filter put it, and how to say
@@ -58,17 +59,25 @@ export function PriorityMenuSection({
   }
 
   return (
-    <>
-      <div className="my-1 border-t border-border" />
-      {/* The verdict and its reason, as one line of plain words. Not a
-          control: it is what the two controls below are about. */}
-      <div className="px-2 pb-1 pt-0.5">
-        <p className="flex items-center gap-1.5 text-caption font-semibold text-primary">
-          <Sparkle size={14} className={verdict.priority ? 'text-accent' : 'text-secondary'} strokeWidth={1.75} />
+    // The verdict and its reason, as one line of plain words. Not a control:
+    // it is what the two controls below are about, so it names their group.
+    <MenuGroup
+      separated
+      label={
+        <span className="flex items-center gap-1.5">
+          <Sparkle
+            size={14}
+            aria-hidden="true"
+            className={verdict.priority ? 'text-accent' : 'text-secondary'}
+            strokeWidth={1.75}
+          />
           {verdict.priority ? t('priority.isPriority') : t('priority.notPriority')}
-        </p>
-        <p className="mt-0.5 text-2xs leading-snug text-secondary">{because}</p>
-      </div>
+        </span>
+      }
+      labelClassName="px-2 pt-0.5 text-caption font-semibold text-primary"
+      description={because}
+      descriptionClassName="mt-0.5 px-2 pb-1 text-2xs leading-snug text-secondary"
+    >
       <MenuItem
         icon={<Sparkle size={14} className="text-secondary" strokeWidth={1.75} />}
         label={verdict.override === true ? t('priority.forget') : t('priority.always')}
@@ -91,6 +100,6 @@ export function PriorityMenuSection({
           }}
         />
       )}
-    </>
+    </MenuGroup>
   )
 }

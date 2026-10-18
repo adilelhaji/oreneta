@@ -27,6 +27,7 @@ export function EventContextMenu({ state, onClose }: { state: EventContextMenuSt
     <FloatingContextMenu
       x={state.x}
       y={state.y}
+      label={state.event.subject || t('calendar.untitled', { defaultValue: '(No title)' })}
       onClose={onClose}
       overlay
       overlayClassName="fixed inset-0 z-[60]"

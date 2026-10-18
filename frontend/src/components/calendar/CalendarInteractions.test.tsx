@@ -387,7 +387,7 @@ describe('creating events on the grid (#267)', () => {
       fireEvent.contextMenu(column(screen, 15), { clientX: 10, clientY: 9 * 52 + 20 })
     })
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'New event' }))
+      fireEvent.click(screen.getByRole('menuitem', { name: 'New event' }))
     })
     const timed = calendar$.editing.peek()!
     expect(clock(timed.start)).toBe('15 9:15')
@@ -398,7 +398,7 @@ describe('creating events on the grid (#267)', () => {
       fireEvent.contextMenu(column(screen, 15), { clientX: 10, clientY: 9 * 52 + 20 })
     })
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'New all-day event' }))
+      fireEvent.click(screen.getByRole('menuitem', { name: 'New all-day event' }))
     })
     const allDay = calendar$.editing.peek()!
     expect(allDay.all_day).toBe(true)
@@ -411,7 +411,7 @@ describe('creating events on the grid (#267)', () => {
     await act(async () => {
       fireEvent.contextMenu(eventButton(screen), { clientX: 10, clientY: 10 })
     })
-    expect(screen.queryByRole('button', { name: 'New all-day event' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'New all-day event' })).toBeNull()
   })
 
   it('moves the keyboard slot in grid steps and days, and creates with Enter or Shift+Enter', async () => {
@@ -448,7 +448,7 @@ describe('creating events on the grid (#267)', () => {
       fireEvent.contextMenu(slot(screen))
     })
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'New event' }))
+      fireEvent.click(screen.getByRole('menuitem', { name: 'New event' }))
     })
     const draft = calendar$.editing.peek()!
     expect(clock(draft.start)).toBe('12 9:00')

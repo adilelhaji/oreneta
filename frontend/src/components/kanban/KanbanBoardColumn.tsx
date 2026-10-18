@@ -228,6 +228,7 @@ function KanbanColumnContent({
       x={headerMenu.x}
       y={headerMenu.y}
       offset={4}
+      label={t('threads.actions.title')}
       onClose={() => setHeaderMenu(null)}
       overlay
       className="fixed z-50 min-w-[176px] rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in text-primary"

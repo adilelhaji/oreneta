@@ -18,7 +18,8 @@ import { useTranslation } from '../../lib/i18n'
 import type { FilterMode } from '../../states/ui'
 import { useDismissOnOutside } from '../menu/useDismissOnOutside'
 import { MenuItem } from '../menu/MenuItem'
-import { menuItemBase } from '../menu/menuStyles'
+import { MenuList, MenuSeparator } from '../menu/Menu'
+import { menuItemSelectedClass } from '../menu/menuStyles'
 
 export type ThreadActionsMenuItemsProps = {
   filterMode: FilterMode
@@ -70,53 +71,56 @@ export function ThreadActionsMenuItems({
 }: ThreadActionsMenuItemsProps) {
   const { t } = useTranslation()
 
+  // One filter of several is in force: radio items, that one checked.
   const filterItem = (mode: FilterMode, label: string, icon: ReactNode) => (
-    <button
-      className={`${menuItemBase} flex-nowrap ${
-        filterMode === mode ? 'bg-accent/10 dark:bg-accent/15 text-accent' : 'text-primary hover:bg-hover'
-      }`}
+    <MenuItem
+      role="menuitemradio"
+      checked={filterMode === mode}
+      appearance={filterMode === mode ? menuItemSelectedClass : undefined}
+      className="flex-nowrap"
+      icon={icon}
+      label={<span className="whitespace-nowrap shrink-0">{label}</span>}
       onClick={() => {
         onFilterChange(mode)
         closeMenu()
       }}
-    >
-      {icon}
-      <span className="whitespace-nowrap shrink-0">{label}</span>
-    </button>
+    />
   )
 
   return (
     <>
       {!hideFilters && (
         <>
-          {filterItem(
-            'all',
-            allLabel ?? t('filters.all'),
-            <Inbox size={14} className="text-secondary shrink-0" strokeWidth={1.75} />,
-          )}
-          {filterItem(
-            'unread',
-            t('filters.unread'),
-            <Mail size={14} className="text-secondary shrink-0" strokeWidth={1.75} />,
-          )}
-          {filterItem(
-            'starred',
-            t('filters.starred'),
-            <Star size={14} className="text-secondary shrink-0" strokeWidth={1.75} />,
-          )}
-          {/* Where what was set aside can be found. Without it, putting a
-              thread away is trusting that it comes back. */}
-          {!hideSnoozed &&
-            filterItem(
-              'snoozed',
-              t('filters.snoozed', { defaultValue: 'Snoozed' }),
-              <Clock size={14} className="text-secondary shrink-0" strokeWidth={1.75} />,
+          <div role="group" aria-label={t('filters.label')}>
+            {filterItem(
+              'all',
+              allLabel ?? t('filters.all'),
+              <Inbox size={14} className="text-secondary shrink-0" strokeWidth={1.75} />,
             )}
-          <div className="my-1 border-t border-border" />
+            {filterItem(
+              'unread',
+              t('filters.unread'),
+              <Mail size={14} className="text-secondary shrink-0" strokeWidth={1.75} />,
+            )}
+            {filterItem(
+              'starred',
+              t('filters.starred'),
+              <Star size={14} className="text-secondary shrink-0" strokeWidth={1.75} />,
+            )}
+            {/* Where what was set aside can be found. Without it, putting a
+                thread away is trusting that it comes back. */}
+            {!hideSnoozed &&
+              filterItem(
+                'snoozed',
+                t('filters.snoozed', { defaultValue: 'Snoozed' }),
+                <Clock size={14} className="text-secondary shrink-0" strokeWidth={1.75} />,
+              )}
+          </div>
+          <MenuSeparator />
         </>
       )}
       <MenuItem
-        className="flex-nowrap disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex-nowrap"
         disabled={!hasUnread}
         icon={<CheckCheck size={14} className="text-secondary shrink-0" strokeWidth={1.75} />}
         label={<span className="whitespace-nowrap shrink-0">{t('threads.actions.markAllAsRead')}</span>}
@@ -127,7 +131,8 @@ export function ThreadActionsMenuItems({
       />
       {onEmptyFolder && (
         <MenuItem
-          className="flex-nowrap text-danger"
+          danger
+          className="flex-nowrap"
           icon={<Trash2 size={14} className="shrink-0" strokeWidth={1.75} />}
           label={
             <span className="whitespace-nowrap shrink-0">{emptyFolderLabel ?? t('threads.actions.emptyTrash')}</span>
@@ -170,7 +175,7 @@ export function ThreadActionsMenuItems({
       )}
       {(onSync || onRemove || onDeleteFolder) && (
         <>
-          <div className="my-1 border-t border-border" />
+          <MenuSeparator />
           {onSync && (
             <MenuItem
               className="flex-nowrap"
@@ -207,7 +212,8 @@ export function ThreadActionsMenuItems({
           )}
           {onDeleteFolder && (
             <MenuItem
-              className="flex-nowrap text-danger"
+              danger
+              className="flex-nowrap"
               icon={<FolderX size={14} className="shrink-0" strokeWidth={1.75} />}
               label={<span className="whitespace-nowrap shrink-0">{t('folders.delete.action')}</span>}
               onClick={() => {
@@ -284,6 +290,7 @@ export function ThreadActionsMenu({
   return (
     <div ref={rootRef} className="relative">
       <button
+        type="button"
         className={`flex ${triggerClassName} shrink-0 items-center justify-center rounded-control-sm cursor-pointer transition-all ${
           filterActive ? 'bg-accent text-on-accent ' : 'hover:bg-hover text-secondary'
         }`}
@@ -292,11 +299,17 @@ export function ThreadActionsMenu({
           setOpen((value) => !value)
         }}
         title={t('threads.actions.title')}
+        aria-label={t('threads.actions.title')}
+        aria-haspopup="menu"
+        aria-expanded={open}
       >
         <MoreVertical size={size} strokeWidth={1.75} />
       </button>
       {open && (
-        <div
+        <MenuList
+          label={t('threads.actions.title')}
+          autoFocus
+          onClose={() => setOpen(false)}
           className="absolute end-0 mt-1.5 z-50 min-w-[160px] w-max rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in select-none"
           onClick={(event) => event.stopPropagation()}
         >
@@ -321,7 +334,7 @@ export function ThreadActionsMenu({
             searchLabel={searchLabel}
             closeMenu={() => setOpen(false)}
           />
-        </div>
+        </MenuList>
       )}
     </div>
   )

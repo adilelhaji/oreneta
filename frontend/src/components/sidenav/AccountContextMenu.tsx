@@ -26,7 +26,7 @@ export function AccountContextMenu({
   const folders = useValue(mail$.foldersByAccount[account.id])
   const hasUnread = inboxUnread(folders) > 0
   return (
-    <RailContextMenu x={x} y={y} onClose={onClose}>
+    <RailContextMenu x={x} y={y} label={account.display_name || account.email || account.id} onClose={onClose}>
       <RailMenuItem
         icon={<SlidersHorizontal size={14} className={secondary} strokeWidth={1.75} />}
         label={t('settings.account.accountSettings')}
@@ -37,7 +37,6 @@ export function AccountContextMenu({
         }}
       />
       <RailMenuItem
-        className="disabled:cursor-not-allowed disabled:opacity-50"
         disabled={!hasUnread || account.auth_type === 'graph_oauth'}
         icon={<CheckCheck size={14} className={secondary} strokeWidth={1.75} />}
         label={t('threads.actions.markAllAsRead')}

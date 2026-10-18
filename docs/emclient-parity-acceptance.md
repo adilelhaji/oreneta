@@ -160,6 +160,16 @@ notifica com a correu nou. La comprovació amb un servidor no té cap prova auto
 [mail-check-interval.md](design/mail-check-interval.md). Cap fila no canvia d'estat: no hi ha
 cap fila de sincronització, S15-01 (POP3) es manté `implemented-unverified` i GRAPH-01
 `partial`, i l'evidència nativa de Windows (N4) i amb servidors reals (N5) continua pendent.
+El 2026-10-18 (#289, peça 7 del redisseny) tots els menús emergents i contextuals de
+l'aplicació són menús WAI-ARIA (`menu`, `menuitem`, `menuitemcheckbox`, `menuitemradio`,
+separadors, grups amb nom i submenús), es fan servir amb el teclat (fletxes, Inici i Fi,
+cerca per lletra, Escapada només per al menú de dins, Tab per tancar, fletxa cap al final
+de la línia per obrir un submenú i cap a l'inici per tancar-lo, a l'inrevés en àrab), el
+focus hi entra en obrir-los i torna a l'element que els va obrir en tancar-los, i les files
+fan 28 px (decisió D9, aprovada el 2026-10-17 i registrada a #288). Proves unitàries i
+proves de l'entrada de producció, en anglès i en àrab, amb axe sense cap infracció sobre
+els menús. Cap fila no canvia d'estat (SET-08, SET-27, #37):
+l'evidència nativa de Windows i la dels lectors de pantalla continuen pendents.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|
