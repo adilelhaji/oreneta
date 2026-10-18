@@ -5,7 +5,8 @@ import { settings$ } from '../../states/settings'
 import type { ComposeDraft } from '../../types'
 import { RecipientInput } from './RecipientInput'
 
-const fieldClass = 'flex-1 bg-transparent text-ui text-primary placeholder-secondary outline-none'
+// min-w-0: a field gives way in a narrow reader instead of running past its edge.
+const fieldClass = 'min-w-0 flex-1 bg-transparent text-ui text-primary placeholder-secondary outline-none'
 
 const labelClass = 'w-12 shrink-0 text-caption font-bold text-secondary'
 
@@ -42,7 +43,7 @@ export function ComposerHeaderFields({
               const email = e.target.value.slice(sep + 1)
               update({ accountId: accId, fromEmail: email })
             }}
-            className="flex-1 bg-transparent text-ui text-primary outline-none cursor-pointer"
+            className="min-w-0 flex-1 bg-transparent text-ui text-primary outline-none cursor-pointer"
           >
             {sendable.flatMap((acc) =>
               accountIdentities(acc).map((identity) => (

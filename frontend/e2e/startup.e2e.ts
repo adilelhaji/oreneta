@@ -1851,7 +1851,9 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
             })
             .map(
               (element) =>
-                element.getAttribute('aria-label') ?? element.getAttribute('title') ?? element.textContent?.trim(),
+                // An unnamed field is reported by its tag and placeholder rather than as "".
+                (element.getAttribute('aria-label') ?? element.getAttribute('title') ?? element.textContent?.trim()) ||
+                `${element.tagName.toLowerCase()} "${element.getAttribute('placeholder') ?? ''}"`,
             ),
         )
         expect(outside, where).toEqual([])
@@ -1941,7 +1943,9 @@ async function rtlInView(page: Page, where: string) {
       })
       .map(
         (element) =>
-          element.getAttribute('aria-label') ?? element.getAttribute('title') ?? element.textContent?.trim().slice(0, 40),
+          // An unnamed field is reported by its tag and placeholder rather than as "".
+          (element.getAttribute('aria-label') ?? element.getAttribute('title') ?? element.textContent?.trim().slice(0, 40)) ||
+          `${element.tagName.toLowerCase()} "${element.getAttribute('placeholder') ?? ''}"`,
       ),
   )
   expect(outside, where).toEqual([])
@@ -3627,7 +3631,9 @@ async function ltrInView(page: Page, where: string) {
       })
       .map(
         (element) =>
-          element.getAttribute('aria-label') ?? element.getAttribute('title') ?? element.textContent?.trim().slice(0, 40),
+          // An unnamed field is reported by its tag and placeholder rather than as "".
+          (element.getAttribute('aria-label') ?? element.getAttribute('title') ?? element.textContent?.trim().slice(0, 40)) ||
+          `${element.tagName.toLowerCase()} "${element.getAttribute('placeholder') ?? ''}"`,
       ),
   )
   expect(outside, where).toEqual([])
