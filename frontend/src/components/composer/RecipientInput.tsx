@@ -27,7 +27,10 @@ type RecipientInputProps = {
   autoFocus?: boolean
 }
 
-const inputClass = 'min-w-[8rem] flex-1 bg-transparent text-ui text-primary placeholder-secondary outline-none'
+// At least 8rem to type in, but never wider than the field it sits in: at 200 %
+// zoom in a narrow reader, a fixed 8rem ran past the window's edge (#283).
+const inputClass =
+  'min-w-[min(8rem,100%)] flex-1 bg-transparent text-ui text-primary placeholder-secondary outline-none'
 
 /**
  * A recipient field whose entries are things rather than text.

@@ -137,7 +137,7 @@ export function NotesView() {
                       onClick={() => open(note.id)}
                       className={clsx(
                         'flex w-full flex-col gap-0.5 rounded-control px-3 py-2 text-start transition-colors cursor-pointer',
-                        selected === note.id ? 'bg-accent/10 dark:bg-accent/15' : 'hover:bg-hover',
+                        selected === note.id ? 'bg-active' : 'hover:bg-hover',
                       )}
                     >
                       <span className="flex items-center gap-1.5 text-ui font-semibold text-primary">

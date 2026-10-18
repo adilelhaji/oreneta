@@ -5,7 +5,7 @@ import { Mail } from 'lucide-react'
 import { Button } from './button/Button'
 import { IconButton } from './button/IconButton'
 import { Chip } from './chip/Chip'
-import { TextInput } from './field/Field'
+import { SelectInput, TextInput } from './field/Field'
 import { Notice } from './notice/Notice'
 import { EmptyState } from './empty-state/EmptyState'
 import { ErrorState, LoadingState } from './empty-state/StateViews'
@@ -52,6 +52,25 @@ describe('shared control interactions', () => {
     expect(field.getAttribute('aria-invalid')).toBe('grammar')
     view.rerender(<TextInput aria-label="Recipient" />)
     expect(field.hasAttribute('aria-invalid')).toBe(false)
+  })
+
+  it('outlines fields with the 3:1 input border and invalid ones with danger (#287)', () => {
+    const view = render(
+      <>
+        <TextInput aria-label="Valid" />
+        <TextInput aria-label="Invalid" invalid />
+        <SelectInput aria-label="Choice" defaultValue="a">
+          <option value="a">A</option>
+        </SelectInput>
+      </>,
+    )
+    const classes = (name: string) =>
+      view.getByRole(name === 'Choice' ? 'combobox' : 'textbox', { name }).className.split(' ')
+    expect(classes('Valid')).toContain('border-input')
+    expect(classes('Valid')).not.toContain('border-border')
+    expect(classes('Invalid')).toContain('border-danger')
+    expect(classes('Invalid')).not.toContain('border-input')
+    expect(classes('Choice')).toContain('border-input')
   })
 
   it('keeps disabled menu actions inert and preserves long action names with shortcuts', () => {

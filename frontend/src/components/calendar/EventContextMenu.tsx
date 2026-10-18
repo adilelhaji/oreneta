@@ -30,7 +30,7 @@ export function EventContextMenu({ state, onClose }: { state: EventContextMenuSt
       onClose={onClose}
       overlay
       overlayClassName="fixed inset-0 z-[60]"
-      className="fixed z-[61] min-w-[160px] rounded-control border border-border bg-header p-1 shadow-overlay"
+      className="fixed z-[61] min-w-[160px] rounded-control border border-border bg-chats p-1 shadow-overlay"
     >
       <MenuItem
         icon={<SquarePen size={14} className="text-accent" strokeWidth={1.75} />}

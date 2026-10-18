@@ -3842,6 +3842,68 @@ fn concurrent_first_open_runs_migrations_once() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// Opens of one file in one process wait for a migration that holds its
+/// write lock longer than the busy timeout, instead of failing with
+/// "database is locked" (#227).
+#[test]
+fn concurrent_opens_wait_for_a_migration_longer_than_the_busy_timeout() {
+    let dir = std::env::temp_dir().join(format!("meron-store-test-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("meron.db");
+    db::slow_migration::next_for(&path, std::time::Duration::from_secs(6));
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(6));
+    let handles = (0..6)
+        .map(|_| {
+            let path = path.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                db::open_at(&path).map(|_| ())
+            })
+        })
+        .collect::<Vec<_>>();
+
+    for handle in handles {
+        handle.join().unwrap().unwrap();
+    }
+    assert!(db::slow_migration::spent(), "the migration held its lock");
+
+    let conn = Connection::open(&path).unwrap();
+    let version: i64 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(version, db::SCHEMA_VERSION);
+
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A store already current is opened without its write lock, so a writer
+/// elsewhere does not hold it up; one whose body cache is not current still
+/// gets it done (#227).
+#[test]
+fn a_current_store_opens_without_the_write_lock() {
+    let dir = std::env::temp_dir().join(format!("meron-store-test-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("meron.db");
+    drop(db::open_at(&path).unwrap());
+
+    let writer = Connection::open(&path).unwrap();
+    writer.execute_batch("BEGIN IMMEDIATE").unwrap();
+    db::open_at(&path).expect("opened while another connection writes");
+    writer.execute_batch("ROLLBACK").unwrap();
+
+    writer.execute("DELETE FROM meta WHERE key = 'body_cache_version'", []).unwrap();
+    let conn = db::open_at(&path).unwrap();
+    let cache: Option<String> = conn
+        .query_row("SELECT value FROM meta WHERE key = 'body_cache_version'", [], |r| r.get(0))
+        .optional()
+        .unwrap();
+    assert!(cache.is_some(), "the body cache was brought up to date");
+    drop((conn, writer));
+
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn upgrade_from_main_v30_preserves_label_links_and_adds_tasks_and_spam() {
     let conn = test_conn();
@@ -4196,6 +4258,52 @@ fn save_sent_copy_pref_round_trips_and_can_be_cleared() {
     let value: Value = serde_json::from_str(&prefs).unwrap();
     assert_eq!(value["save_sent_copy"], Value::Null);
     assert_eq!(value["other"], 7);
+}
+
+/// #270 (ADR-0071, 1B): an account from before the preference has none and
+/// reads as manual; "manual only" is 0; an out-of-bounds value reads within
+/// bounds, and a malformed one as unset.
+#[test]
+fn mail_check_interval_reads_manual_when_unset_and_bounded_values() {
+    let conn = Connection::open_in_memory().unwrap();
+    db::run_migrations(&conn).unwrap();
+    conn.execute(
+        "INSERT INTO accounts(id, engine, provider) VALUES('mail-1', 'mail', 'custom')",
+        [],
+    )
+    .unwrap();
+    assert_eq!(mail_check_interval(&conn, "mail-1").unwrap(), crate::mail_check::MANUAL);
+    for (stored, read) in [("0", 0u64), ("2", 5), ("45", 45), ("99999", 1440), ("\"soon\"", 0)] {
+        conn.execute(
+            &format!("UPDATE accounts SET prefs = json_set('{{}}', '$.mail_check_interval_minutes', json('{stored}')) WHERE id = 'mail-1'"),
+            [],
+        )
+        .unwrap();
+        assert_eq!(mail_check_interval(&conn, "mail-1").unwrap(), read, "{stored}");
+    }
+    // Nothing to check for an account that does not exist.
+    assert_eq!(mail_check_interval(&conn, "nobody").unwrap(), crate::mail_check::MANUAL);
+}
+
+/// ADR-0071, 1B: an account created now checks every 15 minutes; saving it
+/// again (a reconnect, new server settings) keeps the person's own choice.
+#[test]
+fn a_new_mail_account_starts_at_fifteen_minutes_and_keeps_its_choice() {
+    let conn = test_conn();
+    let meta = AccountMeta {
+        engine: "mail".to_string(),
+        provider: "custom".to_string(),
+        email: "ana@example.test".to_string(),
+        display_name: String::new(),
+        avatar_url: String::new(),
+        sender_name: String::new(),
+    };
+    let creds = proxy_test_creds(crate::proxy::ProxyChoice::default());
+    upsert_account(&conn, "ana", &meta, &creds).unwrap();
+    assert_eq!(mail_check_interval(&conn, "ana").unwrap(), crate::mail_check::NEW_ACCOUNT_INTERVAL_MINUTES);
+    set_account_pref_u64(&conn, "ana", "mail_check_interval_minutes", 0).unwrap();
+    upsert_account(&conn, "ana", &meta, &creds).unwrap();
+    assert_eq!(mail_check_interval(&conn, "ana").unwrap(), crate::mail_check::MANUAL);
 }
 
 #[test]

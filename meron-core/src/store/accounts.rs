@@ -140,6 +140,10 @@ struct AccountPrefs {
     /// RSS automatic sync interval in minutes; default 60.
     #[serde(deserialize_with = "lenient_pref")]
     rss_sync_interval_minutes: Option<u64>,
+    /// Mail periodic check interval in minutes, 0 = manual only (#270);
+    /// absent on accounts older than #270, which read as manual (ADR-0071).
+    #[serde(deserialize_with = "lenient_pref")]
+    mail_check_interval_minutes: Option<u64>,
     /// Send-as identities (besides the primary address); default none.
     #[serde(deserialize_with = "lenient_pref")]
     aliases: Option<Vec<Alias>>,
@@ -223,6 +227,14 @@ impl AccountPrefs {
     fn rss_sync_interval_minutes(&self) -> u64 {
         self.rss_sync_interval_minutes
             .unwrap_or(DEFAULT_RSS_SYNC_INTERVAL_MINUTES)
+    }
+
+    /// Mail periodic check interval in minutes; 0 is "manual only". A stored
+    /// value out of bounds (written by hand, say) is read within them.
+    fn mail_check_interval_minutes(&self) -> u64 {
+        self.mail_check_interval_minutes
+            .map(crate::mail_check::normalize)
+            .unwrap_or(crate::mail_check::MANUAL)
     }
 
     /// Configured send-as aliases (never the primary address).
@@ -347,8 +359,8 @@ pub fn upsert_account(
         && !conn.prepare("SELECT 1 FROM accounts WHERE id = ?1")?.exists(params![id])?;
     let now = now_unix();
     conn.execute(
-        "INSERT INTO accounts(id, engine, provider, email, display_name, avatar_url, config, created_at, updated_at, sender_name, sort_order)
-         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9, COALESCE((SELECT MAX(sort_order) + 1 FROM accounts), 0))
+        "INSERT INTO accounts(id, engine, provider, email, display_name, avatar_url, config, created_at, updated_at, sender_name, sort_order, prefs)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9, COALESCE((SELECT MAX(sort_order) + 1 FROM accounts), 0), ?10)
          ON CONFLICT(id) DO UPDATE SET
            engine       = excluded.engine,
            provider     = excluded.provider,
@@ -376,6 +388,11 @@ pub fn upsert_account(
             creds_to_config(creds),
             now,
             meta.sender_name,
+            // Only a row created here takes these: an update keeps the
+            // account's own prefs. A new mail account checks its mail
+            // periodically; an existing one without the pref stays manual
+            // (ADR-0071, 1B).
+            if meta.engine == "mail" { crate::mail_check::new_account_prefs() } else { "{}".to_string() },
         ],
     )?;
     if new_exchange {
@@ -1172,6 +1189,7 @@ pub fn list_accounts(conn: &Connection) -> Result<Vec<serde_json::Value>> {
                 "save_sent_copy": save_sent_copy,
                 "chat_wallpaper": chat_wallpaper,
                 "sort_order": sort_order,
+                "mail_check_interval_minutes": p.mail_check_interval_minutes(),
                 "aliases": p.aliases_json(),
                 "signature": p.signature_json(),
                 "proxy": c.proxy.to_json(),
@@ -1229,6 +1247,14 @@ pub fn account_paused(conn: &Connection, id: &str) -> Result<bool> {
     Ok(account_prefs(conn, id)?
         .map(|p| p.is_paused())
         .unwrap_or(false))
+}
+
+/// An account's mail periodic check interval in minutes, 0 = manual only
+/// (#270). Unknown accounts read as manual: nothing to check.
+pub fn mail_check_interval(conn: &Connection, id: &str) -> Result<u64> {
+    Ok(account_prefs(conn, id)?
+        .map(|p| p.mail_check_interval_minutes())
+        .unwrap_or(crate::mail_check::MANUAL))
 }
 
 /// Explicit Sent-copy override for an account. None means use provider default.

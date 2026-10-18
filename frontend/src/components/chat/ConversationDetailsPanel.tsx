@@ -338,7 +338,7 @@ export function ConversationDetailsPanel({
           onClose={() => setPersonMenu(null)}
           overlay
           overlayClassName="fixed inset-0 z-[80]"
-          className="fixed z-[81] min-w-[180px] rounded-control border border-border bg-header p-1 shadow-overlay"
+          className="fixed z-[81] min-w-[180px] rounded-control border border-border bg-chats p-1 shadow-overlay"
           onContextMenu={(event) => event.preventDefault()}
         >
           {accountId && onOpenConversation && (

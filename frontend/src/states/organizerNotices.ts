@@ -72,6 +72,32 @@ export function noticeRecipients(event: Pick<CalendarEvent, 'attendees'>, sender
   return people
 }
 
+/// Who a change to an event can be told to, and the event as it is saved for
+/// that. An account's own calendar (Exchange, Google) tells the people on it
+/// itself; a local or CalDAV one tells them by mail from here, which needs an
+/// account that sends as the organizer (`canNotify` is false without one, and
+/// then nobody is asked about). Only people with an address can be told. A
+/// meeting told by mail is saved naming its organizer: the identity the notice
+/// goes out from, when it names none yet. Shared by the editor and by moving
+/// an event on the grid (#266), so both ask the same question.
+export function noticePlan<T extends Pick<CalendarEvent, 'accountId' | 'organizer' | 'attendees'>>(
+  event: T,
+  kind: Calendar['kind'] | undefined,
+  accounts: Account[],
+): { sender: NoticeSender | null; canNotify: boolean; invitees: string[]; toSave: T } {
+  const byMail = mailsNotices(kind)
+  const sender = byMail ? noticeSender(event, accounts) : null
+  const canNotify = !byMail || sender !== null
+  const invitees = !canNotify
+    ? []
+    : byMail
+      ? noticeRecipients(event, sender)
+      : event.attendees.map((person) => person.addr.trim()).filter(Boolean)
+  const toSave: T =
+    byMail && sender && event.attendees.length > 0 ? { ...event, organizer: organizerFor(event, sender) } : event
+  return { sender, canNotify, invitees, toSave }
+}
+
 export type Notice = { method: 'REQUEST' | 'CANCEL'; to: string[]; subject: string; sequence: number; ics: string }
 
 /// Builds the notice for an event as stored: after a save, its new version;
