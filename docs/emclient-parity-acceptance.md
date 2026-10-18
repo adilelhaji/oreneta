@@ -95,7 +95,7 @@ nucli l'aplica a les carpetes seleccionables que la notificació del servidor (I
 cobreix, sense Paperera, Correu brossa ni «Tots» de Gmail; als comptes Exchange i Graph,
 que no en tenen, també la safata d'entrada, i als POP3, només la safata d'entrada. IDLE
 continua igual sigui quin sigui l'interval. El correu nou que arriba així passa per les regles i per la resposta automàtica
-d'absència, i el de POP3 també s'avisa. Vegeu
+d'absència, i el de POP3 també es notifica. Vegeu
 [mail-check-interval.md](design/mail-check-interval.md). Cap fila no canvia d'estat: no hi ha
 cap fila de sincronització, S15-01 (POP3) es manté `implemented-unverified` i GRAPH-01
 `partial`, i l'evidència nativa de Windows (N4) i amb servidors reals (N5) continua pendent.

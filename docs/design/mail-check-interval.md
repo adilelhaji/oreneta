@@ -7,7 +7,7 @@ Estat abans d'aquesta incidència (verificat al main `cb6804eb`): a l'escriptori
 cap comprovació periòdica del correu. La safata d'entrada de cada compte IMAP té un
 vigilant IDLE (#121), i les carpetes que es mostren com a columnes del tauler també. La
 resta de carpetes només s'actualitzaven en obrir-les; l'aplicació sincronitzava la safata
-d'entrada de cada compte una vegada en engegar. Els comptes POP3, Exchange (EWS) i
+d'entrada de cada compte una vegada en engegar-se. Els comptes POP3, Exchange (EWS) i
 Microsoft Graph no tenen cap vigilant, de manera que no rebien correu nou després de
 l'engegada si la persona no obria la carpeta. Només els comptes RSS tenien un interval
 propi, i el pont Go el perdia en llegir la llista de comptes (`types.go` no tenia el camp),
@@ -37,7 +37,7 @@ de manera que l'escriptori sempre mostrava i feia servir el valor per defecte.
   quins comptes toquen. No es comprova mai un compte en pausa, l'arxiu local, un compte
   RSS (que manté el seu interval propi) ni un compte amb «Només manualment».
 - Un compte comença a comptar el seu interval quan el planificador el veu per primera
-  vegada: en engegar l'aplicació (la safata d'entrada ja s'ha sincronitzat en engegar),
+  vegada: en engegar l'aplicació (la safata d'entrada ja s'ha sincronitzat),
   quan s'afegeix o quan deixa de ser «Només manualment». El moment de l'última
   comprovació no es desa.
 - Cada comprovació demana primer al servidor la llista de carpetes seleccionables i
@@ -53,10 +53,10 @@ de manera que l'escriptori sempre mostrava i feia servir el valor per defecte.
   sincronitzar Enviats i Esborranys ni baixar-ne cossos per avançat. Una carpeta que la
   interfície ja està sincronitzant es deixa a aquesta sincronització.
 - El correu nou de la safata d'entrada passa per les regles i per la resposta automàtica
-  d'absència, igual que el que arriba per IDLE; el correu baixat per POP3 també s'avisa
-  com a correu nou.
-- La interfície rep un sol avís per compte i comprovació: el del correu nou, o un sol
-  refresc. Si hi ha errors, un sol error per compte, amb quantes carpetes han fallat i el
+  d'absència, igual que el que arriba per IDLE; el correu baixat per POP3 també es
+  notifica com a correu nou.
+- La interfície rep un sol avís per compte i comprovació: el del correu nou, o una sola
+  actualització. Si hi ha errors, un sol error per compte, amb quantes carpetes han fallat i el
   primer motiu.
 - Una comprovació no s'encavalla amb la següent del mateix compte, i com a màxim dura
   10 minuts; si s'atura, el compte es torna a comprovar a l'interval següent.
@@ -81,7 +81,7 @@ il·legible, una comprovació que encara dura, un compte esborrat, la comprovaci
 encara que falli) i per a l'error únic; per a la lectura de la preferència (sense valor,
 fora de límits, il·legible), per al valor dels comptes nous, el gestor
 `account.setMailCheckInterval`, la llista de comptes i la còpia de seguretat. Proves Go del
-pont i de la interfície. La comprovació contra un servidor (`check_account_mail`) no té
+pont i de la interfície. La comprovació amb un servidor (`check_account_mail`) no té
 cap prova automàtica: no hi ha cap servidor IMAP fals amb LIST i SELECT al nucli, i
 l'interval mínim de 5 minuts no hi cap a la prova d'integració. La prova amb servidors
 reals i a Windows natiu queda pendent.
