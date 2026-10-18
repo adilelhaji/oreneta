@@ -115,8 +115,8 @@
   tanca durant la lectura.
 - **La transacció torna a comprovar l'estat:** la lectura és a la xarxa i, mentre
   dura, la persona pot triar «No l'afegeixis» o suprimir el compte. La
-  transacció posterior només crea res si el compte encara existeix i l'entrada
-  encara existeix en estat `pending`; si no, descarta el que ha llegit sense
+  transacció posterior només escriu si el compte encara existeix i l'entrada
+  encara hi és en estat `pending`; si no, descarta el que ha llegit sense
   escriure res (i, si la clau pendent del §3 encara hi és, l'esborra). Una
   lectura tardana no pot desfer mai un `declined` ni tornar a crear dades d'un
   compte suprimit.
