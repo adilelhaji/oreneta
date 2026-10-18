@@ -2870,5 +2870,10 @@
   "search.scope.unified": "Cerca in «{folder}»: quella cartella in ogni account incluso nelle cartelle unificate, anche se è nascosta.",
   "search.scope.folder": "Cerca solo in «{folder}». Le cartelle nascoste non sono incluse.",
   "search.scope.hiddenFolder": "Cerca solo in «{folder}», una cartella nascosta.",
-  "search.scope.unifiedInbox": "Cerca in «{folder}»: la posta in arrivo di ogni account incluso nelle cartelle unificate."
+  "search.scope.unifiedInbox": "Cerca in «{folder}»: la posta in arrivo di ogni account incluso nelle cartelle unificate.",
+  "settings.signature.placement": "Nelle risposte e negli inoltri",
+  "settings.signature.placementHint": "Dove va la firma rispetto al messaggio citato",
+  "settings.signature.placementWithText": "Con ciò che scrivo",
+  "settings.signature.placementAbove": "Sopra la citazione",
+  "settings.signature.placementBelow": "Sotto la citazione"
 }

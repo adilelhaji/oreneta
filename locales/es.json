@@ -2870,5 +2870,10 @@
   "search.scope.unified": "Busca en «{folder}»: esa carpeta de cada cuenta incluida en las carpetas unificadas, aunque esté oculta.",
   "search.scope.folder": "Busca solo en «{folder}». Las carpetas ocultas no se incluyen.",
   "search.scope.hiddenFolder": "Busca solo en «{folder}», una carpeta oculta.",
-  "search.scope.unifiedInbox": "Busca en «{folder}»: la bandeja de entrada de cada cuenta incluida en las carpetas unificadas."
+  "search.scope.unifiedInbox": "Busca en «{folder}»: la bandeja de entrada de cada cuenta incluida en las carpetas unificadas.",
+  "settings.signature.placement": "En respuestas y reenvíos",
+  "settings.signature.placementHint": "Dónde va la firma respecto al original citado",
+  "settings.signature.placementWithText": "Con lo que escribo",
+  "settings.signature.placementAbove": "Encima de la cita",
+  "settings.signature.placementBelow": "Debajo de la cita"
 }

@@ -2870,5 +2870,10 @@
   "search.scope.unified": "Otsib kaustast „{folder}“: see kaust igal ühendatud kaustadesse kaasatud kontol, ka siis, kui see on peidetud.",
   "search.scope.folder": "Otsib ainult kaustast „{folder}“. Peidetud kaustu ei otsita.",
   "search.scope.hiddenFolder": "Otsib ainult kaustast „{folder}“, mis on peidetud.",
-  "search.scope.unifiedInbox": "Otsib kaustast „{folder}“: iga ühendatud kaustadesse kaasatud konto sisendkaust."
+  "search.scope.unifiedInbox": "Otsib kaustast „{folder}“: iga ühendatud kaustadesse kaasatud konto sisendkaust.",
+  "settings.signature.placement": "Vastustes ja edastustes",
+  "settings.signature.placementHint": "Kuhu allkiri tsiteeritud algse sõnumi suhtes läheb",
+  "settings.signature.placementWithText": "Koos minu tekstiga",
+  "settings.signature.placementAbove": "Tsitaadi kohal",
+  "settings.signature.placementBelow": "Tsitaadi all"
 }

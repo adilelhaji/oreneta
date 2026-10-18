@@ -2870,5 +2870,10 @@
   "search.scope.unified": "「{folder}」を検索します: 統合フォルダーに含まれる各アカウントのそのフォルダー (非表示でも含む)。",
   "search.scope.folder": "「{folder}」のみを検索します。非表示のフォルダーは含まれません。",
   "search.scope.hiddenFolder": "非表示のフォルダー「{folder}」のみを検索します。",
-  "search.scope.unifiedInbox": "「{folder}」を検索します: 統合フォルダーに含まれる各アカウントの受信トレイ。"
+  "search.scope.unifiedInbox": "「{folder}」を検索します: 統合フォルダーに含まれる各アカウントの受信トレイ。",
+  "settings.signature.placement": "返信と転送",
+  "settings.signature.placementHint": "引用した元のメールに対する署名の位置",
+  "settings.signature.placementWithText": "自分の文章と一緒に",
+  "settings.signature.placementAbove": "引用の上",
+  "settings.signature.placementBelow": "引用の下"
 }
