@@ -113,6 +113,13 @@
   `linked`. Si la lectura falla, no es crea res, l'entrada continua `pending` i
   es desa el motiu. Així no hi pot quedar una llista a mitges si l'aplicació es
   tanca durant la lectura.
+- **La transacció torna a comprovar l'estat:** la lectura és a la xarxa i, mentre
+  dura, la persona pot triar «No l'afegeixis» o suprimir el compte. La
+  transacció posterior només crea res si el compte encara existeix i l'entrada
+  encara existeix en estat `pending`; si no, descarta el que ha llegit sense
+  escriure res (i, si la clau pendent del §3 encara hi és, l'esborra). Una
+  lectura tardana no pot desfer mai un `declined` ni tornar a crear dades d'un
+  compte suprimit.
 - És una lectura: no s'envia res al servidor, i es fa una sola vegada, com a
   resposta a una acció de la persona (afegir el compte). Els reintents d'una entrada `pending` es fan en
   obrir Tasques i amb «Sincronitza», que són els moments en què ja se
@@ -203,7 +210,10 @@
 ### 6. Contractes que canvien
 
 - `caldav.discover`: torna els components de cada col·lecció.
-- `caldav.add`: rep també les col·leccions de tasques.
+- `caldav.add`: rep també les col·leccions de tasques. Avui rebutja la petició
+  si no hi ha cap calendari triat; passa a rebutjar-la només si no hi ha ni
+  calendaris ni llistes de tasques, perquè un servidor que només té
+  col·leccions `VTODO` es pugui afegir.
 - `tasks.lists`: torna també les entrades `pending` i `declined` dels comptes,
   amb el motiu i l'estat de l'avís.
 - Noves: `tasks.declineAccountList` («No l'afegeixis», «Treu-la»),
@@ -268,8 +278,10 @@
   a `declined` i amb el compte); la marca `scanned` (un servidor afegit després
   no es torna a llistar; les col·leccions desmarcades queden `declined`); un
   compte nou no mostra l'avís de l'actualització; tornar a afegir una llista
-  CalDAV amb la contrasenya d'un calendari del mateix origen, i sense cap; la
-  prova d'ADR-0011 amb la taula nova;
+  CalDAV amb la contrasenya d'un calendari del mateix origen, i sense cap; una
+  lectura que acaba després de «No l'afegeixis» o de suprimir el compte no
+  escriu res; `caldav.add` amb només llistes de tasques (un servidor només
+  `VTODO`) i sense res; la prova d'ADR-0011 amb la taula nova;
   CalDAV amb una col·lecció només `VTODO`, una mixta amb tasques i una sense,
   una sense la propietat, una d'un altre origen, una d'ADR-0039 ja enllaçada
   (adoptada, sense duplicat) i la mateixa URL escrita de formes diferents, amb
