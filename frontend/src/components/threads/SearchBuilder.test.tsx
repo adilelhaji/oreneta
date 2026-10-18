@@ -7,7 +7,9 @@ const { SearchBuilder } = await import('./SearchBuilder')
 const { SavedSearchMenu } = await import('./SavedSearchMenu')
 const { ui$ } = await import('../../states/ui')
 const { settings$, sanitizeSavedSearches } = await import('../../states/settings')
-const { dayToSeconds, secondsToDay } = await import('../../states/searchBuilder')
+const { dayToSeconds, secondsToDay, EMPTY_QUERY } = await import('../../states/searchBuilder')
+const { folderPrefs$ } = await import('../../states/folderPrefs')
+const { mail$ } = await import('../../states/mail')
 
 function bridge(answer: (command: string, payload: any) => unknown) {
   const calls: { command: string; payload: any }[] = []
@@ -93,4 +95,41 @@ it('a search saved before scopes existed is kept and applies where it is opened'
   expect(sanitizeSavedSearches([{ id: '1', name: 'n', query: 'q', account: 'a', folder: 'f' }])).toEqual([
     { id: '1', name: 'n', query: 'q', account: 'a', folder: 'f' },
   ])
+})
+
+it('says where the search looks and whether hidden folders are in it (#273)', async () => {
+  bridge(() => ({ query: EMPTY_QUERY }))
+  const folders = [
+    { id: 'INBOX', account_id: 'a@x', name: 'Inbox', role: 'inbox', unread: 0, delimiter: '/' },
+    { id: 'Lists', account_id: 'a@x', name: 'Lists', role: 'folder', unread: 0, delimiter: '/' },
+  ]
+  mail$.foldersByAccount['a@x'].set(folders)
+  folderPrefs$.hidden.set([{ accountId: 'a@x', folderId: 'Lists' }])
+  const scopeOf = async () => {
+    const view = render(<SearchBuilder query="" />)
+    fireEvent.click(view.getByRole('button', { name: 'Search options' }))
+    const text = view.getByText(/^Searches /).textContent
+    await act(async () => {})
+    cleanup()
+    return text
+  }
+  try {
+    expect(await scopeOf()).toBe('Searches only “Inbox”. Hidden folders are not included.')
+    ui$.selectedFolder.set('Lists')
+    expect(await scopeOf()).toBe('Searches only “Lists”, a hidden folder.')
+    ui$.selectedAccount.set('unified')
+    ui$.selectedFolder.set('sent')
+    expect(await scopeOf()).toBe(
+      'Searches “Unified sent”: that folder in each account included in the unified folders, even where it is hidden.',
+    )
+    ui$.selectedFolder.set('inbox')
+    expect(await scopeOf()).toBe('Searches “Unified inbox”: the inbox of each account included in the unified folders.')
+    ui$.selectedFolder.set('starred')
+    expect(await scopeOf()).toBe(
+      'Searches starred messages in every folder of every account, hidden folders included.',
+    )
+  } finally {
+    folderPrefs$.hidden.set([])
+    mail$.foldersByAccount['a@x'].delete()
+  }
 })

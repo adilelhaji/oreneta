@@ -1,9 +1,18 @@
-import { ArrowDown, ArrowUp, FolderInput, Star, StarOff } from 'lucide-react'
+import { ArrowDown, ArrowUp, Eye, EyeOff, FolderInput, Star, StarOff } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { FOLDER_COLORS } from '../../lib/folderColors'
 import { FOLDER_MOVE_BLOCK_TEXT, folderMoveSourceBlock } from '../../lib/folderMoves'
-import { folderPrefs$, moveFavorite, setFolderColor, toggleFavorite, type FolderRef } from '../../states/folderPrefs'
+import { FOLDER_HIDE_BLOCK_TEXT, folderHideBlock } from '../../lib/folderHiding'
+import {
+  folderPrefs$,
+  hideFolder,
+  moveFavorite,
+  setFolderColor,
+  toggleFavorite,
+  unhideFolder,
+  type FolderRef,
+} from '../../states/folderPrefs'
 import type { Account, Folder } from '../../types'
 import { MenuGroup } from '../menu/Menu'
 import { RailContextMenu, RailMenuItem } from './RailContextMenu'
@@ -12,7 +21,8 @@ const secondary = 'text-secondary'
 
 // Right-click (or Shift+F10 / Menu key) menu for a folder in mail navigation
 // and in Favorites (ADR-0050): favorite on/off, its place among favorites,
-// a color from the named palette, and "Move folder to…".
+// a color from the named palette, "Move folder to…", and hiding the folder
+// from the tree or showing it again (#273).
 export function FolderContextMenu({
   folder,
   folders,
@@ -21,6 +31,7 @@ export function FolderContextMenu({
   y,
   inFavorites = false,
   onMoveTo,
+  onHiddenChange = () => {},
   onClose,
 }: {
   folder: Folder
@@ -31,6 +42,8 @@ export function FolderContextMenu({
   /** Opened on a Favorites entry: adds Move up / Move down. */
   inFavorites?: boolean
   onMoveTo: (folder: Folder) => void
+  /** Told after the folder was hidden or shown again, to announce it. */
+  onHiddenChange?: (folder: Folder, hidden: boolean) => void
   onClose: () => void
 }) {
   const { t } = useTranslation()
@@ -40,6 +53,17 @@ export function FolderContextMenu({
   const index = favorites.findIndex((item) => item.accountId === ref.accountId && item.folderId === ref.folderId)
   const favorite = index !== -1
   const current = colors.find((item) => item.accountId === ref.accountId && item.folderId === ref.folderId)?.color
+  const hidden = useValue(folderPrefs$.hidden)
+  const hiddenHere = hidden.some((item) => item.accountId === ref.accountId && item.folderId === ref.folderId)
+  const hideBlock = hiddenHere ? null : folderHideBlock(folder, folders, hidden)
+  // Hidden itself and under a hidden parent too: its own mark can go, but the
+  // folder stays out of the tree, and the row says so.
+  const others = hidden.filter((item) => item.accountId !== ref.accountId || item.folderId !== ref.folderId)
+  const staysHidden = hiddenHere && folderHideBlock(folder, folders, others) === 'parentHidden'
+  const hideNote = hideBlock ?? (staysHidden ? 'parentHidden' : null)
+  const hideReason = hideNote
+    ? t(FOLDER_HIDE_BLOCK_TEXT[hideNote].key, { defaultValue: FOLDER_HIDE_BLOCK_TEXT[hideNote].text })
+    : ''
   const block = folderMoveSourceBlock(folder, folders, account)
   const reason = block ? t(FOLDER_MOVE_BLOCK_TEXT[block].key, { defaultValue: FOLDER_MOVE_BLOCK_TEXT[block].text }) : ''
   // Opened from the keyboard too (Shift+F10, the Menu key): the menu itself
@@ -102,6 +126,31 @@ export function FolderContextMenu({
             </>
           }
           onClick={close(() => onMoveTo(folder))}
+        />
+        <RailMenuItem
+          disabled={!!hideBlock}
+          title={hideReason || undefined}
+          icon={
+            hiddenHere ? (
+              <Eye size={14} className={secondary} strokeWidth={1.75} />
+            ) : (
+              <EyeOff size={14} className={secondary} strokeWidth={1.75} />
+            )
+          }
+          label={
+            <>
+              {hiddenHere
+                ? t('folders.hide.show', { defaultValue: 'Show folder again' })
+                : t('folders.hide.action', { defaultValue: 'Hide folder' })}
+              {hideReason && <small className="block text-caption text-secondary">{hideReason}</small>}
+            </>
+          }
+          onClick={close(() => {
+            if (hiddenHere) unhideFolder(ref)
+            else hideFolder(ref)
+            // Still hidden through its parent: nothing to announce as shown.
+            if (!staysHidden) onHiddenChange(folder, !hiddenHere)
+          })}
         />
         {/* One choice of several: radio items, the chosen one checked. */}
         <MenuGroup
