@@ -2895,5 +2895,7 @@
   "settings.signature.placementHint": "Var signaturen hamnar i förhållande till det citerade originalet",
   "settings.signature.placementWithText": "Med det jag skriver",
   "settings.signature.placementAbove": "Ovanför citatet",
-  "settings.signature.placementBelow": "Under citatet"
+  "settings.signature.placementBelow": "Under citatet",
+  "shell.region.mail": "E-post",
+  "shell.region.modules": "Moduler"
 }

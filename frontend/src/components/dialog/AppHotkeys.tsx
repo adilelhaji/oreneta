@@ -36,10 +36,13 @@ import {
 import { compose$, openComposeTab, openReplyInFullEditor, closeMessageTab } from '../../states/compose'
 import { handleEditUndoKeyDown } from '../../lib/editUndo'
 import { zoom } from '../../states/zoom'
+import { focusAdjacentRegion, modalDialogOpen, trackRegionFocus } from '../../lib/regions'
 import {
   isBareShortcut,
+  isFunctionKey,
   isMac,
   matchShortcut,
+  shortcutChord,
   shortcutForChord,
   RAIL_SHORTCUT_IDS,
   type Chord,
@@ -168,7 +171,9 @@ function handleChatArrowNavigation(key: string, target: EventTarget | null): boo
 
 function handleRailShortcut(action: ShortcutId): boolean {
   const slot = RAIL_SHORTCUT_IDS.indexOf(action as RailShortcutId)
-  if (slot === -1 || modalOpen()) return false
+  // A modal dialog keeps the account or board behind it as it is, whatever
+  // key the slot is bound to (an F-key included).
+  if (slot === -1 || modalOpen() || modalDialogOpen()) return false
 
   let target = slot
   if (settings$.showUnifiedInboxInSideNav.peek()) {
@@ -284,6 +289,12 @@ export function AppHotkeys() {
       // and only act in the chat view with no modal open.
       if (isBareShortcut(action)) {
         if (isTyping(event.target) || !bareShortcutsActive()) return
+      } else if (isFunctionKey(shortcutChord(action).key) && (modalOpen() || modalDialogOpen())) {
+        // F1–F12 type nothing, so they work while typing (ADR-0068 §6), but a
+        // single key still stands down while a modal dialog is open: it keeps
+        // the focus, and F6 does nothing there.
+        event.preventDefault()
+        return
       }
 
       const selected = () => activeThreadId()
@@ -357,6 +368,15 @@ export function AppHotkeys() {
         case 'shortcuts.help':
           event.preventDefault()
           ui$.shortcutsOpen.set(!ui$.shortcutsOpen.peek())
+          break
+        // From region to region (ADR-0068 §6), also from a text field: a
+        // function key types nothing. A modal dialog keeps the focus (here
+        // too when the shortcut is rebound to a letter, or a ⌘/Ctrl chord).
+        case 'pane.next':
+        case 'pane.prev':
+          event.preventDefault()
+          if (modalOpen() || modalDialogOpen()) break
+          focusAdjacentRegion(action === 'pane.next' ? 1 : -1)
           break
         case 'thread.next':
           event.preventDefault()
@@ -459,7 +479,9 @@ export function AppHotkeys() {
     window.addEventListener('focusin', clearThreadListDeleteScope)
     window.addEventListener('pointerdown', clearThreadListDeleteScope)
     window.addEventListener('oreneta.frameKeyDown', onFrameKeyDown)
+    const stopTrackingRegionFocus = trackRegionFocus()
     return () => {
+      stopTrackingRegionFocus()
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('focusin', clearThreadListDeleteScope)
       window.removeEventListener('pointerdown', clearThreadListDeleteScope)

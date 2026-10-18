@@ -21,7 +21,7 @@ afterEach(() => {
   ui$.selectedAccount.set('')
   ui$.selectedFolder.set('inbox')
   ui$.selectedThread.set('')
-  ui$.tasksOpen.set(false)
+  ui$.module.set('mail')
   ui$.mobilePane.set('threads')
   delete (window as any).go
 })
@@ -74,13 +74,13 @@ describe('the tasks view', () => {
 
   it('opening a task leaves the view and selects its conversation', async () => {
     stubBridge({ 'tasks.list': { tasks: [task()] } })
-    ui$.tasksOpen.set(true)
+    ui$.module.set('tasks')
     const view = render(<TasksView />)
     await waitFor(() => expect(view.container.textContent).toContain('Renew the contract'))
 
     fireEvent.click(view.getByText('Renew the contract'))
 
-    expect(ui$.tasksOpen.get()).toBe(false)
+    expect(ui$.module.get()).toBe('mail')
     expect(ui$.selectedAccount.get()).toBe('acct')
     expect(ui$.selectedFolder.get()).toBe('INBOX')
     expect(ui$.selectedThread.get()).toBe('acct#INBOX#t1')
@@ -89,14 +89,14 @@ describe('the tasks view', () => {
 
   it('a task whose conversation is not in the local copy says so and stays on the list', async () => {
     stubBridge({ 'tasks.list': { tasks: [task({ located: false })] } })
-    ui$.tasksOpen.set(true)
+    ui$.module.set('tasks')
     ui$.toast.set('')
     const view = render(<TasksView />)
     await waitFor(() => expect(view.container.querySelectorAll('li').length).toBe(1))
 
     fireEvent.click(view.getByText('Renew the contract'))
 
-    expect(ui$.tasksOpen.get()).toBe(true)
+    expect(ui$.module.get()).toBe('tasks')
     expect(ui$.selectedThread.get()).toBe('')
     expect(ui$.toastTone.get()).toBe('error')
     expect(ui$.toast.get()).toContain('no longer in the local copy')
@@ -116,14 +116,14 @@ describe('the tasks view', () => {
 
   it('the edit button opens the edit dialog without navigating away', async () => {
     stubBridge({ 'tasks.list': { tasks: [task({ note: 'Call them back' })] } })
-    ui$.tasksOpen.set(true)
+    ui$.module.set('tasks')
     const view = render(<TasksView />)
     await waitFor(() => expect(view.container.textContent).toContain('Renew the contract'))
 
     fireEvent.click(view.getByLabelText('Edit task'))
     expect(ui$.taskEditor.get()).toMatchObject({ threadId: 'acct#INBOX#t1', id: 1 })
     // Unlike opening the row itself, editing must not leave the Tasks view.
-    expect(ui$.tasksOpen.get()).toBe(true)
+    expect(ui$.module.get()).toBe('tasks')
   })
 
   it('completing a task calls tasks.setCompleted and reloads', async () => {

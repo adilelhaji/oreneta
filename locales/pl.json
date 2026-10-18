@@ -2895,5 +2895,7 @@
   "settings.signature.placementHint": "Gdzie umieścić podpis względem cytowanej wiadomości",
   "settings.signature.placementWithText": "Przy moim tekście",
   "settings.signature.placementAbove": "Nad cytatem",
-  "settings.signature.placementBelow": "Pod cytatem"
+  "settings.signature.placementBelow": "Pod cytatem",
+  "shell.region.mail": "Poczta",
+  "shell.region.modules": "Moduły"
 }

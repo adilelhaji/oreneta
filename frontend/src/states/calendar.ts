@@ -551,12 +551,7 @@ export function newEvent(startAt?: number): EventDraft | null {
 export function openCalendarOn(date: Date) {
   calendar$.anchor.set(startOfDay(date).getTime())
   calendar$.view.set('day')
-  ui$.peopleOpen.set(false)
-  ui$.tasksOpen.set(false)
-  ui$.notesOpen.set(false)
-  ui$.attachmentsOpen.set(false)
-  ui$.messagingOpen.set(false)
-  ui$.calendarOpen.set(true)
+  ui$.module.set('calendar')
 }
 
 /// A notice of missed reminders was clicked (#225): the calendar on the day

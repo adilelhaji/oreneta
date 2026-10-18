@@ -2895,5 +2895,7 @@
   "settings.signature.placementHint": "인용한 원본에 대한 서명 위치",
   "settings.signature.placementWithText": "내가 쓴 내용과 함께",
   "settings.signature.placementAbove": "인용 위",
-  "settings.signature.placementBelow": "인용 아래"
+  "settings.signature.placementBelow": "인용 아래",
+  "shell.region.mail": "메일",
+  "shell.region.modules": "모듈"
 }

@@ -99,6 +99,16 @@ la configuració manual de comptes (S15-01, de POP3, tracta la baixada del corre
 manté `implemented-unverified`), i l'evidència nativa de Windows (N4) i amb proveïdors
 reals (N5) continua pendent; les proves amb servidors falsos i amb maddy (MAIL-17 del
 paquet d'acceptació de proveïdors) són sintètiques.
+El 2026-10-18 (#306, pas 1 d'ADR-0068, `docs/design/app-regions.md`) la finestra va
+incorporar regions amb nom i F6 / Maj+F6 per passar d'una a l'altra, sense cap canvi visual:
+un sol estat de mòdul, els diàlegs i els avisos fora de `<main>`, `<main>` amb el nom del
+mòdul i la barra vertical amb el nom «Mòduls». F6 també actua des d'un camp de text i des del
+missatge HTML, i no fa res si hi ha un diàleg modal obert (l'editor i el detall d'un
+esdeveniment, la revisió del context de l'assistent i la galeria ara es declaren modals).
+Les proves automàtiques de límits, de dreta a esquerra i de zoom es mantenen, i se n'hi
+afegeixen de noves: F6 en anglès, en català i en àrab, i les regles de regions d'axe. Cap fila no canvia d'estat (S01-04, S01-05, SET-02,
+SET-23, SET-27): l'evidència nativa de Windows continua pendent, i també cal comprovar que F6
+arriba a la pàgina a WebView2 i a WebKitGTK.
 El 2026-10-18 (#281, ADR-0070) SET-20 va incorporar les llistes de tasques que arriben amb
 el compte, com els calendaris: la carpeta Tasques d'un compte d'Exchange i les col·leccions
 de tasques d'un servidor CalDAV que s'afegeix a un compte (les que només admeten tasques, i

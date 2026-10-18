@@ -2895,5 +2895,7 @@
   "settings.signature.placementHint": "Where the signature goes against the quoted original",
   "settings.signature.placementWithText": "With what I write",
   "settings.signature.placementAbove": "Above the quote",
-  "settings.signature.placementBelow": "Below the quote"
+  "settings.signature.placementBelow": "Below the quote",
+  "shell.region.mail": "Mail",
+  "shell.region.modules": "Modules"
 }

@@ -78,7 +78,7 @@ beforeEach(() => {
     syncing: false,
   })
   ui$.taskEditor.set(null)
-  ui$.tasksOpen.set(true)
+  ui$.module.set('tasks')
   accounts$.set([exchange])
 })
 // Whatever a test started settles before the next file runs: a reload that
@@ -101,7 +101,7 @@ afterEach(() => {
     syncing: false,
   })
   ui$.taskEditor.set(null)
-  ui$.tasksOpen.set(false)
+  ui$.module.set('mail')
 })
 
 describe('Exchange task lists (ADR-0058)', () => {

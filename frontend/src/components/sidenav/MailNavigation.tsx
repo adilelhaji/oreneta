@@ -540,7 +540,7 @@ export function MailNavigationView({
 
   const rootBlock = dragged ? actions.dropBlock(null) : undefined
   return (
-    <nav className="mail-navigation" aria-label={t('mailNavigation.title')}>
+    <nav data-region="folders" className="mail-navigation" aria-label={t('mailNavigation.title')}>
       <FavoritesSection
         favorites={favorites}
         favoriteCount={favoriteRefs.length}
