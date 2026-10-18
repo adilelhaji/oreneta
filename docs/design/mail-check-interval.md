@@ -1,6 +1,6 @@
 # Interval de comprovació del correu (#270)
 
-**Estat: prototip pendent de l'[ADR-0067](../adr/0067-interval-de-comprovacio-del-correu.md)**
+**Estat: prototip pendent de l'[ADR-0071](../adr/0071-interval-de-comprovacio-del-correu.md)**
 (proposada). Aquest document descriu el que fa el prototip de la branca
 `issue-270-sync-interval`, sense PR; el comportament definitiu depèn de les decisions de
 l'ADR, on també es descriuen els problemes coneguts del prototip.

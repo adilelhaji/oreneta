@@ -1,4 +1,4 @@
-# ADR-0067: Interval de comprovació del correu al costat de la notificació del servidor
+# ADR-0071: Interval de comprovació del correu al costat de la notificació del servidor
 
 - Estat: **proposada**. Pendent de la decisió del propietari; no s'ha obert cap PR.
 - Data: 2026-10-18.
