@@ -1,7 +1,7 @@
 # Acceptació repetible del correu (#145, slice #184)
 
 La [matriu](provider-acceptance-matrix.json) fa correspondre cada subprova actual de
-`TestIntegrationMailFlow` a 12 resultats per a l'usuari. És un paquet executable
+`TestIntegrationMailFlow` a 17 resultats per a l'usuari. És un paquet executable
 **IMAP/SMTP aïllat**, no una certificació de Gmail, Workspace, Graph ni de la interfície
 de Windows. El [registre d'acceptació de paritat](emclient-parity-acceptance.md) conserva els seus
 requisits natius/de proveïdor independents. #145 continua oberta per a l'evidència real i
@@ -26,7 +26,7 @@ càrregues útils, les adreces dels comptes, els registres del contenidor i els 
 prova desconeguts no es copien a l'informe. Els esdeveniments en brut es queden a
 l'executor (runner) per a aquest job, no a l'artefacte. La comprovació IDLE separada de
 tres execucions continua sent obligatòria; el seu resultat és al job de la CI, no a
-l'informe de 12 resultats. Un informe favorable per si sol no pot establir que tot el job o
+l'informe de 17 resultats. Un informe favorable per si sol no pot establir que tot el job o
 les set bateries requerides s'hagin superat.
 
 L'informe registra el SHA exacte de l'origen, l'URL i l'intent del flux de treball
