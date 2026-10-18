@@ -134,6 +134,14 @@ del propietari (`docs/design/calendar-drag-and-create.md`). Hi ha proves unitàr
 arrossegaments reals a l'entrada de producció (Chromium). Cap fila no canvia d'estat:
 SET-18 es manté `partial` (el temps meteorològic continua absent) i l'evidència nativa
 de Windows és pendent.
+El 2026-10-17 (#287) l'aparença (S01-01, S01-02) va incorporar la primera peça del
+redisseny aprovat pel propietari: dos tons de superfície a tots els temes (el marc per a
+la finestra, les capçaleres i el panell de carpetes; el contingut per a les llistes i el
+lector), el token `--me-border-input` per a la vora dels camps (3:1), l'anell de focus
+d'accent sòlid i els radis de 4/6/8/12 px. Els temes personalitzats desats conserven els
+seus colors i s'hi afegeix la vora de camp derivada. Vuit temes integrats mantenen l'accent per
+sota de 4,5:1 com a text, com abans; corregir-ho espera la decisió del propietari. Cap
+fila no canvia d'estat: l'evidència nativa de Windows continua pendent.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|

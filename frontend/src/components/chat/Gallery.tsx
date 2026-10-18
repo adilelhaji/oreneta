@@ -297,7 +297,7 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
             }}
           />
           <div
-            className="fixed z-[61] min-w-[160px] rounded-control border border-border bg-header p-1 shadow-overlay"
+            className="fixed z-[61] min-w-[160px] rounded-control border border-border bg-chats p-1 shadow-overlay"
             // Opens from the pointer towards the end of the line.
             style={
               documentDirection() === 'rtl'

@@ -28,7 +28,7 @@ function ToolbarButton({
       onClick={onClick}
       title={title}
       className={`flex h-7 w-7 items-center justify-center rounded-control-sm transition-colors cursor-pointer ${
-        active ? 'bg-accent/15 text-accent' : 'text-secondary hover:bg-hover'
+        active ? 'bg-active text-accent' : 'text-secondary hover:bg-hover'
       }`}
     >
       {children}
@@ -107,9 +107,9 @@ export function ComposerToolbar({ editor, onSetLink }: { editor: Editor; onSetLi
         title={t('composer.toolbar.markdownHint')}
       >
         {t('composer.toolbar.markdown')}:
-        <code className="rounded bg-black/[0.06] px-1 dark:bg-white/[0.08]">**bold**</code>
-        <code className="rounded bg-black/[0.06] px-1 dark:bg-white/[0.08]"># heading</code>
-        <code className="rounded bg-black/[0.06] px-1 dark:bg-white/[0.08]">- list</code>
+        <code className="rounded bg-raised px-1">**bold**</code>
+        <code className="rounded bg-raised px-1"># heading</code>
+        <code className="rounded bg-raised px-1">- list</code>
       </span>
     </div>
   )

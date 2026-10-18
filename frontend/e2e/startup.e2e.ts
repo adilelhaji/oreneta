@@ -1108,6 +1108,8 @@ for (const appearance of ['light', 'dark'] as const) {
       await expect(primary).toBeFocused()
       await expect(primary).toHaveCSS('outline-style', 'solid')
       await expect(primary).toHaveCSS('outline-width', '2px')
+      // The ring is the solid accent, not a translucent mix (#287).
+      await expect(primary).toHaveCSS('outline-color', appearance === 'light' ? 'rgb(32, 86, 221)' : 'rgb(126, 166, 255)')
       await expect(primary).toHaveCSS('color', appearance === 'light' ? 'rgb(255, 255, 255)' : 'rgb(16, 27, 46)')
       await primary.hover()
       await page.mouse.down()
@@ -1121,6 +1123,10 @@ for (const appearance of ['light', 'dark'] as const) {
       await invalid.focus()
       await expect(invalid).toHaveAttribute('aria-invalid', 'true')
       await expect(invalid).toHaveCSS('outline-width', '2px')
+      // Unfocused field and select outlines use the 3:1 input border, not the divider (#287).
+      const inputBorder = appearance === 'light' ? 'rgb(107, 122, 147)' : 'rgb(125, 145, 180)'
+      await expect(catalogue.getByRole('textbox', { name: 'Small field' })).toHaveCSS('border-top-color', inputBorder)
+      await expect(catalogue.getByRole('combobox', { name: 'Select field' })).toHaveCSS('border-top-color', inputBorder)
 
       const select = catalogue.getByRole('button', { name: 'Selectable and removable', exact: true })
       await select.scrollIntoViewIfNeeded()

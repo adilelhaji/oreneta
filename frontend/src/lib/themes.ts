@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { contrastRatio, darken, isValidColor, lighten, mix, withAlpha } from './color'
+import { composite, contrastRatio, darken, isValidColor, lighten, mix, withAlpha } from './color'
 
 // Theme registry and derivation. A theme is a complete set of values for the
 // `--me-*` CSS custom properties in index.css. Built-ins live here; custom
@@ -49,7 +49,16 @@ type SemanticThemeTokens = {
   accentText: string
 }
 
-export type ThemeTokens = BaseThemeTokens & SemanticThemeTokens
+/**
+ * Slots every theme has but a palette need not pin: when it does not, they are
+ * derived from its other colours so they meet their contrast floor.
+ */
+type DerivedThemeTokens = {
+  /** Outline of fields, selects and checkboxes (WCAG 1.4.11, 3:1). */
+  borderInput: string
+}
+
+export type ThemeTokens = BaseThemeTokens & SemanticThemeTokens & DerivedThemeTokens
 
 function accentTextFor(accent: string): string {
   return (contrastRatio(accent, '#ffffff') ?? 21) >= (contrastRatio(accent, '#000000') ?? 0) ? '#ffffff' : '#000000'
@@ -91,6 +100,7 @@ export const TOKEN_CSS_VAR: Record<keyof ThemeTokens, string> = {
   info: '--me-info',
   infoSoft: '--me-info-soft',
   accentText: '--me-accent-text',
+  borderInput: '--me-border-input',
   bgApp: '--me-bg-app',
   bgChat: '--me-bg-chat',
   bgChatOverlay: '--me-bg-chat-overlay',
@@ -143,6 +153,51 @@ export type CustomTheme = ThemeDef & { source: CustomThemeInput }
 
 /** WCAG AA for body-size text. */
 export const READABLE_CONTRAST = 4.5
+/** WCAG AA for the boundary of a control and the focus ring (1.4.11). */
+export const UI_CONTRAST = 3
+
+type SurfaceTokens = Pick<
+  ThemeTokens,
+  'bgApp' | 'bgHeader' | 'bgChats' | 'bgChat' | 'bgRaised' | 'bgHover' | 'bgActive'
+>
+
+/**
+ * Every opaque colour text and controls are drawn on: the frame, the content
+ * and the raised surfaces, with the translucent ones (hover and raised in some
+ * dark palettes) resolved over the content and over the frame, where they are
+ * painted. A surface that cannot be resolved is left out, not guessed.
+ */
+export function themeSurfaces(tokens: SurfaceTokens): string[] {
+  const { bgApp, bgHeader, bgChats, bgChat, bgRaised, bgHover, bgActive } = tokens
+  const out = new Set<string>()
+  for (const under of [bgChats, bgApp]) {
+    for (const value of [bgApp, bgHeader, bgChats, bgChat, bgRaised, bgHover, bgActive]) {
+      const resolved = composite(value, under)
+      if (resolved) out.add(resolved)
+    }
+  }
+  return [...out]
+}
+
+/**
+ * Field outline: the divider colour moved toward the text only as far as it
+ * needs to reach 3:1 on every surface, so it stays quieter than the text.
+ * Best effort beyond that: with no resolvable surface (contrast unknown), or
+ * when nothing up to the text itself reaches 3:1, the outline is the text
+ * colour, the strongest the palette offers. The editor names a text shortfall.
+ */
+function readableInputBorder(border: string, text: string, surfaces: string[]): string {
+  if (surfaces.length === 0) return text
+  for (let step = 0; step <= 50; step++) {
+    const candidate = mix(border, text, step / 50)
+    if (surfaces.every((bg) => (contrastRatio(candidate, bg) ?? 0) >= UI_CONTRAST)) return candidate
+  }
+  return text
+}
+
+function derivedTokens(tokens: BaseThemeTokens): DerivedThemeTokens {
+  return { borderInput: readableInputBorder(tokens.border, tokens.textPrimary, themeSurfaces(tokens)) }
+}
 
 /**
  * Secondary text: the primary text faded toward the background, but only as
@@ -166,9 +221,10 @@ export type ContrastShortfall = { pair: 'text' | 'accent'; ratio: number }
 
 export function contrastShortfalls(tokens: ThemeTokens): ContrastShortfall[] {
   const worst = (fg: string, backgrounds: string[]) => Math.min(...backgrounds.map((bg) => contrastRatio(fg, bg) ?? 0))
-  const text = worst(tokens.textPrimary, [tokens.bgApp, tokens.bgChat, tokens.bgChats, tokens.bgActive])
-  // Accent is drawn as text on the selected folder, account and sort header.
-  const accent = worst(tokens.accent, [tokens.bgChats, tokens.bgActive])
+  const text = worst(tokens.textPrimary, themeSurfaces(tokens))
+  // Accent is drawn as text on the selected folder, account and sort header,
+  // and the folder pane and headers sit on the frame tone (#287).
+  const accent = worst(tokens.accent, [tokens.bgApp, tokens.bgHeader, tokens.bgChats, tokens.bgActive])
   const shortfalls: ContrastShortfall[] = []
   if (text < READABLE_CONTRAST) shortfalls.push({ pair: 'text', ratio: text })
   if (accent < READABLE_CONTRAST) shortfalls.push({ pair: 'accent', ratio: accent })
@@ -176,31 +232,40 @@ export function contrastShortfalls(tokens: ThemeTokens): ContrastShortfall[] {
 }
 
 /**
- * Expand the 6 editor inputs into a full token map. Formulas are tuned so the
- * Oreneta Light/Dark inputs reproduce (closely) the hand-picked index.css values.
+ * Expand the 6 editor inputs into a full token map: the frame (window, headers)
+ * from `bgApp`, the content (lists, reader) from `surface`. The formulas give a
+ * coherent palette from any inputs; they approximate, not reproduce, the
+ * hand-picked Oreneta Light/Dark values (those also pin hover, raised and
+ * selection by hand).
  */
 export function deriveThemeTokens(input: CustomThemeInput): ThemeTokens {
   const { appearance, bgApp, surface, sideNav, accent, text } = input
   const light = appearance === 'light'
 
-  const bgChat = light ? lighten(bgApp, 0.5) : bgApp
+  // The reader is content, so in dark it sits between the frame and the list
+  // rather than taking the frame tone itself (#287).
+  const bgChat = light ? lighten(bgApp, 0.5) : mix(bgApp, surface, 0.5)
   const border = mix(surface, text, 0.12)
   const bgActive = light ? mix(surface, text, 0.12) : lighten(surface, 0.1)
-  return {
-    ...semanticTokens(appearance),
-    accentText: accentTextFor(accent),
+  const bgHover = light ? mix(surface, text, 0.06) : withAlpha(lighten(surface, 0.08), 0.6)
+  const bgRaised = light ? mix(surface, bgApp, 0.5) : withAlpha(surface, 0.4)
+  // Frame tone (#287): headers and bars share the window background; the
+  // lists and the reader keep the content surface.
+  const bgHeader = bgApp
+  const surfaces = themeSurfaces({ bgApp, bgHeader, bgChats: surface, bgChat, bgRaised, bgHover, bgActive })
+  const base: BaseThemeTokens = {
     bgApp,
     bgChat,
     bgChatOverlay: withAlpha(bgChat, light ? 0.94 : 0.95),
     bgSideNav: sideNav,
     bgChats: surface,
-    bgHeader: surface,
-    bgHover: light ? mix(surface, text, 0.06) : withAlpha(lighten(surface, 0.08), 0.6),
-    bgRaised: light ? mix(surface, bgApp, 0.5) : withAlpha(surface, 0.4),
+    bgHeader,
+    bgHover,
+    bgRaised,
     bgActive,
     border,
     textPrimary: text,
-    textSecondary: readableSecondary(text, bgApp, [bgApp, bgChat, surface, bgActive]),
+    textSecondary: readableSecondary(text, bgApp, surfaces),
     accent,
     accentHover: light ? darken(accent, 0.1) : lighten(accent, 0.12),
     bubbleIn: light ? surface : lighten(surface, 0.08),
@@ -216,22 +281,29 @@ export function deriveThemeTokens(input: CustomThemeInput): ThemeTokens {
       ? `0 2px 8px -2px ${withAlpha(accent, 0.12)}, 0 1px 3px -1px ${withAlpha(accent, 0.06)}`
       : '0 4px 12px -3px rgba(0, 0, 0, 0.4), 0 1px 4px -2px rgba(0, 0, 0, 0.3)',
   }
+  return {
+    ...base,
+    ...semanticTokens(appearance),
+    accentText: accentTextFor(accent),
+    borderInput: readableInputBorder(border, text, surfaces),
+  }
 }
 
-// Legacy green palettes retain their persisted IDs and colors.
+// Legacy green palettes retain their persisted IDs and accents. #287 moved their
+// headers to the frame tone and darkened secondary text that read under 4.5:1.
 const MERON_LIGHT: BaseThemeTokens = {
   bgApp: '#f0f2f1',
   bgChat: '#f8faf9',
   bgChatOverlay: 'rgba(248, 250, 249, 0.94)',
   bgSideNav: '#121a16',
   bgChats: '#ffffff',
-  bgHeader: '#ffffff',
+  bgHeader: '#f0f2f1',
   bgHover: '#eef1f0',
   bgRaised: '#f7f9f8',
   bgActive: '#e2e7e4',
   border: '#e0e6e2',
   textPrimary: '#1b211e',
-  textSecondary: '#68746e',
+  textSecondary: '#5e6964', // was #68746e, under 4.5:1 on its own surfaces (#287)
   accent: '#0e7a58',
   accentHover: '#0b6448',
   bubbleIn: '#ffffff',
@@ -250,7 +322,7 @@ const MERON_DARK: BaseThemeTokens = {
   bgChatOverlay: 'rgba(12, 16, 14, 0.95)',
   bgSideNav: '#070a09',
   bgChats: '#151b18',
-  bgHeader: '#151b18',
+  bgHeader: '#0c100e',
   bgHover: 'rgba(38, 47, 42, 0.6)',
   bgRaised: 'rgba(21, 27, 24, 0.4)',
   bgActive: '#222b26',
@@ -276,13 +348,13 @@ const INDIGO_LIGHT: BaseThemeTokens = {
   bgChatOverlay: 'rgba(248, 250, 252, 0.94)',
   bgSideNav: '#0f172a',
   bgChats: '#ffffff',
-  bgHeader: '#ffffff',
+  bgHeader: '#f1f5f9',
   bgHover: '#f1f5f9',
   bgRaised: '#f8fafc',
   bgActive: '#e2e8f0',
   border: '#e2e8f0',
   textPrimary: '#0f172a',
-  textSecondary: '#64748b',
+  textSecondary: '#5a697f', // was #64748b, under 4.5:1 on its own surfaces (#287)
   accent: '#4f46e5',
   accentHover: '#4338ca',
   bubbleIn: '#ffffff',
@@ -301,7 +373,7 @@ const INDIGO_DARK: BaseThemeTokens = {
   bgChatOverlay: 'rgba(9, 13, 22, 0.95)',
   bgSideNav: '#05070c',
   bgChats: '#0f172a',
-  bgHeader: '#0f172a',
+  bgHeader: '#090d16',
   bgHover: 'rgba(30, 41, 59, 0.6)',
   bgRaised: 'rgba(15, 23, 42, 0.4)',
   bgActive: '#1e293b',
@@ -337,7 +409,7 @@ const MIST: BaseThemeTokens = {
   bgRaised: '#f4fafb',
   bgActive: '#d7eaef',
   border: '#cfe0e5',
-  textSecondary: '#6f8790',
+  textSecondary: '#516b74', // was #6f8790, under 4.5:1 on its own surfaces (#287)
   bubbleIn: '#ffffff',
   bubbleOut: '#d5f0f4',
   bubbleOutText: '#0e5663',
@@ -362,7 +434,7 @@ const PAPER: BaseThemeTokens = {
   bgRaised: '#faf6ee',
   bgActive: '#e6ded1',
   border: '#ded4c4',
-  textSecondary: '#7b817d',
+  textSecondary: '#5c6463', // was #7b817d, under 4.5:1 on its own surfaces (#287)
   bubbleIn: '#fffdf8',
   bubbleOut: '#e5edf2',
   bubbleOutText: '#334155',
@@ -387,7 +459,7 @@ const DAWN: BaseThemeTokens = {
   bgRaised: '#fff6f2',
   bgActive: '#ead8d1',
   border: '#e1cfc7',
-  textSecondary: '#897c83',
+  textSecondary: '#695d67', // was #897c83, under 4.5:1 on its own surfaces (#287)
   bubbleIn: '#fffaf7',
   bubbleOut: '#f5dada',
   bubbleOutText: '#753849',
@@ -481,7 +553,7 @@ const HONEY: BaseThemeTokens = {
   bgRaised: '#faf4e8',
   bgActive: '#eadfc6',
   border: '#e7dcc2',
-  textSecondary: '#8b8068',
+  textSecondary: '#6c624d', // was #8b8068, under 4.5:1 on its own surfaces (#287)
   bubbleIn: '#fffdf7',
   bubbleOut: '#f5e6c4',
   bubbleOutText: '#6e4d09',
@@ -506,7 +578,7 @@ const LILAC: BaseThemeTokens = {
   bgRaised: '#f6f4fb',
   bgActive: '#dfd9ee',
   border: '#ded8ea',
-  textSecondary: '#7e7894',
+  textSecondary: '#635d79', // was #7e7894, under 4.5:1 on its own surfaces (#287)
   bubbleIn: '#fdfcff',
   bubbleOut: '#e8def8',
   bubbleOutText: '#4b3389',
@@ -562,18 +634,20 @@ const EMBER: BaseThemeTokens = {
   composerBorder: '#423227',
 }
 
+// Frame and content tones (#287): the frame (window, headers, bars) is the
+// deeper tone, lists and the reader the lighter one, fields white.
 const ORENETA_LIGHT: BaseThemeTokens = {
   ...INDIGO_LIGHT,
-  bgApp: '#f1f4fa',
+  bgApp: '#e3eaf4',
   bgChat: '#fdfdff',
   bgChatOverlay: 'rgba(253, 253, 255, 0.94)',
   bgSideNav: '#15316e',
   bgChats: '#fbfcfe',
-  bgHeader: '#fbfcfe',
-  bgHover: '#edf2fa',
-  bgRaised: '#f5f8fd',
-  bgActive: '#e7eefb',
-  border: '#dce3ef',
+  bgHeader: '#e3eaf4',
+  bgHover: '#ebf0f8',
+  bgRaised: '#ffffff',
+  bgActive: '#d6e3fb',
+  border: '#d3dbe8',
   textPrimary: '#182840',
   textSecondary: '#52637d',
   accent: '#2056dd',
@@ -582,21 +656,21 @@ const ORENETA_LIGHT: BaseThemeTokens = {
   bubbleInText: '#182840',
   bubbleOut: '#e7eefb',
   bubbleOutText: '#182840',
-  composerBg: '#fbfcfe',
-  composerBorder: '#dce3ef',
+  composerBg: '#ffffff',
+  composerBorder: '#d3dbe8',
   bubbleShadowOut: INDIGO_LIGHT.bubbleShadowIn,
 }
 const ORENETA_DARK: BaseThemeTokens = {
   ...INDIGO_DARK,
-  bgApp: '#101b2e',
-  bgChat: '#101b2e',
-  bgChatOverlay: 'rgba(16, 27, 46, 0.95)',
-  bgSideNav: '#0b162b',
-  bgChats: '#152137',
-  bgHeader: '#152137',
+  bgApp: '#0c1526',
+  bgChat: '#111c30',
+  bgChatOverlay: 'rgba(17, 28, 48, 0.95)',
+  bgSideNav: '#08111f',
+  bgChats: '#142036',
+  bgHeader: '#0c1526',
   bgHover: '#22314c',
   bgRaised: '#1b2a42',
-  bgActive: '#253a5c',
+  bgActive: '#243a5e',
   border: '#30415b',
   textPrimary: '#e6edf9',
   textSecondary: '#a7b8d2',
@@ -606,13 +680,33 @@ const ORENETA_DARK: BaseThemeTokens = {
   bubbleInText: '#e6edf9',
   bubbleOut: '#293f63',
   bubbleOutText: '#e6edf9',
-  composerBg: '#152137',
+  composerBg: '#1b2a42',
   composerBorder: '#30415b',
 }
 
-const BUILTIN_PALETTES: Array<Omit<ThemeDef, 'tokens'> & { tokens: BaseThemeTokens }> = [
-  { id: 'oreneta-light', name: 'Oreneta Light', appearance: 'light', tokens: ORENETA_LIGHT },
-  { id: 'oreneta-dark', name: 'Oreneta Dark', appearance: 'dark', tokens: ORENETA_DARK },
+/**
+ * `pinned` holds hand-tuned values for slots that are otherwise derived. It is
+ * kept apart from `tokens` because the derived palettes above spread a full
+ * derivation, whose slots were computed for the editor inputs rather than for
+ * the colours pinned over them.
+ */
+const BUILTIN_PALETTES: Array<
+  Omit<ThemeDef, 'tokens'> & { tokens: BaseThemeTokens; pinned?: Partial<DerivedThemeTokens> }
+> = [
+  {
+    id: 'oreneta-light',
+    name: 'Oreneta Light',
+    appearance: 'light',
+    tokens: ORENETA_LIGHT,
+    pinned: { borderInput: '#6b7a93' },
+  },
+  {
+    id: 'oreneta-dark',
+    name: 'Oreneta Dark',
+    appearance: 'dark',
+    tokens: ORENETA_DARK,
+    pinned: { borderInput: '#7d91b4' },
+  },
   { id: 'indigo', name: 'Indigo', appearance: 'light', tokens: INDIGO_LIGHT },
   { id: 'indigo-dark', name: 'Indigo Dark', appearance: 'dark', tokens: INDIGO_DARK },
   { id: 'light', name: 'Legacy Green', appearance: 'light', tokens: MERON_LIGHT },
@@ -629,12 +723,14 @@ const BUILTIN_PALETTES: Array<Omit<ThemeDef, 'tokens'> & { tokens: BaseThemeToke
   { id: 'ember', name: 'Ember', appearance: 'dark', tokens: EMBER },
 ]
 
-export const BUILTIN_THEMES: ThemeDef[] = BUILTIN_PALETTES.map((theme) => ({
+export const BUILTIN_THEMES: ThemeDef[] = BUILTIN_PALETTES.map(({ pinned, ...theme }) => ({
   ...theme,
   tokens: {
     ...theme.tokens,
     ...semanticTokens(theme.appearance),
     accentText: theme.id === 'oreneta-dark' ? '#101b2e' : accentTextFor(theme.tokens.accent),
+    ...derivedTokens(theme.tokens),
+    ...pinned,
   },
 }))
 
@@ -652,8 +748,8 @@ export function defaultThemeId(appearance: Appearance): string {
 /** Editor seed for a new custom theme: the default theme's source palette. */
 export function defaultCustomInput(appearance: Appearance): CustomThemeInput {
   return appearance === 'light'
-    ? { appearance, bgApp: '#f1f4fa', surface: '#fbfcfe', sideNav: '#15316e', accent: '#2056dd', text: '#182840' }
-    : { appearance, bgApp: '#101b2e', surface: '#152137', sideNav: '#0b162b', accent: '#7ea6ff', text: '#e6edf9' }
+    ? { appearance, bgApp: '#e3eaf4', surface: '#fbfcfe', sideNav: '#15316e', accent: '#2056dd', text: '#182840' }
+    : { appearance, bgApp: '#0c1526', surface: '#142036', sideNav: '#08111f', accent: '#7ea6ff', text: '#e6edf9' }
 }
 
 export function newCustomThemeId(): string {
@@ -681,9 +777,25 @@ function sanitizeTokens(raw: unknown, appearance: Appearance): ThemeTokens | nul
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
   const obj = raw as Record<string, unknown>
   const out = {} as Record<keyof ThemeTokens, string>
+  const saved = (key: keyof ThemeTokens) => (typeof obj[key] === 'string' ? (obj[key] as string) : '')
   const fallback = {
     ...semanticTokens(appearance),
-    accentText: accentTextFor(typeof obj.accent === 'string' ? obj.accent : ''),
+    accentText: accentTextFor(saved('accent')),
+    // The field outline is derived from the saved colours themselves, so a
+    // palette saved before the slot existed keeps every colour it had.
+    borderInput: readableInputBorder(
+      saved('border'),
+      saved('textPrimary'),
+      themeSurfaces({
+        bgApp: saved('bgApp'),
+        bgHeader: saved('bgHeader'),
+        bgChats: saved('bgChats'),
+        bgChat: saved('bgChat'),
+        bgRaised: saved('bgRaised'),
+        bgHover: saved('bgHover'),
+        bgActive: saved('bgActive'),
+      }),
+    ),
   }
   for (const key of THEME_TOKEN_KEYS) {
     // Preserve every saved palette value; fill only the newly added slots.

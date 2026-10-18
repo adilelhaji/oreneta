@@ -54,7 +54,8 @@
   overflow-y: auto;
   padding: 12px 8px;
   border-inline-end: 1px solid var(--me-border);
-  background: var(--me-bg-chats);
+  /* Frame tone (#287): the folder pane is navigation, not content. */
+  background: var(--me-bg-app);
   font-size: var(--text-ui);
 }
 .mail-navigation h2 {
@@ -115,7 +116,7 @@
 .mail-navigation input {
   width: 100%;
   padding: 8px;
-  border: 1px solid var(--me-border);
+  border: 1px solid var(--me-border-input);
   border-radius: var(--radius-control-sm);
   margin: 0 0 8px;
 }
@@ -326,6 +327,9 @@
   --color-raised: var(--me-bg-raised);
   --color-active: var(--me-bg-active);
   --color-border: var(--me-border);
+  /* Outline of a field, select or checkbox: 3:1 on every surface (WCAG 1.4.11),
+     where --color-border is only a divider. */
+  --color-input: var(--me-border-input);
   --color-primary: var(--me-text-primary);
   --color-secondary: var(--me-text-secondary);
   --color-accent: var(--me-accent);
@@ -373,12 +377,12 @@
   --text-heading-lg: 1.75rem; /* 28px — prominent screen headings */
   --text-heading-lg--line-height: 1.25;
 
-  /* Radii, by what the shape is. Values match what the interface already
-     looked like, so nothing moves; the names are what stop them drifting. */
-  --radius-control-sm: 0.5rem; /* small buttons, inputs, menu items */
-  --radius-control: 0.75rem; /* buttons, inputs, chips, icon buttons */
-  --radius-panel: 1rem; /* cards, popovers, message bubbles */
-  --radius-dialog: 1.5rem; /* dialogs */
+  /* Radii, by what the shape is: near-square corners (owner decision D3,
+     #287; they were 8/12/16/24 px). The names are what stop them drifting. */
+  --radius-control-sm: 0.25rem; /* 4px — small buttons, inputs, menu items */
+  --radius-control: 0.375rem; /* 6px — buttons, inputs, chips, icon buttons */
+  --radius-panel: 0.5rem; /* 8px — cards, popovers, message bubbles */
+  --radius-dialog: 0.75rem; /* 12px — dialogs */
 
   /* Elevation. Two levels: something raised off its surface, and something
      floating over the whole page. */
@@ -426,7 +430,12 @@
 }
 
 /* Default Oreneta cobalt palettes and no-JS fallback. Keep these tokens in
-   sync with lib/themes.ts; existing choices paint their own inline tokens. */
+   sync with lib/themes.ts; existing choices paint their own inline tokens.
+   Two surface tones (#287): the frame (--me-bg-app, --me-bg-header) for the
+   window, headers and bars, and the content (--me-bg-chats, --me-bg-chat) for
+   lists and the reader; --me-bg-raised is the field surface. Floating menus
+   use --me-bg-chats, because --me-bg-raised is translucent in some dark
+   palettes. */
 :root {
   --me-accent-text: #ffffff;
   --me-info-soft: #e7eefb;
@@ -437,16 +446,17 @@
   --me-warning: #795000;
   --me-success-soft: #e8f5ec;
   --me-success: #166534;
-  --me-bg-app: #f1f4fa;
+  --me-border-input: #6b7a93;
+  --me-bg-app: #e3eaf4;
   --me-bg-chat: #fdfdff;
   --me-bg-chat-overlay: rgba(253, 253, 255, 0.94);
   --me-bg-sidenav: #15316e;
   --me-bg-chats: #fbfcfe;
-  --me-bg-header: #fbfcfe;
-  --me-bg-hover: #edf2fa;
-  --me-bg-raised: #f5f8fd;
-  --me-bg-active: #e7eefb;
-  --me-border: #dce3ef;
+  --me-bg-header: #e3eaf4;
+  --me-bg-hover: #ebf0f8;
+  --me-bg-raised: #ffffff;
+  --me-bg-active: #d6e3fb;
+  --me-border: #d3dbe8;
   --me-text-primary: #182840;
   --me-text-secondary: #52637d;
   --me-accent: #2056dd;
@@ -455,8 +465,8 @@
   --me-bubble-in-text: #182840;
   --me-bubble-out: #e7eefb;
   --me-bubble-out-text: #182840;
-  --me-composer-bg: #fbfcfe;
-  --me-composer-border: #dce3ef;
+  --me-composer-bg: #ffffff;
+  --me-composer-border: #d3dbe8;
   --me-bubble-shadow-in: 0 2px 8px -2px rgba(15, 23, 42, 0.08), 0 1px 3px -1px rgba(15, 23, 42, 0.04);
   --me-bubble-shadow-out: 0 2px 8px -2px rgba(15, 23, 42, 0.08), 0 1px 3px -1px rgba(15, 23, 42, 0.04);
   --me-wallpaper-overlay: color-mix(in srgb, var(--me-bg-chat) 50%, transparent);
@@ -476,15 +486,16 @@
   --me-warning: #ffdc91;
   --me-success-soft: #163629;
   --me-success: #8addac;
-  --me-bg-app: #101b2e;
-  --me-bg-chat: #101b2e;
-  --me-bg-chat-overlay: rgba(16, 27, 46, 0.95);
-  --me-bg-sidenav: #0b162b;
-  --me-bg-chats: #152137;
-  --me-bg-header: #152137;
+  --me-border-input: #7d91b4;
+  --me-bg-app: #0c1526;
+  --me-bg-chat: #111c30;
+  --me-bg-chat-overlay: rgba(17, 28, 48, 0.95);
+  --me-bg-sidenav: #08111f;
+  --me-bg-chats: #142036;
+  --me-bg-header: #0c1526;
   --me-bg-hover: #22314c;
   --me-bg-raised: #1b2a42;
-  --me-bg-active: #253a5c;
+  --me-bg-active: #243a5e;
   --me-border: #30415b;
   --me-text-primary: #e6edf9;
   --me-text-secondary: #a7b8d2;
@@ -494,7 +505,7 @@
   --me-bubble-in-text: #e6edf9;
   --me-bubble-out: #293f63;
   --me-bubble-out-text: #e6edf9;
-  --me-composer-bg: #152137;
+  --me-composer-bg: #1b2a42;
   --me-composer-border: #30415b;
   --me-bubble-shadow-in: 0 4px 12px -3px rgba(0, 0, 0, 0.3), 0 1px 4px -2px rgba(0, 0, 0, 0.2);
   --me-bubble-shadow-out: 0 4px 12px -3px rgba(0, 0, 0, 0.4), 0 1px 4px -2px rgba(0, 0, 0, 0.3);
@@ -531,9 +542,10 @@ textarea {
    above removes the browser's ring for pointer focus; this puts a single,
    consistent one back for keyboard focus only, so a person tabbing through
    the app can always see where they are and a person clicking never sees a
-   ring they did not ask for. */
+   ring they did not ask for. The ring is the solid accent (#287), not a
+   translucent mix, so its contrast does not depend on what lies under it. */
 :focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--me-accent) 75%, transparent);
+  outline: 2px solid var(--me-accent);
   outline-offset: 2px;
   border-radius: inherit;
 }
@@ -557,8 +569,8 @@ textarea,
   width: 1rem;
   height: 1rem;
   flex-shrink: 0;
-  border: 1px solid color-mix(in srgb, var(--me-border) 78%, var(--me-text-secondary));
-  border-radius: 0.3125rem;
+  border: 1px solid var(--me-border-input);
+  border-radius: var(--radius-control-sm);
   background-color: var(--me-bg-chats);
   background-position: center;
   background-repeat: no-repeat;
@@ -574,16 +586,16 @@ textarea,
     transform 0.16s ease;
 }
 
+/* Hover keeps the 3:1 outline (#287): a mix toward the accent fell under
+   3:1 in palettes with a pale accent. */
 .app-checkbox:hover {
-  border-color: color-mix(in srgb, var(--me-accent) 62%, var(--me-border));
   background-color: var(--me-bg-raised);
 }
 
+/* The shared solid ring above marks keyboard focus; the box only takes the
+   accent edge, without a translucent halo of its own. */
 .app-checkbox:focus-visible {
   border-color: var(--me-accent);
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--me-accent) 18%, transparent),
-    inset 0 1px 1px rgba(15, 23, 42, 0.03);
 }
 
 .app-checkbox:checked,

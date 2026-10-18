@@ -16,6 +16,9 @@ describe('pane limits (#212)', () => {
     expect(drawnPane(400, 400, THREAD_LIST_WIDTH)).toEqual({ value: 400, limits: { min: 280, max: 560 } })
     // Not measured yet: the stored width stands.
     expect(drawnPane(400, 0, THREAD_LIST_WIDTH)).toEqual({ value: 400, limits: THREAD_LIST_WIDTH })
+    // Home just set 280 and the list is still drawn at 560: the next arrow
+    // steps from 280, not from the stale 560 (#283's restart test raced this).
+    expect(drawnPane(280, 560, THREAD_LIST_WIDTH)).toEqual({ value: 280, limits: THREAD_LIST_WIDTH })
   })
 
   it('puts the details sidebar beside the reader only where the row leaves the reader 360 px', () => {
