@@ -90,7 +90,7 @@ const empty = {
 beforeEach(() => {
   tasks$.set({ ...empty })
   ui$.taskEditor.set(null)
-  ui$.tasksOpen.set(true)
+  ui$.module.set('tasks')
   accounts$.set([exchange])
 })
 const settled = () => new Promise((resolve) => setTimeout(resolve, 20))
@@ -102,7 +102,7 @@ afterEach(() => {
   tasks$.set({ ...empty })
   ui$.confirm.set(null)
   ui$.taskEditor.set(null)
-  ui$.tasksOpen.set(false)
+  ui$.module.set('mail')
 })
 
 describe('the task lists that come with an account (ADR-0070)', () => {

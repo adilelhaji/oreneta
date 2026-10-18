@@ -132,7 +132,7 @@ fn read_multistatus(body: &str) -> (Vec<DavResponse>, bool) {
             Ok(Event::Start(element)) => {
                 let name = local_name(element.name().as_ref());
                 if name == "comp" {
-                    record_component(current.as_mut(), &path, &element);
+                    record_component(current.as_mut(), &path, &element, reader.decoder());
                 }
                 if name == "response" {
                     current = Some(DavResponse::default());
@@ -147,7 +147,7 @@ fn read_multistatus(body: &str) -> (Vec<DavResponse>, bool) {
                 let name = local_name(element.name().as_ref());
                 // `<collection/>` and `<addressbook/>` inside a resourcetype.
                 if name == "comp" {
-                    record_component(current.as_mut(), &path, &element);
+                    record_component(current.as_mut(), &path, &element, reader.decoder());
                 } else if path.last().map(String::as_str) == Some("resourcetype") {
                     if let Some(response) = current.as_mut() {
                         response.resource_types.push(name);
@@ -232,7 +232,12 @@ fn read_multistatus(body: &str) -> (Vec<DavResponse>, bool) {
 }
 
 /// A `<comp name="VTODO"/>` inside `supported-calendar-component-set`.
-fn record_component(response: Option<&mut DavResponse>, path: &[String], element: &quick_xml::events::BytesStart) {
+fn record_component(
+    response: Option<&mut DavResponse>,
+    path: &[String],
+    element: &quick_xml::events::BytesStart,
+    decoder: quick_xml::encoding::Decoder,
+) {
     let Some(response) = response else { return };
     if path.last().map(String::as_str) != Some("supported-calendar-component-set") {
         return;
@@ -241,7 +246,7 @@ fn record_component(response: Option<&mut DavResponse>, path: &[String], element
         .attributes()
         .flatten()
         .find(|attribute| local_name(attribute.key.as_ref()) == "name")
-        .and_then(|attribute| attribute.unescape_value().ok().map(|value| value.trim().to_ascii_uppercase()));
+        .and_then(|attribute| attribute.decode_and_unescape_value(decoder).ok().map(|value| value.trim().to_ascii_uppercase()));
     if let Some(name) = name.filter(|name| !name.is_empty()) {
         let components = response.components.get_or_insert_with(Vec::new);
         if !components.contains(&name) {
