@@ -66,7 +66,7 @@ mòdul.
   però F6 hi arriba després: és l'ordre del marc nou, on els mòduls són al peu
   de les carpetes (pas 4), i així no canvia d'un pas a l'altre. ADR-0068 §6 diu
   que és l'ordre del document: al marc nou tots dos coincideixen, i mentre la
-  barra vertical es pinti abans que les carpetes mana la llista de l'ADR.
+  barra vertical es pinti abans que les carpetes, mana la llista de l'ADR.
 - **Cicle:** després de l'última regió, F6 torna a la primera. Des de fora de
   qualsevol regió, F6 va a la primera i Maj+F6, a l'última.
 - **Se salten** les regions que no es veuen (perquè l'amplada les amaga o perquè
