@@ -2815,5 +2815,19 @@
   "people.deleteGroupText": "{name} grubu silinecek. İçindeki kişiler kalır.",
   "people.deleteGroupTextServer": "{name} grubu, sunucusundaki adres defterinden silinecek. İçindeki kişiler kalır.",
   "people.deleteText": "{name}, bu bilgisayardaki adres defterinden silinecek.",
-  "people.deleteTextServer": "{name}, sunucusundaki adres defterinden, onu okuyan tüm uygulamalar için silinecek."
+  "people.deleteTextServer": "{name}, sunucusundaki adres defterinden, onu okuyan tüm uygulamalar için silinecek.",
+  "folders.hide.action": "Klasörü gizle",
+  "folders.hide.show": "Klasörü yeniden göster",
+  "folders.hide.mark": "Gizli",
+  "folders.hide.toggle": "Gizli klasörleri göster ({count})",
+  "folders.hide.hidden": "{folder} gizlendi",
+  "folders.hide.shown": "{folder} yeniden gösteriliyor",
+  "folders.hide.blocked.inbox": "Gelen kutusu gizlenemez",
+  "folders.hide.blocked.containsInbox": "Bu klasör gelen kutusunu içerdiği için gizlenemez",
+  "folders.hide.blocked.parentHidden": "İçinde bulunduğu klasör gizli olduğu için gizli",
+  "search.scope.starred": "Tüm hesapların tüm klasörlerindeki yıldızlı iletilerde arar, gizli klasörler dahil.",
+  "search.scope.unified": "“{folder}” içinde arar: birleşik klasörlere dahil her hesabın bu klasörü, gizli olsa bile.",
+  "search.scope.folder": "Yalnızca “{folder}” içinde arar. Gizli klasörler dahil değildir.",
+  "search.scope.hiddenFolder": "Yalnızca gizli bir klasör olan “{folder}” içinde arar.",
+  "search.scope.unifiedInbox": "“{folder}” içinde arar: birleşik klasörlere dahil her hesabın gelen kutusu."
 }

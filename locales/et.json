@@ -2815,5 +2815,19 @@
   "people.deleteGroupText": "Grupp {name} kustutatakse. Selle inimesed jäävad alles.",
   "people.deleteGroupTextServer": "Grupp {name} kustutatakse aadressiraamatust selle serveris. Selle inimesed jäävad alles.",
   "people.deleteText": "{name} kustutatakse selle arvuti aadressiraamatust.",
-  "people.deleteTextServer": "{name} kustutatakse aadressiraamatust selle serveris, kõigi seda lugevate rakenduste jaoks."
+  "people.deleteTextServer": "{name} kustutatakse aadressiraamatust selle serveris, kõigi seda lugevate rakenduste jaoks.",
+  "folders.hide.action": "Peida kaust",
+  "folders.hide.show": "Näita kausta uuesti",
+  "folders.hide.mark": "Peidetud",
+  "folders.hide.toggle": "Näita peidetud kaustu ({count})",
+  "folders.hide.hidden": "{folder} on peidetud",
+  "folders.hide.shown": "{folder} on jälle nähtav",
+  "folders.hide.blocked.inbox": "Sisendkausta ei saa peita",
+  "folders.hide.blocked.containsInbox": "See kaust sisaldab sisendkausta ja seda ei saa peita",
+  "folders.hide.blocked.parentHidden": "Peidetud, sest seda sisaldav kaust on peidetud",
+  "search.scope.starred": "Otsib tärniga sõnumitest kõigis kõigi kontode kaustades, ka peidetud kaustades.",
+  "search.scope.unified": "Otsib kaustast „{folder}“: see kaust igal ühendatud kaustadesse kaasatud kontol, ka siis, kui see on peidetud.",
+  "search.scope.folder": "Otsib ainult kaustast „{folder}“. Peidetud kaustu ei otsita.",
+  "search.scope.hiddenFolder": "Otsib ainult kaustast „{folder}“, mis on peidetud.",
+  "search.scope.unifiedInbox": "Otsib kaustast „{folder}“: iga ühendatud kaustadesse kaasatud konto sisendkaust."
 }

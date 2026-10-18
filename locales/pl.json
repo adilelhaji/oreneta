@@ -2815,5 +2815,19 @@
   "people.deleteGroupText": "Grupa {name} zostanie usunięta. Osoby w niej pozostaną.",
   "people.deleteGroupTextServer": "Grupa {name} zostanie usunięta z książki adresowej na jej serwerze. Osoby w niej pozostaną.",
   "people.deleteText": "Kontakt {name} zostanie usunięty z książki adresowej na tym komputerze.",
-  "people.deleteTextServer": "Kontakt {name} zostanie usunięty z książki adresowej na jej serwerze, dla każdej aplikacji, która ją czyta."
+  "people.deleteTextServer": "Kontakt {name} zostanie usunięty z książki adresowej na jej serwerze, dla każdej aplikacji, która ją czyta.",
+  "folders.hide.action": "Ukryj folder",
+  "folders.hide.show": "Pokaż folder ponownie",
+  "folders.hide.mark": "Ukryty",
+  "folders.hide.toggle": "Pokaż ukryte foldery ({count})",
+  "folders.hide.hidden": "Ukryto {folder}",
+  "folders.hide.shown": "Ponownie pokazano {folder}",
+  "folders.hide.blocked.inbox": "Nie można ukryć skrzynki odbiorczej",
+  "folders.hide.blocked.containsInbox": "Ten folder zawiera skrzynkę odbiorczą i nie można go ukryć",
+  "folders.hide.blocked.parentHidden": "Ukryty, ponieważ zawierający go folder jest ukryty",
+  "search.scope.starred": "Przeszukuje wiadomości oznaczone gwiazdką we wszystkich folderach wszystkich kont, także w ukrytych.",
+  "search.scope.unified": "Przeszukuje „{folder}”: ten folder na każdym koncie uwzględnionym w folderach zbiorczych, nawet jeśli jest ukryty.",
+  "search.scope.folder": "Przeszukuje tylko „{folder}”. Ukryte foldery nie są uwzględniane.",
+  "search.scope.hiddenFolder": "Przeszukuje tylko „{folder}”, który jest ukrytym folderem.",
+  "search.scope.unifiedInbox": "Przeszukuje „{folder}”: skrzynkę odbiorczą każdego konta uwzględnionego w folderach zbiorczych."
 }

@@ -2815,5 +2815,19 @@
   "people.deleteGroupText": "将删除群组 {name}。其中的人员会保留。",
   "people.deleteGroupTextServer": "将从服务器上的通讯录中删除群组 {name}。其中的人员会保留。",
   "people.deleteText": "将从这台电脑上的通讯录中删除 {name}。",
-  "people.deleteTextServer": "将从服务器上的通讯录中删除 {name}，对读取该通讯录的所有应用都生效。"
+  "people.deleteTextServer": "将从服务器上的通讯录中删除 {name}，对读取该通讯录的所有应用都生效。",
+  "folders.hide.action": "隐藏文件夹",
+  "folders.hide.show": "重新显示文件夹",
+  "folders.hide.mark": "已隐藏",
+  "folders.hide.toggle": "显示隐藏的文件夹（{count}）",
+  "folders.hide.hidden": "已隐藏 {folder}",
+  "folders.hide.shown": "已重新显示 {folder}",
+  "folders.hide.blocked.inbox": "无法隐藏收件箱",
+  "folders.hide.blocked.containsInbox": "此文件夹包含收件箱，无法隐藏",
+  "folders.hide.blocked.parentHidden": "因其上级文件夹已隐藏而隐藏",
+  "search.scope.starred": "在所有账户的所有文件夹中搜索已加星标的邮件，包括隐藏的文件夹。",
+  "search.scope.unified": "在“{folder}”中搜索：统一文件夹中每个账户的该文件夹，即使已隐藏。",
+  "search.scope.folder": "仅在“{folder}”中搜索。不包括隐藏的文件夹。",
+  "search.scope.hiddenFolder": "仅在隐藏的文件夹“{folder}”中搜索。",
+  "search.scope.unifiedInbox": "在“{folder}”中搜索：统一文件夹中每个账户的收件箱。"
 }
