@@ -13,9 +13,8 @@ const menuItemBase =
   // leading-normal, not leading-none: labels that truncate clip their own
   // descenders when the line box is only as tall as the font size. The row
   // height is pinned by min-h-7 + items-center, so the taller line box costs nothing.
-  // The focus ring sits inside the row: the menu's 4 px padding would clip one
-  // drawn outside it, and neighbouring rows would cover it.
-  'flex min-h-7 w-full items-center gap-2 rounded-control-sm px-2 py-1 text-start text-ui font-normal leading-normal transition-colors duration-(--duration-fast) focus-visible:-outline-offset-2'
+  // The focus ring sits inside the row (index.css, `[role^='menuitem']`).
+  'flex min-h-7 w-full items-center gap-2 rounded-control-sm px-2 py-1 text-start text-ui font-normal leading-normal transition-colors duration-(--duration-fast)'
 
 /** Colours and cursor of a row in its state: enabled, disabled, destructive. */
 export function menuItemStateClass({ danger = false, disabled = false } = {}): string {

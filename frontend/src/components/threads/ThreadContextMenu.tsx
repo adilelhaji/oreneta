@@ -230,7 +230,7 @@ export function ThreadContextMenu({
   // Make sure the thread's account folders are loaded each time the menu
   // (re)opens — in the unified view they aren't part of the selected account's
   // `mail$.folders`. The submenus start closed on their own: the menu is
-  // remounted per thread (its key).
+  // remounted per thread (its key), and "Copy to" reports its closing.
   const mailAccountId = menu?.kind === 'mail' ? menu.accountId : undefined
   useEffect(() => {
     if (mailAccountId) void ensureAccountFolders(mailAccountId)
@@ -262,7 +262,7 @@ export function ThreadContextMenu({
         key={menu.threadId}
         x={menu.x}
         y={menu.y}
-        label={menu.name}
+        label={menu.name || t('threads.noSubject')}
         onClose={close}
         className="fixed z-50 min-w-[160px] rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
         dataAttribute="data-thread-context-menu"
@@ -354,7 +354,7 @@ export function ThreadContextMenu({
       key={menu.threadId}
       x={menu.x}
       y={menu.y}
-      label={menu.subject}
+      label={menu.subject || t('threads.noSubject')}
       onClose={close}
       className="fixed z-50 min-w-[190px] rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
       dataAttribute="data-thread-context-menu"

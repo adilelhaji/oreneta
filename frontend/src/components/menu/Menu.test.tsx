@@ -123,7 +123,7 @@ describe('a context menu (#289)', () => {
 
   it('closes on Escape and gives focus back to the opener', async () => {
     const { view, opener } = openHarness()
-    key(view.getByRole('menuitem', { name: 'Archive' }), 'Escape')
+    fireEvent.keyDown(window, { key: 'Escape' })
     expect(view.queryByRole('menu')).toBeNull()
     await settle()
     expect(active()).toBe(opener)
@@ -140,7 +140,7 @@ describe('a context menu (#289)', () => {
     const elsewhere = document.createElement('input')
     document.body.append(elsewhere)
     elsewhere.focus()
-    key(view.getByRole('menuitem', { name: 'Archive' }), 'Escape')
+    fireEvent.keyDown(window, { key: 'Escape' })
     await settle()
     expect(active()).toBe(elsewhere)
     elsewhere.remove()
@@ -195,7 +195,7 @@ describe('a submenu (#289)', () => {
     // A click with no pointer behind it, as Enter and Space produce.
     fireEvent.click(trigger, { detail: 0 })
     expect(active()?.textContent).toBe('Inbox')
-    key(active()!, 'Escape')
+    fireEvent.keyDown(window, { key: 'Escape' })
     expect(submenuOf(trigger)).toBeNull()
     expect(view.getByRole('menu', { name: 'Thread' })).toBeTruthy()
     await settle()
@@ -214,7 +214,7 @@ describe('a submenu (#289)', () => {
     expect(active()?.textContent).toBe('Inbox')
   })
 
-  it('closes with the whole menu when an item in it acts, focus back on the opener', async () => {
+  it('closes every level on Tab from inside it, focus back on the opener', async () => {
     const actions: string[] = []
     const { view, opener } = openHarness({ onAction: (name) => actions.push(name) })
     const trigger = view.getByRole('menuitem', { name: 'Move to' })
@@ -226,6 +226,24 @@ describe('a submenu (#289)', () => {
     await settle()
     expect(active()).toBe(opener)
     expect(actions).toEqual([])
+  })
+})
+
+describe('a submenu that reports whether it is open (#289)', () => {
+  it('says it closed when the menu around it goes away while it is open', () => {
+    const seen: boolean[] = []
+    const view = render(
+      <FloatingContextMenu x={0} y={0} label="Thread" className="fixed">
+        <SubmenuItem label="Copy to" onOpenChange={(open) => seen.push(open)}>
+          <MenuItem label="Inbox" />
+        </SubmenuItem>
+      </FloatingContextMenu>,
+    )
+    const trigger = view.getByRole('menuitem', { name: 'Copy to' })
+    fireEvent.mouseEnter(trigger.parentElement!)
+    expect(seen.at(-1)).toBe(true)
+    view.unmount()
+    expect(seen.at(-1)).toBe(false)
   })
 })
 

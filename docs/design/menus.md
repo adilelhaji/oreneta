@@ -51,7 +51,7 @@ focus.
 
 ## Disseny
 
-Files de 28 px (`min-h-7`) amb icona de 16 px al començament, xebró al final dels
+Files de 28 px (`min-h-7`) amb icona de 14 px al començament, xebró al final dels
 submenús i drecera alineada al final; continuen per sobre dels 24 px de WCAG 2.5.8.
 En passar-hi per sobre i amb el focus del teclat, fons de selecció; l'anell de focus
 es dibuixa a dins de la fila. Una fila amb aspecte propi (la carpeta actual, el filtre

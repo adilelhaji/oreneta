@@ -49,6 +49,11 @@ export function SubmenuItem({
 
   useEffect(() => {
     onOpenChangeRef.current?.(open)
+    // Closed with the menu around it (an item picked, Escape): say so too, or
+    // a caller keeping the state would think it still open next time.
+    return () => {
+      if (open) onOpenChangeRef.current?.(false)
+    }
   }, [open])
 
   useLayoutEffect(() => {

@@ -151,12 +151,17 @@ export function menuWithin(surface: HTMLElement): HTMLElement | null {
 
 /**
  * Focuses a menu item and brings it into view inside a scrolling menu (a long
- * folder list) without scrolling the page: a page scroll would read as a
- * scroll outside the menu, which closes it.
+ * folder list) by scrolling that menu only, never the page: a page scroll
+ * would read as a scroll outside the menu, which closes it.
  */
 export function focusMenuItem(item: HTMLElement) {
   item.focus({ preventScroll: true })
-  item.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  const menu = item.closest<HTMLElement>('[role="menu"]')
+  if (!menu || menu.scrollHeight <= menu.clientHeight) return
+  const row = item.getBoundingClientRect()
+  const box = menu.getBoundingClientRect()
+  if (row.top < box.top) menu.scrollTop -= box.top - row.top
+  else if (row.bottom > box.bottom) menu.scrollTop += row.bottom - box.bottom
 }
 
 /** Focuses the first or last item of the menu in `surface`. False when it has none. */

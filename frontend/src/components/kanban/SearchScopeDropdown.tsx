@@ -78,7 +78,7 @@ export function SearchScopeDropdown({
           <MenuItem
             role="menuitemradio"
             checked={value === 'all'}
-            appearance={value === 'all' ? `${menuItemSelectedClass} font-bold` : undefined}
+            appearance={value === 'all' ? menuItemSelectedClass : undefined}
             className="select-none"
             icon={
               <Columns3 size={14} className={value === 'all' ? 'text-accent' : 'text-secondary'} strokeWidth={1.75} />
@@ -107,7 +107,7 @@ export function SearchScopeDropdown({
                 key={key}
                 role="menuitemradio"
                 checked={isSelected}
-                appearance={isSelected ? `${menuItemSelectedClass} font-bold` : undefined}
+                appearance={isSelected ? menuItemSelectedClass : undefined}
                 className="select-none"
                 icon={
                   <Avatar

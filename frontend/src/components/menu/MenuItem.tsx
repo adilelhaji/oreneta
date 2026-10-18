@@ -71,8 +71,10 @@ export function MenuItem({
       aria-expanded={submenu ? submenu.expanded : undefined}
       aria-controls={submenu?.expanded ? submenu.controls : undefined}
       onClick={(event) => {
+        // Inert like a disabled button: nothing above it hears the click either.
         if (disabled) {
           event.preventDefault()
+          event.stopPropagation()
           return
         }
         onClick?.(event)

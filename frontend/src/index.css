@@ -518,6 +518,12 @@ textarea:focus-visible,
 select:focus-visible {
   outline-offset: 0;
 }
+/* Menu rows draw the ring inside themselves: the menu's padding would clip one
+   outside, and the neighbouring rows would cover it (#289). Outside a layer,
+   like the rule above, so it wins over it. */
+[role^='menuitem']:focus-visible {
+  outline-offset: -2px;
+}
 
 /* Enable the native right-click menu (cut/copy/paste) on text fields. Wails
    disables the default context menu in production builds unless an element

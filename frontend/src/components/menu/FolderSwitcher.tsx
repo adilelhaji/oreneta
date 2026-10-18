@@ -282,8 +282,12 @@ export function FolderSwitcher({
               // Said as a disabled item so the arrow keys reach it too.
               <MenuItem
                 disabled
-                appearance="cursor-default justify-center py-4 text-center text-xs font-medium text-secondary"
-                label={loading ? t('folders.loading') : t('folders.noneAvailable')}
+                appearance="cursor-default py-4 text-xs text-secondary"
+                label={
+                  <span className="block text-center font-medium">
+                    {loading ? t('folders.loading') : t('folders.noneAvailable')}
+                  </span>
+                }
               />
             ) : (
               tree.map((node) => (

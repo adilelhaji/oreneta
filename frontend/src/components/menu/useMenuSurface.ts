@@ -98,6 +98,9 @@ export function useMenuKeys({
     const current = target.closest<HTMLElement>(MENU_ITEM_SELECTOR)
     const index = current ? items.indexOf(current) : -1
     event.stopPropagation()
+    // Any key but a typed character ends a typeahead search: Space after an
+    // arrow activates the item again.
+    if (action.kind !== 'typeahead') typeahead.current = { query: '', at: 0 }
     switch (action.kind) {
       case 'swallow':
         // Enter and Space still activate the focused item natively.

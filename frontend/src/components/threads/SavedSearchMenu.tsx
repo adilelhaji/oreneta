@@ -96,7 +96,13 @@ export function SavedSearchMenu({ query }: { query: string }) {
                 ui$.query.set(search.query)
                 setOpen(false)
               }}
-              onForget={() => settings$.savedSearches.set(saved.filter((item) => item.id !== search.id))}
+              onForget={() => {
+                const rest = saved.filter((item) => item.id !== search.id)
+                settings$.savedSearches.set(rest)
+                // Nothing left to list: the menu closes, focus back on its
+                // trigger, rather than staying open and empty.
+                if (rest.length === 0) setOpen(false)
+              }}
             />
           ))}
         </MenuList>
