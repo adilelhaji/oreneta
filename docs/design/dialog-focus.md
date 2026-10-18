@@ -23,7 +23,11 @@ l'exemple del catàleg amb Tab, Espai, Retorn i Escapada i verifica el retorn de
 focus després de tancar-lo amb el teclat i amb el punter.
 
 Aquest és un increment del cicle de vida, no una afirmació d'accessibilitat modal
-completa. La contenció del focus amb Tab, els menús en portal, les estructures de
-diàleg personalitzades, l'ordre de capes simultànies i l'evidència amb lectors
-de pantalla natius continuen a #37. Aquest canvi no introdueix cap captura del
+completa. La contenció del focus amb Tab, les estructures de diàleg
+personalitzades, l'ordre de capes simultànies i l'evidència amb lectors de
+pantalla natius continuen a #37. Aquest canvi no introdueix cap captura del
 focus ni cap gestor modal nou.
+
+Els menús en portal tenen el seu propi cicle del focus, amb les mateixes regles, a
+[menús](menus.md) (#289); l'evidència amb lectors de pantalla natius també hi
+continua pendent (#37).

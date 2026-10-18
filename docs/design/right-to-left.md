@@ -41,6 +41,7 @@ surt), `index.css`.
 | Fletxes del visualitzador d'imatges | `inlineArrowStep` amb `documentDirection()` |
 | Separadors de subfinestres | `PaneResizer` (ADR-0059) |
 | Menús contextuals i desplegables | `FloatingContextMenu` + `startEdgeX`, `endAlignedX`, `besideEndX`, `flyoutX` |
+| Fletxes dels menús: obrir i tancar submenús, menús en fila | `menuKeyAction` (`lib/menuKeyboard.ts`, [menús](menus.md)) |
 | Menú ràpid, finestra de gramàtica | `menuLeft` |
 | Missatges HTML al seu marc | `applyContentDirection` (`dir="auto"` a cada bloc de text si el missatge no en declara cap) |
 | Correu que surt | `markRightToLeftBlocks` des d'`inlineRichStyles` (`dir="rtl"`, citació amb la barra a la dreta i sagnat amb `margin-right`, ADR-0067) |
@@ -67,6 +68,8 @@ es reflecteix; un xebró de desplegar amb `transition-transform` es gira 180°.
 - `components/readingDirection.test.tsx`, i les proves de pestanyes i grups
   a `TaskLists`, `CalDavCalendars` i `Categories`: teclat i col·locació d'un
   menú.
+- `lib/menuKeyboard.test.ts`, `components/menu/Menu.test.tsx`: les fletxes dels
+  submenús i dels menús en fila en els dos sentits (#289).
 - `components/mixedDirection.test.tsx`: assumpte en alfabet llatí a la interfície
   àrab i assumpte en àrab a l'anglesa, amb la direcció resultant; canvi d'idioma
   sense recarregar.
@@ -77,6 +80,8 @@ es reflecteix; un xebró de desplegar amb `transition-transform` es gira 180°.
     els dos temes, sense desbordar per cap costat i amb axe;
   - un menú contextual obert al costat de la vora dreta: sencer i sense
     etiquetes partides;
+  - («#289») un submenú que s'obre amb la fletxa esquerra, a l'esquerra de la
+    seva fila, i es tanca amb la dreta, amb axe;
   - la tornada a l'anglès sense recarregar, i un assumpte en àrab a la interfície
     anglesa.
 - `e2e/startup.e2e.ts` («#306»): F6 i Maj+F6 recorren les regions en el mateix

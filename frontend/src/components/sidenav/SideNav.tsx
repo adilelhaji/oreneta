@@ -415,6 +415,9 @@ export function SideNav() {
             setMoreMenu({ x: besideEndX(rect, 8), y: rect.top })
           }}
           title={t('common.more')}
+          aria-label={t('common.more')}
+          aria-haspopup="menu"
+          aria-expanded={moreMenu !== null}
         >
           <MoreHorizontal size={20} strokeWidth={1.75} />
         </button>
@@ -430,7 +433,12 @@ export function SideNav() {
       )}
 
       {unifiedMenu && (
-        <RailContextMenu x={unifiedMenu.x} y={unifiedMenu.y} onClose={() => setUnifiedMenu(null)}>
+        <RailContextMenu
+          x={unifiedMenu.x}
+          y={unifiedMenu.y}
+          label={t('accounts.unified')}
+          onClose={() => setUnifiedMenu(null)}
+        >
           {accountGroups.map((group) => (
             <RailMenuItem
               key={group.id}

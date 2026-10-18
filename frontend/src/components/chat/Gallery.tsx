@@ -6,6 +6,7 @@ import { useTranslation } from '../../lib/i18n'
 import { useEscapeKey } from '../../lib/useEscapeKey'
 import { copyAttachmentImage, downloadAttachment } from '../../states/mail'
 import { MenuItem } from '../menu/MenuItem'
+import { MenuList } from '../menu/Menu'
 import { VideoAttachment } from './VideoAttachment'
 import { documentDirection, inlineArrowStep } from '../../lib/direction'
 
@@ -85,6 +86,9 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
   }, [index, resetZoom])
 
   useEscapeKey(onClose)
+  // Over the gallery's own Escape: with the image menu open, Escape closes
+  // only the menu.
+  useEscapeKey(() => setMenu(null), menu !== null)
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -296,7 +300,10 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
               setMenu(null)
             }}
           />
-          <div
+          <MenuList
+            label={current.filename || current.caption || t('chat.actions.saveImage')}
+            autoFocus
+            onClose={() => setMenu(null)}
             className="fixed z-[61] min-w-[160px] rounded-control border border-border bg-chats p-1 shadow-overlay"
             // Opens from the pointer towards the end of the line.
             style={
@@ -316,7 +323,7 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
               label={t('chat.actions.copyImage')}
               onClick={copyCurrent}
             />
-          </div>
+          </MenuList>
         </>
       )}
 

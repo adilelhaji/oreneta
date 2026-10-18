@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useValue } from '@legendapp/state/react'
 import { Check, Lock } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
+import { useEscapeKey } from '../../lib/useEscapeKey'
+import { MenuList } from '../menu/Menu'
 import { accounts$ } from '../../states/accounts'
 import {
   CALENDAR_COLORS,
@@ -24,6 +26,7 @@ export function CalendarList() {
   const calendars = useValue(calendar$.calendars)
   const accounts = useValue(accounts$)
   const [picking, setPicking] = useState<string | null>(null)
+  useEscapeKey(() => setPicking(null), picking !== null)
 
   if (calendars.length === 0) return null
 
@@ -72,6 +75,8 @@ export function CalendarList() {
                       type="button"
                       onClick={() => setPicking(open ? null : key(calendar))}
                       title={t('calendar.color', { defaultValue: 'Colour' })}
+                      aria-haspopup="menu"
+                      aria-expanded={open}
                       className={`min-w-0 flex-1 truncate text-start text-xs transition-colors cursor-pointer ${
                         calendar.enabled ? 'text-primary' : 'text-secondary'
                       }`}
@@ -84,11 +89,21 @@ export function CalendarList() {
                   {open && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setPicking(null)} />
-                      <div className="absolute start-6 top-8 z-50 flex gap-1.5 rounded-control border border-border bg-app p-2 shadow-overlay">
+                      {/* One colour of several: radio items, the one in use checked. */}
+                      <MenuList
+                        label={t('calendar.color', { defaultValue: 'Colour' })}
+                        orientation="horizontal"
+                        autoFocus
+                        onClose={() => setPicking(null)}
+                        className="absolute start-6 top-8 z-50 flex gap-1.5 rounded-control border border-border bg-app p-2 shadow-overlay"
+                      >
                         {CALENDAR_COLORS.map((swatch) => (
                           <button
                             key={swatch}
                             type="button"
+                            role="menuitemradio"
+                            tabIndex={-1}
+                            aria-checked={swatch === color}
                             aria-label={swatch}
                             onClick={() => {
                               void setCalendarColor(calendar.accountId, calendar.id, swatch)
@@ -100,7 +115,7 @@ export function CalendarList() {
                             style={{ backgroundColor: swatch }}
                           />
                         ))}
-                      </div>
+                      </MenuList>
                     </>
                   )}
                 </li>

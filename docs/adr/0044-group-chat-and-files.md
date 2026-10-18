@@ -2,6 +2,12 @@
 
 - Estat: acceptada; presa per delegació i revisada pel propietari
   el 2026-10-12.
+- Esmena del 2026-10-16 (#220), ampliada el 2026-10-18, acceptada pel
+  propietari el 2026-10-18 («Si»): cada pregunta d'una pujada té un termini de 30 s, que
+  inclou l'espera per posar-la a la cua de sortida; sense resposta, la
+  pujada acaba amb `disconnected`. També precisa que el servei es cerca fins
+  que es troba. Els dos apartats marcats amb «esmena #220» a
+  «Enviar un fitxer» en formen part; la resta de la decisió no canvia.
 - Data: 2026-10-12.
 - Abast: el que ADR-0036 va deixar pendent de #111: grups (MUC, XEP-0045) i
   fitxers (HTTP File Upload, XEP-0363) amb progrés i cancel·lació.
@@ -54,7 +60,8 @@
     per a una sala on ja s'és, no es desa.
 - **Enviar un fitxer:**
   - el servei de pujada es cerca al servidor del compte (disco#info
-    del domini i dels seus elements), una vegada per sessió;
+    del domini i dels seus elements) fins que es troba; un cop trobat,
+    serveix per a la resta de la sessió (esmena #220);
   - el límit de mida és el del formulari del servei (`max-file-size`):
     un fitxer més gran es rebutja aquí, abans de demanar lloc i sense enviar
     res;
@@ -65,6 +72,18 @@
     capçaleres que permet XEP-0363;
   - el progrés arriba cada 256 KB (`chat.progress`) i el final una vegada
     (`chat.uploaded`); cancel·lar talla l'enviament i no surt cap missatge;
+  - cada pregunta de la pujada (el servei, el lloc) espera com a màxim
+    30 s (esmena #220), comptats des d'abans de posar-la a la cua
+    de sortida: les d'una mateixa tanda comparteixen el termini, i una que no
+    hi cap a temps no s'envia. Les preguntes als components del servidor es
+    fan quan arriba la llista i tenen un termini nou, de manera que la cerca
+    pot durar uns 60 s en total. Una pregunta que ja és a la cua quan
+    s'acaba el termini pot sortir més tard; la resposta que arribi aleshores
+    s'ignora.
+    Un lloc sense resposta acaba la pujada amb `disconnected`;
+    una cerca que acaba sense servei l'acaba amb `noService`, o amb
+    `disconnected` si alguna pregunta s'ha quedat sense resposta, i la
+    pujada següent torna a cercar;
   - un cop pujat, l'enllaç surt com a missatge normal, amb l'enllaç al cos
     i com a OOB (XEP-0066), i segueix les regles d'estat de sempre;
     «Tornar a enviar» torna a enviar el mateix enllaç amb el mateix id.

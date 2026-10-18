@@ -9,8 +9,12 @@ import { kanbanColumnKey, type KanbanColumn } from '../../states/kanban'
 import { accountLabel, folderLabel, mergeLabelFolders, useFoldersByAccount } from '../../lib/kanbanData'
 import { isRssAccount } from '../../lib/threadActions'
 import { Avatar } from '../avatar/Avatar'
+import { MenuItem } from '../menu/MenuItem'
+import { MenuList, MenuSeparator } from '../menu/Menu'
+import { menuItemSelectedClass } from '../menu/menuStyles'
 
-// Custom dropdown component for the search scope selector
+// The search scope selector: a menu button whose menu offers every column, the
+// scope in force checked (radio items, #289).
 export function SearchScopeDropdown({
   value,
   onChange,
@@ -54,6 +58,8 @@ export function SearchScopeDropdown({
         onClick={() => setIsOpen(!isOpen)}
         className="flex h-full items-center gap-1.5 px-3.5 text-caption font-semibold text-secondary hover:text-primary transition-colors cursor-pointer select-none rounded-e-xl outline-none border-0"
         title={t('kanban.searchScope.label')}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
       >
         <span className="truncate max-w-[130px]">{selectedLabel}</span>
         <ChevronDown
@@ -63,22 +69,28 @@ export function SearchScopeDropdown({
         />
       </button>
       {isOpen && (
-        <div className="absolute end-0 mt-1.5 z-50 w-64 max-h-72 overflow-y-auto rounded-panel border border-border bg-chats p-1.5 shadow-overlay shadow-black/10 dark:shadow-black/35 animate-slide-up">
-          <button
-            type="button"
+        <MenuList
+          label={t('kanban.searchScope.label')}
+          autoFocus
+          onClose={() => setIsOpen(false)}
+          className="absolute end-0 mt-1.5 z-50 w-64 max-h-72 overflow-y-auto rounded-panel border border-border bg-chats p-1.5 shadow-overlay shadow-black/10 dark:shadow-black/35 animate-slide-up"
+        >
+          <MenuItem
+            role="menuitemradio"
+            checked={value === 'all'}
+            appearance={value === 'all' ? menuItemSelectedClass : undefined}
+            className="select-none"
+            icon={
+              <Columns3 size={14} className={value === 'all' ? 'text-accent' : 'text-secondary'} strokeWidth={1.75} />
+            }
+            label={<span className="font-semibold">{t('kanban.searchScope.allColumns')}</span>}
             onClick={() => {
               onChange('all')
               setIsOpen(false)
             }}
-            className={`w-full flex items-center gap-2 px-3 py-2 text-xs rounded-control transition-colors cursor-pointer select-none ${
-              value === 'all' ? 'bg-accent/10 text-accent font-bold' : 'text-primary hover:bg-hover'
-            }`}
-          >
-            <Columns3 size={14} className={value === 'all' ? 'text-accent' : 'text-secondary'} strokeWidth={1.75} />
-            <span className="font-semibold">{t('kanban.searchScope.allColumns')}</span>
-          </button>
+          />
 
-          <div className="my-1 border-t border-border/50" />
+          <MenuSeparator />
 
           {visibleColumns.map((column) => {
             const key = kanbanColumnKey(column)
@@ -91,34 +103,37 @@ export function SearchScopeDropdown({
             const columnIsRss = isRssAccount(columnAccount, column.accountId)
 
             return (
-              <button
+              <MenuItem
                 key={key}
-                type="button"
+                role="menuitemradio"
+                checked={isSelected}
+                appearance={isSelected ? menuItemSelectedClass : undefined}
+                className="select-none"
+                icon={
+                  <Avatar
+                    name={columnAccountLabel || accountLabel(column.accountId, accounts)}
+                    email={columnIsRss ? undefined : columnAccount?.email}
+                    src={columnAccount?.avatar_url}
+                    size={18}
+                    fallback={columnIsRss ? <Rss size={14} strokeWidth={1.75} /> : undefined}
+                  />
+                }
+                label={
+                  <span className="block min-w-0 text-start">
+                    <span className="block truncate font-semibold">{folderLabel(column, folders, accounts, t)}</span>
+                    <span className="block truncate text-2xs text-secondary font-medium">
+                      {column.accountId === 'unified' ? t('accounts.unified') : columnAccountLabel}
+                    </span>
+                  </span>
+                }
                 onClick={() => {
                   onChange(key)
                   setIsOpen(false)
                 }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-control transition-colors cursor-pointer select-none ${
-                  isSelected ? 'bg-accent/10 text-accent font-bold' : 'text-primary hover:bg-hover'
-                }`}
-              >
-                <Avatar
-                  name={columnAccountLabel || accountLabel(column.accountId, accounts)}
-                  email={columnIsRss ? undefined : columnAccount?.email}
-                  src={columnAccount?.avatar_url}
-                  size={18}
-                  fallback={columnIsRss ? <Rss size={14} strokeWidth={1.75} /> : undefined}
-                />
-                <div className="min-w-0 flex-1 text-start">
-                  <div className="truncate font-semibold">{folderLabel(column, folders, accounts, t)}</div>
-                  <div className="truncate text-2xs text-secondary font-medium">
-                    {column.accountId === 'unified' ? t('accounts.unified') : columnAccountLabel}
-                  </div>
-                </div>
-              </button>
+              />
             )
           })}
-        </div>
+        </MenuList>
       )}
     </div>
   )

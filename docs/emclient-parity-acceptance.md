@@ -78,6 +78,13 @@ de mencions, però comptada com a no llegida) i les mencions sense llegir de cad
 compte. L'absència automàtica per inactivitat necessita una API nova del sistema: el propietari va
 triar l'opció A de l'ADR-0065, que encara no està implementada (#265). La fila es manté `partial` (hi falten aquest punt i
 l'evidència nativa de Windows).
+El 2026-10-18 (#220, esmena proposada de l'ADR-0044) el xat fa servir una còpia de tokio-xmpp 6.0.0
+amb un pedaç (`third_party/tokio-xmpp`, al registre SOUP): el receptor ja no perd l'avís quan se'l
+consulta mentre s'envia alguna cosa, i la sessió ja no es queda sense rebre res mentre continua
+connectada. Cada
+pregunta d'una pujada de fitxer té un termini de 30 s, que també cobreix l'espera per entrar a la
+cua de sortida quan és plena; sense resposta, la pujada acaba amb `disconnected`. SET-21 es manté
+`partial`: l'evidència nativa de Windows continua pendent.
 El 2026-10-17 (#273) SET-07 va incorporar amagar carpetes de l'arbre de carpetes i tornar-les
 a mostrar («Amaga la carpeta», «Mostra les carpetes amagades», «Torna a mostrar la carpeta»),
 amb les subcarpetes incloses, com a preferència local (`folder_hidden`) que no arriba mai al
@@ -160,6 +167,16 @@ notifica com a correu nou. La comprovació amb un servidor no té cap prova auto
 [mail-check-interval.md](design/mail-check-interval.md). Cap fila no canvia d'estat: no hi ha
 cap fila de sincronització, S15-01 (POP3) es manté `implemented-unverified` i GRAPH-01
 `partial`, i l'evidència nativa de Windows (N4) i amb servidors reals (N5) continua pendent.
+El 2026-10-18 (#289, peça 7 del redisseny) tots els menús emergents i contextuals de
+l'aplicació són menús WAI-ARIA (`menu`, `menuitem`, `menuitemcheckbox`, `menuitemradio`,
+separadors, grups amb nom i submenús), es fan servir amb el teclat (fletxes, Inici i Fi,
+cerca per lletra, Escapada només per al menú de dins, Tab per tancar, fletxa cap al final
+de la línia per obrir un submenú i cap a l'inici per tancar-lo, a l'inrevés en àrab), el
+focus hi entra en obrir-los i torna a l'element que els va obrir en tancar-los, i les files
+fan 28 px (decisió D9, aprovada el 2026-10-17 i registrada a #288). Proves unitàries i
+proves de l'entrada de producció, en anglès i en àrab, amb axe sense cap infracció sobre
+els menús. Cap fila no canvia d'estat (SET-08, SET-27, #37):
+l'evidència nativa de Windows i la dels lectors de pantalla continuen pendents.
 El 2026-10-18 (#281, ADR-0070) SET-20 va incorporar les llistes de tasques que arriben amb
 el compte, com els calendaris: la carpeta Tasques d'un compte d'Exchange i les col·leccions
 de tasques d'un servidor CalDAV que s'afegeix a un compte (les que només admeten tasques, i

@@ -501,7 +501,7 @@ impl Default for Options {
 }
 
 /// What an answer to one of our questions (iq) is about.
-enum Asked {
+pub(super) enum Asked {
     Mam(Option<String>),
     /// What the account's own server offers (invisibility).
     Features,
@@ -513,21 +513,76 @@ enum Asked {
     Ignored,
 }
 
-type Answer = (Asked, Result<tokio_xmpp::IqResponse, tokio_xmpp::IqFailure>);
-type Pending = FuturesUnordered<Pin<Box<dyn Future<Output = Answer> + Send>>>;
+pub(super) type Answer = (Asked, Result<tokio_xmpp::IqResponse, tokio_xmpp::IqFailure>);
+pub(super) type Pending = FuturesUnordered<Pin<Box<dyn Future<Output = Answer> + Send>>>;
 
 fn ask(pending: &Pending, what: Asked, token: tokio_xmpp::IqResponseToken) {
     pending.push(Box::pin(async move { (what, token.await) }));
 }
 
-/// The upload service, found once per session.
+/// How long a question about a file (the service, its place) has to get
+/// into the outgoing queue and be answered (#220). `tokio-xmpp` never gives
+/// up on one by itself, and while its queue is full a send waits for room.
+const UPLOAD_ANSWER_DEADLINE: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Like `ask`, but the question has until `deadline` both to get into the
+/// outgoing queue and to be answered (#220). The deadline starts before the
+/// question is queued: with the queue full (a stalled connection) the wait
+/// for room ends at the deadline and the question is not sent, so neither
+/// the upload nor the session waits past it. Unsent or unanswered, it ends
+/// as a failure and the upload waiting on it is told. Questions asked
+/// together share one deadline, so a batch waits for room once at most.
+/// `pending` is borrowed mutably so this future stays `Send` (a shared
+/// borrow of the non-`Sync` set across the await would not be).
+pub(super) async fn ask_by(
+    client: &mut Client,
+    pending: &mut Pending,
+    deadline: tokio::time::Instant,
+    what: Asked,
+    to: Option<Jid>,
+    request: tokio_xmpp::IqRequest,
+) {
+    let token = sent_by(deadline, client.send_iq(to, request)).await;
+    pending.push(Box::pin(async move { (what, answered_by(deadline, token).await) }));
+}
+
+/// What `send` gives if it finishes by `deadline`; `None` if it does not,
+/// or if the deadline has already passed, and then `send` is never started.
+pub(super) async fn sent_by<T>(deadline: tokio::time::Instant, send: impl Future<Output = T>) -> Option<T> {
+    if tokio::time::Instant::now() >= deadline {
+        return None;
+    }
+    tokio::time::timeout_at(deadline, send).await.ok()
+}
+
+/// The answer to a question, if it was sent and the answer comes by
+/// `deadline`. Otherwise it is reported as a failure to send (timed out),
+/// the same as a question the stream lost: either way no answer will come.
+pub(super) async fn answered_by(
+    deadline: tokio::time::Instant,
+    token: Option<impl Future<Output = Result<tokio_xmpp::IqResponse, tokio_xmpp::IqFailure>>>,
+) -> Result<tokio_xmpp::IqResponse, tokio_xmpp::IqFailure> {
+    let answer = match token {
+        Some(token) => tokio::time::timeout_at(deadline, token).await.ok(),
+        None => None,
+    };
+    answer.unwrap_or_else(|| {
+        Err(tokio_xmpp::IqFailure::SendError(std::io::Error::new(std::io::ErrorKind::TimedOut, "no answer in time")))
+    })
+}
+
+/// The upload service: searched for until found, then used for the rest
+/// of the session.
 #[derive(Default)]
-struct Uploads {
-    service: Option<(Jid, Option<u64>)>,
+pub(super) struct Uploads {
+    pub(super) service: Option<(Jid, Option<u64>)>,
     /// Discovery questions still unanswered.
-    searching: usize,
-    waiting: Vec<Upload>,
-    asked: HashMap<String, Upload>,
+    pub(super) searching: usize,
+    /// A discovery question got no answer (late, or lost with the stream):
+    /// a search that ends without a service then failed, not found nothing.
+    pub(super) unanswered: bool,
+    pub(super) waiting: Vec<Upload>,
+    pub(super) asked: HashMap<String, Upload>,
 }
 
 /// Runs one account's connection until stopped: catches up from the archive
@@ -637,16 +692,19 @@ pub async fn run(
                         }
                     }
                     Event::Disconnected(error) => {
+                        // tokio-xmpp 6 reconnects on its own and does not send this;
+                        // questions lost with a stream end at their deadline instead.
+                        // Kept should a version send it: uploads still waiting were
+                        // not sent, and say so.
                         let _ = super::after_disconnect(&db.lock().unwrap(), &account.id);
                         // What contacts and rooms said stays until the stream is
                         // resumed or replaced; the app shows it only while online.
                         live.lock().unwrap().applied = Applied::Offline;
                         own_changed();
                         emit("chat.status", json!({ "account": account.id, "state": "offline", "message": error.to_string() }));
-                        // Questions asked on the old stream get no answer: uploads
-                        // still waiting for a place were not sent, and say so.
                         pending = FuturesUnordered::new();
                         uploads.searching = 0;
+                        uploads.unanswered = false;
                         for upload in uploads.waiting.drain(..).chain(uploads.asked.drain().map(|(_, u)| u)) {
                             uploaded(&upload, Err(FileError::Disconnected));
                         }
@@ -791,42 +849,26 @@ pub async fn run(
                         }
                     }
                     Asked::Items => {
-                        uploads.searching = uploads.searching.saturating_sub(1);
+                        discovery_answered(&mut uploads, &answer);
                         if let Ok(tokio_xmpp::IqResponse::Result(Some(element))) = answer {
                             if let Ok(items) = DiscoItemsResult::try_from(element) {
+                                let deadline = tokio::time::Instant::now() + UPLOAD_ANSWER_DEADLINE;
                                 for item in items.items.into_iter().take(20) {
-                                    let token = client.send_iq(Some(item.jid.clone()), tokio_xmpp::IqRequest::Get(DiscoInfoQuery { node: None }.into())).await;
                                     uploads.searching += 1;
-                                    ask(&pending, Asked::Info(item.jid), token);
+                                    let request = tokio_xmpp::IqRequest::Get(DiscoInfoQuery { node: None }.into());
+                                    ask_by(&mut client, &mut pending, deadline, Asked::Info(item.jid.clone()), Some(item.jid), request).await;
                                 }
                             }
                         }
                         next_uploads(&mut client, &mut pending, &mut uploads, &uploaded).await;
                     }
                     Asked::Info(jid) => {
-                        uploads.searching = uploads.searching.saturating_sub(1);
-                        if let Ok(tokio_xmpp::IqResponse::Result(Some(element))) = answer {
-                            if let Ok(info) = DiscoInfoResult::try_from(element) {
-                                if let (None, Some(max)) = (&uploads.service, files::upload_service(&info)) {
-                                    uploads.service = Some((jid, max));
-                                }
-                            }
-                        }
+                        info_answered(&mut uploads, jid, answer);
                         next_uploads(&mut client, &mut pending, &mut uploads, &uploaded).await;
                     }
                     Asked::Slot(id) => {
                         let Some(upload) = uploads.asked.remove(&id) else { continue };
-                        let slot = match answer {
-                            Ok(tokio_xmpp::IqResponse::Result(Some(element))) => SlotResult::try_from(element)
-                                .map_err(|e| FileError::Refused { detail: e.to_string() })
-                                .and_then(files::parse_slot),
-                            Ok(tokio_xmpp::IqResponse::Error(error)) => Err(FileError::Refused {
-                                detail: error.texts.values().next().cloned().unwrap_or_else(|| format!("{:?}", error.defined_condition)),
-                            }),
-                            Ok(tokio_xmpp::IqResponse::Result(None)) => Err(FileError::Refused { detail: "no place was given".into() }),
-                            Err(_) => Err(FileError::Disconnected),
-                        };
-                        match slot {
+                        match slot_from(answer) {
                             Err(error) => uploaded(&upload, Err(error)),
                             Ok(_) if upload.cancel.load(Ordering::Relaxed) => uploaded(&upload, Err(FileError::Cancelled)),
                             Ok(slot) => spawn_put(upload, slot, &options, &emit, &account.id, done_tx.clone()),
@@ -951,10 +993,11 @@ pub async fn run(
                         if uploads.service.is_none() && uploads.searching == 0 {
                             // Find the upload service: the server itself, or one of its components.
                             let domain = Jid::from(BareJid::from_parts(None, own.domain()));
-                            let token = client.send_iq(Some(domain.clone()), tokio_xmpp::IqRequest::Get(DiscoItemsQuery { node: None, rsm: None }.into())).await;
-                            ask(&pending, Asked::Items, token);
-                            let token = client.send_iq(Some(domain.clone()), tokio_xmpp::IqRequest::Get(DiscoInfoQuery { node: None }.into())).await;
-                            ask(&pending, Asked::Info(domain), token);
+                            let deadline = tokio::time::Instant::now() + UPLOAD_ANSWER_DEADLINE;
+                            let request = tokio_xmpp::IqRequest::Get(DiscoItemsQuery { node: None, rsm: None }.into());
+                            ask_by(&mut client, &mut pending, deadline, Asked::Items, Some(domain.clone()), request).await;
+                            let request = tokio_xmpp::IqRequest::Get(DiscoInfoQuery { node: None }.into());
+                            ask_by(&mut client, &mut pending, deadline, Asked::Info(domain.clone()), Some(domain), request).await;
                             uploads.searching = 2;
                         } else {
                             next_uploads(&mut client, &mut pending, &mut uploads, &uploaded).await;
@@ -1096,22 +1139,69 @@ async fn next_uploads(
     uploaded: &(dyn Fn(&Upload, Result<String, FileError>) + Sync),
 ) {
     let Some((service, max)) = uploads.service.clone() else {
-        if uploads.searching == 0 {
-            for upload in uploads.waiting.drain(..) {
-                uploaded(&upload, Err(FileError::NoService));
-            }
-        }
+        end_search(uploads, uploaded);
         return;
     };
+    let deadline = tokio::time::Instant::now() + UPLOAD_ANSWER_DEADLINE;
     for upload in std::mem::take(&mut uploads.waiting) {
         if let Err(error) = files::check_size(upload.size, max) {
             uploaded(&upload, Err(error));
             continue;
         }
-        let request = files::slot_request(&upload.name, upload.size);
-        let token = client.send_iq(Some(service.clone()), tokio_xmpp::IqRequest::Get(request.into())).await;
-        ask(pending, Asked::Slot(upload.id.clone()), token);
+        let request = tokio_xmpp::IqRequest::Get(files::slot_request(&upload.name, upload.size).into());
+        ask_by(client, pending, deadline, Asked::Slot(upload.id.clone()), Some(service.clone()), request).await;
         uploads.asked.insert(upload.id.clone(), upload);
+    }
+}
+
+/// One discovery question is settled. One that got no answer (past its
+/// deadline, or lost with the stream) is noted, unlike a server's "no".
+pub(super) fn discovery_answered(uploads: &mut Uploads, answer: &Result<tokio_xmpp::IqResponse, tokio_xmpp::IqFailure>) {
+    uploads.searching = uploads.searching.saturating_sub(1);
+    uploads.unanswered |= answer.is_err();
+}
+
+/// An entity's disco#info: the first upload service found is the one used.
+pub(super) fn info_answered(uploads: &mut Uploads, jid: Jid, answer: Result<tokio_xmpp::IqResponse, tokio_xmpp::IqFailure>) {
+    discovery_answered(uploads, &answer);
+    if let Ok(tokio_xmpp::IqResponse::Result(Some(element))) = answer {
+        if let Ok(info) = DiscoInfoResult::try_from(element) {
+            if let (None, Some(max)) = (&uploads.service, files::upload_service(&info)) {
+                uploads.service = Some((jid, max));
+                // Found: an earlier unanswered question no longer matters.
+                uploads.unanswered = false;
+            }
+        }
+    }
+}
+
+/// The service's answer to a slot request. None at all (past its deadline,
+/// or lost with the stream) is a failed connection.
+pub(super) fn slot_from(answer: Result<tokio_xmpp::IqResponse, tokio_xmpp::IqFailure>) -> Result<files::Slot, FileError> {
+    match answer {
+        Ok(tokio_xmpp::IqResponse::Result(Some(element))) => SlotResult::try_from(element)
+            .map_err(|e| FileError::Refused { detail: e.to_string() })
+            .and_then(files::parse_slot),
+        Ok(tokio_xmpp::IqResponse::Error(error)) => Err(FileError::Refused {
+            detail: error.texts.values().next().cloned().unwrap_or_else(|| format!("{:?}", error.defined_condition)),
+        }),
+        Ok(tokio_xmpp::IqResponse::Result(None)) => Err(FileError::Refused { detail: "no place was given".into() }),
+        Err(_) => Err(FileError::Disconnected),
+    }
+}
+
+/// With every discovery question answered (or past its deadline) and no
+/// service found, the waiting uploads end: there is none, or, when a
+/// question went unanswered, the connection failed. The next upload
+/// searches again.
+pub(super) fn end_search(uploads: &mut Uploads, uploaded: &(dyn Fn(&Upload, Result<String, FileError>) + Sync)) {
+    if uploads.searching > 0 {
+        return;
+    }
+    let error = if uploads.unanswered { FileError::Disconnected } else { FileError::NoService };
+    uploads.unanswered = false;
+    for upload in uploads.waiting.drain(..) {
+        uploaded(&upload, Err(error.clone()));
     }
 }
 

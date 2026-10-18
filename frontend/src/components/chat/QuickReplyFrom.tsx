@@ -10,7 +10,7 @@ import { startEdgeX } from '../../lib/direction'
 // Menu geometry, used to open the picker *upward* — the quick reply sits at the
 // bottom of the window, so a downward menu would cover the composer it belongs
 // to. FloatingContextMenu clamps to the viewport, so an estimate is enough.
-const ITEM_HEIGHT_PX = 32
+const ITEM_HEIGHT_PX = 28
 const MENU_PADDING_PX = 8
 const MENU_GAP_PX = 6
 
@@ -31,11 +31,14 @@ export function QuickReplyFrom() {
   return (
     <>
       <button
+        type="button"
         onClick={(event) => {
           const rect = event.currentTarget.getBoundingClientRect()
           setMenu({ x: startEdgeX(rect), y: rect.top - menuHeight - MENU_GAP_PX })
         }}
         title={t('composer.actions.chooseSendAddress')}
+        aria-haspopup="menu"
+        aria-expanded={menu !== null}
         className="flex max-w-full items-center gap-1 self-start rounded-control-sm px-1.5 py-0.5 text-caption text-secondary hover:bg-active hover:text-primary transition-colors cursor-pointer"
       >
         <span className="font-semibold">{t('composer.fields.from')}</span>
@@ -47,6 +50,7 @@ export function QuickReplyFrom() {
         <FloatingContextMenu
           x={menu.x}
           y={menu.y}
+          label={t('composer.actions.chooseSendAddress')}
           overlay
           onClose={() => setMenu(null)}
           className="fixed z-50 min-w-[220px] max-w-[min(420px,90vw)] rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
@@ -56,6 +60,9 @@ export function QuickReplyFrom() {
           {identities.map((identity) => (
             <MenuItem
               key={identity.email}
+              // One address of several: the one in use is checked.
+              role="menuitemradio"
+              checked={identity.email === selected.email}
               icon={
                 identity.email === selected.email ? (
                   <Check size={14} className="shrink-0 text-accent" strokeWidth={1.75} />

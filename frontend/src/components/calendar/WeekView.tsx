@@ -509,6 +509,8 @@ export function WeekView({
         <FloatingContextMenu
           x={menu.x}
           y={menu.y}
+          // Named after the day it creates on (#289).
+          label={menu.day.toLocaleDateString(language, { weekday: 'long', day: 'numeric', month: 'long' })}
           onClose={() => setMenu(null)}
           overlay
           overlayClassName="fixed inset-0 z-[60]"
