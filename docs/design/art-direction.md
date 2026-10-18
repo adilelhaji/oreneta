@@ -50,7 +50,7 @@ Els colors objectiu són:
 |---|---|---|---|
 | `accent` | `#2056dd` | `#7ea6ff` | Interactiu, selecció, l'únic color saturat d'una pantalla |
 | `bg-sidenav` | Blau marí proper a `#15316e` | Blau marí gairebé negre | La barra de comptes |
-| Neutres | Blanc trencat amb un to fred lleu, no `#fff` pur | Blau marí gairebé negre, no `#000` pur | Tota la resta |
+| Neutres | Blanc trencat amb un to fred lleu, no `#fff` pur, llevat de la superfície elevada dels camps (`#ffffff`, #287) | Blau marí gairebé negre, no `#000` pur | Tota la resta |
 
 ### Tokens semàntics
 

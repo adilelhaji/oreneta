@@ -182,8 +182,9 @@ export function themeSurfaces(tokens: SurfaceTokens): string[] {
 /**
  * Field outline: the divider colour moved toward the text only as far as it
  * needs to reach 3:1 on every surface, so it stays quieter than the text.
- * With no resolvable surface, or nothing short of the text that reaches it,
- * the outline is the text colour itself, never a guess below the floor.
+ * Best effort beyond that: with no resolvable surface (contrast unknown), or
+ * when nothing up to the text itself reaches 3:1, the outline is the text
+ * colour, the strongest the palette offers. The editor names a text shortfall.
  */
 function readableInputBorder(border: string, text: string, surfaces: string[]): string {
   if (surfaces.length === 0) return text
@@ -220,9 +221,10 @@ export type ContrastShortfall = { pair: 'text' | 'accent'; ratio: number }
 
 export function contrastShortfalls(tokens: ThemeTokens): ContrastShortfall[] {
   const worst = (fg: string, backgrounds: string[]) => Math.min(...backgrounds.map((bg) => contrastRatio(fg, bg) ?? 0))
-  const text = worst(tokens.textPrimary, [tokens.bgApp, tokens.bgChat, tokens.bgChats, tokens.bgActive])
-  // Accent is drawn as text on the selected folder, account and sort header.
-  const accent = worst(tokens.accent, [tokens.bgChats, tokens.bgActive])
+  const text = worst(tokens.textPrimary, themeSurfaces(tokens))
+  // Accent is drawn as text on the selected folder, account and sort header,
+  // and the folder pane and headers sit on the frame tone (#287).
+  const accent = worst(tokens.accent, [tokens.bgApp, tokens.bgHeader, tokens.bgChats, tokens.bgActive])
   const shortfalls: ContrastShortfall[] = []
   if (text < READABLE_CONTRAST) shortfalls.push({ pair: 'text', ratio: text })
   if (accent < READABLE_CONTRAST) shortfalls.push({ pair: 'accent', ratio: accent })
@@ -230,14 +232,19 @@ export function contrastShortfalls(tokens: ThemeTokens): ContrastShortfall[] {
 }
 
 /**
- * Expand the 6 editor inputs into a full token map. Formulas are tuned so the
- * Oreneta Light/Dark inputs reproduce (closely) the hand-picked index.css values.
+ * Expand the 6 editor inputs into a full token map: the frame (window, headers)
+ * from `bgApp`, the content (lists, reader) from `surface`. The formulas give a
+ * coherent palette from any inputs; they approximate, not reproduce, the
+ * hand-picked Oreneta Light/Dark values (those also pin hover, raised and
+ * selection by hand).
  */
 export function deriveThemeTokens(input: CustomThemeInput): ThemeTokens {
   const { appearance, bgApp, surface, sideNav, accent, text } = input
   const light = appearance === 'light'
 
-  const bgChat = light ? lighten(bgApp, 0.5) : bgApp
+  // The reader is content, so in dark it sits between the frame and the list
+  // rather than taking the frame tone itself (#287).
+  const bgChat = light ? lighten(bgApp, 0.5) : mix(bgApp, surface, 0.5)
   const border = mix(surface, text, 0.12)
   const bgActive = light ? mix(surface, text, 0.12) : lighten(surface, 0.1)
   const bgHover = light ? mix(surface, text, 0.06) : withAlpha(lighten(surface, 0.08), 0.6)

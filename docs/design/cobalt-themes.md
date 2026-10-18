@@ -52,12 +52,13 @@ sent #84/#85.
 El [sistema de disseny](design-system.md) defineix dos tons de superfície per a tots els
 temes: el marc (finestra, capçaleres, barres i panell de carpetes) i el contingut
 (llistes i lector). Oreneta Light i Dark prenen els valors aprovats el 2026-10-17: el
-marc `#e3eaf4`/`#0c1526`, la selecció `#d6e3fb`/`#243a5e`, els camps blancs en clar i
-la barra de mòduls `#08111f` en fosc. Els altres 14 temes donen a la capçalera el color de
+marc `#e3eaf4`/`#0c1526`, la selecció `#d6e3fb`/`#243a5e`, la superfície elevada blanca
+en clar i la barra de mòduls `#08111f` en fosc. Els altres 14 temes donen a la capçalera el color de
 fons de la finestra i set enfosqueixen el text secundari fins a 4,5:1; cap accent no canvia.
 Tots els temes, i els personalitzats derivats o desats, tenen el token nou
-`--me-border-input` per a la vora dels camps (3:1). L'anell de focus és l'accent sòlid
+`--me-border-input` per a la vora dels camps, derivat fins a 3:1 quan els colors ho
+permeten (una vora ja desada es conserva). L'anell de focus és l'accent sòlid
 i els radis passen a 4/6/8/12 px. La llavor de l'editor de temes personalitzats segueix
 els valors nous d'Oreneta. Vuit temes integrats tenen l'accent per sota de 4,5:1 com a
 text des d'abans d'aquest canvi; corregir-ho canviaria el seu accent i espera la
-decisió del propietari.
+decisió del propietari (#287).

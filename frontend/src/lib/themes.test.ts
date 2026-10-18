@@ -111,7 +111,7 @@ describe('frame and content tones (#287)', () => {
   it('paints headers in the frame tone and the lists in a different content tone', () => {
     for (const theme of BUILTIN_THEMES) {
       expect({ id: theme.id, header: theme.tokens.bgHeader }).toEqual({ id: theme.id, header: theme.tokens.bgApp })
-      expect(contrastRatio(theme.tokens.bgApp, theme.tokens.bgChats)!).toBeGreaterThan(1)
+      expect(theme.tokens.bgApp).not.toBe(theme.tokens.bgChats)
     }
   })
 
@@ -144,6 +144,8 @@ describe('frame and content tones (#287)', () => {
       const t = deriveThemeTokens(input)
       expect(t.bgHeader).toBe(input.bgApp)
       expect(t.bgChats).toBe(input.surface)
+      // The reader is content too: never the frame tone.
+      expect(t.bgChat).not.toBe(input.bgApp)
       expectReadable(t)
       // Quieter than the text: an outline, not a second text colour.
       expect(t.borderInput).not.toBe(t.textPrimary)
@@ -152,7 +154,7 @@ describe('frame and content tones (#287)', () => {
 })
 
 describe('cobalt defaults', () => {
-  it('retains existing palette IDs and colors alongside distinct new defaults', () => {
+  it('retains existing palette IDs and accents alongside distinct new defaults', () => {
     expect(DEFAULT_LIGHT_ID).toBe('oreneta-light')
     expect(DEFAULT_DARK_ID).toBe('oreneta-dark')
     expect(builtinTheme('indigo')?.tokens.accent).toBe('#4f46e5')
@@ -256,6 +258,17 @@ describe('cobalt defaults', () => {
     const fromGlass = restore(glass)
     expect(fromGlass.bgApp).toBe('rgba(255, 255, 255, 0.5)')
     expect(fromGlass.borderInput).toBe(fromGlass.textPrimary)
+    // Nothing up to the text reaches 3:1: the outline is the text, and the
+    // editor names the text itself as unreadable.
+    const faint: Record<string, string> = {
+      ...deriveThemeTokens(SAMPLE_INPUT),
+      border: '#f4f4f4',
+      textPrimary: '#dddddd',
+    }
+    delete faint.borderInput
+    const fromFaint = restore(faint)
+    expect(fromFaint.borderInput).toBe('#dddddd')
+    expect(contrastShortfalls(fromFaint).map((s) => s.pair)).toContain('text')
   })
 
   it('restores light legacy custom accents with readable text without changing saved colors', () => {
@@ -318,6 +331,14 @@ describe('deriveThemeTokens', () => {
       // Still secondary: never the primary colour unless nothing else reads.
       expect(t.textSecondary).not.toBe(t.textPrimary)
     }
+  })
+
+  it('names an accent that reads on the lists but not on the frame tone', () => {
+    // The cobalt dark accent reads on the dark list but not on a lighter frame.
+    const t = { ...deriveThemeTokens(defaultCustomInput('dark')), bgApp: '#3a4a6a', bgHeader: '#3a4a6a' }
+    expect(contrastRatio(t.accent, t.bgChats)!).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(t.accent, t.bgApp)!).toBeLessThan(4.5)
+    expect(contrastShortfalls(t).map((s) => s.pair)).toContain('accent')
   })
 
   it('names what the chosen colours themselves leave unreadable', () => {

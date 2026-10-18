@@ -409,7 +409,9 @@
    sync with lib/themes.ts; existing choices paint their own inline tokens.
    Two surface tones (#287): the frame (--me-bg-app, --me-bg-header) for the
    window, headers and bars, and the content (--me-bg-chats, --me-bg-chat) for
-   lists and the reader; --me-bg-raised is the field and menu surface. */
+   lists and the reader; --me-bg-raised is the field surface. Floating menus
+   use --me-bg-chats, because --me-bg-raised is translucent in some dark
+   palettes. */
 :root {
   --me-accent-text: #ffffff;
   --me-info-soft: #e7eefb;
@@ -560,8 +562,9 @@ textarea,
     transform 0.16s ease;
 }
 
+/* Hover keeps the 3:1 outline (#287): a mix toward the accent fell under
+   3:1 in palettes with a pale accent. */
 .app-checkbox:hover {
-  border-color: color-mix(in srgb, var(--me-accent) 62%, var(--me-border));
   background-color: var(--me-bg-raised);
 }
 
