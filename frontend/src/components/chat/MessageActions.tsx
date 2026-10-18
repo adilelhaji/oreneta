@@ -83,7 +83,7 @@ export function MessageActions({
       className={clsx(
         'flex items-center gap-0.5 text-secondary',
         variant === 'floating'
-          ? 'absolute end-2 -top-3.5 z-20 rounded-full border border-border/40 bg-header/95 p-0.5 shadow-sm'
+          ? 'absolute end-2 -top-3.5 z-20 rounded-full border border-border/40 bg-chats/95 p-0.5 shadow-sm'
           : 'min-w-0 flex-wrap',
       )}
     >

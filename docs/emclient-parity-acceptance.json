@@ -66,7 +66,7 @@
       "section": "Appearance/Lists; Mail/Conversations",
       "outcome": "New profiles open conventional list and reader; explicit old modes remain",
       "status": "implemented-unverified",
-      "present": "#84 uses table/compact/traditional when preferences are absent; preserves explicit saved values; native certification pending",
+      "present": "#84 uses table/compact/traditional when preferences are absent; since #283 an absent list view is automatic (two-line rows below 520 px of list, the table above) and the list starts at 360 px; preserves explicit saved values; native certification pending",
       "code": "frontend/src/states/settings.ts",
       "acceptance": "Test missing vs saved preferences and production read/reply/select workflow",
       "platform": "Windows desktop",
@@ -79,6 +79,14 @@
           {
             "sha": "d5a8f977513fe8f412fb60cefc41a27f95fa8f75",
             "result": "https://github.com/adilelhaji/oreneta/actions/runs/34327478903"
+          },
+          {
+            "sha": "d70e518eafce9e7afd4ff2ee87af74db2578ab56",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "d70e518eafce9e7afd4ff2ee87af74db2578ab56",
+            "result": "frontend/baseline/autoListView.test.tsx"
           }
         ],
         "native": [],
@@ -161,7 +169,7 @@
       "section": "Appearance/Lists",
       "outcome": "Unread, open, focused and multi-selected rows have distinct meaning",
       "status": "implemented-unverified",
-      "present": "Table rows keep opened edge, unread dot/bold, checkbox tint and focus outline as separate signals; arrivals never join a bulk selection; keyboard/pointer production-entry cases in both cobalt themes (#154, #186); card-list polish and native evidence pending",
+      "present": "Table rows keep opened edge, unread dot/bold, checkbox tint and focus outline as separate signals; arrivals never join a bulk selection; keyboard/pointer production-entry cases in both cobalt themes (#154, #186); since #283 the default narrow list draws two-line rows (open row bg-active + 3 px start edge and aria-current; unread and selection tints unchanged), with open/select production-entry cases; card-list polish and native evidence pending",
       "code": "frontend/src/components/threads/ThreadTable.tsx",
       "acceptance": "Production-entry keyboard/pointer scenarios in both themes; reviewed selection excludes new arrivals",
       "platform": "Windows desktop",
@@ -985,7 +993,7 @@
       "section": "Calendar/General; Weather",
       "outcome": "Calendar configuration and weather availability/privacy policy",
       "status": "partial",
-      "present": "Agenda/week/month views, local/Google/Exchange/CalDAV calendars and .ics; first day of week from the region or chosen, week numbers, shaded work hours and days, work-week view and new-event defaults (ADR-0051) are tested; weather is absent pending an owner decision",
+      "present": "Agenda/week/month views, local/Google/Exchange/CalDAV calendars and .ics; first day of week from the region or chosen, week numbers, shaded work hours and days, work-week view and new-event defaults (ADR-0051) are tested; in the day, work-week and week views events are moved and resized by dragging (15-minute grid, Escape cancels) or from the keyboard, dropped on a new mini calendar, and created by a dragged range, a slot's menu or the keyboard slot, with series asked about, read-only calendars refused and the core's conflict rules kept (#266, #267; Exchange events refused for grid moves pending an owner decision on the core's AlwaysOverwrite), tested in unit and Chromium e2e; weather is absent pending an owner decision",
       "code": "meron-core/src/calendar/mod.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -1014,6 +1022,18 @@
           {
             "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
             "result": "frontend/src/components/calendar/WeekStart.test.tsx"
+          },
+          {
+            "sha": "809d3404f1d97f1fa57f3936c596aa547ba0a443",
+            "result": "frontend/src/lib/calendarDrag.test.ts"
+          },
+          {
+            "sha": "809d3404f1d97f1fa57f3936c596aa547ba0a443",
+            "result": "frontend/src/components/calendar/CalendarInteractions.test.tsx"
+          },
+          {
+            "sha": "809d3404f1d97f1fa57f3936c596aa547ba0a443",
+            "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
         "native": [],

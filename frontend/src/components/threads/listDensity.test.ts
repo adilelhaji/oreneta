@@ -12,7 +12,7 @@ describe('how much room a thread-list row is given', () => {
   })
 
   it('gets tighter, not looser, as it goes', () => {
-    const [compact, cosy, relaxed] = LIST_DENSITIES.map(densityStyle)
+    const [compact, cosy, relaxed] = LIST_DENSITIES.map((density) => densityStyle(density))
     expect(compact.avatarSize).toBeLessThan(cosy.avatarSize)
     expect(cosy.avatarSize).toBeLessThan(relaxed.avatarSize)
   })
@@ -35,5 +35,22 @@ describe('how much room a thread-list row is given', () => {
     // A value stored by a later version, or edited by hand: the list still
     // renders rather than collapsing to undefined measures.
     expect(densityStyle('spacious' as ListDensity)).toEqual(densityStyle('cosy'))
+  })
+
+  it('keeps compact on two lines in a narrow list of the automatic view (#283)', () => {
+    const narrow = densityStyle('compact', true)
+    // Sender and date over subject and preview, not one line that cuts both.
+    expect(narrow.singleLine).toBe(false)
+    expect(narrow.previewOnOwnLine).toBe(false)
+    // Still the tightest two-line row there is.
+    expect(narrow.avatarSize).toBeLessThan(densityStyle('cosy').avatarSize)
+    expect(narrow.avatarSize).toBeGreaterThan(densityStyle('compact').avatarSize)
+  })
+
+  it('leaves the two-line densities and the wide list as they are', () => {
+    expect(densityStyle('cosy', true)).toEqual(densityStyle('cosy'))
+    expect(densityStyle('relaxed', true)).toEqual(densityStyle('relaxed'))
+    expect(densityStyle('compact', false).singleLine).toBe(true)
+    expect(densityStyle('spacious' as ListDensity, true)).toEqual(densityStyle('cosy'))
   })
 })

@@ -3,6 +3,11 @@
 // components/resizer/PaneResizer, which takes the pointer and the keyboard.
 
 export const THREAD_LIST_WIDTH = { min: 280, max: 560 } as const
+/**
+ * The thread list's width on a profile that never resized it (#283): room for
+ * a sender and a subject on their own lines without taking the reader's.
+ */
+export const THREAD_LIST_DEFAULT_WIDTH = 360
 /** Percent of the app shell. */
 export const KANBAN_PANE_WIDTH = { min: 25, max: 60 } as const
 /** The board's conversation pane is never drawn narrower than this, whatever its percentage. */
@@ -27,13 +32,19 @@ export function clampPaneSize(value: number, limits: PaneLimits): number {
  * stating the stored size would make the arrow keys do nothing visible until
  * they had worked their way down to what is on screen. `drawn` is 0 when it
  * has not been measured (no layout yet), and the stored size stands.
+ *
+ * Drawn wider than stored is a measurement that has not caught up with a new,
+ * smaller size yet (Home, then an arrow, before the next layout): the stored
+ * size stands, or the arrow would step from the old width and be lost.
  */
 export function drawnPane(stored: number, drawn: number, limits: PaneLimits): { value: number; limits: PaneLimits } {
   if (!(drawn > 0)) return { value: clampPaneSize(stored, limits), limits }
-  const value = clampPaneSize(drawn, limits)
   // Squeezed: growing it further would not show, so this is as wide as it goes.
-  const max = drawn < stored - 0.5 ? Math.max(limits.min, value) : limits.max
-  return { value, limits: { min: limits.min, max } }
+  if (drawn < stored - 0.5) {
+    const value = clampPaneSize(drawn, limits)
+    return { value, limits: { min: limits.min, max: Math.max(limits.min, value) } }
+  }
+  return { value: clampPaneSize(stored, limits), limits }
 }
 
 /**
