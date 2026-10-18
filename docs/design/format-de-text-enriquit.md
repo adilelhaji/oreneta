@@ -37,7 +37,7 @@ Mod és ⌘ al macOS i Ctrl a la resta.
   alinea a la dreta i la bústia no se sincronitza (`FormattingShortcuts`, a
   `frontend/src/components/composer/richText.ts`).
 - En els teclats on `[` i `]` s'escriuen amb AltGr (català, castellà, francès,
-  alemany), Mod+] i Mod+[ no es poden prémer: un claudàtor escrit amb AltGr
+  alemany), Mod+] i Mod+[ no funcionen: un claudàtor escrit amb AltGr
   arriba com a Ctrl+Alt, i l'editor el deixa escriure. Allà el sagnat es fa
   amb la barra d'eines.
 - L'editor es queda aquestes combinacions encara que una drecera de
