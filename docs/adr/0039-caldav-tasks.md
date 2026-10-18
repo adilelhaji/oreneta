@@ -1,7 +1,11 @@
 # ADR-0039: Llistes de tasques en un servidor CalDAV
 
 - Estat: acceptada; presa per delegació i revisada pel propietari
-  el 2026-10-12.
+  el 2026-10-12. L'ADR-0070 (acceptada pel propietari el 2026-10-18) esmena
+  «Enllaç» (enllaç automàtic de les col·leccions de tasques d'un
+  servidor afegit a un compte), «Suprimir una llista enllaçada», la nota de
+  l'«Esquema 56» sobre la supressió per compte i l'aplicació de «Seguretat
+  (#28)».
 - Data: 2026-10-12.
 - Abast: #103, pas «CalDAV VTODO primer», sobre l'ADR-0013, l'ADR-0012 i
   l'ADR-0018.
