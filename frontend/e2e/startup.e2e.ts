@@ -3809,6 +3809,8 @@ test('F6 leaves a text field and the HTML message, and a modal dialog keeps the 
   const search = page.locator('[data-thread-list]').getByRole('textbox').first()
   await search.click()
   await search.fill('Pilot')
+  // The conversation is still open, so the reader has somewhere to land.
+  await expect(frame.getByText('Wide synthetic invoice')).toBeVisible()
   expect(await regionAtFocus(page)).toBe('content')
   await page.keyboard.press('F6')
   await expect(search).not.toBeFocused()
@@ -3988,6 +3990,7 @@ for (const language of ['en', 'ca', 'ar']) {
 
     await page.getByTitle(catalog['people.title'], { exact: true }).click()
     await page.getByRole('option', { name: /Morgan Rivera/ }).click()
+    await expect(page.getByRole('heading', { name: 'Morgan Rivera' })).toBeVisible()
     await audit('people', catalog['people.title'])
 
     await page.getByTitle(catalog['tasks.title'], { exact: true }).click()
@@ -3998,8 +4001,13 @@ for (const language of ['en', 'ca', 'ar']) {
     await page.getByRole('button', { name: /Meeting notes/ }).click()
     await audit('notes', catalog['notes.title'])
 
-    await page.getByTitle(catalog['calendar.title'], { exact: true }).click()
+    const calendarButton = page.getByTitle(catalog['calendar.title'], { exact: true })
+    await calendarButton.click()
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    // A module's own left column is a region inside the module: from the
+    // rail, F6 goes to the module, then its column, then back to the rail.
+    await calendarButton.focus()
+    expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'folders', 'modules'])
     await audit('calendar', catalog['calendar.title'])
 
     await page.getByTitle(catalog['messaging.title'], { exact: true }).click()

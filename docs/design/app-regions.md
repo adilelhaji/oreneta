@@ -7,8 +7,10 @@ subfinestra de carpetes, la banda superior i el selector de mòduls) canvien el
 que hi ha a cada regió, no aquest mecanisme.
 
 Codi: `frontend/src/lib/regions.ts`, `states/ui.ts` (`ui$.module`), `App.tsx`,
-`components/dialog/AppHotkeys.tsx`, `lib/shortcuts.ts` i
-`components/chat/HtmlFrame.tsx`.
+`components/dialog/AppHotkeys.tsx`, `lib/shortcuts.ts`,
+`components/chat/HtmlFrame.tsx`, `components/sidenav/SideNav.tsx`,
+`components/banner/UpdateBanner.tsx` i els `data-region` de les vistes de cada
+mòdul.
 
 ## Un sol estat de mòdul
 
@@ -35,16 +37,25 @@ Codi: `frontend/src/lib/regions.ts`, `states/ui.ts` (`ui$.module`), `App.tsx`,
 - Hi ha un sol `<main>`. Els diàlegs de l'aplicació, els avisos (toasts), les
   confirmacions i l'avís de certificat en surten i es pinten al costat de les
   regions.
-- Els diàlegs que obre un mòdul (l'editor d'una persona, el d'un esdeveniment)
-  es pinten dins d'aquest mòdul i són modals (`aria-modal="true"`).
+- Els diàlegs que obre un mòdul (l'editor d'una persona, l'editor i el detall
+  d'un esdeveniment, la revisió del context de l'assistent, la galeria
+  d'imatges) es pinten dins d'aquest mòdul i són modals (`aria-modal="true"`).
+  L'editor i el detall d'un esdeveniment, la revisió de l'assistent i la galeria
+  no ho eren: ara tenen `role="dialog"`, `aria-modal` i nom, sense cap canvi
+  visual.
 - La barra vertical i «Comptes i carpetes» continuen dins de `<main>` fins que
   la subfinestra de carpetes i el selector de mòduls les substitueixin (passos
   2 i 4). Les proves que hi arriben amb `main > aside` canvien al pas 4
-  (ADR-0068 §8).
+  (ADR-0068 §8), quan la barra passa a ser el `<nav>` «Mòduls» d'ADR-0068 §1.
 - La barra vertical té nom perquè no hi hagi dues regions complementàries sense
   nom quan la barra lateral de detalls és oberta.
+- Fins al pas 2, la columna de Calendari i la de Notes tenen el mateix nom que
+  `<main>` («Calendari», «Notes»). Són de rols diferents i axe no ho marca, però
+  ADR-0068 §1 no ho permet: el pas 2 els dona els noms «Calendaris» i
+  «Etiquetes».
 - L'avís d'actualització és una regió que té per nom el mateix text de l'avís,
-  perquè no quedi contingut fora de cap regió.
+  perquè no quedi contingut fora de cap regió. Encara no té cap prova
+  automàtica: les proves arrenquen sense cap actualització disponible.
 
 ## F6 i Maj+F6
 
@@ -53,7 +64,9 @@ Codi: `frontend/src/lib/regions.ts`, `states/ui.ts` (`ui$.module`), `App.tsx`,
   barra d'eines. Al correu, doncs, l'ordre és aquest: carpetes, barra vertical,
   llista, lector i barra lateral. La barra vertical es pinta abans que les carpetes,
   però F6 hi arriba després: és l'ordre del marc nou, on els mòduls són al peu
-  de les carpetes (pas 4), i així no canvia d'un pas a l'altre.
+  de les carpetes (pas 4), i així no canvia d'un pas a l'altre. ADR-0068 §6 diu
+  que és l'ordre del document: al marc nou tots dos coincideixen, i mentre la
+  barra vertical es pinti abans que les carpetes mana la llista de l'ADR.
 - **Cicle:** després de l'última regió, F6 torna a la primera. Des de fora de
   qualsevol regió, F6 va a la primera i Maj+F6, a l'última.
 - **Se salten** les regions que no es veuen (perquè l'amplada les amaga o perquè
@@ -69,12 +82,17 @@ Codi: `frontend/src/lib/regions.ts`, `states/ui.ts` (`ui$.module`), `App.tsx`,
   F1–F12 no escriuen text i en queden fora, de manera que F6 també funciona des
   d'un camp de text. Si algú reassigna F6 a una lletra, torna a valer la barrera
   i dins d'un camp s'escriu la lletra.
+- **Qualsevol drecera en una tecla de funció:** val el mateix per a totes, no
+  només per a F6 (per exemple, F9 per sincronitzar, de l'esquema Outlook, ara
+  també actua dins d'un camp de text), però amb un diàleg modal obert no actuen,
+  com abans.
 - **Des del missatge HTML:** el marc aïllat reenvia F1–F12, a més de les
   dreceres amb Ctrl/⌘ o Alt i de les fletxes.
 - **Diàleg modal obert** (`aria-modal="true"`): F6 no fa res i el diàleg reté el
   focus.
-- **Catàleg:** `pane.next` i `pane.prev`, a *Dreceres de teclat → Visualització*,
-  es poden reassignar.
+- **Catàleg:** `pane.next` i `pane.prev`, al diàleg *Dreceres de teclat*, grup
+  «View», es poden reassignar. Els noms dels grups i de les dreceres encara no
+  són al catàleg de traduccions, com abans d'aquest pas.
 - **Pendent (N4):** encara no s'ha comprovat que F6 arribi a la pàgina a
   WebView2 i a WebKitGTK. Fins aleshores la documentació d'usuari no promet F6
   (ADR-0068 §6).
@@ -83,12 +101,13 @@ Codi: `frontend/src/lib/regions.ts`, `states/ui.ts` (`ui$.module`), `App.tsx`,
 
 | Nivell | Què cobreix |
 |---|---|
-| N1 (`lib/regions.test.ts`) | L'ordre del marc i, dins d'un mateix tipus, el del document; un tipus desconegut falla; les regions amagades, inertes o sense res que pugui rebre el focus se salten; el cicle d'anada i tornada; el focus torna a l'últim element; una regió dins d'una altra; un diàleg modal |
+| N1 (`lib/regions.test.ts`) | L'ordre del marc i, dins d'un mateix tipus, el del document; un tipus desconegut falla; les regions amagades, inertes o sense res que pugui rebre el focus se salten; un element que no accepta el focus no compta; el cicle d'anada i tornada; el focus torna a l'últim element; una regió dins d'una altra; un diàleg modal |
+| N2 (`components/dialog/AppHotkeys.test.tsx`) | F6 des d'un camp de text, amb la tecla consumida; res amb un diàleg modal d'un mòdul ni amb Configuració oberta; la paleta d'ordres es queda les tecles; reassignada a una lletra, s'escriu dins d'un camp; reassignada a F8, actua mentre s'escriu i no amb un diàleg modal |
 | N1 (`lib/shortcuts.test.ts`) | F6 i Maj+F6 per defecte, sense col·lisions; F1–F12 no són nues; reassignar F6 a una lletra torna a posar la barrera |
 | N2 (`HtmlFrame.test.tsx`) | El marc reenvia F1–F12, amb Maj o sense, i no una lletra |
 | N1 (`states/uiModule.test.ts`) | Els set mòduls; el botó de la barra vertical obre el mòdul i, si ja és obert, torna al correu; mai dos mòduls alhora |
 | N2 (proves dels mòduls) | `ui$.module` en lloc dels sis booleans |
-| e2e (`startup.e2e.ts`, «#306») | A 1440 px, en anglès, català i àrab: un sol `<main>` amb el nom del mòdul, la barra vertical «Mòduls» i F6 / Maj+F6 en el mateix ordre, fins a tornar a la fila de la llista. Des d'un camp de text, des del missatge HTML i amb un diàleg modal obert; l'avís i el diàleg fora de `<main>`. Una reassignació a una lletra. A 600 px, només les regions que es veuen; al 200 % de l'aplicació, el mateix ordre sense desplaçament horitzontal. Les regles de regions d'axe (`region`, `landmark-unique`, `landmark-one-main`) no troben res a la bústia ni a cap mòdul |
+| e2e (`startup.e2e.ts`, «#306») | A 1440 px, en anglès, català i àrab: un sol `<main>` amb el nom del mòdul, la barra vertical «Mòduls» i F6 / Maj+F6 en el mateix ordre, fins a tornar a la fila de la llista. Des d'un camp de text, des del missatge HTML i amb un diàleg modal obert; un avís emergent (toast) i el diàleg fora de `<main>`. Al calendari, F6 va del mòdul a la seva columna i torna a la barra vertical. Una reassignació a una lletra. A 600 px, només les regions que es veuen; al 200 % de l'aplicació, el mateix ordre sense desplaçament horitzontal. Les regles de regions d'axe (`region`, `landmark-unique`, `landmark-one-main`) no troben res a la bústia ni a cap mòdul |
 
 Les proves de límits, de zoom, de dreta a esquerra i les auditories axe que ja
 hi havia no canvien: aquest pas no mou res de lloc.

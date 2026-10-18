@@ -21,6 +21,9 @@ const TABBABLE = [
   'select:not([disabled])',
   'textarea:not([disabled])',
   'iframe',
+  'summary',
+  'audio[controls]',
+  'video[controls]',
   '[contenteditable=""]',
   '[contenteditable="true"]',
   '[tabindex]',
@@ -31,6 +34,8 @@ export type VisibilityCheck = (element: HTMLElement) => boolean
 
 export function isShown(element: HTMLElement): boolean {
   if (element.closest('[hidden], [inert], [aria-hidden="true"]')) return false
+  // `visibility` is inherited, so the element's own computed value says it.
+  if (getComputedStyle(element).visibility === 'hidden') return false
   if (typeof element.checkVisibility === 'function') return element.checkVisibility()
   return element.getClientRects().length > 0
 }
@@ -114,10 +119,10 @@ export function focusAdjacentRegion(
   for (let moved = 1; moved <= regions.length; moved++) {
     const region = regions[(((start + step * moved) % regions.length) + regions.length) % regions.length]
     const target = focusTargetIn(region, shown)
-    if (target) {
-      target.focus()
-      return region
-    }
+    if (!target) continue
+    target.focus()
+    // A focus the browser refused (an element it does not draw) is no stop.
+    if (root.activeElement === target) return region
   }
   return null
 }

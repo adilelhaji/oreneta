@@ -113,7 +113,15 @@ export function EventEditor() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={closeEditor}>
+      {/* A modal dialog, so the keyboard's region shortcuts stay out (ADR-0068 §6). */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={
+          isNew
+            ? t('calendar.newEvent', { defaultValue: 'New event' })
+            : t('calendar.editEvent', { defaultValue: 'Edit event' })
+        }
         className="flex max-h-[calc(100vh-2rem)] w-full max-w-md flex-col rounded-panel border border-border bg-app shadow-overlay"
         onClick={(e) => e.stopPropagation()}
       >

@@ -177,6 +177,15 @@ describe('F6 and Shift+F6', () => {
     }
   })
 
+  it('passes over an element that refuses the focus', () => {
+    mailWindow()
+    byId('inbox').focus()
+    // As a browser does with an element it does not draw.
+    byId('calendar').focus = () => {}
+    step(1)
+    expect(focused()).toBe('search')
+  })
+
   it('does nothing without regions', () => {
     document.body.innerHTML = '<button id="only">Only</button>'
     byId('only').focus()

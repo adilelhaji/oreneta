@@ -39,8 +39,10 @@ import { zoom } from '../../states/zoom'
 import { focusAdjacentRegion, modalDialogOpen, trackRegionFocus } from '../../lib/regions'
 import {
   isBareShortcut,
+  isFunctionKey,
   isMac,
   matchShortcut,
+  shortcutChord,
   shortcutForChord,
   RAIL_SHORTCUT_IDS,
   type Chord,
@@ -285,6 +287,12 @@ export function AppHotkeys() {
       // and only act in the chat view with no modal open.
       if (isBareShortcut(action)) {
         if (isTyping(event.target) || !bareShortcutsActive()) return
+      } else if (isFunctionKey(shortcutChord(action).key) && (modalOpen() || modalDialogOpen())) {
+        // F1–F12 type nothing, so they work while typing (ADR-0068 §6), but a
+        // single key still stands down while a modal dialog is open: it keeps
+        // the focus, and F6 does nothing there.
+        event.preventDefault()
+        return
       }
 
       const selected = () => activeThreadId()
@@ -360,7 +368,8 @@ export function AppHotkeys() {
           ui$.shortcutsOpen.set(!ui$.shortcutsOpen.peek())
           break
         // From region to region (ADR-0068 §6), also from a text field: a
-        // function key types nothing. A modal dialog keeps the focus.
+        // function key types nothing. A modal dialog keeps the focus (here
+        // too when the shortcut is rebound to a letter, or a ⌘/Ctrl chord).
         case 'pane.next':
         case 'pane.prev':
           event.preventDefault()

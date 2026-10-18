@@ -87,7 +87,13 @@ export function EventDetails() {
         if (mouse.target === mouse.currentTarget) closeDetails()
       }}
     >
-      <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col rounded-panel border border-border bg-app shadow-overlay">
+      {/* A modal dialog, so the keyboard's region shortcuts stay out (ADR-0068 §6). */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={event.subject || t('calendar.noSubject', { defaultValue: '(no subject)' })}
+        className="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col rounded-panel border border-border bg-app shadow-overlay"
+      >
         {/* A band in the calendar's colour, so which calendar this belongs to
             is answered before the text is read. */}
         <div className="h-1.5 rounded-t-2xl" style={{ backgroundColor: color }} />
