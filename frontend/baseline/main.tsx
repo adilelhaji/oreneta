@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client'
 import { createFixture, scenario } from './fixtures'
 import { createBaselineBridge } from './bridge'
+import { THREAD_LIST_DEFAULT_WIDTH } from '../src/lib/paneResize'
 import '../src/index.css'
 
 const fixture = createFixture()
@@ -94,7 +95,7 @@ createRoot(document.getElementById('root')!).render(
         <Composer tabId={tabId} />
       ) : (
         <>
-          <ThreadList width={350} />
+          <ThreadList width={THREAD_LIST_DEFAULT_WIDTH} />
           <MessagePane />
         </>
       )}

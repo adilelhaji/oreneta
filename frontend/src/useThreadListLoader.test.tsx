@@ -5,7 +5,7 @@ import { ThreadList } from './components/threads/ThreadList'
 import { accounts$ } from './states/accounts'
 import { kanban$ } from './states/kanban'
 import { mail$, threadListViewKey } from './states/mail'
-import { settings$ } from './states/settings'
+import { settings$, type ListView } from './states/settings'
 import { ui$ } from './states/ui'
 import { t } from './lib/i18n'
 import type { Account } from './types'
@@ -22,7 +22,7 @@ const fixture = {
 }
 const calls: Record<string, unknown>[] = []
 let previousGo: unknown
-let previousListView: 'cards' | 'table'
+let previousListView: ListView
 let reply: (payload: Record<string, unknown>) => unknown
 
 function MailboxControls() {
