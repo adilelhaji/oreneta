@@ -11,6 +11,7 @@ import { EmptyState } from './empty-state/EmptyState'
 import { ErrorState, LoadingState } from './empty-state/StateViews'
 import { DesignCatalogue } from './dialog/DesignCatalogue'
 import { MenuItem } from './menu/MenuItem'
+import { MenuList } from './menu/Menu'
 
 afterEach(() => {
   cleanup()
@@ -57,14 +58,18 @@ describe('shared control interactions', () => {
   it('keeps disabled menu actions inert and preserves long action names with shortcuts', () => {
     const click = mock(() => {})
     const view = render(
-      <>
+      <MenuList label="Actions">
         <MenuItem label="Delete selected messages" danger disabled onClick={click} />
         <MenuItem label="Archive all reviewed messages" trailing={<kbd>Ctrl+E</kbd>} onClick={click} />
-      </>,
+      </MenuList>,
     )
-    fireEvent.click(view.getByRole('button', { name: 'Delete selected messages' }))
+    // Disabled, yet still focusable and announced: aria-disabled, not the attribute.
+    const disabled = view.getByRole('menuitem', { name: 'Delete selected messages' })
+    expect(disabled.getAttribute('aria-disabled')).toBe('true')
+    expect(disabled.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(disabled)
     expect(click).not.toHaveBeenCalled()
-    fireEvent.click(view.getByRole('button', { name: 'Archive all reviewed messages Ctrl+E' }))
+    fireEvent.click(view.getByRole('menuitem', { name: 'Archive all reviewed messages Ctrl+E' }))
     expect(click).toHaveBeenCalledTimes(1)
   })
 

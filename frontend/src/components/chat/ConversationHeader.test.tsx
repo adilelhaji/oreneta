@@ -161,12 +161,12 @@ describe('the junk button of the reader (#245)', () => {
 
     fireEvent.click(view.getByRole('button', { name: 'More actions' }))
     // The header button and the menu entry, both with the same label.
-    const entries = view.getAllByRole('button', { name: 'Mark as junk' })
-    expect(entries).toHaveLength(2)
-    fireEvent.click(entries[1])
+    expect(view.getAllByRole('button', { name: 'Mark as junk' })).toHaveLength(1)
+    fireEvent.click(view.getByRole('menuitem', { name: 'Mark as junk' }))
 
     await waitFor(() => expect(sent('mail.markJunk')).toEqual([{ thread_id: 'acct#INBOX#k1', junk: true }]))
     // The menu closes behind the action, leaving only the header button.
+    expect(view.queryByRole('menuitem', { name: 'Mark as junk' })).toBeNull()
     expect(view.getAllByRole('button', { name: 'Mark as junk' })).toHaveLength(1)
   })
 
@@ -218,7 +218,8 @@ describe('the junk button of the reader (#245)', () => {
 
     expect(view.queryByRole('button', { name: 'Mark as junk' })).toBeNull()
     fireEvent.click(view.getByRole('button', { name: 'More actions' }))
-    expect(view.queryByRole('button', { name: 'Mark as junk' })).toBeNull()
+    expect(view.getByRole('menu', { name: 'More actions' })).toBeTruthy()
+    expect(view.queryByRole('menuitem', { name: 'Mark as junk' })).toBeNull()
   })
 
   it('is not offered for a feed item', () => {
@@ -226,6 +227,7 @@ describe('the junk button of the reader (#245)', () => {
 
     expect(view.queryByRole('button', { name: 'Mark as junk' })).toBeNull()
     fireEvent.click(view.getByRole('button', { name: 'More actions' }))
-    expect(view.queryByRole('button', { name: 'Mark as junk' })).toBeNull()
+    expect(view.getByRole('menu', { name: 'More actions' })).toBeTruthy()
+    expect(view.queryByRole('menuitem', { name: 'Mark as junk' })).toBeNull()
   })
 })

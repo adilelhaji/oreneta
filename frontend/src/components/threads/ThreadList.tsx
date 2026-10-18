@@ -518,6 +518,8 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
                   icon={MoreHorizontal}
                   iconSize={20}
                   label={t('common.more')}
+                  aria-haspopup="menu"
+                  aria-expanded={quickMenu !== null}
                   size="md"
                   radius="lg"
                   className="min-[769px]:hidden"

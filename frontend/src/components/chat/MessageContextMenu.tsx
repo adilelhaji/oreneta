@@ -64,6 +64,8 @@ export function MessageContextMenu({
     <FloatingContextMenu
       x={state.x}
       y={state.y}
+      // Named after what it acts on: the link, or the message.
+      label={state.linkUrl ?? (state.message.subject || t('threads.noSubject'))}
       onClose={onClose}
       overlay
       overlayClassName="fixed inset-0 z-[60]"

@@ -47,6 +47,9 @@ import { Avatar } from '../avatar/Avatar'
 import { IconButton } from '../button/IconButton'
 import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { MenuItem } from '../menu/MenuItem'
+import { MenuList, MenuSeparator } from '../menu/Menu'
+import { menuItemCurrentClass } from '../menu/menuStyles'
+import { useDismissOnOutside } from '../menu/useDismissOnOutside'
 import { ConversationSubject } from './ConversationSubject'
 import { ReadingHeaderSummary } from './ReadingHeaderSummary'
 import { isConversation, summariseThread } from './readingHeader'
@@ -121,16 +124,11 @@ export function ConversationHeader({
   const [senderMenu, setSenderMenu] = useState<{ x: number; y: number } | null>(null)
   const actionsMenuRef = useRef<HTMLDivElement | null>(null)
 
-  useEffect(() => {
-    if (!actionsMenuOpen) return
-    const onDown = (event: MouseEvent) => {
-      if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target as Node)) {
-        setActionsMenuOpen(false)
-      }
-    }
-    window.addEventListener('mousedown', onDown)
-    return () => window.removeEventListener('mousedown', onDown)
-  }, [actionsMenuOpen])
+  useDismissOnOutside(
+    actionsMenuOpen,
+    (target) => Boolean(actionsMenuRef.current?.contains(target as Node | null)),
+    () => setActionsMenuOpen(false),
+  )
 
   useEffect(() => {
     setSenderMenu(null)
@@ -367,34 +365,44 @@ export function ConversationHeader({
               icon={MoreVertical}
               label={t('chat.moreActions')}
               active={actionsMenuOpen}
+              aria-haspopup="menu"
+              aria-expanded={actionsMenuOpen}
               onClick={() => setActionsMenuOpen((open) => !open)}
             />
             {actionsMenuOpen && (
-              <div className="absolute end-0 top-full z-50 mt-2 w-52 rounded-control border border-border bg-chats p-1 shadow-overlay">
-                <button
+              <MenuList
+                label={t('chat.moreActions')}
+                autoFocus
+                onClose={() => setActionsMenuOpen(false)}
+                className="absolute end-0 top-full z-50 mt-2 w-52 rounded-control border border-border bg-chats p-1 shadow-overlay"
+              >
+                {/* How the conversation is shown: one of two, the one in force checked. */}
+                <MenuItem
+                  role="menuitemradio"
+                  checked={conversationMode === 'html'}
+                  appearance={conversationMode === 'html' ? menuItemCurrentClass : undefined}
+                  icon={<Code size={14} className="shrink-0" strokeWidth={1.75} />}
+                  label={t('chat.viewAsHtml')}
                   onClick={() => {
                     setQuickConversationMode('html')
                     setActionsMenuOpen(false)
                   }}
-                  className={`flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs cursor-pointer hover:bg-hover ${
-                    conversationMode === 'html' ? 'font-semibold text-accent' : 'font-medium text-primary'
-                  }`}
-                >
-                  <Code size={16} className="shrink-0" strokeWidth={1.75} /> {t('chat.viewAsHtml')}
-                </button>
-                <button
+                />
+                <MenuItem
+                  role="menuitemradio"
+                  checked={conversationMode === 'plain'}
+                  appearance={conversationMode === 'plain' ? menuItemCurrentClass : undefined}
+                  icon={<FileText size={14} className="shrink-0" strokeWidth={1.75} />}
+                  label={t('chat.viewAsPlainText')}
                   onClick={() => {
                     setQuickConversationMode('plain')
                     setActionsMenuOpen(false)
                   }}
-                  className={`flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs cursor-pointer hover:bg-hover ${
-                    conversationMode === 'plain' ? 'font-semibold text-accent' : 'font-medium text-primary'
-                  }`}
-                >
-                  <FileText size={16} className="shrink-0" strokeWidth={1.75} /> {t('chat.viewAsPlainText')}
-                </button>
-                <div className="my-1 h-px bg-border" />
-                <button
+                />
+                <MenuSeparator />
+                <MenuItem
+                  icon={<Printer size={14} className="shrink-0" strokeWidth={1.75} />}
+                  label={t('print.action')}
                   onClick={() => {
                     setActionsMenuOpen(false)
                     // As General → Print says: the whole conversation by
@@ -402,63 +410,57 @@ export function ConversationHeader({
                     // is a printout of a fragment (ADR-0060).
                     void printFromReader(activeThread)
                   }}
-                  className="flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs font-medium text-primary cursor-pointer hover:bg-hover"
-                >
-                  <Printer size={16} className="shrink-0" strokeWidth={1.75} /> {t('print.action')}
-                </button>
-                <button
+                />
+                <MenuItem
                   disabled={changesBlocked}
+                  icon={
+                    <Star
+                      size={14}
+                      className={`shrink-0 ${activeThread.starred ? 'fill-warning text-warning' : ''}`}
+                      strokeWidth={1.75}
+                    />
+                  }
+                  label={activeThread.starred ? t('chat.unstar') : t('chat.star')}
                   onClick={() => {
                     void starThread(activeThread.thread_id, !activeThread.starred)
                     setActionsMenuOpen(false)
                   }}
-                  className="flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs font-medium text-primary cursor-pointer hover:bg-hover"
-                >
-                  <Star
-                    size={16}
-                    className={`shrink-0 ${activeThread.starred ? 'fill-warning text-warning' : ''}`}
-                    strokeWidth={1.75}
-                  />
-                  {activeThread.starred ? t('chat.unstar') : t('chat.star')}
-                </button>
+                />
                 {!isRSS && (
                   <>
-                    <button
+                    <MenuItem
                       disabled={changesBlocked}
+                      icon={<Archive size={14} className="shrink-0" strokeWidth={1.75} />}
+                      label={t('threads.actions.archiveThread')}
                       onClick={() => {
                         void archiveThread(activeThread.thread_id)
                         setActionsMenuOpen(false)
                       }}
-                      className="flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs font-medium text-primary cursor-pointer hover:bg-hover"
-                    >
-                      <Archive size={16} className="shrink-0" strokeWidth={1.75} /> {t('threads.actions.archiveThread')}
-                    </button>
+                    />
                     {offersJunk && (
-                      <button
-                        type="button"
+                      <MenuItem
                         disabled={readOnly}
+                        icon={<Ban size={14} className="shrink-0" strokeWidth={1.75} />}
+                        label={junkLabel}
                         onClick={() => {
                           toggleJunk()
                           setActionsMenuOpen(false)
                         }}
-                        className="flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs font-medium text-primary cursor-pointer enabled:hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <Ban size={16} className="shrink-0" strokeWidth={1.75} /> {junkLabel}
-                      </button>
+                      />
                     )}
-                    <button
+                    <MenuItem
+                      danger
                       disabled={changesBlocked}
+                      icon={<Trash2 size={14} className="shrink-0" strokeWidth={1.75} />}
+                      label={t('threads.actions.moveToTrash')}
                       onClick={() => {
                         void deleteThread(activeThread.thread_id)
                         setActionsMenuOpen(false)
                       }}
-                      className="flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs font-medium text-danger cursor-pointer hover:bg-danger-soft"
-                    >
-                      <Trash2 size={16} className="shrink-0" strokeWidth={1.75} /> {t('threads.actions.moveToTrash')}
-                    </button>
+                    />
                   </>
                 )}
-              </div>
+              </MenuList>
             )}
           </div>
         </div>
@@ -468,6 +470,7 @@ export function ConversationHeader({
         <FloatingContextMenu
           x={senderMenu.x}
           y={senderMenu.y}
+          label={senderDisplayName || t('composer.fields.from')}
           onClose={() => setSenderMenu(null)}
           overlay
           overlayClassName="fixed inset-0 z-[60]"

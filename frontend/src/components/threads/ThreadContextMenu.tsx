@@ -1,9 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { useValue } from '@legendapp/state/react'
 import {
   Archive,
   CheckSquare,
-  ChevronRight,
   Copy,
   FolderInput,
   ListTodo,
@@ -23,6 +22,8 @@ import { moveFeed, openFeedEdit } from '../../states/feeds'
 import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { FolderMenuTree } from '../menu/FolderMenuTree'
 import { MenuItem } from '../menu/MenuItem'
+import { MenuGroup, MenuSeparator } from '../menu/Menu'
+import { SubmenuItem } from '../menu/SubmenuItem'
 import {
   archiveThread,
   copyThreadToFolder,
@@ -51,7 +52,6 @@ import { MessageContextMenu } from '../chat/MessageContextMenu'
 import { PriorityMenuSection } from './PriorityMenuSection'
 import { CategoryMenuSection } from './CategoryMenuSection'
 import { awaiting$, reminderAt, waitForReply } from '../../states/awaiting'
-import { flyoutX } from '../../lib/direction'
 
 export type ThreadMenuState =
   | {
@@ -205,15 +205,10 @@ export function ThreadContextMenu({
       !copyBlocked(accounts, menu?.accountId ?? '', account.id),
   )
   const rssAccounts = accounts.filter((account) => isRssAccount(account, account.id))
-  const [moveOpen, setMoveOpen] = useState(false)
   const [copyOpen, setCopyOpen] = useState(false)
   const [copyLoading, setCopyLoading] = useState(false)
   const [, setCopyFoldersVersion] = useState(0)
-  const moveAnchorRef = useRef<HTMLDivElement | null>(null)
-  const copyAnchorRef = useRef<HTMLDivElement | null>(null)
   const copyLoadRef = useRef(false)
-  const [moveFlyoutPosition, setMoveFlyoutPosition] = useState<{ x: number; y: number } | null>(null)
-  const [copyFlyoutPosition, setCopyFlyoutPosition] = useState<{ x: number; y: number } | null>(null)
 
   const loadCopyTargetFolders = async () => {
     if (copyLoadRef.current) return
@@ -232,62 +227,21 @@ export function ThreadContextMenu({
     }
   }
 
-  // Reset the "Move to" flyout each time the menu (re)opens, and make sure the
-  // thread's account folders are loaded — in the unified view they aren't part
-  // of the selected account's `mail$.folders`.
+  // Make sure the thread's account folders are loaded each time the menu
+  // (re)opens — in the unified view they aren't part of the selected account's
+  // `mail$.folders`. The submenus start closed on their own: the menu is
+  // remounted per thread (its key).
   const mailAccountId = menu?.kind === 'mail' ? menu.accountId : undefined
   useEffect(() => {
-    setMoveOpen(false)
-    setCopyOpen(false)
     if (mailAccountId) void ensureAccountFolders(mailAccountId)
   }, [mailAccountId, menu?.threadId])
 
+  // While "Copy to" is open, the folders of every target load, also those of
+  // an account that appears meanwhile.
   useEffect(() => {
     if (!copyOpen) return
     void loadCopyTargetFolders()
   }, [accounts, copyOpen])
-
-  useLayoutEffect(() => {
-    if (!moveOpen) {
-      setMoveFlyoutPosition(null)
-      return
-    }
-
-    const anchor = moveAnchorRef.current
-    if (!anchor) return
-
-    const gap = 4
-    const flyoutWidth = 190
-    const rect = anchor.getBoundingClientRect()
-    const x = flyoutX(rect, flyoutWidth, gap, window.innerWidth)
-    const y = rect.top
-
-    setMoveFlyoutPosition((current) => {
-      if (current?.x === x && current.y === y) return current
-      return { x, y }
-    })
-  }, [moveOpen])
-
-  useLayoutEffect(() => {
-    if (!copyOpen) {
-      setCopyFlyoutPosition(null)
-      return
-    }
-
-    const anchor = copyAnchorRef.current
-    if (!anchor) return
-
-    const gap = 4
-    const flyoutWidth = 230
-    const rect = anchor.getBoundingClientRect()
-    const x = flyoutX(rect, flyoutWidth, gap, window.innerWidth)
-    const y = rect.top
-
-    setCopyFlyoutPosition((current) => {
-      if (current?.x === x && current.y === y) return current
-      return { x, y }
-    })
-  }, [copyOpen])
 
   if (!menu) return null
 
@@ -305,8 +259,11 @@ export function ThreadContextMenu({
     const targetAccounts = rssAccounts.filter((account) => account.id !== menu.accountId)
     return (
       <FloatingContextMenu
+        key={menu.threadId}
         x={menu.x}
         y={menu.y}
+        label={menu.name}
+        onClose={close}
         className="fixed z-50 min-w-[160px] rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
         dataAttribute="data-thread-context-menu"
         onClick={(event) => event.stopPropagation()}
@@ -349,38 +306,29 @@ export function ThreadContextMenu({
           }}
         />
         {targetAccounts.length > 0 && (
-          <div ref={moveAnchorRef} onMouseEnter={() => setMoveOpen(true)} onMouseLeave={() => setMoveOpen(false)}>
-            <MenuItem
-              icon={<FolderInput size={14} className="text-secondary" strokeWidth={1.75} />}
-              label={t('threads.actions.moveTo')}
-              trailing={<ChevronRight size={14} className="text-secondary" strokeWidth={1.75} />}
-              onClick={() => setMoveOpen((open) => !open)}
-            />
-            {moveOpen && moveFlyoutPosition && (
-              <FloatingContextMenu
-                x={moveFlyoutPosition.x}
-                y={moveFlyoutPosition.y}
-                className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
-                dataAttribute="data-thread-context-menu"
-              >
-                {targetAccounts.map((account) => (
-                  <MenuItem
-                    key={account.id}
-                    icon={<FolderInput size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />}
-                    label={
-                      <span dir="auto" className="min-w-0 truncate">{account.display_name || account.email || account.id}</span>
-                    }
-                    onClick={() => {
-                      const threadId = menu.threadId
-                      const targetAccountId = account.id
-                      close()
-                      void moveFeed(threadId, targetAccountId).then(() => after('move', threadId, { targetAccountId }))
-                    }}
-                  />
-                ))}
-              </FloatingContextMenu>
-            )}
-          </div>
+          <SubmenuItem
+            icon={<FolderInput size={14} className="text-secondary" strokeWidth={1.75} />}
+            label={t('threads.actions.moveTo')}
+            dataAttribute="data-thread-context-menu"
+          >
+            {targetAccounts.map((account) => (
+              <MenuItem
+                key={account.id}
+                icon={<FolderInput size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />}
+                label={
+                  <span dir="auto" className="block min-w-0 truncate">
+                    {account.display_name || account.email || account.id}
+                  </span>
+                }
+                onClick={() => {
+                  const threadId = menu.threadId
+                  const targetAccountId = account.id
+                  close()
+                  void moveFeed(threadId, targetAccountId).then(() => after('move', threadId, { targetAccountId }))
+                }}
+              />
+            ))}
+          </SubmenuItem>
         )}
       </FloatingContextMenu>
     )
@@ -403,8 +351,11 @@ export function ThreadContextMenu({
 
   return (
     <FloatingContextMenu
+      key={menu.threadId}
       x={menu.x}
       y={menu.y}
+      label={menu.subject}
+      onClose={close}
       className="fixed z-50 min-w-[190px] rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
       dataAttribute="data-thread-context-menu"
       onClick={(event) => event.stopPropagation()}
@@ -467,7 +418,7 @@ export function ThreadContextMenu({
           }}
         />
       )}
-      <div className="my-1 border-t border-border" />
+      <MenuSeparator />
       {/* Put aside rather than dealt with: the thread leaves the list and
           comes back on its own. Offered above archiving, which is the answer
           for what is finished. */}
@@ -500,7 +451,7 @@ export function ThreadContextMenu({
           />
         ))
       )}
-      <div className="my-1 border-t border-border" />
+      <MenuSeparator />
       <MenuItem
         disabled={changesBlocked}
         icon={<Archive size={14} className="text-secondary" strokeWidth={1.75} />}
@@ -559,104 +510,67 @@ export function ThreadContextMenu({
       <PriorityMenuSection threadId={menu.threadId} accountId={menu.accountId} folderId={menu.folderId} onAct={close} />
       <CategoryMenuSection threadId={menu.threadId} accountId={menu.accountId} folderId={menu.folderId} onAct={close} />
       {canMove && (
-        <div
-          ref={moveAnchorRef}
-          onMouseEnter={() => {
-            setCopyOpen(false)
-            setMoveOpen(true)
-          }}
-          onMouseLeave={() => setMoveOpen(false)}
+        <SubmenuItem
+          icon={<FolderInput size={14} className="text-secondary" strokeWidth={1.75} />}
+          label={t('threads.actions.moveTo')}
+          dataAttribute="data-thread-context-menu"
         >
-          <MenuItem
-            icon={<FolderInput size={14} className="text-secondary" strokeWidth={1.75} />}
-            label={t('threads.actions.moveTo')}
-            trailing={<ChevronRight size={14} className="text-secondary" strokeWidth={1.75} />}
-            onClick={() => setMoveOpen((open) => !open)}
+          <FolderMenuTree
+            folders={accountFolders}
+            excludedFolderIds={[menu.folderId]}
+            onPick={(folder) => {
+              const threadId = menu.threadId
+              const targetAccountId = menu.accountId
+              const targetFolderId = folder.id
+              close()
+              if (onMove) {
+                onMove(threadId, targetAccountId, targetFolderId)
+                return
+              }
+              void moveThreadToFolder(threadId, targetFolderId).then(() =>
+                after('move', threadId, { targetAccountId, targetFolderId }),
+              )
+            }}
           />
-          {moveOpen && moveFlyoutPosition && (
-            <FloatingContextMenu
-              x={moveFlyoutPosition.x}
-              y={moveFlyoutPosition.y}
-              className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
-              dataAttribute="data-thread-context-menu"
+        </SubmenuItem>
+      )}
+      {!changesBlocked && copyTargets.length > 0 && (
+        <SubmenuItem
+          icon={<Copy size={14} className="text-secondary" strokeWidth={1.75} />}
+          label={t('threads.actions.copyTo')}
+          width={230}
+          panelClassName="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[230px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
+          dataAttribute="data-thread-context-menu"
+          onOpenChange={setCopyOpen}
+        >
+          {copyAccountGroups.map(({ account, folders, excluded }) => (
+            <MenuGroup
+              key={account.id}
+              label={account.display_name || account.email || account.id}
+              labelClassName="px-3 pb-1 pt-2 text-caption font-semibold text-secondary"
             >
+              {/* Said as a disabled item so the arrow keys reach it too. */}
+              {folders.length === 0 && (
+                <MenuItem disabled label={copyLoading ? t('folders.loading') : t('folders.noneAvailable')} />
+              )}
               <FolderMenuTree
-                folders={accountFolders}
-                excludedFolderIds={[menu.folderId]}
+                folders={folders}
+                excludedFolderIds={excluded}
                 onPick={(folder) => {
                   const threadId = menu.threadId
-                  const targetAccountId = menu.accountId
+                  const targetAccountId = account.id
                   const targetFolderId = folder.id
                   close()
-                  if (onMove) {
-                    onMove(threadId, targetAccountId, targetFolderId)
-                    return
-                  }
-                  void moveThreadToFolder(threadId, targetFolderId).then(() =>
-                    after('move', threadId, { targetAccountId, targetFolderId }),
+                  void copyThreadToFolder(threadId, targetAccountId, targetFolderId).then(() =>
+                    after('copy', threadId, { targetAccountId, targetFolderId }),
                   )
                 }}
               />
-            </FloatingContextMenu>
-          )}
-        </div>
+            </MenuGroup>
+          ))}
+        </SubmenuItem>
       )}
-      {!changesBlocked && copyTargets.length > 0 && (
-        <div
-          ref={copyAnchorRef}
-          onMouseEnter={() => {
-            setMoveOpen(false)
-            setCopyOpen(true)
-            void loadCopyTargetFolders()
-          }}
-          onMouseLeave={() => setCopyOpen(false)}
-        >
-          <MenuItem
-            icon={<Copy size={14} className="text-secondary" strokeWidth={1.75} />}
-            label={t('threads.actions.copyTo')}
-            trailing={<ChevronRight size={14} className="text-secondary" strokeWidth={1.75} />}
-            onClick={() => {
-              setCopyOpen((open) => !open)
-              void loadCopyTargetFolders()
-            }}
-          />
-          {copyOpen && copyFlyoutPosition && (
-            <FloatingContextMenu
-              x={copyFlyoutPosition.x}
-              y={copyFlyoutPosition.y}
-              className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[230px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
-              dataAttribute="data-thread-context-menu"
-            >
-              {copyAccountGroups.map(({ account, folders, excluded }) => (
-                <div key={account.id}>
-                  <div className="px-3 pb-1 pt-2 text-caption font-semibold text-secondary">
-                    {account.display_name || account.email || account.id}
-                  </div>
-                  {folders.length === 0 && (
-                    <div className="px-3 py-2 text-xs font-semibold text-secondary">
-                      {copyLoading ? t('folders.loading') : t('folders.noneAvailable')}
-                    </div>
-                  )}
-                  <FolderMenuTree
-                    folders={folders}
-                    excludedFolderIds={excluded}
-                    onPick={(folder) => {
-                      const threadId = menu.threadId
-                      const targetAccountId = account.id
-                      const targetFolderId = folder.id
-                      close()
-                      void copyThreadToFolder(threadId, targetAccountId, targetFolderId).then(() =>
-                        after('copy', threadId, { targetAccountId, targetFolderId }),
-                      )
-                    }}
-                  />
-                </div>
-              ))}
-            </FloatingContextMenu>
-          )}
-        </div>
-      )}
-      <div className="my-1 border-t border-border" />
+      <MenuSeparator />
       <MenuItem
         danger
         disabled={changesBlocked}

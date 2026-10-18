@@ -78,6 +78,15 @@ de mencions, però comptada com a no llegida) i les mencions sense llegir de cad
 compte. L'absència automàtica per inactivitat necessita una API nova del sistema: el propietari va
 triar l'opció A de l'ADR-0065, que encara no està implementada (#265). La fila es manté `partial` (hi falten aquest punt i
 l'evidència nativa de Windows).
+El 2026-10-18 (#289, peça 7 del redisseny) tots els menús emergents i contextuals de
+l'aplicació són menús WAI-ARIA (`menu`, `menuitem`, `menuitemcheckbox`, `menuitemradio`,
+separadors, grups amb nom i submenús), es fan servir amb el teclat (fletxes, Inici i Fi,
+cerca per lletra, Escapada només per al menú de dins, Tab per tancar, fletxa cap al final
+de la línia per obrir un submenú i cap a l'inici per tancar-lo, a l'inrevés en àrab), el
+focus hi entra en obrir-los i torna a qui els va obrir en tancar-los, i les files fan 28 px
+(decisió D9). Proves unitàries i una prova de l'entrada de producció, en anglès i en àrab,
+amb axe sense cap infracció sobre els menús. Cap fila no canvia d'estat (SET-27, #37):
+l'evidència nativa de Windows i la dels lectors de pantalla continuen pendents.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|

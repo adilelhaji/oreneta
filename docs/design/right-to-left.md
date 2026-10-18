@@ -41,6 +41,7 @@ surt), `index.css`.
 | Fletxes del visualitzador d'imatges | `inlineArrowStep` amb `documentDirection()` |
 | Separadors de subfinestres | `PaneResizer` (ADR-0059) |
 | Menús contextuals i desplegables | `FloatingContextMenu` + `startEdgeX`, `endAlignedX`, `besideEndX`, `flyoutX` |
+| Fletxes dels menús: obrir i tancar submenús, menús en fila | `menuKeyAction` (`lib/menuKeyboard.ts`, [menús](menus.md)) |
 | Menú ràpid, finestra de gramàtica | `menuLeft` |
 | Missatges HTML al seu marc | `applyContentDirection` (`dir="auto"` a cada bloc de text si el missatge no en declara cap) |
 | Correu que surt | `markRightToLeftBlocks` des d'`inlineRichStyles` (`dir="rtl"` i citació amb la barra a la dreta) |
@@ -73,5 +74,7 @@ es reflecteix; un xebró de desplegar amb `transition-transform` es gira 180°.
     els dos temes, sense desbordar per cap costat i amb axe;
   - un menú contextual obert al costat de la vora dreta: sencer i sense
     etiquetes partides;
+  - («#289») un submenú que s'obre amb la fletxa esquerra, a l'esquerra de la
+    seva fila, i es tanca amb la dreta;
   - la tornada a l'anglès sense recarregar, i un assumpte en àrab a la interfície
     anglesa.

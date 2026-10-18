@@ -1,8 +1,7 @@
 import { folderIcon } from '../../lib/folderIcon'
-import { clsx } from '../../lib/utils'
 import { buildFolderTree, type TreeNode } from '../../lib/folderTree'
 import type { Folder } from '../../types'
-import { menuItemBase } from './menuStyles'
+import { MenuItem } from './MenuItem'
 
 /** Does this subtree contain anything worth clicking? */
 function hasPickable(node: TreeNode, excluded: Set<string>): boolean {
@@ -26,19 +25,22 @@ function FolderMenuRow({
   const Icon = folderIcon(folder)
 
   return (
-    <div>
-      <button
-        type="button"
+    <div role="none">
+      {/* Structural segments and the folder the thread already lives in stay
+          visible so the hierarchy reads correctly, but can't be picked: they
+          are disabled items, still reached and announced by the arrow keys. */}
+      <MenuItem
         disabled={!pickable}
-        // Structural segments and the folder the thread already lives in stay
-        // visible so the hierarchy reads correctly, but can't be picked.
-        className={clsx(menuItemBase, pickable ? 'text-primary hover:bg-hover' : 'cursor-default text-secondary')}
+        appearance={pickable ? undefined : 'cursor-default text-secondary'}
         style={{ paddingInlineStart: depth * 14 + 8 }}
+        icon={<Icon size={14} strokeWidth={1.75} className="shrink-0 text-secondary" />}
+        label={
+          <span dir="auto" className="block min-w-0 truncate">
+            {node.name}
+          </span>
+        }
         onClick={() => folder && onPick(folder)}
-      >
-        <Icon size={14} strokeWidth={1.75} className="shrink-0 text-secondary" />
-        <span dir="auto" className="min-w-0 truncate">{node.name}</span>
-      </button>
+      />
       {node.children.map((child) =>
         hasPickable(child, excluded) ? (
           <FolderMenuRow
@@ -55,7 +57,7 @@ function FolderMenuRow({
 }
 
 /**
- * A flyout's folder list rendered as the account's folder hierarchy: nested
+ * A submenu's folder list rendered as the account's folder hierarchy: nested
  * folders are indented under their parent instead of showing their full path.
  */
 export function FolderMenuTree({

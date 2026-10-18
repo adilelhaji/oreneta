@@ -2,9 +2,47 @@ import { useLayoutEffect, useRef, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useEscapeKey } from '../../lib/useEscapeKey'
 import { documentDirection, menuLeft } from '../../lib/direction'
+import { MENU_SURFACE_ATTRIBUTE } from '../../lib/menuKeyboard'
+import type { MenuName } from './Menu'
+import { MenuTreeContext, useCloseAll, useMenuFocus, useMenuKeys } from './useMenuSurface'
 
 const noop = () => {}
 
+type BaseProps = {
+  x: number
+  y: number
+  onClose?: () => void
+  children: ReactNode
+  className: string
+  offset?: number
+  margin?: number
+  overlay?: boolean
+  overlayClassName?: string
+  dataAttribute?: string
+  id?: string
+  /** Moves focus to the first item on open (and back on close). Submenus
+   * opened by hovering pass false, so the pointer does not move focus. */
+  autoFocus?: boolean
+  /** Opened from an item of another menu: the arrow towards the start of the
+   * line closes it, and Tab closes the menu it came from too. */
+  submenu?: boolean
+  onClick?: (event: MouseEvent<HTMLDivElement>) => void
+  onContextMenu?: (event: MouseEvent<HTMLDivElement>) => void
+}
+
+/**
+ * `surface: 'menu'` (the default): the floating card is the `role="menu"`
+ * itself, named by `label` or `labelledBy`. `surface: 'popover'`: the card
+ * holds a field and a `MenuList` (the folder switcher's filter); the list
+ * carries the menu role and name.
+ */
+type SurfaceProps = ({ surface?: 'menu' } & MenuName) | { surface: 'popover'; label?: undefined; labelledBy?: undefined }
+
+/**
+ * A menu placed at a point (the pointer, a button's corner), in a portal
+ * (#289): role and name, the menu keyboard, focus into it on open and back on
+ * close, Escape through the shared stack (only the innermost menu closes).
+ */
 export function FloatingContextMenu({
   x,
   y,
@@ -16,26 +54,21 @@ export function FloatingContextMenu({
   overlay = false,
   overlayClassName = 'fixed inset-0 z-40',
   dataAttribute,
+  id,
+  autoFocus = true,
+  submenu = false,
   onClick,
   onContextMenu,
-}: {
-  x: number
-  y: number
-  onClose?: () => void
-  children: ReactNode
-  className: string
-  offset?: number
-  margin?: number
-  overlay?: boolean
-  overlayClassName?: string
-  dataAttribute?: string
-  onClick?: (event: MouseEvent<HTMLDivElement>) => void
-  onContextMenu?: (event: MouseEvent<HTMLDivElement>) => void
-}) {
+  ...surfaceProps
+}: BaseProps & SurfaceProps) {
   const menuRef = useRef<HTMLDivElement | null>(null)
   const dataProps = dataAttribute ? { [dataAttribute]: '' } : undefined
+  const closeAll = useCloseAll(onClose, submenu)
+  const onKeyDown = useMenuKeys({ submenu, onCloseSubmenu: submenu ? onClose : undefined, closeMenu: closeAll })
+  const isMenu = surfaceProps.surface !== 'popover'
 
   useEscapeKey(onClose ?? noop, Boolean(onClose))
+  useMenuFocus(menuRef, { autoFocus })
 
   // Placed from the latest props, also when only the menu's content changes
   // size (a row that loads later re-renders that row, not this component).
@@ -76,8 +109,18 @@ export function FloatingContextMenu({
     return () => observer.disconnect()
   }, [])
 
+  const menuProps = isMenu
+    ? {
+        role: 'menu',
+        'aria-orientation': 'vertical' as const,
+        'aria-label': surfaceProps.label,
+        'aria-labelledby': surfaceProps.labelledBy,
+        onKeyDown,
+      }
+    : undefined
+
   const content = (
-    <>
+    <MenuTreeContext.Provider value={{ closeAll }}>
       {overlay && onClose && (
         <div
           className={overlayClassName}
@@ -90,15 +133,19 @@ export function FloatingContextMenu({
       )}
       <div
         ref={menuRef}
-        className={className}
+        id={id}
+        tabIndex={-1}
+        className={`outline-none ${className}`}
         style={{ left: 0, top: y + offset }}
         onClick={onClick}
         onContextMenu={onContextMenu}
+        {...menuProps}
+        {...{ [MENU_SURFACE_ATTRIBUTE]: '' }}
         {...dataProps}
       >
         {children}
       </div>
-    </>
+    </MenuTreeContext.Provider>
   )
 
   if (typeof document === 'undefined') return content

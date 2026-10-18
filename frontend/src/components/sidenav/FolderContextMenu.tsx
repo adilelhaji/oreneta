@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react'
 import { ArrowDown, ArrowUp, FolderInput, Star, StarOff } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
@@ -6,6 +5,7 @@ import { FOLDER_COLORS } from '../../lib/folderColors'
 import { FOLDER_MOVE_BLOCK_TEXT, folderMoveSourceBlock } from '../../lib/folderMoves'
 import { folderPrefs$, moveFavorite, setFolderColor, toggleFavorite, type FolderRef } from '../../states/folderPrefs'
 import type { Account, Folder } from '../../types'
+import { MenuGroup } from '../menu/Menu'
 import { RailContextMenu, RailMenuItem } from './RailContextMenu'
 
 const secondary = 'text-secondary'
@@ -42,12 +42,8 @@ export function FolderContextMenu({
   const current = colors.find((item) => item.accountId === ref.accountId && item.folderId === ref.folderId)?.color
   const block = folderMoveSourceBlock(folder, folders, account)
   const reason = block ? t(FOLDER_MOVE_BLOCK_TEXT[block].key, { defaultValue: FOLDER_MOVE_BLOCK_TEXT[block].text }) : ''
-  const root = useRef<HTMLDivElement | null>(null)
-
-  // Opened from the keyboard, focus has to land inside the menu.
-  useEffect(() => {
-    root.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus()
-  }, [])
+  // Opened from the keyboard too (Shift+F10, the Menu key): the menu itself
+  // moves focus to its first item and gives it back to the folder on close.
 
   const close = (action: () => void) => () => {
     action()
@@ -55,12 +51,13 @@ export function FolderContextMenu({
   }
 
   return (
-    <RailContextMenu x={x} y={y} onClose={onClose}>
-      <div
-        ref={root}
-        aria-label={t('folders.menu.label', { folder: folder.name, defaultValue: 'Actions for {folder}' })}
-        role="group"
-      >
+    <RailContextMenu
+      x={x}
+      y={y}
+      label={t('folders.menu.label', { folder: folder.name, defaultValue: 'Actions for {folder}' })}
+      onClose={onClose}
+    >
+      <div role="none">
         <RailMenuItem
           icon={
             favorite ? (
@@ -106,22 +103,22 @@ export function FolderContextMenu({
           }
           onClick={close(() => onMoveTo(folder))}
         />
-        <div
-          role="group"
-          aria-label={t('folders.color.menu', { defaultValue: 'Folder color' })}
+        {/* One choice of several: radio items, the chosen one checked. */}
+        <MenuGroup
+          label={t('folders.color.menu', { defaultValue: 'Folder color' })}
+          labelClassName="pb-1 text-caption text-secondary"
           className="mt-1 border-t border-border px-2 pt-2 pb-1"
         >
-          <p className="pb-1 text-caption text-secondary" aria-hidden="true">
-            {t('folders.color.menu', { defaultValue: 'Folder color' })}
-          </p>
-          <div className="flex flex-wrap gap-1">
+          <div role="none" className="flex flex-wrap gap-1">
             {FOLDER_COLORS.map((color) => (
               <button
                 key={color.id}
                 type="button"
+                role="menuitemradio"
+                tabIndex={-1}
                 className="folder-color-swatch"
                 data-folder-color={color.id}
-                aria-pressed={current === color.id}
+                aria-checked={current === color.id}
                 aria-label={t(color.labelKey, { defaultValue: color.label })}
                 title={t(color.labelKey, { defaultValue: color.label })}
                 onClick={close(() => setFolderColor(ref, color.id))}
@@ -131,8 +128,10 @@ export function FolderContextMenu({
             ))}
             <button
               type="button"
+              role="menuitemradio"
+              tabIndex={-1}
               className="folder-color-swatch"
-              aria-pressed={!current}
+              aria-checked={!current}
               aria-label={t('folders.color.none', { defaultValue: 'No color' })}
               title={t('folders.color.none', { defaultValue: 'No color' })}
               onClick={close(() => setFolderColor(ref, null))}
@@ -140,7 +139,7 @@ export function FolderContextMenu({
               <span className="mail-folder-dot mail-folder-dot-none" aria-hidden="true" />
             </button>
           </div>
-        </div>
+        </MenuGroup>
       </div>
     </RailContextMenu>
   )

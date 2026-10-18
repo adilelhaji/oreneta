@@ -1,9 +1,8 @@
 import { copyBlocked, messageChangesBlocked, readOnlyTarget } from '../../lib/mailCapabilities'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Archive,
   Ban,
-  ChevronRight,
   Copy,
   FolderInput,
   Mail,
@@ -41,10 +40,12 @@ import { IconButton } from '../button/IconButton'
 import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { FolderMenuTree } from '../menu/FolderMenuTree'
 import { MenuItem } from '../menu/MenuItem'
+import { MenuGroup, MenuSeparator } from '../menu/Menu'
+import { SubmenuItem } from '../menu/SubmenuItem'
 import { settings$ } from '../../states/settings'
 import { startQuickAction } from '../../states/quickActions'
 import { bulkLabelSelected, labelCoverage, labels$ } from '../../states/labels'
-import { endAlignedX, flyoutX } from '../../lib/direction'
+import { endAlignedX } from '../../lib/direction'
 
 export function BulkActionBar({
   items,
@@ -64,15 +65,10 @@ export function BulkActionBar({
   // Read so the marks below follow the list as labels change.
   useValue(mail$.threads)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
-  const [moveOpen, setMoveOpen] = useState(false)
   const [copyOpen, setCopyOpen] = useState(false)
   const [copyLoading, setCopyLoading] = useState(false)
   const [, setCopyFoldersVersion] = useState(0)
-  const moveAnchorRef = useRef<HTMLDivElement | null>(null)
-  const copyAnchorRef = useRef<HTMLDivElement | null>(null)
   const copyLoadRef = useRef(false)
-  const [moveFlyoutPosition, setMoveFlyoutPosition] = useState<{ x: number; y: number } | null>(null)
-  const [copyFlyoutPosition, setCopyFlyoutPosition] = useState<{ x: number; y: number } | null>(null)
   const mailItems = useMemo(() => items.filter((item) => item.kind === 'mail'), [items])
   // Every action here changes messages: on Microsoft Graph that needs the
   // change permission (#141), and copying stays within the same account.
@@ -122,59 +118,12 @@ export function BulkActionBar({
     if (singleAccountId) void ensureAccountFolders(singleAccountId, { refreshIfBootstrapOnly: true })
   }, [singleAccountId])
 
-  useEffect(() => {
-    if (!menu) {
-      setMoveOpen(false)
-      setCopyOpen(false)
-    }
-  }, [menu])
-
+  // While "Copy to" is open, the folders of every target load, also those of
+  // an account that appears meanwhile. The submenus close with the menu.
   useEffect(() => {
     if (!copyOpen) return
     void loadCopyTargetFolders()
   }, [accounts, copyOpen])
-
-  useLayoutEffect(() => {
-    if (!moveOpen) {
-      setMoveFlyoutPosition(null)
-      return
-    }
-
-    const anchor = moveAnchorRef.current
-    if (!anchor) return
-
-    const gap = 4
-    const flyoutWidth = 190
-    const rect = anchor.getBoundingClientRect()
-    const x = flyoutX(rect, flyoutWidth, gap, window.innerWidth)
-    const y = rect.top
-
-    setMoveFlyoutPosition((current) => {
-      if (current?.x === x && current.y === y) return current
-      return { x, y }
-    })
-  }, [moveOpen])
-
-  useLayoutEffect(() => {
-    if (!copyOpen) {
-      setCopyFlyoutPosition(null)
-      return
-    }
-
-    const anchor = copyAnchorRef.current
-    if (!anchor) return
-
-    const gap = 4
-    const flyoutWidth = 230
-    const rect = anchor.getBoundingClientRect()
-    const x = flyoutX(rect, flyoutWidth, gap, window.innerWidth)
-    const y = rect.top
-
-    setCopyFlyoutPosition((current) => {
-      if (current?.x === x && current.y === y) return current
-      return { x, y }
-    })
-  }, [copyOpen])
 
   if (items.length === 0) return null
 
@@ -236,6 +185,8 @@ export function BulkActionBar({
           radius="lg"
           label={t('common.more')}
           active={!!menu}
+          aria-haspopup="menu"
+          aria-expanded={!!menu}
           className="hover:bg-accent/10"
           onClick={(event) => {
             const rect = event.currentTarget.getBoundingClientRect()
@@ -248,6 +199,7 @@ export function BulkActionBar({
         <FloatingContextMenu
           x={menu.x}
           y={menu.y}
+          label={selectedLabel}
           overlay
           onClose={() => setMenu(null)}
           className="fixed z-50 min-w-[190px] rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
@@ -269,7 +221,7 @@ export function BulkActionBar({
                   }}
                 />
               ))}
-              <div className="my-1 border-t border-border" />
+              <MenuSeparator />
             </>
           )}
           <MenuItem
@@ -309,11 +261,11 @@ export function BulkActionBar({
             }}
           />
           {labels.length > 0 && (
-            <>
-              <div className="my-1 border-t border-border" />
-              <p className="px-2 pb-0.5 pt-1 text-2xs font-semibold text-secondary">
-                {t('labels.forSelection', { defaultValue: 'Labels (on all, some or none)' })}
-              </p>
+            <MenuGroup
+              separated
+              label={t('labels.forSelection', { defaultValue: 'Labels (on all, some or none)' })}
+              labelClassName="px-2 pb-0.5 pt-1 text-2xs font-semibold text-secondary"
+            >
               {labels.map((label) => {
                 const ids = mailItems.map((item) => item.threadId)
                 const coverage = labelCoverage(ids, label.id)
@@ -335,9 +287,9 @@ export function BulkActionBar({
                   />
                 )
               })}
-            </>
+            </MenuGroup>
           )}
-          <div className="my-1 border-t border-border" />
+          <MenuSeparator />
           <MenuItem
             icon={<Archive size={14} className="text-secondary" strokeWidth={1.75} />}
             label={t('threads.actions.archiveThread')}
@@ -347,97 +299,50 @@ export function BulkActionBar({
               void bulkArchiveSelected(mailItems)
             }}
           />
-          <div
-            ref={moveAnchorRef}
-            onMouseEnter={() => {
-              if (!canMove) return
-              setCopyOpen(false)
-              setMoveOpen(true)
-            }}
-            onMouseLeave={() => setMoveOpen(false)}
+          <SubmenuItem
+            icon={<FolderInput size={14} className="text-secondary" strokeWidth={1.75} />}
+            label={t('threads.actions.moveTo')}
+            disabled={readOnly || !canMove}
           >
-            <MenuItem
-              icon={<FolderInput size={14} className="text-secondary" strokeWidth={1.75} />}
-              label={t('threads.actions.moveTo')}
-              trailing={<ChevronRight size={14} className="text-secondary" strokeWidth={1.75} />}
-              disabled={readOnly || !canMove}
-              onClick={() => {
-                if (!canMove) return
-                setMoveOpen((open) => !open)
+            {/* Said as a disabled item so the arrow keys reach it too. */}
+            {!hasMoveTarget && <MenuItem disabled label={t('folders.noneAvailable')} />}
+            <FolderMenuTree
+              folders={moveFolders}
+              excludedFolderIds={selectedFolders}
+              onPick={(folder) => {
+                setMenu(null)
+                void bulkMoveSelectedToFolder(mailItems, folder.id)
               }}
             />
-            {moveOpen && moveFlyoutPosition && (
-              <FloatingContextMenu
-                x={moveFlyoutPosition.x}
-                y={moveFlyoutPosition.y}
-                className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
+          </SubmenuItem>
+          <SubmenuItem
+            icon={<Copy size={14} className="text-secondary" strokeWidth={1.75} />}
+            label={t('threads.actions.copyTo')}
+            disabled={readOnly || !canCopy}
+            width={230}
+            panelClassName="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[230px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
+            onOpenChange={setCopyOpen}
+          >
+            {copyAccountGroups.map(({ account, folders }) => (
+              <MenuGroup
+                key={account.id}
+                label={account.display_name || account.email || account.id}
+                labelClassName="px-3 pb-1 pt-2 text-caption font-semibold text-secondary"
               >
-                {!hasMoveTarget && (
-                  <div className="px-3 py-2 text-xs font-semibold text-secondary">{t('folders.noneAvailable')}</div>
+                {folders.length === 0 && (
+                  <MenuItem disabled label={copyLoading ? t('folders.loading') : t('folders.noneAvailable')} />
                 )}
                 <FolderMenuTree
-                  folders={moveFolders}
-                  excludedFolderIds={selectedFolders}
+                  folders={folders}
                   onPick={(folder) => {
                     setMenu(null)
-                    setMoveOpen(false)
-                    void bulkMoveSelectedToFolder(mailItems, folder.id)
+                    void bulkCopySelectedToFolder(mailItems, account.id, folder.id)
                   }}
                 />
-              </FloatingContextMenu>
-            )}
-          </div>
-          <div
-            ref={copyAnchorRef}
-            onMouseEnter={() => {
-              if (!canCopy) return
-              setMoveOpen(false)
-              setCopyOpen(true)
-              void loadCopyTargetFolders()
-            }}
-            onMouseLeave={() => setCopyOpen(false)}
-          >
-            <MenuItem
-              icon={<Copy size={14} className="text-secondary" strokeWidth={1.75} />}
-              label={t('threads.actions.copyTo')}
-              trailing={<ChevronRight size={14} className="text-secondary" strokeWidth={1.75} />}
-              disabled={readOnly || !canCopy}
-              onClick={() => {
-                if (!canCopy) return
-                setCopyOpen((open) => !open)
-                void loadCopyTargetFolders()
-              }}
-            />
-            {copyOpen && copyFlyoutPosition && (
-              <FloatingContextMenu
-                x={copyFlyoutPosition.x}
-                y={copyFlyoutPosition.y}
-                className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[230px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
-              >
-                {copyAccountGroups.map(({ account, folders }) => (
-                  <div key={account.id}>
-                    <div className="px-3 pb-1 pt-2 text-caption font-semibold text-secondary">
-                      {account.display_name || account.email || account.id}
-                    </div>
-                    {folders.length === 0 && (
-                      <div className="px-3 py-2 text-xs font-semibold text-secondary">
-                        {copyLoading ? t('folders.loading') : t('folders.noneAvailable')}
-                      </div>
-                    )}
-                    <FolderMenuTree
-                      folders={folders}
-                      onPick={(folder) => {
-                        setMenu(null)
-                        setCopyOpen(false)
-                        void bulkCopySelectedToFolder(mailItems, account.id, folder.id)
-                      }}
-                    />
-                  </div>
-                ))}
-              </FloatingContextMenu>
-            )}
-          </div>
-          <div className="my-1 border-t border-border" />
+              </MenuGroup>
+            ))}
+          </SubmenuItem>
+          <MenuSeparator />
           <MenuItem
             icon={<Trash2 size={14} strokeWidth={1.75} />}
             label={t('buttons.delete')}

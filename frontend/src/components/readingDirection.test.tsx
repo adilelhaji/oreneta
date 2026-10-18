@@ -140,7 +140,7 @@ describe('a context menu opens towards the end of the line', () => {
   const leftOf = (x: number) =>
     withMenuSize(() => {
       const view = render(
-        <FloatingContextMenu x={x} y={50} className="fixed">
+        <FloatingContextMenu x={x} y={50} label="Menu" className="fixed">
           <button type="button">Item</button>
         </FloatingContextMenu>,
       )

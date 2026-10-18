@@ -954,7 +954,7 @@ test('do not disturb shows an indicator in the side navigation and Resume clears
 
   // The side navigation's own More button (the narrow-window header has one too).
   await page.locator('aside').getByTitle('More', { exact: true }).first().click()
-  await page.getByRole('button', { name: 'Do not disturb until turned off', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Do not disturb until turned off', exact: true }).click()
   await expect(indicator).toBeVisible()
   await expect.poll(async () => (await quietPushes()).at(-1)).toMatchObject({ indefinite: true, quiet: true })
   await expect
@@ -1133,7 +1133,7 @@ for (const appearance of ['light', 'dark'] as const) {
       await expect(remove).toHaveCount(0)
       await expect(catalogue.getByRole('button', { name: 'Toggle · on' })).toHaveAttribute('aria-pressed', 'true')
 
-      const longMenu = catalogue.getByRole('button', { name: /Archivar los mensajes seleccionados/ })
+      const longMenu = catalogue.getByRole('menuitem', { name: /Archivar los mensajes seleccionados/ })
       await longMenu.scrollIntoViewIfNeeded()
       expect(await longMenu.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
       const longAction = catalogue.getByRole('button', { name: 'Volver a comprobar la conexión' })
@@ -1938,6 +1938,127 @@ test('Arabic context menu near the right edge is fully visible with unwrapped la
   expect(errors).toEqual([])
 })
 
+// Menus (#289): a context menu and its submenu are WAI-ARIA menus with no axe
+// violation at all, and are driven by the keyboard: arrows wrap, Home and End,
+// typeahead, the arrow towards the end of the line opens the submenu and the
+// one towards its start closes it (mirrored in Arabic), Escape closes only the
+// innermost menu, and focus returns to where it came from. Rows are 28 px.
+for (const language of ['en', 'ar'] as const) {
+  test(`thread context menu: roles, axe and keyboard, ${language} (#289)`, async ({ page }, info) => {
+    const errors = await prepareStartup(page, true, { navigation: true, language })
+    await page.goto('/')
+    await page.evaluate(() => {
+      ;(window as any).startupProbe.replies['mail.priorityReason'] = {
+        priority: false,
+        reasons: [],
+        sender: 'morgan@example.test',
+        override: null,
+      }
+    })
+    const rtl = language === 'ar'
+    const forward = rtl ? 'ArrowLeft' : 'ArrowRight'
+    const back = rtl ? 'ArrowRight' : 'ArrowLeft'
+    const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+    await expect(row).toBeVisible()
+    await row.focus()
+    await row.click({ button: 'right' })
+
+    const menu = page.getByRole('menu', { name: 'Pilot checklist' })
+    await expect(menu).toBeVisible()
+    const items = menu.getByRole('menuitem')
+    await expect(items.first()).toBeFocused()
+    expect(Math.round((await items.first().boundingBox())!.height)).toBe(28)
+
+    await page.keyboard.press('ArrowUp')
+    await expect(items.last()).toBeFocused()
+    await page.keyboard.press('ArrowDown')
+    await expect(items.first()).toBeFocused()
+    await page.keyboard.press('End')
+    await expect(items.last()).toBeFocused()
+    await page.keyboard.press('Home')
+    await expect(items.first()).toBeFocused()
+    await page.keyboard.press('ArrowDown')
+    await expect(items.nth(1)).toBeFocused()
+
+    if (!rtl) {
+      // Typeahead: "A" goes to the first item after the focused one that
+      // starts with it, Archive thread.
+      await page.keyboard.press('a')
+      await expect(menu.getByRole('menuitem', { name: 'Archive thread', exact: true })).toBeFocused()
+    }
+
+    const trigger = menu.locator('[aria-haspopup="menu"]').first()
+    await trigger.focus()
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    await page.keyboard.press(forward)
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    const submenu = page.locator(`[id="${await trigger.getAttribute('aria-controls')}"]`)
+    await expect(submenu).toHaveAttribute('role', 'menu')
+    await expect(submenu).toHaveAttribute('aria-labelledby', (await trigger.getAttribute('id'))!)
+    await expect(submenu.getByRole('menuitem').first()).toBeFocused()
+    // Opened past the end of its row: right of it in English, left in Arabic.
+    const triggerBox = (await trigger.boundingBox())!
+    const submenuBox = (await submenu.boundingBox())!
+    if (rtl) expect(submenuBox.x + submenuBox.width).toBeLessThanOrEqual(triggerBox.x + 1)
+    else expect(submenuBox.x).toBeGreaterThanOrEqual(triggerBox.x + triggerBox.width - 1)
+
+    const results = await new AxeBuilder({ page }).include('[role="menu"]').withTags(AXE_TAGS).analyze()
+    const body = JSON.stringify(results.violations, null, 2)
+    await info.attach(`axe-menus-${language}`, { body, contentType: 'application/json' })
+    expect(results.violations.map((violation) => `${violation.id}: ${violation.help}`)).toEqual([])
+
+    await page.keyboard.press(back)
+    await expect(submenu).toHaveCount(0)
+    await expect(trigger).toBeFocused()
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+
+    // Enter opens it too; Escape closes only the submenu, then the menu.
+    await page.keyboard.press('Enter')
+    await expect(submenu.getByRole('menuitem').first()).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(submenu).toHaveCount(0)
+    await expect(menu).toBeVisible()
+    await expect(trigger).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(menu).toHaveCount(0)
+    await expect(row).toBeFocused()
+    expect(errors).toEqual([])
+  })
+}
+
+test('a menu button opens its menu from the keyboard and gives focus back (#289)', async ({ page }) => {
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  const trigger = page.getByRole('button', { name: 'Thread actions', exact: true })
+  await expect(trigger).toHaveAttribute('aria-haspopup', 'menu')
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  await trigger.focus()
+  await page.keyboard.press('Enter')
+  const menu = page.getByRole('menu', { name: 'Thread actions' })
+  await expect(menu).toBeVisible()
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+  const items = menu.getByRole('menuitem')
+  await expect(items.first()).toBeFocused()
+  await page.keyboard.press('End')
+  await expect(items.last()).toBeFocused()
+  // Keys typed in a menu stay there: no single-key shortcut fires behind it.
+  await page.keyboard.press('e')
+  await expect(menu).toBeVisible()
+  const results = await new AxeBuilder({ page }).include('[role="menu"]').withTags(AXE_TAGS).analyze()
+  expect(results.violations.map((violation) => `${violation.id}: ${violation.help}`)).toEqual([])
+  await page.keyboard.press('Escape')
+  await expect(menu).toHaveCount(0)
+  await expect(trigger).toBeFocused()
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  // Tab closes it as well, and moves on from the trigger.
+  await page.keyboard.press('Enter')
+  await expect(items.first()).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(menu).toHaveCount(0)
+  await expect(trigger).not.toBeFocused()
+  expect(errors).toEqual([])
+})
+
 test('switching from Arabic back to English restores left to right without a reload (#226)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   const errors = await prepareStartup(page, true, { navigation: true, language: 'ar' })
@@ -2052,7 +2173,7 @@ test('Graph mailbox reader remains read-only without automatic flag or draft wri
   await expect(page.getByRole('button', { name: 'Mark as read', exact: true }).first()).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Label', exact: true }).first()).toBeEnabled()
   await page.getByRole('button', { name: 'Conversation details', exact: true }).first().click({ button: 'right' })
-  await expect(page.getByRole('button', { name: /New message to/ })).toBeDisabled()
+  await expect(page.getByRole('menuitem', { name: /New message to/ })).toBeDisabled()
   const calls = await page.evaluate(() => (window as any).startupProbe.calls as string[])
   for (const command of ['mail.markRead', 'mail.saveDraft', 'mail.send']) expect(calls).not.toContain(command)
   expect(errors).toEqual([])
@@ -2087,7 +2208,7 @@ async function verifyMailBoundary(page: Page, width: number) {
       .click()
   } else {
     await page.getByTitle('Switch folder', { exact: true }).click()
-    await page.getByRole('button', { name: 'Sent', exact: true }).click()
+    await page.getByRole('menuitemradio', { name: 'Sent', exact: true }).click()
   }
   await expect
     .poll(() =>
@@ -2310,7 +2431,7 @@ test('production mailbox navigation yields space to existing narrow folder selec
     await page.setViewportSize({ width, height: 900 })
     await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).not.toBeVisible()
     await page.getByTitle('Switch folder', { exact: true }).click()
-    await expect(page.getByRole('button', { name: 'Sent', exact: true })).toBeInViewport()
+    await expect(page.getByRole('menuitemradio', { name: 'Sent', exact: true })).toBeInViewport()
     await page.keyboard.press('Escape')
   }
   expect(errors).toEqual([])
@@ -2887,12 +3008,12 @@ test('folder favorites, colors and a keyboard move', async ({ page }) => {
   const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
   const tree = nav.locator('ul.mail-folder-tree').last()
   await tree.getByRole('button', { name: 'Clients 1', exact: true }).click({ button: 'right' })
-  await page.getByRole('button', { name: 'Add to favorites' }).click()
+  await page.getByRole('menuitem', { name: 'Add to favorites' }).click()
   const favorites = nav.getByRole('region', { name: 'Favorites' })
   await expect(favorites.getByRole('button', { name: 'Clients 1', exact: true })).toBeVisible()
 
   await tree.getByRole('button', { name: 'Clients 1', exact: true }).click({ button: 'right' })
-  await page.getByRole('button', { name: 'Teal', exact: true }).click()
+  await page.getByRole('menuitemradio', { name: 'Teal', exact: true }).click()
   const colored = nav.getByRole('button', { name: 'Clients Color: Teal 1', exact: true })
   await expect(colored).toHaveCount(2)
   // The palette's CSS applies under the production CSP: the light-theme teal.
@@ -2903,8 +3024,8 @@ test('folder favorites, colors and a keyboard move', async ({ page }) => {
   // Keyboard path: Shift+F10 on the folder, "Move folder to…", the picker, confirm.
   await tree.getByRole('button', { name: 'Team', exact: true }).focus()
   await page.keyboard.press('Shift+F10')
-  await expect(page.getByRole('button', { name: 'Add to favorites' })).toBeFocused()
-  await page.getByRole('button', { name: 'Move folder to…' }).click()
+  await expect(page.getByRole('menuitem', { name: 'Add to favorites' })).toBeFocused()
+  await page.getByRole('menuitem', { name: 'Move folder to…' }).click()
   const picker = page.getByRole('dialog', { name: 'Move Team to…' })
   await picker.getByRole('radio', { name: 'Clients' }).check()
   await picker.getByRole('button', { name: 'Move here' }).click()

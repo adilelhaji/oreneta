@@ -211,7 +211,7 @@
 .folder-color-swatch:hover {
   background: var(--me-bg-hover);
 }
-.folder-color-swatch[aria-pressed='true'] {
+.folder-color-swatch[aria-checked='true'] {
   box-shadow: 0 0 0 2px var(--me-accent);
 }
 .mail-navigation [data-drop-target='ok'] {

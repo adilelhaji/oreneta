@@ -83,7 +83,7 @@ it('a saved search remembers where it was saved and goes back there', () => {
   ui$.query.set('')
   const again = render(<SavedSearchMenu query="" />)
   fireEvent.click(again.getByRole('button', { name: 'Saved searches' }))
-  fireEvent.click(again.getByRole('button', { name: /from:ann/ }))
+  fireEvent.click(again.getByRole('menuitem', { name: /from:ann/ }))
   expect(ui$.selectedAccount.get()).toBe('a@x')
   expect(ui$.query.get()).toBe('from:ann')
 })
