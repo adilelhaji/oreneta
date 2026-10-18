@@ -20,8 +20,8 @@ import { NumberRow, SegmentedRow, SelectRow, SettingsGroup, ToggleRow } from './
 // The intervals offered for the periodic mail check (#270), in minutes; 0 is
 // "manual only". A value set elsewhere (a restored backup) is offered too.
 export const MAIL_CHECK_CHOICES = [0, 5, 10, 15, 30, 60, 120]
-/** What the core uses for an account with no choice of its own. */
-export const DEFAULT_MAIL_CHECK_MINUTES = 15
+/** What an account with no choice of its own does: accounts from before #270 stay manual (ADR-0071, 1B). */
+export const DEFAULT_MAIL_CHECK_MINUTES = 0
 
 export function mailCheckChoices(current: number): number[] {
   return MAIL_CHECK_CHOICES.includes(current)

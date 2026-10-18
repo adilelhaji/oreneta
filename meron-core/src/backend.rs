@@ -79,6 +79,16 @@ impl Session {
         }
     }
 
+    /// The names of the folders the server lists now and that can be
+    /// selected — for IMAP, without the `\Noselect` and `\NonExistent` ones
+    /// (#270). The other backends have no such folders.
+    pub async fn selectable_folder_names(&mut self) -> Result<Vec<String>> {
+        match self {
+            Session::Imap(session) => imap::selectable_folder_names(session).await,
+            other => Ok(other.list_folders().await?.into_iter().map(|folder| folder.name).collect()),
+        }
+    }
+
     pub async fn create_folder(&mut self, name: &str) -> Result<()> {
         match self {
             Session::Local(session) => session.create_folder(name),

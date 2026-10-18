@@ -1,10 +1,11 @@
 # ADR-0071: Interval de comprovació del correu al costat de la notificació del servidor
 
-- Estat: **proposada**. Pendent de la decisió del propietari; no s'ha obert cap PR.
+- Estat: **acceptada** el 2026-10-18 pel propietari («Sí a todo»): les opcions
+  recomanades, 1B, 2B, 3B, 4A, 5A i 6A.
 - Data: 2026-10-18.
 - Abast: #270, filla de #96. Relacionada amb #121 (IDLE), ADR-0035 (POP3), ADR-0004
   (Microsoft Graph), ADR-0037 (còpies programades) i ADR-0054 (arxivament automàtic).
-  Detall de comportament i prototip: [mail-check-interval.md](../design/mail-check-interval.md).
+  Detall del comportament: [mail-check-interval.md](../design/mail-check-interval.md).
 
 ## Context
 
@@ -99,6 +100,25 @@ va trobar problemes que depenen de decisions de producte, no de codi:
 1B (no canvia res per a qui ja té comptes; els comptes nous es comporten com un client de
 correu habitual), 2B, 3B, 4A, 5A i 6A. Amb aquestes opcions, la notificació del servidor
 continua igual, i el cost d'una comprovació és el d'una sincronització per carpeta útil.
+
+## Decisió
+
+El propietari va acceptar la recomanació el 2026-10-18 («Sí a todo»):
+
+- **1B.** Els comptes que ja existien no tenen cap valor desat i es comproven només
+  manualment; un compte nou es crea amb 15 minuts.
+- **2B.** Es comproven les carpetes conegudes que el servidor llista ara com a
+  seleccionables (sense les `\Noselect` ni les que ja no hi són), sense Paperera, Correu
+  brossa ni «Tots» de Gmail (pel seu paper o pel nom) i, en IMAP, sense les que té un
+  vigilant IDLE.
+- **3B.** Cada carpeta es sincronitza amb els 50 missatges més recents, sense tornar a
+  sincronitzar Enviats i Esborranys ni baixar-ne cossos per avançat. El correu nou de la
+  safata d'entrada passa per les regles i per la resposta automàtica d'absència, com amb
+  IDLE; el de POP3 també s'avisa. La interfície rep un sol avís per compte i comprovació.
+- **4A.** Un error en una comprovació periòdica surt una vegada per compte i comprovació,
+  amb quantes carpetes han fallat.
+- **5A.** El planificador viu al nucli.
+- **6A.** Només una nota datada al registre d'acceptació.
 
 ## Conseqüències
 

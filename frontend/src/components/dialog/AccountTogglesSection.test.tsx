@@ -52,11 +52,11 @@ function Harness({ id, isRSS = false }: { id: string; isRSS?: boolean }) {
   return <AccountTogglesSection account={current} isRSS={isRSS} />
 }
 
-it('shows the default for an account with no choice and stores "manual only" as 0', async () => {
+it('an account with no choice of its own is manual, and "manual only" is stored as 0', async () => {
   accounts$.set([account()])
   const screen = render(<Harness id="ana@example.org" />)
   const select = screen.getByLabelText('Check for new mail') as HTMLSelectElement
-  expect(select.value).toBe('15')
+  expect(select.value).toBe('0')
   expect(Array.from(select.options).map((o) => o.textContent)).toEqual([
     'Manually only',
     'Every 5 min',
@@ -67,6 +67,18 @@ it('shows the default for an account with no choice and stores "manual only" as 
     'Every 120 min',
   ])
   expect(screen.getByText(/get new mail by push as it arrives/)).toBeTruthy()
+  await act(async () => {
+    fireEvent.change(select, { target: { value: '30' } })
+  })
+  expect(calls).toEqual([{ command: 'account.setMailCheckInterval', payload: { id: 'ana@example.org', minutes: 30 } }])
+  expect(accounts$.get()[0].mail_check_interval_minutes).toBe(30)
+})
+
+it('stores "manual only" as 0', async () => {
+  accounts$.set([account({ mail_check_interval_minutes: 15 })])
+  const screen = render(<Harness id="ana@example.org" />)
+  const select = screen.getByLabelText('Check for new mail') as HTMLSelectElement
+  expect(select.value).toBe('15')
   await act(async () => {
     fireEvent.change(select, { target: { value: '0' } })
   })
@@ -105,7 +117,7 @@ it('says what the check covers for POP3 and for accounts without push', () => {
   expect(pop.getByText(/downloaded only when the account is checked/)).toBeTruthy()
   cleanup()
   const ews = render(<Harness id="ews" />)
-  expect(ews.getByText(/all its folders are checked/)).toBeTruthy()
+  expect(ews.getByText(/its folders, except Trash and Junk, are checked/)).toBeTruthy()
 })
 
 it('is not offered for feeds or the local archive', () => {

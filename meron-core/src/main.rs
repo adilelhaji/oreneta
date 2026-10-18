@@ -1082,7 +1082,8 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
             let accounts=store::list_accounts(&engine.db.lock().unwrap()).unwrap();
             accounts.iter().find(|a|a["id"]==account).unwrap()["mail_check_interval_minutes"].clone()
         };
-        assert_eq!(listed(&engine),json!(meron_core::mail_check::DEFAULT_INTERVAL_MINUTES));
+        // A row from before #270 has no choice of its own: manual (ADR-0071, 1B).
+        assert_eq!(listed(&engine),json!(meron_core::mail_check::MANUAL));
         for (asked,stored) in [(0,0),(1,5),(30,30),(100_000,1440)] {
             let answer=dispatch(&engine,&request("account.setMailCheckInterval",json!({"account":account,"minutes":asked})),&writer).await.unwrap();
             assert_eq!(answer["minutes"],stored);
@@ -2463,16 +2464,25 @@ async fn idle_watch(engine: Arc<Engine>, out: Writer, account: String, folder: S
     .await;
 }
 
-/// Sync `folder` and surface the result to the UI: a "new mail" toast when
-/// INBOX's UIDNEXT advanced (genuine arrivals), otherwise a silent refresh.
-/// Shared by the IDLE wake path and the post-connect catch-up so both behave
-/// identically.
-async fn sync_and_notify(
+/// What syncing a folder brought: the Inbox arrivals still to announce once
+/// rules have run (`None` for a flag-only change or another folder), and how
+/// many messages the sync saw.
+struct Arrivals {
+    new_inbox: Option<Vec<imap::MessageHeader>>,
+    count: usize,
+}
+
+/// Sync `folder` and, for the Inbox, find its genuine arrivals (UIDNEXT
+/// advanced) and run the account's rules and out-of-office reply on them.
+/// Announces nothing: the IDLE path ([`sync_and_notify`]) and the periodic
+/// check (#270) each decide what the UI hears.
+async fn sync_and_handle_arrivals(
     engine: &Arc<Engine>,
     out: &Writer,
     account: &str,
     folder: &str,
-) -> anyhow::Result<()> {
+    limit: u32,
+) -> anyhow::Result<Arrivals> {
     // An IDLE wake can mean new mail *or* just a flag change (e.g. a message
     // read on another device). UIDNEXT only advances for new arrivals, so
     // compare it across the refresh to tell them apart.
@@ -2483,7 +2493,7 @@ async fn sync_and_notify(
         0
     };
     // Refresh on a separate connection (the IDLE one stays dedicated to IDLE).
-    let synced = sync_messages(engine, account, folder, IDLE_LIMIT).await?;
+    let synced = sync_messages(engine, account, folder, limit).await?;
     let uid_next_after = if is_inbox {
         inbox_uid_next(engine, account)
     } else {
@@ -2523,6 +2533,21 @@ async fn sync_and_notify(
             .filter(|header| !handled.contains(&header.uid))
             .collect::<Vec<_>>()
     });
+    Ok(Arrivals { new_inbox, count: synced.count })
+}
+
+/// Sync `folder` and surface the result to the UI: a "new mail" toast when
+/// INBOX's UIDNEXT advanced (genuine arrivals), otherwise a silent refresh.
+/// Shared by the IDLE wake path and the post-connect catch-up so both behave
+/// identically.
+async fn sync_and_notify(
+    engine: &Arc<Engine>,
+    out: &Writer,
+    account: &str,
+    folder: &str,
+) -> anyhow::Result<()> {
+    let is_inbox = folder.eq_ignore_ascii_case("INBOX");
+    let Arrivals { new_inbox, count } = sync_and_handle_arrivals(engine, out, account, folder, IDLE_LIMIT).await?;
 
     if let Some(headers) = new_inbox.filter(|headers| !headers.is_empty()) {
         // Building the detail fetches the arrivals' own bodies (the notification
@@ -2541,7 +2566,7 @@ async fn sync_and_notify(
         emit(
             out,
             "mail.synced",
-            json!({ "account": account, "folder": folder, "synced": synced.count }),
+            json!({ "account": account, "folder": folder, "synced": count }),
         )
         .await;
     }
@@ -9646,56 +9671,76 @@ async fn run_auto_archive(
     Ok((log, created))
 }
 
-/// The periodic mail check (#270). Every minute, each mail account whose
-/// interval has passed gets the folders push does not cover refreshed, one
-/// folder after another. "Manual only" accounts, paused accounts and the local
-/// archive are never checked, and the IDLE watchers are left alone: push keeps
-/// working whatever the interval says.
+/// The periodic mail check (#270, ADR-0071). Every minute, each mail account
+/// whose interval has passed gets the folders push does not cover refreshed,
+/// one folder after another (see [`check_account_mail`]). "Manual only"
+/// accounts, paused accounts and the local archive are never checked, and the
+/// IDLE watchers are left alone: push keeps working whatever the interval says.
 fn spawn_mail_check(engine: Arc<Engine>, out: Writer) {
-    use meron_core::mail_check::{Delivery, Schedule, TICK_SECONDS};
+    use meron_core::mail_check::{CHECK_TIMEOUT_SECONDS, Candidate, Running, Schedule, TICK_SECONDS, plan_tick};
     tokio::spawn(async move {
-        let started = now_seconds();
         let schedule = Arc::new(std::sync::Mutex::new(Schedule::default()));
         let mut ticker = tokio::time::interval(Duration::from_secs(TICK_SECONDS));
         loop {
             ticker.tick().await;
-            let accounts: Vec<(String, Delivery)> = engine
+            let accounts: Vec<(String, meron_core::mail_check::Delivery)> = engine
                 .accounts
                 .lock()
                 .await
                 .iter()
                 .map(|(id, creds)| (id.clone(), delivery_of(creds)))
                 .collect();
-            let present: std::collections::HashSet<String> = accounts.iter().map(|(id, _)| id.clone()).collect();
-            schedule.lock().unwrap().retain(&present);
-            let now = now_seconds();
-            for (account, delivery) in accounts {
-                if delivery == Delivery::Local || engine.is_paused(&account) {
-                    continue;
-                }
-                let stored = store::mail_check_interval(&engine.db.lock().unwrap(), &account);
-                let interval = match stored {
-                    Ok(interval) => interval,
-                    Err(err) => {
-                        eprintln!("meron-core: mail check interval of {account} unreadable, not checking: {err:#}");
-                        continue;
+            let candidates: Vec<Candidate> = accounts
+                .into_iter()
+                .map(|(account, delivery)| {
+                    let stored = store::mail_check_interval(&engine.db.lock().unwrap(), &account);
+                    Candidate {
+                        paused: engine.is_paused(&account),
+                        interval: stored.map_err(|err| format!("{err:#}")),
+                        account,
+                        delivery,
                     }
-                };
-                {
-                    let mut schedule = schedule.lock().unwrap();
-                    if !schedule.due(&account, interval, started, now) {
-                        continue;
-                    }
-                    schedule.start(&account, now);
-                }
+                })
+                .collect();
+            let (due, unreadable) = plan_tick(&mut schedule.lock().unwrap(), &candidates, now_seconds());
+            for problem in unreadable {
+                eprintln!("meron-core: mail check interval unreadable, not checking {problem}");
+            }
+            for (account, delivery) in due {
                 let (engine, out, schedule) = (engine.clone(), out.clone(), schedule.clone());
                 tokio::spawn(async move {
-                    check_account_mail(&engine, &out, &account, delivery).await;
-                    schedule.lock().unwrap().finish(&account);
+                    // Finishes the check in the schedule however it ends.
+                    let _running = Running::new(schedule, &account);
+                    let check = check_account_mail(&engine, &out, &account, delivery);
+                    if tokio::time::timeout(Duration::from_secs(CHECK_TIMEOUT_SECONDS), check).await.is_err() {
+                        emit(
+                            &out,
+                            "mail.syncError",
+                            json!({ "account": account, "message": "periodic check: timed out" }),
+                        )
+                        .await;
+                    }
                 });
             }
         }
     });
+}
+
+/// A folder sync claimed in `engine.syncing`, released however the sync ends —
+/// also when a timed-out check is dropped mid-sync.
+struct SyncClaim {
+    engine: Arc<Engine>,
+    key: String,
+}
+
+impl Drop for SyncClaim {
+    fn drop(&mut self) {
+        let mut syncing = match self.engine.syncing.lock() {
+            Ok(syncing) => syncing,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        syncing.remove(&self.key);
+    }
 }
 
 /// How an account receives mail, for what its periodic check covers.
@@ -9712,38 +9757,113 @@ fn delivery_of(creds: &imap::Creds) -> meron_core::mail_check::Delivery {
     }
 }
 
-/// One periodic check of one account: the folders push does not cover, each
-/// synced (and announced) as opening it would, in turn.
+/// The folders one periodic check of `account` covers (ADR-0071, 2B): the
+/// known ones the server lists now as selectable, less trash, junk, Gmail's
+/// All Mail and, for IMAP, those an IDLE watcher already pushes.
+async fn mail_check_folders(
+    engine: &Arc<Engine>,
+    account: &str,
+    delivery: meron_core::mail_check::Delivery,
+) -> anyhow::Result<Vec<String>> {
+    use meron_core::mail_check::{Delivery, folders_to_check};
+    let cached = match delivery {
+        Delivery::Local | Delivery::Pop3 => Vec::new(),
+        Delivery::Imap | Delivery::Unpushed => store::get_folders(&engine.db.lock().unwrap(), account)?,
+    };
+    let graph = delivery == Delivery::Unpushed && engine.ensure_valid_creds(account).await?.is_graph();
+    let live: std::collections::HashSet<String> = match delivery {
+        Delivery::Local | Delivery::Pop3 => Default::default(),
+        // Graph keeps its own folder tree in step and has no unselectable
+        // folders; what is cached is what it lists.
+        _ if graph => cached.iter().map(|folder| folder.name.clone()).collect(),
+        Delivery::Imap | Delivery::Unpushed => engine
+            .with_read_session(account, |session| {
+                Box::pin(async move { session.selectable_folder_names().await })
+            })
+            .await?
+            .into_iter()
+            .collect(),
+    };
+    let watched = engine.watched.lock().unwrap();
+    Ok(folders_to_check(delivery, &cached, &live, |folder| {
+        watched.contains(&watch_key(account, folder))
+    }))
+}
+
+/// One POP3 download, and the unread messages it brought.
+async fn pop3_check(engine: &Arc<Engine>, account: &str) -> anyhow::Result<(usize, Vec<imap::MessageHeader>)> {
+    use meron_core::mail_check::SYNC_LIMIT;
+    let inbox = meron_core::pop3::INBOX;
+    let before: std::collections::HashSet<u32> = store::recent_headers(&engine.db.lock().unwrap(), account, inbox, SYNC_LIMIT as i64)?
+        .into_iter()
+        .map(|header| header.uid)
+        .collect();
+    let synced = sync_messages(engine, account, inbox, SYNC_LIMIT).await?;
+    let arrived = synced
+        .messages
+        .into_iter()
+        .filter(|header| !header.seen && !before.contains(&header.uid))
+        .collect();
+    Ok((synced.count, arrived))
+}
+
+/// One periodic check of one account (ADR-0071, 3B and 4A). Each folder is
+/// synced in turn, without the Sent/Drafts companion syncs or the body
+/// prefetch that opening a folder brings; the Inbox's arrivals go through the
+/// account's rules and out-of-office reply as IDLE's do; POP3's downloads are
+/// announced too. The UI hears once per check: the new mail, or one refresh,
+/// and at most one error naming how many folders failed.
 async fn check_account_mail(engine: &Arc<Engine>, out: &Writer, account: &str, delivery: meron_core::mail_check::Delivery) {
-    let listed = store::get_folders(&engine.db.lock().unwrap(), account);
-    let folders: Vec<String> = match listed {
-        Ok(folders) => folders.into_iter().map(|folder| folder.name).collect(),
+    use meron_core::mail_check::{Delivery, Outcome, SYNC_LIMIT};
+    let folders = match mail_check_folders(engine, account, delivery).await {
+        Ok(folders) => folders,
         Err(err) => {
-            eprintln!("meron-core: mail check of {account}: folders unreadable: {err:#}");
+            emit(
+                out,
+                "mail.syncError",
+                json!({ "account": account, "message": format!("periodic check: folder list: {err:#}") }),
+            )
+            .await;
             return;
         }
     };
-    let to_check = {
-        let watched = engine.watched.lock().unwrap();
-        meron_core::mail_check::folders_to_check(delivery, &folders, |folder| {
-            watched.contains(&watch_key(account, folder))
-        })
-    };
-    for folder in to_check {
-        if engine.is_paused(account) {
+    let mut outcome = Outcome::default();
+    let mut arrived: Vec<imap::MessageHeader> = Vec::new();
+    let mut checked = 0;
+    for folder in &folders {
+        if engine.is_paused(account) || !engine.accounts.lock().await.contains_key(account) {
             break;
         }
-        if let Some(key) = claim_message_sync(engine, account, &folder) {
-            run_message_sync(
-                engine.clone(),
-                out.clone(),
-                account.to_string(),
-                folder,
-                meron_core::mail_check::SYNC_LIMIT,
-                key,
-            )
-            .await;
-        }
+        // A folder the interface is syncing right now is left to that sync.
+        let Some(key) = claim_message_sync(engine, account, folder) else { continue };
+        let _claim = SyncClaim { engine: engine.clone(), key };
+        checked += 1;
+        let result = if delivery == Delivery::Pop3 {
+            pop3_check(engine, account).await.map(|(count, new)| {
+                arrived.extend(new);
+                count
+            })
+        } else if folder.eq_ignore_ascii_case("INBOX") {
+            sync_and_handle_arrivals(engine, out, account, folder, SYNC_LIMIT).await.map(|arrivals| {
+                arrived.extend(arrivals.new_inbox.unwrap_or_default());
+                arrivals.count
+            })
+        } else {
+            sync_messages(engine, account, folder, SYNC_LIMIT).await.map(|synced| synced.count)
+        };
+        outcome.record(folder, result.map_err(|err| format!("{err:#}")));
+    }
+    if let Some(message) = outcome.error_message(checked) {
+        emit(out, "mail.syncError", json!({ "account": account, "message": message })).await;
+    }
+    if !arrived.is_empty()
+        && let Some(detail) = new_messages_detail(engine, account, &arrived).await
+    {
+        emit(out, "mail.newMessages", detail).await;
+        return;
+    }
+    if checked > outcome.failed {
+        emit(out, "mail.synced", json!({ "account": account, "synced": outcome.synced })).await;
     }
 }
 

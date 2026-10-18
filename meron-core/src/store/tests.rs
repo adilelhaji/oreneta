@@ -4196,10 +4196,11 @@ fn save_sent_copy_pref_round_trips_and_can_be_cleared() {
     assert_eq!(value["other"], 7);
 }
 
-/// #270: the mail check interval reads its default when unset, "manual only"
-/// as 0, an out-of-bounds value within bounds, and a malformed one as unset.
+/// #270 (ADR-0071, 1B): an account from before the preference has none and
+/// reads as manual; "manual only" is 0; an out-of-bounds value reads within
+/// bounds, and a malformed one as unset.
 #[test]
-fn mail_check_interval_reads_default_manual_and_bounded_values() {
+fn mail_check_interval_reads_manual_when_unset_and_bounded_values() {
     let conn = Connection::open_in_memory().unwrap();
     db::run_migrations(&conn).unwrap();
     conn.execute(
@@ -4207,11 +4208,8 @@ fn mail_check_interval_reads_default_manual_and_bounded_values() {
         [],
     )
     .unwrap();
-    assert_eq!(
-        mail_check_interval(&conn, "mail-1").unwrap(),
-        crate::mail_check::DEFAULT_INTERVAL_MINUTES
-    );
-    for (stored, read) in [("0", 0u64), ("2", 5), ("45", 45), ("99999", 1440), ("\"soon\"", 15)] {
+    assert_eq!(mail_check_interval(&conn, "mail-1").unwrap(), crate::mail_check::MANUAL);
+    for (stored, read) in [("0", 0u64), ("2", 5), ("45", 45), ("99999", 1440), ("\"soon\"", 0)] {
         conn.execute(
             &format!("UPDATE accounts SET prefs = json_set('{{}}', '$.mail_check_interval_minutes', json('{stored}')) WHERE id = 'mail-1'"),
             [],
@@ -4221,6 +4219,27 @@ fn mail_check_interval_reads_default_manual_and_bounded_values() {
     }
     // Nothing to check for an account that does not exist.
     assert_eq!(mail_check_interval(&conn, "nobody").unwrap(), crate::mail_check::MANUAL);
+}
+
+/// ADR-0071, 1B: an account created now checks every 15 minutes; saving it
+/// again (a reconnect, new server settings) keeps the person's own choice.
+#[test]
+fn a_new_mail_account_starts_at_fifteen_minutes_and_keeps_its_choice() {
+    let conn = test_conn();
+    let meta = AccountMeta {
+        engine: "mail".to_string(),
+        provider: "custom".to_string(),
+        email: "ana@example.test".to_string(),
+        display_name: String::new(),
+        avatar_url: String::new(),
+        sender_name: String::new(),
+    };
+    let creds = proxy_test_creds(crate::proxy::ProxyChoice::default());
+    upsert_account(&conn, "ana", &meta, &creds).unwrap();
+    assert_eq!(mail_check_interval(&conn, "ana").unwrap(), crate::mail_check::NEW_ACCOUNT_INTERVAL_MINUTES);
+    set_account_pref_u64(&conn, "ana", "mail_check_interval_minutes", 0).unwrap();
+    upsert_account(&conn, "ana", &meta, &creds).unwrap();
+    assert_eq!(mail_check_interval(&conn, "ana").unwrap(), crate::mail_check::MANUAL);
 }
 
 #[test]

@@ -422,6 +422,28 @@ pub async fn refresh_oauth_token(
     Ok((parsed.access_token, parsed.expires_in.unwrap_or(3600)))
 }
 
+/// The mailboxes LIST returns that can be selected: neither `\Noselect`
+/// (a hierarchy container such as Gmail's `[Gmail]`) nor `\NonExistent`
+/// (RFC 5258). The periodic mail check (#270) asks this before each check,
+/// so a folder deleted elsewhere or a container is never SELECTed.
+pub async fn selectable_folder_names(session: &mut Session) -> Result<Vec<String>> {
+    use async_imap::imap_proto::NameAttribute;
+    let mut out = Vec::new();
+    let mut stream = session.list(Some(""), Some("*")).await.context("LIST")?;
+    while let Some(item) = stream.next().await {
+        let name = item.context("LIST item")?;
+        let unselectable = name.attributes().iter().any(|attr| match attr {
+            NameAttribute::NoSelect => true,
+            NameAttribute::Extension(ext) => ext.trim_start_matches('\\').eq_ignore_ascii_case("NonExistent"),
+            _ => false,
+        });
+        if !unselectable {
+            out.push(name.name().to_string());
+        }
+    }
+    Ok(out)
+}
+
 pub async fn list_folders(session: &mut Session) -> Result<Vec<Folder>> {
     let mut out = Vec::new();
     let mut stream = session.list(Some(""), Some("*")).await.context("LIST")?;

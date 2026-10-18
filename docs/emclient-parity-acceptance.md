@@ -88,6 +88,17 @@ El 2026-10-17 (#277, ADR-0047 esmenada el 2026-10-18, `docs/design/quicktext-pla
 signatura a les respostes i els reenviaments: amb el text propi (com fins ara), damunt de la citació o sota la
 citació, com a preferència local (`signature_placement`). Cap fila no canvia d'estat: SET-10
 es manté `implemented-unverified` i l'evidència nativa de Windows continua pendent.
+El 2026-10-18 (#270, ADR-0071) cada compte de correu va incorporar l'interval de
+comprovació («Només manualment» o cada 5, 10, 15, 30, 60 o 120 minuts): els comptes
+nous comencen amb 15 minuts i els que ja existien es comproven només manualment. El
+nucli l'aplica a les carpetes seleccionables que la notificació del servidor (IDLE) no
+cobreix, sense Paperera, Correu brossa ni «Tots» de Gmail; als comptes Exchange i Graph,
+que no en tenen, també la safata d'entrada, i als POP3, només la safata d'entrada. IDLE
+continua igual sigui quin sigui l'interval. El correu nou que arriba així passa per les regles i per la resposta automàtica
+d'absència, i el de POP3 també s'avisa. Vegeu
+[mail-check-interval.md](design/mail-check-interval.md). Cap fila no canvia d'estat: no hi ha
+cap fila de sincronització, S15-01 (POP3) es manté `implemented-unverified` i GRAPH-01
+`partial`, i l'evidència nativa de Windows (N4) i amb servidors reals (N5) continua pendent.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|

@@ -141,7 +141,7 @@ struct AccountPrefs {
     #[serde(deserialize_with = "lenient_pref")]
     rss_sync_interval_minutes: Option<u64>,
     /// Mail periodic check interval in minutes, 0 = manual only (#270);
-    /// default [`crate::mail_check::DEFAULT_INTERVAL_MINUTES`].
+    /// absent on accounts older than #270, which read as manual (ADR-0071).
     #[serde(deserialize_with = "lenient_pref")]
     mail_check_interval_minutes: Option<u64>,
     /// Send-as identities (besides the primary address); default none.
@@ -234,7 +234,7 @@ impl AccountPrefs {
     fn mail_check_interval_minutes(&self) -> u64 {
         self.mail_check_interval_minutes
             .map(crate::mail_check::normalize)
-            .unwrap_or(crate::mail_check::DEFAULT_INTERVAL_MINUTES)
+            .unwrap_or(crate::mail_check::MANUAL)
     }
 
     /// Configured send-as aliases (never the primary address).
@@ -353,8 +353,8 @@ pub fn upsert_account(
 ) -> Result<()> {
     let now = now_unix();
     conn.execute(
-        "INSERT INTO accounts(id, engine, provider, email, display_name, avatar_url, config, created_at, updated_at, sender_name, sort_order)
-         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9, COALESCE((SELECT MAX(sort_order) + 1 FROM accounts), 0))
+        "INSERT INTO accounts(id, engine, provider, email, display_name, avatar_url, config, created_at, updated_at, sender_name, sort_order, prefs)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9, COALESCE((SELECT MAX(sort_order) + 1 FROM accounts), 0), ?10)
          ON CONFLICT(id) DO UPDATE SET
            engine       = excluded.engine,
            provider     = excluded.provider,
@@ -382,6 +382,11 @@ pub fn upsert_account(
             creds_to_config(creds),
             now,
             meta.sender_name,
+            // Only a row created here takes these: an update keeps the
+            // account's own prefs. A new mail account checks its mail
+            // periodically; an existing one without the pref stays manual
+            // (ADR-0071, 1B).
+            if meta.engine == "mail" { crate::mail_check::new_account_prefs() } else { "{}".to_string() },
         ],
     )?;
     Ok(())
