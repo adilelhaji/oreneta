@@ -78,7 +78,13 @@ de mencions, però comptada com a no llegida) i les mencions sense llegir de cad
 compte. L'absència automàtica per inactivitat necessita una API nova del sistema: el propietari va
 triar l'opció A de l'ADR-0065, que encara no està implementada (#265). La fila es manté `partial` (hi falten aquest punt i
 l'evidència nativa de Windows).
-El 2026-10-17 (#277, ADR-0047, `docs/design/quicktext-placeholders.md`) SET-10 va incorporar, per a cada compte, l'opció de triar on va la
+El 2026-10-17 (#273) SET-07 va incorporar amagar carpetes de l'arbre de carpetes i tornar-les
+a mostrar («Amaga la carpeta», «Mostra les carpetes amagades», «Torna a mostrar la carpeta»),
+amb les subcarpetes incloses, com a preferència local (`folder_hidden`) que no arriba mai al
+servidor: les carpetes amagades es continuen sincronitzant, i «Opcions de cerca» diu si la
+cerca les inclou. La safata d'entrada no es pot amagar. Cap fila no canvia d'estat: SET-07
+es manté `partial` i l'evidència nativa de Windows continua pendent.
+El 2026-10-17 (#277, ADR-0047 esmenada el 2026-10-18, `docs/design/quicktext-placeholders.md`) SET-10 va incorporar, per a cada compte, l'opció de triar on va la
 signatura a les respostes i els reenviaments: amb el text propi (com fins ara), damunt de la citació o sota la
 citació, com a preferència local (`signature_placement`). Cap fila no canvia d'estat: SET-10
 es manté `implemented-unverified` i l'evidència nativa de Windows continua pendent.
