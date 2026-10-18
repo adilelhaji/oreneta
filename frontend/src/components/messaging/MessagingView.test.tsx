@@ -665,14 +665,12 @@ it('a private message in a group is its own conversation, opened from a name in 
 })
 
 it('clicking a chat notification opens its conversation in the Chat view', async () => {
-  ui$.messagingOpen.set(false)
-  ui$.calendarOpen.set(true)
+  ui$.module.set('calendar')
   await act(async () => openChatFromNotification('c1', 'pau@chat.test'))
-  expect(ui$.messagingOpen.peek()).toBe(true)
-  expect(ui$.calendarOpen.peek()).toBe(false)
+  expect(ui$.module.peek()).toBe('chat')
   expect(messaging$.conversation.peek()).toBe('pau@chat.test')
   expect(calls.find((c) => c.command === 'chat.markRead')?.payload).toEqual({ account: 'c1', conversation: 'pau@chat.test' })
-  ui$.messagingOpen.set(false)
+  ui$.module.set('mail')
 })
 
 it('the saved status shows before connecting, and invisible says it needs the connection', async () => {

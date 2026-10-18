@@ -358,6 +358,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
       ref={listRef}
       data-thread-list
       data-list-view={drawnView}
+      data-region="content"
       // The remembered width is a preference, not a claim on the window: on a
       // narrow one the list gives way (down to 280px) before the reader does.
       className={`relative flex w-full shrink-0 flex-col border-e border-border bg-chats min-[769px]:w-[var(--thread-list-width)] min-[769px]:min-w-[280px] min-[769px]:shrink ${

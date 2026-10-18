@@ -16,14 +16,7 @@ export function CompactNavigation() {
       <IconButton
         icon={ArrowLeft}
         label={t('chat.backToChats')}
-        onClick={() => {
-          ui$.calendarOpen.set(false)
-          ui$.peopleOpen.set(false)
-          ui$.tasksOpen.set(false)
-          ui$.notesOpen.set(false)
-          ui$.attachmentsOpen.set(false)
-          ui$.messagingOpen.set(false)
-        }}
+        onClick={() => ui$.module.set('mail')}
       />
       <IconButton
         ref={opener}

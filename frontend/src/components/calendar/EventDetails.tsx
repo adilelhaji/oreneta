@@ -3,6 +3,7 @@ import { AlignLeft, Bell, CalendarDays, Clock, MapPin, Repeat, SquarePen, Trash2
 import { openExternal } from '../../lib/native'
 import i18n, { useTranslation } from '../../lib/i18n'
 import { useEscapeKey } from '../../lib/useEscapeKey'
+import { ModalCard } from '../dialog/ModalCard'
 import { useEffect, useState } from 'react'
 import {
   allDayLocalDays,
@@ -87,7 +88,10 @@ export function EventDetails() {
         if (mouse.target === mouse.currentTarget) closeDetails()
       }}
     >
-      <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col rounded-panel border border-border bg-app shadow-overlay">
+      <ModalCard
+        label={event.subject || t('calendar.noSubject', { defaultValue: '(no subject)' })}
+        className="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col rounded-panel border border-border bg-app shadow-overlay"
+      >
         {/* A band in the calendar's colour, so which calendar this belongs to
             is answered before the text is read. */}
         <div className="h-1.5 rounded-t-2xl" style={{ backgroundColor: color }} />
@@ -305,7 +309,7 @@ export function EventDetails() {
             </button>
           )}
         </div>
-      </div>
+      </ModalCard>
     </div>
   )
 }
