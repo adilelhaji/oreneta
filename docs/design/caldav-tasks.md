@@ -50,7 +50,7 @@ A **Tasques**:
   llista arriba, el nucli emet `tasks.changed {account, list_id}`, i quan
   una lectura en segon pla falla, `tasks.changed {account, source}`, perquè
   una vista oberta en mostri el motiu. Si, mentre una entrada esperava, la
-  mateixa col·lecció s'ha enllaçat a mà (ADR-0039), aquella llista s'adopta i
+  mateixa col·lecció s'havia enllaçat a mà (ADR-0039), aquella llista s'adopta i
   no se'n fa cap altra.
 - **Límits coneguts.** Una relectura de servidor és «tot o res»: si una sola
   col·lecció no respon a la pregunta «té alguna tasca?», la marca continua
@@ -127,7 +127,7 @@ A **Tasques**:
     s'escriu quan la lectura ha acabat sencera, just abans de la transacció,
     i la pendent s'esborra quan la transacció s'ha confirmat. Si en algun
     pas no es pot desar una clau, s'esborren les que ja s'havien desat. Una
-    contrasenya desada que ja no hi és es diu com a error, no s'envia buida.
+    contrasenya desada que ja no hi és es notifica com a error, no s'envia buida.
   - `tasks.lists` retorna també `account_lists`: totes les entrades, excepte
     els servidors ja llistats. `tasks.sync`, amb `list_id` o sense, llegeix
     també el que és pendent i respon `accounts`.
