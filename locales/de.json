@@ -2828,5 +2828,10 @@
   "search.scope.unified": "Durchsucht „{folder}“: diesen Ordner in jedem Konto der vereinheitlichten Ordner, auch wenn er ausgeblendet ist.",
   "search.scope.folder": "Durchsucht nur „{folder}“. Ausgeblendete Ordner sind nicht enthalten.",
   "search.scope.hiddenFolder": "Durchsucht nur „{folder}“, einen ausgeblendeten Ordner.",
-  "search.scope.unifiedInbox": "Durchsucht „{folder}“: den Posteingang jedes Kontos der vereinheitlichten Ordner."
+  "search.scope.unifiedInbox": "Durchsucht „{folder}“: den Posteingang jedes Kontos der vereinheitlichten Ordner.",
+  "settings.signature.placement": "In Antworten und Weiterleitungen",
+  "settings.signature.placementHint": "Wo die Signatur im Verhältnis zum zitierten Original steht",
+  "settings.signature.placementWithText": "Bei meinem Text",
+  "settings.signature.placementAbove": "Über dem Zitat",
+  "settings.signature.placementBelow": "Unter dem Zitat"
 }

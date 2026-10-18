@@ -584,7 +584,7 @@
       "section": "Mail/Templates and Signatures; QuickText",
       "outcome": "Templates, account signatures and safe placeholder expansion",
       "status": "implemented-unverified",
-      "present": "Templates with escaped plain text (#40), per-account signatures and searchable QuickText with placeholders and a cursor mark (#88) are implemented and tested; native evidence pending",
+      "present": "Templates with escaped plain text (#40), per-account signatures and searchable QuickText with placeholders and a cursor mark (#88) are implemented and tested; a per-account choice of where the signature goes in replies and forwards (with the person's own text, above or below the quoted original, #277) is implemented and tested; native evidence pending",
       "code": "frontend/src/lib/placeholders.ts",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -609,6 +609,18 @@
           {
             "sha": "fe72de7c777718b2649969d18d40be84b96bfd0c",
             "result": "frontend/src/components/dialog/SignatureSettingsCard.test.tsx"
+          },
+          {
+            "sha": "cdf054e2fd7f2d0720c6e7d0603c2ad3b47774e8",
+            "result": "frontend/src/states/replyForwardCompose.test.ts"
+          },
+          {
+            "sha": "cdf054e2fd7f2d0720c6e7d0603c2ad3b47774e8",
+            "result": "frontend/src/components/dialog/SignatureSettingsCard.test.tsx"
+          },
+          {
+            "sha": "cdf054e2fd7f2d0720c6e7d0603c2ad3b47774e8",
+            "result": "frontend/src/components/composer/Composer.test.tsx"
           }
         ],
         "native": [],

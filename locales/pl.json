@@ -2828,5 +2828,10 @@
   "search.scope.unified": "Przeszukuje „{folder}”: ten folder na każdym koncie uwzględnionym w folderach zbiorczych, nawet jeśli jest ukryty.",
   "search.scope.folder": "Przeszukuje tylko „{folder}”. Ukryte foldery nie są uwzględniane.",
   "search.scope.hiddenFolder": "Przeszukuje tylko „{folder}”, który jest ukrytym folderem.",
-  "search.scope.unifiedInbox": "Przeszukuje „{folder}”: skrzynkę odbiorczą każdego konta uwzględnionego w folderach zbiorczych."
+  "search.scope.unifiedInbox": "Przeszukuje „{folder}”: skrzynkę odbiorczą każdego konta uwzględnionego w folderach zbiorczych.",
+  "settings.signature.placement": "W odpowiedziach i przekazaniach",
+  "settings.signature.placementHint": "Gdzie umieścić podpis względem cytowanej wiadomości",
+  "settings.signature.placementWithText": "Przy moim tekście",
+  "settings.signature.placementAbove": "Nad cytatem",
+  "settings.signature.placementBelow": "Pod cytatem"
 }

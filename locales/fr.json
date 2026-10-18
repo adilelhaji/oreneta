@@ -2828,5 +2828,10 @@
   "search.scope.unified": "Recherche dans « {folder} » : ce dossier dans chaque compte inclus dans les dossiers unifiés, même s’il est masqué.",
   "search.scope.folder": "Recherche uniquement dans « {folder} ». Les dossiers masqués ne sont pas inclus.",
   "search.scope.hiddenFolder": "Recherche uniquement dans « {folder} », un dossier masqué.",
-  "search.scope.unifiedInbox": "Recherche dans « {folder} » : la boîte de réception de chaque compte inclus dans les dossiers unifiés."
+  "search.scope.unifiedInbox": "Recherche dans « {folder} » : la boîte de réception de chaque compte inclus dans les dossiers unifiés.",
+  "settings.signature.placement": "Dans les réponses et les transferts",
+  "settings.signature.placementHint": "Où placer la signature par rapport au message cité",
+  "settings.signature.placementWithText": "Avec ce que j’écris",
+  "settings.signature.placementAbove": "Au-dessus de la citation",
+  "settings.signature.placementBelow": "Sous la citation"
 }
