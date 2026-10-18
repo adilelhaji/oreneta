@@ -554,6 +554,38 @@ func (a *App) accountSetRSSSyncInterval(payload map[string]any) (any, error) {
 	return map[string]any{"ok": true, "minutes": minutes}, nil
 }
 
+// accountSetMailCheckInterval sets how often a mail account is checked for
+// what push does not cover (#270): 0 is "manual only"; the engine keeps any
+// other value within 5..1440 minutes and answers with what it stored.
+func (a *App) accountSetMailCheckInterval(payload map[string]any) (any, error) {
+	id, _ := payload["id"].(string)
+	if id == "" {
+		id, _ = payload["account_id"].(string)
+	}
+	if id == "" {
+		return nil, errors.New("account id required")
+	}
+	minutes, ok := numberPayload(payload["minutes"])
+	if !ok || minutes < 0 {
+		return nil, errors.New("minutes required")
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	res, err := a.sidecar.Call("account.setMailCheckInterval", map[string]any{"account": id, "minutes": minutes})
+	if err != nil {
+		return nil, err
+	}
+	stored := minutes
+	if answer, isMap := res.(map[string]any); isMap {
+		if n, isNumber := numberPayload(answer["minutes"]); isNumber {
+			stored = n
+		}
+	}
+	a.logf("account.setMailCheckInterval: account=%s minutes=%d", id, stored)
+	return map[string]any{"ok": true, "minutes": stored}, nil
+}
+
 func numberPayload(v any) (int, bool) {
 	switch n := v.(type) {
 	case int:

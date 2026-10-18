@@ -281,6 +281,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.accountSetSaveSentCopy(payload)
 	case "account.setRSSSyncInterval":
 		return a.accountSetRSSSyncInterval(payload)
+	case "account.setMailCheckInterval":
+		return a.accountSetMailCheckInterval(payload)
 	case "account.reorder":
 		return a.accountReorder(payload)
 	case "oauth.gmailBegin":

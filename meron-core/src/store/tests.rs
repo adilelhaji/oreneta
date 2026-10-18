@@ -4196,6 +4196,33 @@ fn save_sent_copy_pref_round_trips_and_can_be_cleared() {
     assert_eq!(value["other"], 7);
 }
 
+/// #270: the mail check interval reads its default when unset, "manual only"
+/// as 0, an out-of-bounds value within bounds, and a malformed one as unset.
+#[test]
+fn mail_check_interval_reads_default_manual_and_bounded_values() {
+    let conn = Connection::open_in_memory().unwrap();
+    db::run_migrations(&conn).unwrap();
+    conn.execute(
+        "INSERT INTO accounts(id, engine, provider) VALUES('mail-1', 'mail', 'custom')",
+        [],
+    )
+    .unwrap();
+    assert_eq!(
+        mail_check_interval(&conn, "mail-1").unwrap(),
+        crate::mail_check::DEFAULT_INTERVAL_MINUTES
+    );
+    for (stored, read) in [("0", 0u64), ("2", 5), ("45", 45), ("99999", 1440), ("\"soon\"", 15)] {
+        conn.execute(
+            &format!("UPDATE accounts SET prefs = json_set('{{}}', '$.mail_check_interval_minutes', json('{stored}')) WHERE id = 'mail-1'"),
+            [],
+        )
+        .unwrap();
+        assert_eq!(mail_check_interval(&conn, "mail-1").unwrap(), read, "{stored}");
+    }
+    // Nothing to check for an account that does not exist.
+    assert_eq!(mail_check_interval(&conn, "nobody").unwrap(), crate::mail_check::MANUAL);
+}
+
 #[test]
 fn rss_sync_interval_defaults_and_persists_without_clobbering() {
     let conn = Connection::open_in_memory().unwrap();

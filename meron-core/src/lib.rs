@@ -29,6 +29,7 @@ pub mod folder_move;
 pub mod graph;
 pub mod imap;
 pub mod log;
+pub mod mail_check;
 pub mod mail_model;
 pub mod merge;
 pub mod oof;

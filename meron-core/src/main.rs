@@ -1067,6 +1067,31 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         assert_eq!(list["accounts"][0]["needs_reconnect"],true);
         assert!(!list.to_string().contains("access_token"));
     }
+    /// #270: the periodic check interval of a mail account is stored, bounded
+    /// and listed; "manual only" is 0; an account with no choice lists the
+    /// default; anything but a mail account is refused.
+    #[tokio::test]
+    async fn mail_check_interval_is_stored_bounded_and_listed() {
+        use super::*;
+        let engine=Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer=Arc::new(Mutex::new(tokio::io::stdout()));
+        let request=|method:&str,params:Value|Request{id:1,method:method.into(),params};
+        let account="checked@example.test";
+        engine.db.lock().unwrap().execute("INSERT INTO accounts(id,engine,provider,email,display_name,config,created_at,updated_at) VALUES(?1,'mail','custom',?1,'Checked','{\"auth_type\":\"password\",\"host\":\"imap.example.test\"}',0,0)",[account]).unwrap();
+        let listed=|engine:&Arc<Engine>|{
+            let accounts=store::list_accounts(&engine.db.lock().unwrap()).unwrap();
+            accounts.iter().find(|a|a["id"]==account).unwrap()["mail_check_interval_minutes"].clone()
+        };
+        assert_eq!(listed(&engine),json!(meron_core::mail_check::DEFAULT_INTERVAL_MINUTES));
+        for (asked,stored) in [(0,0),(1,5),(30,30),(100_000,1440)] {
+            let answer=dispatch(&engine,&request("account.setMailCheckInterval",json!({"account":account,"minutes":asked})),&writer).await.unwrap();
+            assert_eq!(answer["minutes"],stored);
+            assert_eq!(listed(&engine),json!(stored));
+            assert_eq!(store::mail_check_interval(&engine.db.lock().unwrap(),account).unwrap(),stored);
+        }
+        assert!(dispatch(&engine,&request("account.setMailCheckInterval",json!({"account":account})),&writer).await.is_err());
+        assert!(dispatch(&engine,&request("account.setMailCheckInterval",json!({"account":"nobody@example.test","minutes":15})),&writer).await.is_err());
+    }
     /// ADR-0050: `folders.move` end to end on the local archive, which is its
     /// own server, and refused on Exchange, which does not manage folders here.
     #[tokio::test]
@@ -1509,14 +1534,26 @@ fn spawn_message_sync(
     folder: String,
     limit: u32,
 ) {
-    if engine.is_paused(&account) {
-        return;
+    if let Some(key) = claim_message_sync(&engine, &account, &folder) {
+        tokio::spawn(run_message_sync(engine, out, account, folder, limit, key));
+    }
+}
+
+/// Claims a folder's sync: `None` when the account is paused or the folder is
+/// already being synced, which is then left to that sync.
+fn claim_message_sync(engine: &Arc<Engine>, account: &str, folder: &str) -> Option<String> {
+    if engine.is_paused(account) {
+        return None;
     }
     let key = format!("msg:{account}/{folder}");
-    if !engine.syncing.lock().unwrap().insert(key.clone()) {
-        return;
-    }
-    tokio::spawn(async move {
+    engine.syncing.lock().unwrap().insert(key.clone()).then_some(key)
+}
+
+/// The sync [`spawn_message_sync`] runs once `key` is claimed. The periodic
+/// check (#270) awaits it folder by folder, so one account's folders do not
+/// all open a connection at once.
+async fn run_message_sync(engine: Arc<Engine>, out: Writer, account: String, folder: String, limit: u32, key: String) {
+    {
         let uid_next_before = if folder.eq_ignore_ascii_case("INBOX") {
             inbox_uid_next(&engine, &account)
         } else {
@@ -1578,7 +1615,7 @@ fn spawn_message_sync(
                 .await
             }
         }
-    });
+    }
 }
 
 /// Re-fetch an RSS account's feeds in the background (deduped, blocking pool),
@@ -2699,6 +2736,7 @@ async fn main() {
     spawn_deferred_watch(engine.clone(), out.clone());
     spawn_backup_schedule(engine.clone(), out.clone());
     spawn_auto_archive(engine.clone(), out.clone());
+    spawn_mail_check(engine.clone(), out.clone());
 
     emit(&out, "ready", ready_event()).await;
 
@@ -8928,6 +8966,21 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({ "ok": true, "minutes": minutes }))
         }
 
+        // How often a mail account is checked for what push does not cover
+        // (#270): 0 is "manual only", anything else is kept within 5..1440
+        // minutes. The scheduler reads it on its next tick; push is untouched.
+        "account.setMailCheckInterval" => {
+            let id = req_str(p, "account").or_else(|_| req_str(p, "id"))?;
+            let minutes = meron_core::mail_check::normalize(u64::from(req_u32(p, "minutes")?));
+            let db = engine.db.lock().unwrap();
+            anyhow::ensure!(
+                store::account_engine(&db, &id)?.as_deref() == Some("mail"),
+                "unknown mail account: {id}"
+            );
+            store::set_account_pref_u64(&db, &id, "mail_check_interval_minutes", minutes)?;
+            Ok(json!({ "ok": true, "minutes": minutes }))
+        }
+
         // Reorder accounts in the database.
         "account.reorder" => {
             let ids = req_str_array(p, "accounts")?;
@@ -9591,6 +9644,107 @@ async fn run_auto_archive(
         }
     }
     Ok((log, created))
+}
+
+/// The periodic mail check (#270). Every minute, each mail account whose
+/// interval has passed gets the folders push does not cover refreshed, one
+/// folder after another. "Manual only" accounts, paused accounts and the local
+/// archive are never checked, and the IDLE watchers are left alone: push keeps
+/// working whatever the interval says.
+fn spawn_mail_check(engine: Arc<Engine>, out: Writer) {
+    use meron_core::mail_check::{Delivery, Schedule, TICK_SECONDS};
+    tokio::spawn(async move {
+        let started = now_seconds();
+        let schedule = Arc::new(std::sync::Mutex::new(Schedule::default()));
+        let mut ticker = tokio::time::interval(Duration::from_secs(TICK_SECONDS));
+        loop {
+            ticker.tick().await;
+            let accounts: Vec<(String, Delivery)> = engine
+                .accounts
+                .lock()
+                .await
+                .iter()
+                .map(|(id, creds)| (id.clone(), delivery_of(creds)))
+                .collect();
+            let present: std::collections::HashSet<String> = accounts.iter().map(|(id, _)| id.clone()).collect();
+            schedule.lock().unwrap().retain(&present);
+            let now = now_seconds();
+            for (account, delivery) in accounts {
+                if delivery == Delivery::Local || engine.is_paused(&account) {
+                    continue;
+                }
+                let stored = store::mail_check_interval(&engine.db.lock().unwrap(), &account);
+                let interval = match stored {
+                    Ok(interval) => interval,
+                    Err(err) => {
+                        eprintln!("meron-core: mail check interval of {account} unreadable, not checking: {err:#}");
+                        continue;
+                    }
+                };
+                {
+                    let mut schedule = schedule.lock().unwrap();
+                    if !schedule.due(&account, interval, started, now) {
+                        continue;
+                    }
+                    schedule.start(&account, now);
+                }
+                let (engine, out, schedule) = (engine.clone(), out.clone(), schedule.clone());
+                tokio::spawn(async move {
+                    check_account_mail(&engine, &out, &account, delivery).await;
+                    schedule.lock().unwrap().finish(&account);
+                });
+            }
+        }
+    });
+}
+
+/// How an account receives mail, for what its periodic check covers.
+fn delivery_of(creds: &imap::Creds) -> meron_core::mail_check::Delivery {
+    use meron_core::mail_check::Delivery;
+    if creds.is_local() {
+        Delivery::Local
+    } else if creds.is_pop3() {
+        Delivery::Pop3
+    } else if creds.is_ews() || creds.is_graph() {
+        Delivery::Unpushed
+    } else {
+        Delivery::Imap
+    }
+}
+
+/// One periodic check of one account: the folders push does not cover, each
+/// synced (and announced) as opening it would, in turn.
+async fn check_account_mail(engine: &Arc<Engine>, out: &Writer, account: &str, delivery: meron_core::mail_check::Delivery) {
+    let listed = store::get_folders(&engine.db.lock().unwrap(), account);
+    let folders: Vec<String> = match listed {
+        Ok(folders) => folders.into_iter().map(|folder| folder.name).collect(),
+        Err(err) => {
+            eprintln!("meron-core: mail check of {account}: folders unreadable: {err:#}");
+            return;
+        }
+    };
+    let to_check = {
+        let watched = engine.watched.lock().unwrap();
+        meron_core::mail_check::folders_to_check(delivery, &folders, |folder| {
+            watched.contains(&watch_key(account, folder))
+        })
+    };
+    for folder in to_check {
+        if engine.is_paused(account) {
+            break;
+        }
+        if let Some(key) = claim_message_sync(engine, account, &folder) {
+            run_message_sync(
+                engine.clone(),
+                out.clone(),
+                account.to_string(),
+                folder,
+                meron_core::mail_check::SYNC_LIMIT,
+                key,
+            )
+            .await;
+        }
+    }
 }
 
 /// Checks every few minutes whether an account's archiving is due (#112),
