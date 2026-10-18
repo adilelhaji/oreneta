@@ -99,6 +99,12 @@ la configuració manual de comptes (S15-01, de POP3, tracta la baixada del corre
 manté `implemented-unverified`), i l'evidència nativa de Windows (N4) i amb proveïdors
 reals (N5) continua pendent; les proves amb servidors falsos i amb maddy (MAIL-17 del
 paquet d'acceptació de proveïdors) són sintètiques.
+El 2026-10-17 (#274, ADR-0067) el redactor va incorporar el tipus de lletra, la mida, el
+color del text i el de ressaltat, l'alineació, el sagnat i les taules (inserir i suprimir
+taules, i inserir i suprimir files i columnes), amb barra d'eines i dreceres. Els estils que
+arriben enganxats o citats es validen abans d'entrar a l'HTML enviat, i l'alternativa de text pla escriu
+cada fila d'una taula de dades en una línia. SET-10 es manté `implemented-unverified`: falten
+l'evidència nativa de Windows i la comprovació en clients de correu reals.
 El 2026-10-18 (#306, pas 1 d'ADR-0068, `docs/design/app-regions.md`) la finestra va
 incorporar regions amb nom i F6 / Maj+F6 per passar d'una a l'altra, sense cap canvi visual:
 un sol estat de mòdul, els diàlegs i els avisos fora de `<main>`, `<main>` amb el nom del
