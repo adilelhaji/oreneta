@@ -2856,5 +2856,19 @@
   "people.deleteGroupText": "Il gruppo {name} verrà eliminato. Le persone al suo interno restano.",
   "people.deleteGroupTextServer": "Il gruppo {name} verrà eliminato dalla rubrica sul suo server. Le persone al suo interno restano.",
   "people.deleteText": "{name} verrà eliminato dalla rubrica su questo computer.",
-  "people.deleteTextServer": "{name} verrà eliminato dalla rubrica sul suo server, per tutte le app che la leggono."
+  "people.deleteTextServer": "{name} verrà eliminato dalla rubrica sul suo server, per tutte le app che la leggono.",
+  "folders.hide.action": "Nascondi cartella",
+  "folders.hide.show": "Mostra di nuovo la cartella",
+  "folders.hide.mark": "Nascosta",
+  "folders.hide.toggle": "Mostra cartelle nascoste ({count})",
+  "folders.hide.hidden": "{folder} nascosta",
+  "folders.hide.shown": "{folder} di nuovo visibile",
+  "folders.hide.blocked.inbox": "La posta in arrivo non può essere nascosta",
+  "folders.hide.blocked.containsInbox": "Questa cartella contiene la posta in arrivo e non può essere nascosta",
+  "folders.hide.blocked.parentHidden": "Nascosta perché è nascosta la cartella che la contiene",
+  "search.scope.starred": "Cerca tra i messaggi speciali di tutte le cartelle di tutti gli account, comprese quelle nascoste.",
+  "search.scope.unified": "Cerca in «{folder}»: quella cartella in ogni account incluso nelle cartelle unificate, anche se è nascosta.",
+  "search.scope.folder": "Cerca solo in «{folder}». Le cartelle nascoste non sono incluse.",
+  "search.scope.hiddenFolder": "Cerca solo in «{folder}», una cartella nascosta.",
+  "search.scope.unifiedInbox": "Cerca in «{folder}»: la posta in arrivo di ogni account incluso nelle cartelle unificate."
 }

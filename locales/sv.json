@@ -2856,5 +2856,19 @@
   "people.deleteGroupText": "Gruppen {name} raderas. Personerna i den finns kvar.",
   "people.deleteGroupTextServer": "Gruppen {name} raderas från adressboken på dess server. Personerna i den finns kvar.",
   "people.deleteText": "{name} raderas från adressboken på den här datorn.",
-  "people.deleteTextServer": "{name} raderas från adressboken på dess server, för alla appar som läser den."
+  "people.deleteTextServer": "{name} raderas från adressboken på dess server, för alla appar som läser den.",
+  "folders.hide.action": "Dölj mapp",
+  "folders.hide.show": "Visa mappen igen",
+  "folders.hide.mark": "Dold",
+  "folders.hide.toggle": "Visa dolda mappar ({count})",
+  "folders.hide.hidden": "{folder} är dold",
+  "folders.hide.shown": "{folder} visas igen",
+  "folders.hide.blocked.inbox": "Inkorgen kan inte döljas",
+  "folders.hide.blocked.containsInbox": "Den här mappen innehåller inkorgen och kan inte döljas",
+  "folders.hide.blocked.parentHidden": "Dold eftersom mappen den ligger i är dold",
+  "search.scope.starred": "Söker bland stjärnmärkta meddelanden i alla mappar för alla konton, även dolda mappar.",
+  "search.scope.unified": "Söker i ”{folder}”: den mappen i varje konto som ingår i de samlade mapparna, även där den är dold.",
+  "search.scope.folder": "Söker bara i ”{folder}”. Dolda mappar ingår inte.",
+  "search.scope.hiddenFolder": "Söker bara i ”{folder}”, en dold mapp.",
+  "search.scope.unifiedInbox": "Söker i ”{folder}”: inkorgen i varje konto som ingår i de samlade mapparna."
 }

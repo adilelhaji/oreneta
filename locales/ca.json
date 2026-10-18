@@ -2856,5 +2856,19 @@
   "people.deleteGroupText": "Se suprimirà el grup {name}. Les persones del grup es conserven.",
   "people.deleteGroupTextServer": "Se suprimirà el grup {name} de la llibreta d'adreces del seu servidor. Les persones del grup es conserven.",
   "people.deleteText": "{name} se suprimirà de la llibreta d'adreces d'aquest ordinador.",
-  "people.deleteTextServer": "{name} se suprimirà de la llibreta d'adreces del seu servidor, per a totes les aplicacions que la llegeixen."
+  "people.deleteTextServer": "{name} se suprimirà de la llibreta d'adreces del seu servidor, per a totes les aplicacions que la llegeixen.",
+  "folders.hide.action": "Amaga la carpeta",
+  "folders.hide.show": "Torna a mostrar la carpeta",
+  "folders.hide.mark": "Amagada",
+  "folders.hide.toggle": "Mostra les carpetes amagades ({count})",
+  "folders.hide.hidden": "S'ha amagat {folder}",
+  "folders.hide.shown": "{folder} es torna a mostrar",
+  "folders.hide.blocked.inbox": "La safata d'entrada no es pot amagar",
+  "folders.hide.blocked.containsInbox": "Aquesta carpeta conté la safata d'entrada i no es pot amagar",
+  "folders.hide.blocked.parentHidden": "És amagada perquè ho és la carpeta que la conté",
+  "search.scope.starred": "Cerca als missatges destacats de totes les carpetes de tots els comptes, incloses les amagades.",
+  "search.scope.unified": "Cerca a «{folder}»: aquesta carpeta de cada compte inclòs a les carpetes unificades, encara que sigui amagada.",
+  "search.scope.folder": "Cerca només a «{folder}». Les carpetes amagades no s'hi inclouen.",
+  "search.scope.hiddenFolder": "Cerca només a «{folder}», que és una carpeta amagada.",
+  "search.scope.unifiedInbox": "Cerca a «{folder}»: la safata d'entrada de cada compte inclòs a les carpetes unificades."
 }

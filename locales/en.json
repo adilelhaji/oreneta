@@ -2856,5 +2856,19 @@
   "people.deleteGroupText": "The group {name} will be deleted. The people in it stay.",
   "people.deleteGroupTextServer": "The group {name} will be deleted from the address book on its server. The people in it stay.",
   "people.deleteText": "{name} will be deleted from the address book on this computer.",
-  "people.deleteTextServer": "{name} will be deleted from the address book on its server, for every app that reads it."
+  "people.deleteTextServer": "{name} will be deleted from the address book on its server, for every app that reads it.",
+  "folders.hide.action": "Hide folder",
+  "folders.hide.show": "Show folder again",
+  "folders.hide.mark": "Hidden",
+  "folders.hide.toggle": "Show hidden folders ({count})",
+  "folders.hide.hidden": "{folder} hidden",
+  "folders.hide.shown": "{folder} shown again",
+  "folders.hide.blocked.inbox": "The inbox cannot be hidden",
+  "folders.hide.blocked.containsInbox": "This folder holds the inbox and cannot be hidden",
+  "folders.hide.blocked.parentHidden": "Hidden because the folder that holds it is hidden",
+  "search.scope.starred": "Searches starred messages in every folder of every account, hidden folders included.",
+  "search.scope.unified": "Searches “{folder}”: that folder in each account included in the unified folders, even where it is hidden.",
+  "search.scope.folder": "Searches only “{folder}”. Hidden folders are not included.",
+  "search.scope.hiddenFolder": "Searches only “{folder}”, a hidden folder.",
+  "search.scope.unifiedInbox": "Searches “{folder}”: the inbox of each account included in the unified folders."
 }

@@ -2856,5 +2856,19 @@
   "people.deleteGroupText": "グループ {name} が削除されます。グループ内の人はそのまま残ります。",
   "people.deleteGroupTextServer": "グループ {name} がサーバー上のアドレス帳から削除されます。グループ内の人はそのまま残ります。",
   "people.deleteText": "{name} がこのコンピューター上のアドレス帳から削除されます。",
-  "people.deleteTextServer": "{name} がサーバー上のアドレス帳から削除されます。そのアドレス帳を読むすべてのアプリに反映されます。"
+  "people.deleteTextServer": "{name} がサーバー上のアドレス帳から削除されます。そのアドレス帳を読むすべてのアプリに反映されます。",
+  "folders.hide.action": "フォルダーを非表示",
+  "folders.hide.show": "フォルダーを再表示",
+  "folders.hide.mark": "非表示",
+  "folders.hide.toggle": "非表示のフォルダーを表示 ({count})",
+  "folders.hide.hidden": "{folder} を非表示にしました",
+  "folders.hide.shown": "{folder} を再表示しました",
+  "folders.hide.blocked.inbox": "受信トレイは非表示にできません",
+  "folders.hide.blocked.containsInbox": "このフォルダーには受信トレイが含まれているため、非表示にできません",
+  "folders.hide.blocked.parentHidden": "親フォルダーが非表示のため非表示です",
+  "search.scope.starred": "すべてのアカウントのすべてのフォルダーにあるスター付きメールを検索します (非表示のフォルダーを含む)。",
+  "search.scope.unified": "「{folder}」を検索します: 統合フォルダーに含まれる各アカウントのそのフォルダー (非表示でも含む)。",
+  "search.scope.folder": "「{folder}」のみを検索します。非表示のフォルダーは含まれません。",
+  "search.scope.hiddenFolder": "非表示のフォルダー「{folder}」のみを検索します。",
+  "search.scope.unifiedInbox": "「{folder}」を検索します: 統合フォルダーに含まれる各アカウントの受信トレイ。"
 }
