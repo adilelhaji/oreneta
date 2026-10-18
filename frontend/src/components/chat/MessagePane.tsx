@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { t as translate, useTranslation } from '../../lib/i18n'
 import { compose$, openComposeTab, withoutHydratedQuickReplyDraft } from '../../states/compose'
 import { ui$ } from '../../states/ui'
 import { mail$, getActiveThread, loadThread } from '../../states/mail'
@@ -37,7 +37,7 @@ function threadFromTab(tab: MessageTab, fallback: Message | null): Message {
     from_name: '',
     from_addr: tab.from,
     to: '',
-    subject: tab.subject || '(no subject)',
+    subject: tab.subject || translate('threads.noSubject'),
     preview: '',
     body: '',
     date: tab.date ?? 0,
@@ -308,6 +308,7 @@ export function MessagePane() {
   return (
     <div
       data-message-pane
+      data-region="reader"
       className={`relative flex min-w-0 flex-1 flex-col overflow-hidden min-[769px]:min-w-[360px] ${
         mobilePane === 'conversation' ? 'max-[769px]:flex' : 'max-[769px]:hidden'
       }`}
@@ -315,8 +316,14 @@ export function MessagePane() {
       <ConversationTabs />
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <section className="relative flex flex-1 flex-col overflow-hidden bg-chat">
+          {/* Under an open reader or compose tab the conversation stays mounted,
+              hidden, so it is made inert as well as invisible: `visibility`
+              alone lets a child with `transition-all` stay visible, and
+              focusable, while the transition runs, and Tab could land inside
+              an aria-hidden region (#243). */}
           <div
             aria-hidden={!!activeDocumentTab}
+            inert={!!activeDocumentTab}
             className={`relative flex min-h-0 flex-1 flex-col ${
               activeDocumentTab ? 'pointer-events-none invisible' : ''
             }`}
@@ -335,7 +342,7 @@ export function MessagePane() {
             media={mediaItems}
             files={fileItems}
             participants={participants}
-            scopeTitle={activeThread.subject || '(no subject)'}
+            scopeTitle={activeThread.subject || t('threads.noSubject')}
             // For RSS, from_name duplicates the subject (both the feed title), so
             // show the feed host instead; otherwise show the sender name.
             scopeSubtitle={isRSS ? activeThread.from_addr : activeThread.from_name || activeThread.from_addr}
@@ -360,7 +367,7 @@ export function MessagePane() {
             onOpenEvent={(start) => {
               calendar$.anchor.set(startOfDay(new Date(start * 1000)).getTime())
               calendar$.view.set('day')
-              ui$.calendarOpen.set(true)
+              ui$.module.set('calendar')
             }}
           />
         )}

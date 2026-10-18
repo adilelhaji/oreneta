@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Pin, Plus, Search, StickyNote, Trash2 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { loadNotes, noteTitle, notes$ } from '../../states/notes'
 import { Button } from '../button/Button'
 import { EmptyState } from '../empty-state/EmptyState'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
 import { NoteEditor } from './NoteEditor'
+import { backArrow } from '../../lib/direction'
 
 /**
  * Notes that belong to no account and no message (#104, ADR-0015): a list
@@ -41,7 +42,7 @@ export function NotesView() {
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
+    <div data-region="content" className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
       <header className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-header px-4 py-3">
         <CompactNavigation />
         <h1 className="flex items-center gap-2 text-heading-sm font-bold text-primary">
@@ -72,8 +73,9 @@ export function NotesView() {
       <div className="flex min-h-0 flex-1">
         <section
           aria-label={t('notes.listLabel', { defaultValue: 'Notes' })}
+          data-region="folders"
           className={clsx(
-            'flex min-h-0 w-full flex-col border-r border-border min-[900px]:w-80 min-[900px]:shrink-0',
+            'flex min-h-0 w-full flex-col border-e border-border min-[900px]:w-80 min-[900px]:shrink-0',
             opened && 'max-[899px]:hidden',
           )}
         >
@@ -134,7 +136,7 @@ export function NotesView() {
                       aria-current={selected === note.id ? 'true' : undefined}
                       onClick={() => open(note.id)}
                       className={clsx(
-                        'flex w-full flex-col gap-0.5 rounded-control px-3 py-2 text-left transition-colors cursor-pointer',
+                        'flex w-full flex-col gap-0.5 rounded-control px-3 py-2 text-start transition-colors cursor-pointer',
                         selected === note.id ? 'bg-accent/10 dark:bg-accent/15' : 'hover:bg-hover',
                       )}
                     >
@@ -147,14 +149,14 @@ export function NotesView() {
                             aria-label={t('notes.pinned', { defaultValue: 'Pinned' })}
                           />
                         )}
-                        <span className="truncate">{noteTitle(note)}</span>
+                        <span dir="auto" className="truncate">{noteTitle(note)}</span>
                       </span>
                       {note.title && note.preview && (
                         <span className="line-clamp-2 text-caption text-secondary">{note.preview}</span>
                       )}
                       <span className="flex flex-wrap gap-x-2 text-2xs text-secondary">
                         <span>
-                          {new Date(note.updated_at * 1000).toLocaleString(undefined, {
+                          {new Date(note.updated_at * 1000).toLocaleString(intlLocale(), {
                             dateStyle: 'medium',
                             timeStyle: 'short',
                           })}
@@ -179,9 +181,9 @@ export function NotesView() {
               <button
                 type="button"
                 onClick={() => notes$.selected.set(null)}
-                className="border-b border-border px-4 py-2 text-left text-caption text-secondary hover:bg-hover min-[900px]:hidden cursor-pointer"
+                className="border-b border-border px-4 py-2 text-start text-caption text-secondary hover:bg-hover min-[900px]:hidden cursor-pointer"
               >
-                ← {t('notes.backToList', { defaultValue: 'All notes' })}
+                {backArrow()} {t('notes.backToList', { defaultValue: 'All notes' })}
               </button>
               <NoteEditor key={opened.key} initialId={opened.id} />
             </>

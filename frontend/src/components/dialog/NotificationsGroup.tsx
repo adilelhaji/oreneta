@@ -1,6 +1,6 @@
 import { AlarmClock, BellOff, CalendarClock, Mail, Moon, Play, Volume2 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import type { t as translate } from '../../lib/i18n'
 import { NOTIFICATION_SOUNDS, parseHm, type NotificationPrefs, type NotificationSoundId } from '../../lib/quietHours'
 import { settings$ } from '../../states/settings'
@@ -51,7 +51,7 @@ function SoundChoiceRow({
             aria-label={title}
             value={value}
             onChange={(event) => onChange(event.target.value as NotificationSoundId)}
-            className="w-32 rounded-control py-1.5 pl-3 font-semibold"
+            className="w-32 rounded-control py-1.5 ps-3 font-semibold"
           >
             {NOTIFICATION_SOUNDS.map((id) => (
               <option key={id} value={id} className="bg-chats text-primary">
@@ -78,7 +78,7 @@ const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]
 
 function dayLabel(day: number): string {
   // 2024-01-07 was a Sunday; the locale names the day.
-  return new Date(2024, 0, 7 + day).toLocaleDateString(undefined, { weekday: 'short' })
+  return new Date(2024, 0, 7 + day).toLocaleDateString(intlLocale(), { weekday: 'short' })
 }
 
 /**
@@ -143,7 +143,7 @@ export function NotificationsGroup() {
                 onChange={(event) => set({ volume: Number(event.target.value) })}
                 className="w-32 accent-[var(--color-accent)] cursor-pointer"
               />
-              <span className="w-9 text-right text-caption font-bold text-secondary">{prefs.volume}%</span>
+              <span className="w-9 text-end text-caption font-bold text-secondary">{prefs.volume}%</span>
             </label>
           }
         />

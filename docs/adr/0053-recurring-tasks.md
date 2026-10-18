@@ -1,130 +1,145 @@
-# ADR-0053: Tareas que se repiten
+# ADR-0053: Tasques que es repeteixen
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan.
-- Fecha: 2026-10-13.
-- Alcance: lo que ADR-0013 y ADR-0039 dejaron fuera de #103 (fila SET-20
-  del registro de paridad con eM Client 10.4, «Tasks»): crear y editar la
-  repetición de una tarea, y completar una ocurrencia sin perder la serie,
-  en listas locales y en listas CalDAV.
+- Estat: acceptada per delegació («Tomo yo la recomendada»); pendent de
+  revisió del propietari al final del pla.
+- Data: 2026-10-13.
+- Abast: el que ADR-0013 i ADR-0039 van deixar fora de #103 (fila SET-20
+  del registre d'acceptació amb eM Client 10.4, «Tasks»): crear i editar la
+  repetició d'una tasca, i completar una ocurrència sense perdre la sèrie,
+  en llistes locals i en llistes CalDAV.
 
-## Decisión
+## Decisió
 
-- **Un solo modelo de repetición para eventos y tareas:**
-  - la regla es `calendar::Recurrence` (la del editor de eventos), con dos
-    campos nuevos: `month_week` (el enésimo día de la semana del mes, 1–4 o
-    -1 para «el último») y `month_day` (el día del mes cuando no es el de la
-    fecha de vencimiento);
-  - el editor de la repetición es uno (`RepeatFields`), compartido por el
-    editor de eventos y el de tareas. El de tareas ofrece además «el
-    segundo martes» / «el último viernes» junto a «el día 13»; el de
-    eventos todavía no, porque Exchange y Google no lo escriben aún desde
-    aquí;
-  - el texto de la regla es un valor `RRULE` (RFC 5545), igual en local y
-    en CalDAV: `calendar::recurrence` lo lee, lo escribe y calcula la
-    siguiente fecha.
-- **Qué reglas se escriben:** diaria, semanal (en uno o varios días),
-  mensual (un día del mes o el enésimo día de la semana), anual; cada N; sin
-  fin, N veces (`COUNT`) o hasta una fecha (`UNTIL`, inclusiva).
-  - Al escribirla se explicita todo lo que dependería del inicio:
-    `BYDAY` en la semanal, `BYMONTHDAY` o `BYDAY=2TU` en la mensual,
-    `BYMONTH` en la anual. Así, mover el inicio a la siguiente ocurrencia
-    nunca cambia los días en que cae.
-  - `UNTIL` va como fecha si la tarea vence en un día sin hora, y como el
-    final de ese día aquí, en UTC, si tiene hora (debe tener la forma del
-    inicio).
-  - «Diaria en lunes a viernes», como la escribe Thunderbird, se lee como
-    semanal en esos días.
-- **Fin de mes:** el 31 de un mes de 30 días es el 30, y el 29 de febrero
-  de un año no bisiesto, el 28; el mes siguiente vuelve al 31. Es lo que
-  hacen Outlook y eM Client. RFC 5545 omite esos meses; una tarea «el 31»
-  que se saltara medio año sería una tarea olvidada. Como la regla lleva
-  `BYMONTHDAY=31`, otro cliente que siga la RFC calcula otro día para ese
-  mes, pero el vencimiento escrito (`DUE`) es el que manda.
-- **Horas y cambio de horario:** la siguiente ocurrencia conserva la hora
-  de reloj (una tarea a las 09:00 sigue a las 09:00 tras el cambio). Una
-  hora que el cambio se salta (02:30 la noche en que se adelanta) pasa a la
-  primera que existe. Se calcula con la zona de este ordenador.
-- **Una tarea que se repite necesita fecha de vencimiento** (la regla
-  cuenta desde ella); elegir una repetición sin fecha pone hoy. Una tarea
-  ligada a una conversación no se repite.
-- **Completar una ocurrencia** (lo que hace la casilla, tras preguntar):
-  - se guarda una copia completada de la tarea, sin regla, con el
-    vencimiento de esa ocurrencia: el registro de lo hecho;
-  - la tarea pasa a la siguiente ocurrencia: vencimiento nuevo, el
-    recordatorio a la misma distancia (y vuelve a sonar), y la regla con lo
-    que queda (`COUNT` baja en uno);
-  - la siguiente ocurrencia es la de después del vencimiento, aunque ya
-    haya pasado; no se saltan ocurrencias atrasadas;
-  - si era la última (fin por fecha o por número), la tarea se completa sin
-    más y no se hace copia.
-- **«Dejar de repetir»:** quita la regla y completa la tarea. Reabierta, ya
-  no se repite. Las copias de ocurrencias anteriores se quedan.
-- **En una lista CalDAV (ADR-0039):**
-  - se elige mover la tarea maestra y guardar la ocurrencia hecha como
-    tarea aparte, como Apple Reminders; tasks.org (DAVx⁵) mueve la tarea
-    igual, sin copia. Se escriben `DUE` y `DTSTART` (movido los mismos días,
-    en su forma: fecha, hora con `TZID` o UTC; se añade si falta, porque la
-    regla cuenta desde él) y `RRULE`; `STATUS` sigue `NEEDS-ACTION`. La
-    copia es un objeto nuevo con `STATUS:COMPLETED`. Ambos van con la
-    sincronización normal, la copia con `If-None-Match: *` y la maestra con
-    `If-Match`;
-  - se descarta la otra práctica, la de Thunderbird: una excepción
-    `RECURRENCE-ID` completada por ocurrencia. Muchos clientes (tasks.org,
-    Apple Reminders, la app Tasks de Nextcloud) no la interpretan: verían
-    la serie atrasada para siempre, y el objeto crece sin límite. Radicale
-    y Nextcloud solo guardan el objeto; con la maestra movida y la regla
-    intacta, cualquier cliente que siga la RFC ve la serie bien;
-  - la serie nunca se pierde: la regla y el `UID` siguen en el mismo
-    objeto, y lo demás que tenga (propiedades X-, categorías, relaciones,
-    alarmas) se conserva línea a línea, como en ADR-0039;
-  - un recordatorio de una tarea que se repite se escribe relativo al
-    vencimiento (`TRIGGER;RELATED=END:-PT1H`), que en una serie suena en
-    cada ocurrencia. Si la alarma ya era relativa y la distancia no cambia,
-    no se toca;
-  - una tarea que se repite de una forma que aquí no se escribe sigue
-    siendo de solo lectura, con el aviso de siempre: `RDATE`, `EXDATE`,
-    ocurrencias cambiadas (`RECURRENCE-ID`), varias `RRULE`, partes como
-    `BYSETPOS` o `BYHOUR`, una anual en otro mes que el del vencimiento, o
-    una regla sin `DUE`. Se ve y se borra, pero no se cambia: cambiarla
-    mal sería peor.
-- **Avisos:** la lista muestra un icono de repetición y la regla en breve
-  («Cada semana», «Cada 3 días»). Al completar una ocurrencia se dice cuándo
-  vence la siguiente.
-- **Esquema 61:** columna `tasks.rrule` (valor `RRULE`, vacío si no se
-  repite). La migración vuelve a leer las tareas CalDAV marcadas como de
-  solo lectura desde la copia guardada, para que las que ahora se pueden
-  editar lo sean sin esperar un cambio en el servidor.
+- **Un sol model de repetició per a esdeveniments i tasques:**
+  - la regla és `calendar::Recurrence` (la de l'editor d'esdeveniments), amb dos
+    camps nous: `month_week` (l'enèsim dia de la setmana del mes, 1–4 o
+    -1 per a «l'últim») i `month_day` (el dia del mes quan no és el de la
+    data de venciment);
+  - l'editor de la repetició és un de sol (`RepeatFields`), compartit per
+    l'editor d'esdeveniments i el de tasques. El de tasques ofereix a més «el
+    segon dimarts» / «l'últim divendres» al costat de «el dia 13»; el
+    d'esdeveniments encara no, perquè Exchange i Google encara no l'escriuen
+    des d'aquí;
+  - el text de la regla és un valor `RRULE` (RFC 5545), igual en local i
+    a CalDAV: `calendar::recurrence` el llegeix, l'escriu i calcula la
+    data següent.
+- **Quines regles s'escriuen:** diària, setmanal (en un o diversos dies),
+  mensual (un dia del mes o l'enèsim dia de la setmana), anual; cada N; sense
+  fi, N vegades (`COUNT`) o fins a una data (`UNTIL`, inclusiva).
+  - En escriure-la s'explicita tot el que dependria de l'inici:
+    `BYDAY` a la setmanal, `BYMONTHDAY` o `BYDAY=2TU` a la mensual,
+    `BYMONTH` a l'anual. Així, moure l'inici a l'ocurrència següent
+    mai no canvia els dies en què cau.
+  - `UNTIL` va com a data si la tasca venç en un dia sense hora, i com el
+    final d'aquell dia aquí, en UTC, si té hora (ha de tenir la forma de
+    l'inici).
+  - En llegir-lo (aclarit el 2026-10-16, #221), un `UNTIL` en UTC és la
+    data en què cau aquell instant a la zona d'aquest ordinador, no en UTC:
+    RFC 5545 talla la sèrie en aquell instant, i una ocurrència d'aquella data
+    a una hora anterior és de la sèrie. En UTC+12 o més, el migdia UTC
+    del 31 de desembre ja és l'1 de gener; CI passa les proves del
+    calendari també amb `TZ=Pacific/Auckland`.
+  - Límit conegut: la regla desa una data i no un instant. És exacte
+    quan `UNTIL` és l'última ocurrència o el final del seu dia a la zona
+    del lector, que és el que escriu Oreneta. Amb un altre `UNTIL`, una
+    tasca amb hora posterior a la d'`UNTIL` aquell dia té una ocurrència
+    més que a la RFC: per exemple amb el migdia UTC, o amb el final del
+    dia en UTC (`…T235959Z`, com escriuen altres clients) llegit en
+    qualsevol zona que no sigui UTC. A més, en tornar a escriure la regla,
+    `UNTIL` passa al final d'aquell dia aquí: un `UNTIL` aliè surt fins a gairebé
+    un dia més tard i altres clients veuen la sèrie una mica més llarga.
+  - «Diària de dilluns a divendres», com l'escriu Thunderbird, es llegeix com a
+    setmanal en aquests dies.
+- **Fi de mes:** el 31 d'un mes de 30 dies és el 30, i el 29 de febrer
+  d'un any no de traspàs, el 28; el mes següent torna al 31. És el que
+  fan Outlook i eM Client. RFC 5545 omet aquests mesos; una tasca «el 31»
+  que se saltés mig any seria una tasca oblidada. Com que la regla porta
+  `BYMONTHDAY=31`, un altre client que segueixi la RFC calcula un altre dia per
+  a aquell mes, però el venciment escrit (`DUE`) és el que mana.
+- **Hores i canvi d'horari:** l'ocurrència següent conserva l'hora
+  de rellotge (una tasca a les 09:00 continua a les 09:00 després del canvi).
+  Una hora que el canvi se salta (02:30 la nit en què s'avança) passa a la
+  primera que existeix. Es calcula amb la zona d'aquest ordinador.
+- **Una tasca que es repeteix necessita data de venciment** (la regla
+  compta des d'aquesta); triar una repetició sense data posa avui. Una tasca
+  lligada a una conversa no es repeteix.
+- **Completar una ocurrència** (el que fa la casella, després de preguntar):
+  - es desa una còpia completada de la tasca, sense regla, amb el
+    venciment d'aquella ocurrència: el registre del que s'ha fet;
+  - la tasca passa a l'ocurrència següent: venciment nou, el
+    recordatori a la mateixa distància (i torna a sonar), i la regla amb el
+    que queda (`COUNT` baixa en u);
+  - l'ocurrència següent és la de després del venciment, encara que ja
+    hagi passat; no se salten ocurrències endarrerides;
+  - si era l'última (fi per data o per nombre), la tasca es completa sense
+    més i no es fa còpia.
+- **«Deixar de repetir»:** treu la regla i completa la tasca. Reoberta, ja
+  no es repeteix. Les còpies d'ocurrències anteriors es queden.
+- **En una llista CalDAV (ADR-0039):**
+  - es tria moure la tasca mestra i desar l'ocurrència feta com a
+    tasca a part, com Apple Reminders; tasks.org (DAVx⁵) mou la tasca
+    igualment, sense còpia. S'escriuen `DUE` i `DTSTART` (mogut els mateixos
+    dies, en la seva forma: data, hora amb `TZID` o UTC; s'afegeix si falta,
+    perquè la regla compta des d'aquest) i `RRULE`; `STATUS` continua
+    `NEEDS-ACTION`. La còpia és un objecte nou amb `STATUS:COMPLETED`. Tots
+    dos van amb la sincronització normal, la còpia amb `If-None-Match: *` i la
+    mestra amb `If-Match`;
+  - es descarta l'altra pràctica, la de Thunderbird: una excepció
+    `RECURRENCE-ID` completada per ocurrència. Molts clients (tasks.org,
+    Apple Reminders, l'aplicació Tasks de Nextcloud) no la interpreten: veurien
+    la sèrie endarrerida per sempre, i l'objecte creix sense límit. Radicale
+    i Nextcloud només desen l'objecte; amb la mestra moguda i la regla
+    intacta, qualsevol client que segueixi la RFC veu la sèrie bé;
+  - la sèrie mai no es perd: la regla i l'`UID` continuen al mateix
+    objecte, i la resta que tingui (propietats X-, categories, relacions,
+    alarmes) es conserva línia a línia, com a ADR-0039;
+  - un recordatori d'una tasca que es repeteix s'escriu relatiu al
+    venciment (`TRIGGER;RELATED=END:-PT1H`), que en una sèrie sona a
+    cada ocurrència. Si l'alarma ja era relativa i la distància no canvia,
+    no es toca;
+  - una tasca que es repeteix d'una manera que aquí no s'escriu continua
+    sent de només lectura, amb l'avís de sempre: `RDATE`, `EXDATE`,
+    ocurrències canviades (`RECURRENCE-ID`), diverses `RRULE`, parts com
+    `BYSETPOS` o `BYHOUR`, una anual en un mes diferent del del venciment, o
+    una regla sense `DUE`. Es veu i se suprimeix, però no es canvia: canviar-la
+    malament seria pitjor.
+- **Avisos:** la llista mostra una icona de repetició i la regla abreujada
+  («Cada setmana», «Cada 3 dies»). En completar una ocurrència es diu quan
+  venç la següent.
+- **Esquema 61:** columna `tasks.rrule` (valor `RRULE`, buit si no es
+  repeteix). La migració torna a llegir les tasques CalDAV marcades com de
+  només lectura des de la còpia desada, perquè les que ara es poden
+  editar ho siguin sense esperar un canvi al servidor.
 
-## Fuera de alcance
+## Fora d'abast
 
-- «Regenerar la tarea N días después de completarla» (Outlook): no hay
-  forma estándar de guardarlo en un VTODO; queda para otra entrega.
-- Tareas de Google Tasks, Microsoft To Do (Graph) y Exchange (EWS): siguen
-  sin proveedor; la fila SET-20 lo dice. Exchange ya lo tiene (ADR-0058).
-- «Saltar esta ocurrencia» sin completarla.
-- El enésimo día de la semana en eventos (falta escribirlo en Exchange y
+- «Regenerar la tasca N dies després de completar-la» (Outlook): no hi ha
+  manera estàndard de desar-ho en un VTODO; queda per a un altre lliurament.
+- Tasques de Google Tasks, Microsoft To Do (Graph) i Exchange (EWS): continuen
+  sense proveïdor; la fila SET-20 ho diu. Exchange ja el té (ADR-0058).
+- «Ometre aquesta ocurrència» sense completar-la.
+- L'enèsim dia de la setmana en esdeveniments (falta escriure'l a Exchange i
   Google).
 
-## Pruebas
+## Proves
 
-- `calendar/recurrence/tests.rs`: siguiente fecha diaria, semanal en
-  varios días y cada N, el 31 en meses cortos (30, 28, 29), el 29 de
-  febrero, el enésimo y el último día de la semana, fin por número y por
-  fecha, hora de reloj a través del cambio de horario (Madrid y Los
-  Ángeles, también una hora inexistente), lectura y escritura de `RRULE` y
-  reglas rechazadas.
-- `task_sync/vtodo/tests.rs`: una regla de otro cliente se lee explicitada;
-  editar otra cosa no la toca; pasar a la siguiente ocurrencia escribe
-  `DUE`, `DTSTART`, `RRULE` y conserva lo desconocido; las repeticiones que
-  no se escriben siguen bloqueadas.
-- `task_sync/tests.rs`: completar contra un servidor de prueba (maestra
-  movida, copia completada nueva, recordatorio movido, sin conflicto en la
-  siguiente lectura, fin por número), dejar de repetir, una tarea nueva
-  con regla y la migración.
-- `store/task_lists/tests.rs`: lo mismo en una lista local.
-- Integración con Radicale (`integration_caldav_tasks_test.go`): completar
-  una ocurrencia y leerla de vuelta del servidor real.
-- Frontend: `RecurringTasks.test.tsx` (editor, indicador y elección al
-  completar). Todo con `TZ=Asia/Tokyo` y `TZ=America/Los_Angeles` además de
-  la zona del equipo.
+- `calendar/recurrence/tests.rs`: data següent diària, setmanal en
+  diversos dies i cada N, el 31 en mesos curts (30, 28, 29), el 29 de
+  febrer, l'enèsim i l'últim dia de la setmana, fi per nombre i per
+  data, hora de rellotge a través del canvi d'horari (Madrid i Los
+  Angeles, també una hora inexistent), lectura i escriptura de `RRULE` i
+  regles rebutjades.
+- `task_sync/vtodo/tests.rs`: una regla d'un altre client es llegeix explicitada;
+  editar una altra cosa no la toca; passar a l'ocurrència següent escriu
+  `DUE`, `DTSTART`, `RRULE` i conserva el que és desconegut; les repeticions
+  que no s'escriuen continuen bloquejades.
+- `task_sync/tests.rs`: completar contra un servidor de prova (mestra
+  moguda, còpia completada nova, recordatori mogut, sense conflicte a la
+  lectura següent, fi per nombre), deixar de repetir, una tasca nova
+  amb regla i la migració.
+- `store/task_lists/tests.rs`: el mateix en una llista local.
+- Integració amb Radicale (`integration_caldav_tasks_test.go`): completar
+  una ocurrència i llegir-la de tornada del servidor real.
+- Frontend: `RecurringTasks.test.tsx` (editor, indicador i elecció en
+  completar). Tot amb `TZ=Asia/Tokyo` i `TZ=America/Los_Angeles` a més de
+  la zona de l'equip.

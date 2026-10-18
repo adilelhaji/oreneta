@@ -191,7 +191,7 @@ class AndroidMailPushService :
     }
 
     companion object {
-        private const val TAG = "MeronMailPush"
+        private const val TAG = "Oreneta.MailPush"
         private const val CHANNEL_ID = "meron_live_mail_status"
         private const val NOTIFICATION_ID = 2001
 

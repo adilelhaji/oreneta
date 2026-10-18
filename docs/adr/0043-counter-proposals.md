@@ -1,88 +1,89 @@
-# ADR-0043: Proponer otra hora y coincidencias con la agenda propia
+# ADR-0043: Proposar una altra hora i coincidències amb l'agenda pròpia
 
-- Estado: aceptada; tomada por delegación y revisada por el propietario
+- Estat: acceptada; presa per delegació i revisada pel propietari
   el 2026-10-12.
-- Fecha: 2026-10-12.
-- Alcance: lo que ADR-0019 dejó pendiente de #102 (contrapropuesta y
-  disponibilidad).
+- Data: 2026-10-12.
+- Abast: el que ADR-0019 va deixar pendent de #102 (contraproposta i
+  disponibilitat).
 
-## Decisión
+## Decisió
 
-- **Proponer otra hora (asistente):**
-  - en la tarjeta de una invitación por correo, «Proponer otra hora» abre un
-    formulario con inicio, fin y una nota opcional; nada sale hasta pulsar
-    «Enviar propuesta»;
-  - se envía un iTIP `COUNTER` (RFC 5546 §3.2.7) solo al organizador, por la
-    misma ruta que las respuestas (ADR-0019): un mensaje normal con adjunto
-    `text/calendar; method=COUNTER`, registrado como intento de envío;
-  - el objeto lleva el mismo UID y la misma SEQUENCE de la invitación (una
-    propuesta no crea versión), DTSTAMP, el ORGANIZER tal como llegó, solo
-    el ATTENDEE propio, el inicio y el fin propuestos (en UTC, o como
-    `VALUE=DATE` si la invitación es de día entero), el SUMMARY y el COMMENT
-    escapado;
-  - se rechaza, sin enviar nada, si la invitación es antigua (SEQUENCE menor
-    que la ya contestada), si la reunión está cancelada (CANCEL, STATUS o
-    cancelación aplicada), si el fin no es posterior al inicio, si la cuenta
-    es la organizadora o si es una serie entera sin RECURRENCE-ID;
-  - el calendario propio no cambia: decide el organizador.
-- **Recibir una propuesta (organizador):**
-  - la tarjeta dice quién propone qué hora y su nota;
-  - si la cuenta organiza un evento guardado aquí con ese UID (calendario
-    propio, no suscripción, con ORGANIZER igual a la cuenta), ofrece
-    «Abrir en el editor» y «Rechazar la propuesta»; si no, solo informa;
-  - una propuesta para una versión anterior aparece como antigua y sin
-    botones. La SEQUENCE actual se lee del servidor si el evento está en
-    CalDAV. En un calendario local no se guarda y no se puede comparar.
-- **Aceptar una propuesta:** «Abrir en el editor» abre el evento propio con
-  la hora propuesta. Guardar pasa por la actualización de siempre
-  (`calendar.update`) y no hay una ruta nueva de envío.
-  - En calendarios locales y CalDAV, guardar no avisa a los asistentes; la
-    tarjeta y el editor lo dicen.
-  - El editor ya no pregunta «¿Avisar a los asistentes?» en esos
-    calendarios: antes lo preguntaba y el núcleo no enviaba nada.
-- **Rechazar una propuesta:** iTIP `DECLINECOUNTER` (§3.2.8) solo al
-  asistente que propuso, con el mismo UID y SEQUENCE, el ORGANIZER, ese
-  ATTENDEE, DTSTAMP y la nota opcional. La reunión queda como estaba.
-- **Rechazo recibido (asistente):** la tarjeta dice «El organizador rechazó
-  la hora que propusiste», con su nota, y nada más.
-- **Coincidencias con la agenda propia:**
-  - el editor de eventos, la tarjeta de una invitación, el formulario de
-    propuesta y la tarjeta de una propuesta dicen qué eventos propios se
-    solapan con esa hora: «Coincide con: …», hasta tres asuntos y «y N
-    más»;
-  - es una consulta local a `calendar_events` de todas las cuentas, sin
-    red, y no cuenta lo cancelado, lo libre o transparente (`free_busy`
-    `free`), lo que la persona rechazó ni el propio evento;
-  - tampoco cuentan las suscripciones: son calendarios publicados por
-    otros, como los festivos;
-  - un evento de día entero cuenta solo si la hora propuesta toca su día
-    donde está la persona;
-  - un evento CalDAV o importado con `TRANSP:TRANSPARENT` se guarda ahora
-    como libre.
-- **Exchange y Google:** sus cuentas tratan las propuestas en su propio
-  calendario; la tarjeta lo indica, como con las invitaciones.
+- **Proposar una altra hora (assistent):**
+  - a la targeta d'una invitació per correu, «Proposar una altra hora» obre un
+    formulari amb inici, fi i una nota opcional; no surt res fins que es prem
+    «Enviar proposta»;
+  - s'envia un iTIP `COUNTER` (RFC 5546 §3.2.7) només a l'organitzador, per la
+    mateixa ruta que les respostes (ADR-0019): un missatge normal amb adjunt
+    `text/calendar; method=COUNTER`, registrat com a intent d'enviament;
+  - l'objecte porta el mateix UID i la mateixa SEQUENCE de la invitació (una
+    proposta no crea versió), DTSTAMP, l'ORGANIZER tal com va arribar, només
+    l'ATTENDEE propi, l'inici i la fi proposats (en UTC, o com a
+    `VALUE=DATE` si la invitació és de dia sencer), el SUMMARY i el COMMENT
+    escapat;
+  - es rebutja, sense enviar res, si la invitació és antiga (SEQUENCE menor
+    que la ja contestada), si la reunió està cancel·lada (CANCEL, STATUS o
+    cancel·lació aplicada), si la fi no és posterior a l'inici, si el compte
+    és l'organitzador o si és una sèrie sencera sense RECURRENCE-ID;
+  - el calendari propi no canvia: decideix l'organitzador.
+- **Rebre una proposta (organitzador):**
+  - la targeta diu qui proposa quina hora i la seva nota;
+  - si el compte organitza un esdeveniment desat aquí amb aquest UID (calendari
+    propi, no subscripció, amb ORGANIZER igual al compte), ofereix
+    «Obrir a l'editor» i «Rebutjar la proposta»; si no, només informa;
+  - una proposta per a una versió anterior apareix com a antiga i sense
+    botons. La SEQUENCE actual es llegeix del servidor si l'esdeveniment és a
+    CalDAV. En un calendari local no es desa i no es pot comparar.
+- **Acceptar una proposta:** «Obrir a l'editor» obre l'esdeveniment propi amb
+  l'hora proposada. Desar passa per l'actualització de sempre
+  (`calendar.update`) i no hi ha cap ruta nova d'enviament.
+  - En calendaris locals i CalDAV, desar no avisa els assistents; la
+    targeta i l'editor ho diuen.
+  - L'editor ja no pregunta «Avisar els assistents?» en aquests
+    calendaris: abans ho preguntava i el nucli no enviava res.
+- **Rebutjar una proposta:** iTIP `DECLINECOUNTER` (§3.2.8) només a
+  l'assistent que va proposar, amb el mateix UID i SEQUENCE, l'ORGANIZER, aquest
+  ATTENDEE, DTSTAMP i la nota opcional. La reunió queda com estava.
+- **Rebuig rebut (assistent):** la targeta diu «L'organitzador ha rebutjat
+  l'hora que vas proposar», amb la seva nota, i res més.
+- **Coincidències amb l'agenda pròpia:**
+  - l'editor d'esdeveniments, la targeta d'una invitació, el formulari de
+    proposta i la targeta d'una proposta diuen quins esdeveniments propis es
+    superposen amb aquesta hora: «Coincideix amb: …», fins a tres assumptes i
+    «i N més»;
+  - és una consulta local a `calendar_events` de tots els comptes, sense
+    xarxa, i no compta el que s'ha cancel·lat, el que és lliure o transparent
+    (`free_busy` `free`), el que la persona ha rebutjat ni el mateix
+    esdeveniment;
+  - tampoc no compten les subscripcions: són calendaris publicats per
+    altres, com els festius;
+  - un esdeveniment de dia sencer només compta si l'hora proposada toca el seu
+    dia allà on és la persona;
+  - un esdeveniment CalDAV o importat amb `TRANSP:TRANSPARENT` ara es desa
+    com a lliure.
+- **Exchange i Google:** els seus comptes tracten les propostes al seu propi
+  calendari; la targeta ho indica, com amb les invitacions.
 
-## Alternativas descartadas
+## Alternatives descartades
 
-- **Aplicar la propuesta al calendario directamente desde la tarjeta:**
-  cambiaría la hora sin revisar el resto del evento. Además, parecería que
-  los asistentes quedan avisados, y no es así.
-- **Enviar desde aquí la actualización a todos los asistentes al aceptar:**
-  no existe una ruta de envío de actualizaciones del organizador para
-  calendarios locales y CalDAV, y no se inventa una en esta entrega.
-- **Guardar la SEQUENCE en `calendar_events`:** sería una columna más que
-  sincronizar en todos los proveedores. Leerla del servidor CalDAV cuando
-  hace falta basta.
-- **Disponibilidad de los asistentes desde los servidores:** bloqueada.
-  - Google necesita los registros OAuth propios.
-  - La bandeja de salida de CalDAV scheduling no existe en Radicale, que es
-    el servidor de pruebas.
-  - `GetUserAvailability` de EWS necesita un servidor Exchange real.
+- **Aplicar la proposta al calendari directament des de la targeta:**
+  canviaria l'hora sense revisar la resta de l'esdeveniment. A més, semblaria
+  que els assistents queden avisats, i no és així.
+- **Enviar des d'aquí l'actualització a tots els assistents en acceptar:**
+  no existeix cap ruta d'enviament d'actualitzacions de l'organitzador per a
+  calendaris locals i CalDAV, i no se n'inventa cap en aquest lliurament.
+- **Desar la SEQUENCE a `calendar_events`:** seria una columna més per
+  sincronitzar en tots els proveïdors. N'hi ha prou de llegir-la del servidor
+  CalDAV quan cal.
+- **Disponibilitat dels assistents des dels servidors:** bloquejada.
+  - Google necessita els registres OAuth propis.
+  - La safata de sortida de CalDAV scheduling no existeix a Radicale, que és
+    el servidor de proves.
+  - `GetUserAvailability` d'EWS necessita un servidor Exchange real.
 
-## Pendiente
+## Pendent
 
-- Avisar a los asistentes al guardar como organizador en calendarios
-  locales y CalDAV (enviar un REQUEST actualizado).
-- Disponibilidad de otras personas desde Google, CalDAV y EWS (bloqueada,
-  ver arriba).
-- Verificación N5 con Outlook, Gmail y Apple Calendar.
+- Avisar els assistents en desar com a organitzador en calendaris
+  locals i CalDAV (enviar un REQUEST actualitzat).
+- Disponibilitat d'altres persones des de Google, CalDAV i EWS (bloquejada,
+  vegeu més amunt).
+- Verificació N5 amb Outlook, Gmail i Apple Calendar.

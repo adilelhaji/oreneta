@@ -3,7 +3,9 @@
 //
 // - Sounds play here, in the frontend, from the same `mail.newMessages`,
 //   `calendar.reminder` and `tasks.reminder` events the Go bridge turns into
-//   OS notifications. The core resolves an account's mute onto each mail
+//   OS notifications, and when the bridge says it showed the notice of
+//   missed reminders (`calendar.missedRemindersShown`, #225), which it can
+//   hold back until quiet hours end. The core resolves an account's mute onto each mail
 //   event, and a muted account stays silent too.
 // - Do not disturb and the quiet hours are decided by lib/quietHours. The Go
 //   bridge, which raises the OS popups, gets the quiet intervals pushed to it
@@ -121,6 +123,7 @@ export function startNotifications(): () => void {
       soundForEvent('mail', !!detail?.muted)
     })
     on('calendar.reminder', () => soundForEvent('reminder'))
+    on('calendar.missedRemindersShown', () => soundForEvent('reminder'))
     on('tasks.reminder', () => soundForEvent('reminder'))
     on('tray.doNotDisturb', () => toggleDoNotDisturb())
   }

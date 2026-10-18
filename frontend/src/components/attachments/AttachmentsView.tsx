@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Download, Eye, Mail, Paperclip, Search } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { accounts$ } from '../../states/accounts'
 import {
   attachmentList$,
@@ -63,8 +63,7 @@ export function AttachmentsView() {
   }, [filter.account, filter.name, filter.sender, filter.kind, filter.within])
 
   const openMessage = (item: ListedAttachment) => {
-    ui$.attachmentsOpen.set(false)
-    ui$.messagingOpen.set(false)
+    ui$.module.set('mail')
     openMailAccount(item.account, item.folder, false)
     ui$.selectedThread.set(item.thread_id)
     ui$.mobilePane.set('conversation')
@@ -91,7 +90,7 @@ export function AttachmentsView() {
   const missing = uncovered(coverage)
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
+    <div data-region="content" className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
       <header className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-header px-4 py-3">
         <CompactNavigation />
         <h1 className="flex items-center gap-2 text-heading-sm font-bold text-primary">
@@ -193,12 +192,12 @@ export function AttachmentsView() {
                 >
                   <Icon size={20} className="shrink-0 text-secondary" />
                   <div className="min-w-0 flex-1 basis-56">
-                    <p className="truncate text-ui font-semibold text-primary">{name}</p>
+                    <p dir="auto" className="truncate text-ui font-semibold text-primary">{name}</p>
                     <p className="truncate text-caption text-secondary">
                       {[
                         formatFileSize(item.size),
                         item.from_name || item.from_addr,
-                        new Date(item.date * 1000).toLocaleDateString(undefined, { dateStyle: 'medium' }),
+                        new Date(item.date * 1000).toLocaleDateString(intlLocale(), { dateStyle: 'medium' }),
                         item.subject,
                       ]
                         .filter(Boolean)
@@ -242,7 +241,7 @@ export function AttachmentsView() {
                     </button>
                   </span>
                   {!item.key && (
-                    <p className="w-full pl-8 text-2xs text-secondary">
+                    <p className="w-full ps-8 text-2xs text-secondary">
                       {item.unavailable === 'link'
                         ? t('attachmentsView.isLink', {
                             defaultValue: 'A link to a file kept elsewhere; open the message to follow it.',

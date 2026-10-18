@@ -135,10 +135,11 @@ export function ConversationDetailsPanel({
       <aside
         ref={asideRef}
         data-details-panel
+        data-region="sidebar"
         data-layout={beside ? 'beside' : 'overlay'}
         style={{ '--details-panel-width': `${width}px` } as CSSProperties}
-        className={`flex w-[var(--details-panel-width)] shrink-0 flex-col border-s border-border bg-header animate-slide-in-right ${
-          beside ? 'relative' : 'absolute inset-y-0 right-0 z-50 max-w-[85vw] shadow-overlay'
+        className={`flex w-[var(--details-panel-width)] shrink-0 flex-col border-s border-border bg-header animate-slide-in-end ${
+          beside ? 'relative' : 'absolute inset-y-0 end-0 z-50 max-w-[85vw] shadow-overlay'
         }`}
       >
         {/* Resizable beside the reader only; as an overlay it is capped to the window. */}
@@ -268,7 +269,7 @@ export function ConversationDetailsPanel({
                       onClick={() => onShowInConversation(item.messageId)}
                       title={t('chat.showInConversation')}
                       aria-label={t('chat.showInConversation')}
-                      className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full border border-white/20 bg-black/65 text-white shadow-sm transition-colors hover:bg-accent hover:text-on-accent cursor-pointer"
+                      className="absolute end-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full border border-white/20 bg-black/65 text-white shadow-sm transition-colors hover:bg-accent hover:text-on-accent cursor-pointer"
                     >
                       <MessageSquare size={14} strokeWidth={1.75} />
                     </button>
@@ -293,7 +294,7 @@ export function ConversationDetailsPanel({
                       disabled={!downloadable}
                       onClick={() => downloadAttachment(file)}
                       title={downloadable ? t('chat.saveFile', { filename: file.filename }) : file.filename}
-                      className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-l-xl p-2.5 text-left ${
+                      className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-s-xl p-2.5 text-start ${
                         downloadable
                           ? 'hover:bg-black/[0.05] dark:hover:bg-white/[0.05] cursor-pointer'
                           : 'cursor-default'
@@ -303,7 +304,7 @@ export function ConversationDetailsPanel({
                         <FileIcon size={16} />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-primary">{file.filename}</p>
+                        <p dir="auto" className="truncate text-xs font-semibold text-primary">{file.filename}</p>
                         <p className="text-2xs text-secondary">{formatFileSize(file.size)}</p>
                       </div>
                       {downloadable && (
@@ -319,7 +320,7 @@ export function ConversationDetailsPanel({
                       onClick={() => onShowInConversation(file.messageId)}
                       title={t('chat.showInConversation')}
                       aria-label={t('chat.showInConversation')}
-                      className="mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-black/[0.06] hover:text-primary dark:hover:bg-white/[0.08] cursor-pointer"
+                      className="me-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-black/[0.06] hover:text-primary dark:hover:bg-white/[0.08] cursor-pointer"
                     >
                       <MessageSquare size={16} strokeWidth={1.75} />
                     </button>
@@ -422,7 +423,7 @@ function SummaryRow({ icon: Icon, label, onClick }: { icon: LucideIcon; label: s
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full cursor-pointer items-center gap-3 rounded-control-sm px-2 py-3 text-left text-sm font-medium text-primary hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
+      className="flex w-full cursor-pointer items-center gap-3 rounded-control-sm px-2 py-3 text-start text-sm font-medium text-primary hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
     >
       <Icon size={21} className="shrink-0" />
       <span>{label}</span>
@@ -458,19 +459,19 @@ function PeopleList({
             if (event.button === 2) openMenu(event, person)
           }}
           onContextMenu={(event) => openMenu(event, person)}
-          className="group flex items-center gap-3 rounded-control p-2 text-left hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
+          className="group flex items-center gap-3 rounded-control p-2 text-start hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
         >
           <Avatar name={person.name} email={person.email} size={36} />
           <div className="min-w-0 flex-1">
             <p className="flex items-center gap-1.5 truncate text-xs font-semibold text-primary selectable-text">
-              <span className="truncate">{person.name}</span>
+              <span dir="auto" className="truncate">{person.name}</span>
               {person.isSelf && (
                 <span className="shrink-0 rounded-full bg-accent/15 px-1.5 py-px text-2xs font-bold uppercase tracking-wide text-accent">
                   {t('chat.you')}
                 </span>
               )}
             </p>
-            <p className="truncate text-caption text-secondary selectable-text">{person.email}</p>
+            <p dir="auto" className="truncate text-caption text-secondary selectable-text">{person.email}</p>
           </div>
           <button
             type="button"

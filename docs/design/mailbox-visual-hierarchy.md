@@ -1,22 +1,30 @@
-# Mailbox table visual hierarchy (#186)
+# Jerarquia visual de la taula de la bústia (#186)
 
-Small visual refinement under #34, retaining the approved shell and saved views.
+Petit refinament visual dins de #34, que manté l'estructura aprovada i les
+visualitzacions desades.
 
-- A softly shaded sticky header separates column controls from messages.
-- Rows have a 36px minimum height; sender, subject and date retain the existing
-  type scale and columns. Long content still truncates with full-text tooltips.
-- Unread subjects have an accent dot and bold text. The dot's space is retained
-  for read messages so subjects align; the accessible unread label is unchanged.
-- A 3px inset edge at the start of the opened row stays visible alongside bulk
-  selection. It follows the row rather than a particular configurable column.
-- Unread rows have a subtle tint. Opened and bulk-selected backgrounds take
-  precedence; checkbox, edge, dot and keyboard outline remain separate signals.
-- Shared theme colors support saved themes, including dark mode. No preference,
-  mailbox state, sorting, selection, protocol or account behavior changes.
-- In forced-colors mode, system-color borders preserve the opened edge and
-  unread dot when background tints and shadows are suppressed.
+- Una capçalera fixa amb un ombrejat suau separa els controls de les columnes
+  dels missatges.
+- Les files tenen una alçada mínima de 36 px; el remitent, l'assumpte i la data
+  conserven l'escala tipogràfica i les columnes existents. El contingut llarg
+  encara es trunca, amb indicadors de funció que mostren el text complet.
+- Els assumptes no llegits tenen un punt del color d'èmfasi i el text en negreta.
+  L'espai del punt es manté en els missatges llegits perquè els assumptes
+  quedin alineats; l'etiqueta accessible de no llegit no canvia.
+- Una vora interior de 3 px a l'inici de la fila oberta continua visible al costat
+  de la selecció múltiple. Segueix la fila, no una columna configurable concreta.
+- Les files no llegides tenen un tint subtil. Els fons de fila oberta i de
+  selecció múltiple tenen prioritat; la casella de selecció, la vora, el punt i
+  el contorn del focus del teclat continuen sent senyals separats.
+- Els colors compartits del tema admeten els temes desats, inclòs el mode fosc.
+  No canvia cap preferència, ni l'estat de la bústia, l'ordenació, la selecció,
+  el protocol o el comportament dels comptes.
+- En el mode de colors forçats, unes vores amb colors del sistema conserven la
+  vora de la fila oberta i el punt de no llegit quan se suprimeixen els tints de
+  fons i les ombres.
 
-Verification: component state transitions and production-entry browser scenarios
-for light/dark at desktop and narrow widths, with keyboard opening/selection,
-column reordering and rendered screenshots. These synthetic scenarios do not
-certify native zoom or real providers and do not replace the installed executable.
+Verificació: transicions d'estat dels components i escenaris de navegador sobre
+el punt d'entrada de producció, en clar i en fosc, a l'amplada d'escriptori i a
+amplades estretes, amb obertura i selecció amb el teclat, reordenació de columnes
+i captures de pantalla renderitzades. Aquests escenaris sintètics no certifiquen
+el zoom natiu ni els proveïdors reals i no substitueixen l'executable instal·lat.

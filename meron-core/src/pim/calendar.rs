@@ -477,11 +477,58 @@ async fn run_claimed(engine: &Arc<Engine>, emit: &Emit, account: &str, from: i64
         }
         Err(e) if e.is::<BackgroundSyncCancelled>() => SyncOutcome::Cancelled,
         Err(e) => {
-            let message = format!("calendar sync: {e:#}");
-            emit("calendar.syncError", json!({ "account": account, "message": message })).await;
+            let (reason, message) = report_failure(account, &e);
+            emit(
+                "calendar.syncError",
+                json!({ "account": account, "message": message, "reason": reason }),
+            )
+            .await;
             SyncOutcome::Failed(message)
         }
     }
+}
+
+/// How the engine and the calendar route say an account has no usable sign-in
+/// (`engine.rs`, `calendar/route.rs`).
+const NEEDS_RECONNECT: &str = "account needs reconnect";
+
+/// What a failed refresh is reported as: the reason the interface names it by
+/// (`api_disabled`, `needs_consent`, `needs_reconnect`, or `other`; `conflict`
+/// belongs to writes and does not arise here), and the sentence
+/// `calendar.syncError` carries.
+///
+/// Every failure is also written to the log with its account and reason
+/// (#244). Before, a failure reached only the interface, so a calendar that
+/// failed in the field left nothing on disk to diagnose it from. The log line
+/// carries no token, and no part of an answer that could not be read: that
+/// could be an event's own text.
+fn report_failure(account: &str, error: &anyhow::Error) -> (&'static str, String) {
+    let reason = match calendar::google::refusal_of(error) {
+        Some(refusal) => refusal.kind.as_str(),
+        // Signed out, or never signed in here: also fixed by reconnecting.
+        None if error.chain().any(|cause| cause.to_string().starts_with(NEEDS_RECONNECT)) => "needs_reconnect",
+        None => "other",
+    };
+    crate::mlog!(
+        crate::log::Level::Warn,
+        "calendar",
+        "account={account}: sync failed ({reason}): {}",
+        loggable(error)
+    );
+    (reason, format!("calendar sync: {error:#}"))
+}
+
+/// An error as `{:#}` writes it, except that an answer that could not be read
+/// is said to be so, by position, rather than quoted.
+fn loggable(error: &anyhow::Error) -> String {
+    error
+        .chain()
+        .map(|cause| match cause.downcast_ref::<serde_json::Error>() {
+            Some(json) => format!("unreadable answer at line {}, column {}", json.line(), json.column()),
+            None => cause.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(": ")
 }
 
 /// Pulls the calendar list, then one window of occurrences per enabled
@@ -541,7 +588,8 @@ async fn sync_window(
                         crate::mlog!(
                             crate::log::Level::Warn,
                             "calendar",
-                            "{id}: subscription not refreshed: {err:#}"
+                            "account={account}: {id}: subscription not refreshed: {}",
+                            loggable(&err)
                         );
                         continue;
                     }
@@ -564,7 +612,7 @@ async fn sync_window(
                 let (_, transport) = match caldav_target(engine, account, &id) {
                     Ok(found) => found,
                     Err(err) => {
-                        crate::mlog!(crate::log::Level::Warn, "calendar", "{id}: not refreshed: {err:#}");
+                        crate::mlog!(crate::log::Level::Warn, "calendar", "account={account}: {id}: not refreshed: {}", loggable(&err));
                         continue;
                     }
                 };
@@ -576,7 +624,7 @@ async fn sync_window(
                 let objects = match fetched {
                     Ok(Ok(objects)) => objects,
                     Ok(Err(err)) => {
-                        crate::mlog!(crate::log::Level::Warn, "calendar", "{id}: not refreshed: {err:#}");
+                        crate::mlog!(crate::log::Level::Warn, "calendar", "account={account}: {id}: not refreshed: {}", loggable(&err));
                         continue;
                     }
                     Err(err) => return Err(err.into()),
@@ -619,4 +667,158 @@ async fn sync_window(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    struct MemoryHost;
+    impl crate::engine::EngineHost for MemoryHost {
+        fn open_db(&self) -> anyhow::Result<rusqlite::Connection> {
+            crate::store::open_at(":memory:")
+        }
+        fn apply_secret(&self, _: &rusqlite::Connection, _: &str, _: &mut crate::imap::Creds) {}
+        fn store_secret(&self, _: &rusqlite::Connection, _: &str, _: &crate::secrets::Secrets) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
+
+    type Seen = Arc<Mutex<Vec<(&'static str, Value)>>>;
+
+    /// An `Emit` that keeps what it was given.
+    fn recorder() -> (Emit, Seen) {
+        let seen: Seen = Arc::new(Mutex::new(Vec::new()));
+        let keep = seen.clone();
+        let emit: Emit = Arc::new(move |name, detail| {
+            keep.lock().unwrap().push((name, detail));
+            Box::pin(async {})
+        });
+        (emit, seen)
+    }
+
+    #[tokio::test]
+    async fn a_failed_refresh_is_logged_and_reported_with_its_account() {
+        // An account the engine cannot sign in to fails before any server is
+        // asked: the same path every other failure takes.
+        let engine = Arc::new(Engine::new(Box::new(MemoryHost)).unwrap());
+        let (emit, seen) = recorder();
+        crate::log::capture();
+        let outcome = sync_now(&engine, &emit, "gone@example.com", 0, 86_400).await;
+        let lines = crate::log::captured();
+
+        let SyncOutcome::Failed(message) = outcome else {
+            panic!("expected a failure, got {outcome:?}");
+        };
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.len(), 1, "one event: {seen:?}");
+        let (name, detail) = &seen[0];
+        assert_eq!(*name, "calendar.syncError");
+        assert_eq!(detail["account"], "gone@example.com");
+        // Fixed by reconnecting, like a token Google no longer accepts.
+        assert_eq!(detail["reason"], "needs_reconnect");
+        assert_eq!(detail["message"], message.as_str());
+        assert!(message.contains("account needs reconnect"), "got: {message}");
+
+        let logged: Vec<&String> = lines
+            .iter()
+            .filter(|line| line.contains("calendar: account=gone@example.com: sync failed (needs_reconnect)"))
+            .collect();
+        assert_eq!(logged.len(), 1, "one log line for the failure: {lines:?}");
+        assert!(logged[0].starts_with("[WARN]"), "kept by release builds too: {}", logged[0]);
+        assert!(logged[0].contains("account needs reconnect"), "with its reason: {}", logged[0]);
+    }
+
+    #[test]
+    fn a_google_refusal_is_reported_and_logged_by_its_kind() {
+        let body = r#"{"error":{"code":403,"message":"Google Calendar API has not been used in project 42 before or it is disabled.","errors":[{"reason":"accessNotConfigured"}]}}"#;
+        let error = anyhow::Error::new(calendar::google::refusal(403, body)).context("list calendars");
+        crate::log::capture();
+        let (reason, message) = report_failure("me@gmail.com", &error);
+        let lines = crate::log::captured();
+
+        assert_eq!(reason, "api_disabled");
+        assert!(message.starts_with("calendar sync: list calendars: "), "got: {message}");
+        assert!(message.contains("Google Calendar API is not enabled"), "got: {message}");
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert!(lines[0].contains("account=me@gmail.com: sync failed (api_disabled)"), "{}", lines[0]);
+        assert!(lines[0].contains("project 42"), "Google's sentence names the project: {}", lines[0]);
+
+        let consent = r#"{"error":{"code":403,"message":"Request had insufficient authentication scopes."}}"#;
+        let error = anyhow::Error::new(calendar::google::refusal(403, consent));
+        assert_eq!(report_failure("me@gmail.com", &error).0, "needs_consent");
+    }
+
+    /// What Google answers when the Calendar API is off in the project.
+    const API_DISABLED: &str = r#"{"error":{"code":403,"message":"Google Calendar API has not been used in project 42 before or it is disabled.","errors":[{"reason":"accessNotConfigured"}]}}"#;
+
+    #[tokio::test]
+    async fn a_refusal_keeps_its_kind_through_the_retry() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        // Refused at once: a refusal is not transient, so it is not retried.
+        let refused = anyhow::Error::new(calendar::google::refusal(403, API_DISABLED));
+        assert!(!crate::engine::is_transient_sync_error(&refused), "{refused:#}");
+        let attempts = AtomicUsize::new(0);
+        let error = retry_background_sync_after::<(), _, _, _>(
+            "test",
+            std::time::Duration::ZERO,
+            || true,
+            || {
+                attempts.fetch_add(1, Ordering::SeqCst);
+                async {
+                    Err(anyhow::Error::new(calendar::google::refusal(403, API_DISABLED)).context("list calendars"))
+                }
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(attempts.load(Ordering::SeqCst), 1);
+        assert_eq!(report_failure("me@gmail.com", &error).0, "api_disabled");
+
+        // Refused on the retry, after a first attempt that timed out: the
+        // retry's error is still the one named.
+        let attempts = AtomicUsize::new(0);
+        let error = retry_background_sync_after::<(), _, _, _>(
+            "test",
+            std::time::Duration::ZERO,
+            || true,
+            || {
+                let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+                async move {
+                    if attempt == 0 {
+                        anyhow::bail!("GET https://www.googleapis.com/calendar/v3/users/me/calendarList: timed out")
+                    }
+                    Err(anyhow::Error::new(calendar::google::refusal(403, API_DISABLED)))
+                }
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
+        crate::log::capture();
+        let (reason, message) = report_failure("me@gmail.com", &error);
+        let lines = crate::log::captured();
+        assert_eq!(reason, "api_disabled");
+        assert!(message.contains("timed out") && message.contains("Calendar API is not enabled"), "{message}");
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert!(lines[0].contains("sync failed (api_disabled)"), "{}", lines[0]);
+    }
+
+    #[test]
+    fn the_log_never_quotes_an_answer_that_could_not_be_read() {
+        // A malformed answer's parse error quotes the value it choked on,
+        // which can be an event's own text.
+        let unreadable = serde_json::from_str::<i64>(r#""Dinner with Anna""#).unwrap_err();
+        assert!(unreadable.to_string().contains("Dinner"), "the premise: serde quotes it");
+        let error = anyhow::Error::new(unreadable).context("parse events");
+        crate::log::capture();
+        let (reason, _) = report_failure("me@gmail.com", &error);
+        let lines = crate::log::captured();
+
+        assert_eq!(reason, "other");
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert!(!lines[0].contains("Dinner"), "{}", lines[0]);
+        assert!(lines[0].contains("parse events: unreadable answer at line 1"), "{}", lines[0]);
+    }
 }

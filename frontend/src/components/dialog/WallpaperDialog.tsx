@@ -105,7 +105,7 @@ export function WallpaperDialog({
           </div>
         </div>
 
-        <div className="flex w-full shrink-0 flex-col border-t border-border/70 bg-raised p-5 select-none md:w-[320px] md:border-t-0 md:border-l">
+        <div className="flex w-full shrink-0 flex-col border-t border-border/70 bg-raised p-5 select-none md:w-[320px] md:border-t-0 md:border-s">
           <div className="relative flex min-h-[280px] flex-1 flex-col overflow-hidden rounded-panel border border-border bg-chat shadow-inner">
             <div
               className={`absolute inset-0 transition-all duration-200 ${previewInfo.className}`}
@@ -120,12 +120,12 @@ export function WallpaperDialog({
                 <div className="flex h-5 w-5 items-center justify-center rounded-full bg-accent/80 text-[0.53125rem] font-bold text-on-accent shadow-xs">
                   {previewName ? previewName.slice(0, 1) : 'U'}
                 </div>
-                <div className="rounded-panel rounded-bl-sm border border-border bg-chats p-2.5 text-caption leading-normal text-primary shadow-xs">
+                <div className="rounded-panel rounded-es-sm border border-border bg-chats p-2.5 text-caption leading-normal text-primary shadow-xs">
                   How does this chat wallpaper look on your screen?
                 </div>
               </div>
               <div className="flex max-w-[80%] flex-col self-end">
-                <div className="rounded-panel rounded-br-sm border border-accent/20 bg-accent p-2.5 text-caption leading-normal text-on-accent shadow-xs">
+                <div className="rounded-panel rounded-ee-sm border border-accent/20 bg-accent p-2.5 text-caption leading-normal text-on-accent shadow-xs">
                   Looks fantastic! The text contrast and background pattern are perfectly balanced.
                 </div>
               </div>
@@ -139,7 +139,7 @@ export function WallpaperDialog({
 
 function SelectedMark() {
   return (
-    <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-on-accent shadow-xs">
+    <span className="absolute end-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-on-accent shadow-xs">
       <Check size={14} strokeWidth={1.75} />
     </span>
   )

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, type Mock, setSystemTime, spyOn } from 'bun:test'
+import i18n, { intlLocale } from '../../lib/i18n'
 import {
   escapeRegExp,
+  formatDateDivider,
   extractAddr,
   formatFileSize,
   formatMessageStamp,
@@ -203,10 +205,10 @@ describe('messageHelpers timestamp helpers', () => {
     it.each([0, 9, 23])(`formats same-day hour %i with local 24-hour time (showDate=${showDate})`, (hour) => {
       const date = new Date(2026, 5, 10, hour, 5)
       const options = { hour: '2-digit', minute: '2-digit', hour12: false } as const
-      const expected = date.toLocaleTimeString([], options)
+      const expected = date.toLocaleTimeString(intlLocale(), options)
       timeFormat.mockClear()
       expect(formatMessageStamp(sec(date), showDate)).toBe(expected)
-      expect(timeFormat.mock.calls).toEqual([[[], options]])
+      expect(timeFormat.mock.calls).toEqual([[intlLocale(), options]])
       expect(dateFormat).not.toHaveBeenCalled()
     })
 
@@ -217,13 +219,13 @@ describe('messageHelpers timestamp helpers', () => {
       ['later this year', new Date(2026, 11, 31, 9), false],
       ['prior year', new Date(2025, 11, 31, 9), true],
       ['next year', new Date(2027, 0, 1, 9), true],
-    ] as const)(`formats %s using host locale date fields (showDate=${showDate})`, (_name, date, includeYear) => {
+    ] as const)(`formats %s in the interface language's date fields (showDate=${showDate})`, (_name, date, includeYear) => {
       const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
       if (includeYear) options.year = 'numeric'
-      const expected = date.toLocaleDateString([], options)
+      const expected = date.toLocaleDateString(intlLocale(), options)
       dateFormat.mockClear()
       expect(formatMessageStamp(sec(date), showDate)).toBe(expected)
-      expect(dateFormat.mock.calls).toEqual([[[], options]])
+      expect(dateFormat.mock.calls).toEqual([[intlLocale(), options]])
       expect(timeFormat).not.toHaveBeenCalled()
     })
   }
@@ -257,5 +259,25 @@ describe('attachments the provider cannot hand over (#142)', () => {
     } as any
     const media = getVisibleMedia(message, { load_remote_images: false } as any, false)
     expect(media.files.map((file: any) => file.unavailable ?? file.filename)).toEqual(['link', 'tooLarge'])
+  })
+})
+
+describe('date dividers in the interface language (#231)', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  it('names today and yesterday from the catalog', async () => {
+    const noon = new Date()
+    noon.setHours(12, 0, 0, 0)
+    const before = new Date(noon)
+    before.setDate(noon.getDate() - 1)
+    const now = noon.getTime() / 1000
+    const yesterday = before.getTime() / 1000
+    expect(formatDateDivider(now)).toBe('Today')
+    expect(formatDateDivider(yesterday)).toBe('Yesterday')
+    await i18n.changeLanguage('ca')
+    expect(formatDateDivider(now)).toBe('Avui')
+    expect(formatDateDivider(yesterday)).toBe('Ahir')
   })
 })

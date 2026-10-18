@@ -17,11 +17,12 @@ import {
   type Participant,
 } from '../../states/calendar'
 import { accounts$ } from '../../states/accounts'
-import { mailsNotices, noticeRecipients, noticeSender, organizerFor } from '../../states/organizerNotices'
+import { noticePlan } from '../../states/organizerNotices'
 import { ScopeAsk } from './ScopeAsk'
 import { NotifyAsk } from './NotifyAsk'
 import { ConflictNote } from './ConflictNote'
 import { RepeatFields } from './RepeatFields'
+import { ModalCard } from '../dialog/ModalCard'
 
 /// Creates or edits one event.
 ///
@@ -88,18 +89,8 @@ export function EventEditor() {
   // mail from here, which needs an account that sends as the organizer.
   // Without one the question is not asked, since nothing could follow it.
   const kind = calendars.find((c) => c.id === event.calendar_id && c.accountId === event.accountId)?.kind
-  const byMail = mailsNotices(kind)
-  const sender = byMail ? noticeSender(event, accounts) : null
-  const canNotify = !byMail || sender !== null
-  const invitees = !canNotify
-    ? []
-    : byMail
-      ? noticeRecipients(event, sender)
-      : event.attendees.map((person) => person.addr.trim()).filter(Boolean)
-  // A meeting with guests is saved naming its organizer: the identity the
-  // notice goes out from, when it names none yet.
-  const toSave: EventDraft =
-    byMail && sender && event.attendees.length > 0 ? { ...event, organizer: organizerFor(event, sender) } : event
+  // A meeting with guests told by mail is saved naming its organizer.
+  const { sender, canNotify, invitees, toSave } = noticePlan(event, kind, accounts)
 
   /// Runs an action through the questions it raises, in order: which
   /// occurrences, then whether to tell anyone. Neither is asked when it has
@@ -113,7 +104,12 @@ export function EventEditor() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={closeEditor}>
-      <div
+      <ModalCard
+        label={
+          isNew
+            ? t('calendar.newEvent', { defaultValue: 'New event' })
+            : t('calendar.editEvent', { defaultValue: 'Edit event' })
+        }
         className="flex max-h-[calc(100vh-2rem)] w-full max-w-md flex-col rounded-panel border border-border bg-app shadow-overlay"
         onClick={(e) => e.stopPropagation()}
       >
@@ -185,7 +181,7 @@ export function EventEditor() {
             aria-label={t('calendar.meeting', { defaultValue: 'Online meeting' })}
             className="flex w-full flex-col gap-1.5"
           >
-            <span className="pl-0.5 text-caption font-semibold text-secondary">
+            <span className="ps-0.5 text-caption font-semibold text-secondary">
               {t('calendar.meeting', { defaultValue: 'Online meeting' })}
             </span>
             {event.meeting && event.add_meeting !== 'none' ? (
@@ -382,7 +378,7 @@ export function EventEditor() {
             </button>
           </div>
         </div>
-      </div>
+      </ModalCard>
     </div>
   )
 }
@@ -412,7 +408,7 @@ export function reminderLabel(minutes: number, t: ReturnType<typeof useTranslati
 function Labelled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex w-full flex-col gap-1.5">
-      <span className="pl-0.5 text-caption font-semibold text-secondary">{label}</span>
+      <span className="ps-0.5 text-caption font-semibold text-secondary">{label}</span>
       {children}
     </label>
   )
@@ -578,7 +574,7 @@ function Attendees({
               key={person.addr}
               className="flex items-center gap-1 rounded-control-sm bg-raised px-2 py-1 text-caption text-primary"
             >
-              <span className="max-w-[12rem] truncate">{person.addr}</span>
+              <span dir="auto" className="max-w-[12rem] truncate">{person.addr}</span>
               <button
                 type="button"
                 onClick={() => onChange(people.filter((other) => other.addr !== person.addr))}
@@ -613,7 +609,7 @@ function Attendees({
               <button
                 type="button"
                 onClick={() => addPerson(person)}
-                className="flex w-full flex-col items-start px-3 py-1.5 text-left transition-colors hover:bg-hover cursor-pointer"
+                className="flex w-full flex-col items-start px-3 py-1.5 text-start transition-colors hover:bg-hover cursor-pointer"
               >
                 <span className="text-caption font-medium text-primary">{person.name || person.addr}</span>
                 {person.name && <span className="text-2xs text-secondary">{person.addr}</span>}

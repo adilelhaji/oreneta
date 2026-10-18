@@ -244,7 +244,9 @@ export function MergeDialog() {
                         {m.problems.map(problemText).join(', ')}
                       </p>
                     )}
-                    <pre className="whitespace-pre-wrap font-sans text-secondary">{m.body}</pre>
+                    <pre dir="auto" className="bidi-plaintext whitespace-pre-wrap font-sans text-secondary">
+                      {m.body}
+                    </pre>
                   </li>
                 ))}
               </ol>
@@ -262,7 +264,7 @@ export function MergeDialog() {
                     <li key={b.id}>
                       <button
                         type="button"
-                        className="text-left text-accent underline"
+                        className="text-start text-accent underline"
                         onClick={() => setWatching(b.id)}
                       >
                         {b.subject} —{' '}

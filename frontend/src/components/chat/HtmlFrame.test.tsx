@@ -61,6 +61,27 @@ it('survives a srcDoc replacement whose document temporarily has no root', () =>
   expect(cleaned).toBe(initialCleaned + 2)
 })
 
+it('forwards F1–F12, with or without Shift, but not a bare letter (ADR-0068 §6)', () => {
+  const forwarded: unknown[] = []
+  const listen = (event: Event) => forwarded.push((event as CustomEvent).detail)
+  window.addEventListener('oreneta.frameKeyDown', listen)
+  try {
+    const view = render(<HtmlFrame html="<p>Message</p>" title="Message" />)
+    fireEvent.load(view.getByTitle('Message'))
+    const doc = frameDocument!
+    const press = (init: KeyboardEventInit) =>
+      doc.body.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }))
+    press({ key: 'F6' })
+    press({ key: 'F6', shiftKey: true })
+    press({ key: 'F12' })
+    press({ key: 'g' })
+    press({ key: 'F13' })
+    expect(forwarded).toEqual([{ key: 'F6' }, { key: 'F6', shift: true }, { key: 'F12' }])
+  } finally {
+    window.removeEventListener('oreneta.frameKeyDown', listen)
+  }
+})
+
 it('does not announce readiness for an absent document or window', () => {
   const doc = frameDocument
   frameDocument = null

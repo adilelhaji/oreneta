@@ -1,40 +1,40 @@
-# Traducción sin conexión (#106)
+# Traducció sense connexió (#106)
 
-Registro de la implementación de ADR-0031.
+Registre de la implementació de l'ADR-0031.
 
-## Piezas
+## Peces
 
-- **Núcleo:**
-  - `meron-core/src/translation/` tiene el registro fijo, la ruta (directa
-    o por inglés), el estado, la descarga comprobada y atómica, la cuota y
-    la limpieza al arrancar;
+- **Nucli:**
+  - `meron-core/src/translation/` té el registre fix, la ruta (directa
+    o passant per l'anglès), l'estat, la baixada comprovada i atòmica, la quota i
+    la neteja en arrencar;
   - RPC `translation.status/download/cancel/remove`;
-  - eventos `translation.progress` y `translation.done`; el error lleva un
-    código (`cancelled`, `quota`, `diskFull`, `integrity`, `network`,
+  - esdeveniments `translation.progress` i `translation.done`; l'error porta un
+    codi (`cancelled`, `quota`, `diskFull`, `integrity`, `network`,
     `disk`).
-- **Puente Go:** `MERON_MODELS_DIR` (caché de la instalación) y `/models/`,
-  que no sirve carpetas que empiezan por punto.
-- **Aplicación:**
-  - `lib/translation.ts`: cliente del worker, comprobación de hashes,
-    suposición de idioma y traductor (una petición cada vez, parada);
-  - `states/translation.ts`: descargas con consentimiento y traducciones por
-    mensaje;
-  - `TranslationNotice`, `TranslateDraftDialog` y el grupo de Ajustes
-    «Traducción».
+- **Pont Go:** `MERON_MODELS_DIR` (memòria cau de la instal·lació) i `/models/`,
+  que no serveix carpetes que comencen per punt.
+- **Aplicació:**
+  - `lib/translation.ts`: client del worker, comprovació de resums (hash),
+    deducció de l'idioma i traductor (una petició cada vegada, aturada);
+  - `states/translation.ts`: baixades amb consentiment i traduccions per
+    missatge;
+  - `TranslationNotice`, `TranslateDraftDialog` i el grup de Configuració
+    «Traducció».
 
-## Pruebas
+## Proves
 
-- **N1, núcleo:** archivo dañado, más largo de lo publicado, corte,
-  cancelación, cuota, restos al arrancar, rutas y registro con rutas de
-  archivo.
-- **N1, aplicación:** ruta, suposición de idioma, comprobación de hashes,
-  traductor, lector (elegir idiomas, mostrar y ver original, descarga
-  rechazada o aceptada, error de integridad, par sin modelo) y diálogo de
-  borrador (nada cambia hasta elegir; HTML con formato).
-- **Motor real:** `build-tests/bergamot.check.mjs` arranca el worker y
-  WebAssembly que se distribuyen y traduce español a inglés con el modelo
-  publicado. CI lo baja con `scripts/fetch-translation-test-model.mjs`,
-  comprobado contra el registro y guardado en caché.
-- **N3 e2e:** en Chromium y con la CSP de producción, un borrador se traduce
-  con el Bergamot real, se revisa y se añade debajo; no hay ninguna
-  petición fuera de la aplicación.
+- **N1, nucli:** fitxer malmès, més llarg del que s'ha publicat, tall,
+  cancel·lació, quota, restes en arrencar, rutes i registre amb camins de
+  fitxer.
+- **N1, aplicació:** ruta, deducció de l'idioma, comprovació de resums,
+  traductor, lector (triar idiomes, mostrar i veure l'original, baixada
+  rebutjada o acceptada, error d'integritat, parell sense model) i diàleg
+  d'esborrany (no canvia res fins que es tria; HTML amb format).
+- **Motor real:** `build-tests/bergamot.check.mjs` arrenca el worker i el
+  WebAssembly que es distribueixen i tradueix del castellà a l'anglès amb el model
+  publicat. La CI el baixa amb `scripts/fetch-translation-test-model.mjs`,
+  comprovat amb el registre i desat a la memòria cau.
+- **N3 e2e:** a Chromium i amb la CSP de producció, un esborrany es tradueix
+  amb el Bergamot real, es revisa i s'afegeix a sota; no hi ha cap
+  petició fora de l'aplicació.

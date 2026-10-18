@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Trash2, Wind } from 'lucide-react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { showToast } from '../../states/ui'
 import { sweep, sweepPreview, type SweepPreview } from '../../states/priority'
 import { Button } from '../button/Button'
@@ -127,7 +127,7 @@ export function SweepDialog({
                   {message.subject || t('sendLater.noSubject')}
                 </span>
                 <time className="shrink-0 text-2xs text-secondary tabular-nums">
-                  {message.date ? new Date(message.date * 1000).toLocaleDateString() : ''}
+                  {message.date ? new Date(message.date * 1000).toLocaleDateString(intlLocale()) : ''}
                 </time>
               </li>
             ))}

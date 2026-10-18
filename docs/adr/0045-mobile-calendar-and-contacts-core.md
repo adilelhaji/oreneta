@@ -1,169 +1,170 @@
-# ADR-0045: Calendario y contactos del móvil en el núcleo compartido
+# ADR-0045: Calendari i contactes del mòbil al nucli compartit
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan.
-- Fecha: 2026-10-12.
-- Alcance: los diez comandos que usa la interfaz móvil de calendario y
-  contactos (`calendar.list`, `calendar.setEnabled`, `calendar.events`,
+- Estat: acceptada per delegació («Tomo yo la recomendada»); pendent de
+  revisió del propietari al final del pla.
+- Data: 2026-10-12.
+- Abast: les deu ordres que fa servir la interfície mòbil de calendari i
+  contactes (`calendar.list`, `calendar.setEnabled`, `calendar.events`,
   `calendar.eventDetails`, `calendar.create`, `calendar.update`,
-  `calendar.delete`, `people.list`, `people.save`, `people.delete`), tras
-  la decisión del propietario del 2026-10-12 de llevar calendario y
-  contactos al móvil reutilizando el núcleo del escritorio
-  (`docs/design/mobile-inventory.md`). Ningún otro comando (invitaciones,
-  tareas, notas…) cambia.
+  `calendar.delete`, `people.list`, `people.save`, `people.delete`), després
+  de la decisió del propietari del 2026-10-12 de portar calendari i
+  contactes al mòbil reutilitzant el nucli de l'escriptori
+  (`docs/design/mobile-inventory.md`). Cap altra ordre (invitacions,
+  tasques, notes…) no canvia.
 
-## Decisión
+## Decisió
 
-- **Un solo código para los dos.** La lógica de esos comandos sale del
-  `dispatch` del binario de escritorio (`meron-core/src/main.rs`) a la
-  biblioteca, en `meron-core/src/pim/`:
+- **Un sol codi per als dos.** La lògica d'aquestes ordres surt del
+  `dispatch` del binari d'escriptori (`meron-core/src/main.rs`) cap a la
+  biblioteca, a `meron-core/src/pim/`:
   - `pim::calendar`: `list`, `set_enabled`, `events`, `event_details`,
-    `create`, `update`, `delete`, y lo que necesitan (`local_calendar_write`,
-    `caldav_target`, `caldav_write`, `CALDAV_CONFLICT`, `spawn_sync` y la
-    sincronización de una ventana);
-  - `pim::people`: `list`, `save`, `delete`, y la escritura CardDAV y en la
-    libreta local (`carddav_create` y compañía, `PersonInput`);
-  - cada función recibe el `Engine` y los parámetros de la petición y
-    devuelve el JSON que el anfitrión reenvía sin tocarlo.
-- **El escritorio no cambia.** Los brazos de `dispatch` pasan a ser una
-  llamada a esas funciones. Respuestas, errores y eventos son los mismos
-  byte a byte; las pruebas del despachador siguen igual.
-- **Eventos de fondo con una abstracción mínima.** Lo que termina después
-  de responder (el refresco de una ventana) avisa por `pim::Emit`, una
-  función `(nombre, detalle)` asíncrona:
-  - en escritorio escribe `{"event", "detail"}` en stdout, como el resto de
-    eventos (`emitter` en `main.rs`);
-  - en móvil llama a `ffi::emit_event`, el canal de eventos de la
+    `create`, `update`, `delete`, i el que necessiten (`local_calendar_write`,
+    `caldav_target`, `caldav_write`, `CALDAV_CONFLICT`, `spawn_sync` i la
+    sincronització d'una finestra);
+  - `pim::people`: `list`, `save`, `delete`, i l'escriptura CardDAV i a la
+    llibreta local (`carddav_create` i companyia, `PersonInput`);
+  - cada funció rep l'`Engine` i els paràmetres de la petició i
+    retorna el JSON que l'amfitrió reenvia sense tocar-lo.
+- **L'escriptori no canvia.** Els braços de `dispatch` passen a ser una
+  crida a aquestes funcions. Respostes, errors i esdeveniments són els mateixos
+  byte a byte; les proves del distribuïdor continuen igual.
+- **Esdeveniments de fons amb una abstracció mínima.** El que acaba després
+  de respondre (l'actualització d'una finestra) avisa per `pim::Emit`, una
+  funció `(nombre, detalle)` asíncrona:
+  - a l'escriptori escriu `{"event", "detail"}` a stdout, com la resta
+    d'esdeveniments (`emitter` a `main.rs`);
+  - al mòbil crida `ffi::emit_event`, el canal d'esdeveniments de la
     plataforma.
-- **El reintento de fondo pasa a la biblioteca.** `is_transient_sync_error`,
-  `BackgroundSyncCancelled` y el reintento único
-  (`engine::retry_background_sync_after`) se mueven a `engine.rs`; el
-  binario conserva `retry_background_sync` como envoltorio con su propio
-  retraso, así que sus otras sincronizaciones no cambian.
-- **Ruta móvil.** `protocol::dispatch_mobile_protocol_request` envía esos
-  diez métodos a `protocol/pim.rs`, que toma el `Engine` con
-  `ffi::engine_for` (el de primer plano, o uno transitorio), aplica la
-  misma guarda de Graph que el escritorio y ejecuta la función compartida
-  con `ffi::engine_block_on`. Los parámetros son los del escritorio
+- **El reintent de fons passa a la biblioteca.** `is_transient_sync_error`,
+  `BackgroundSyncCancelled` i el reintent únic
+  (`engine::retry_background_sync_after`) es mouen a `engine.rs`; el
+  binari conserva `retry_background_sync` com a embolcall amb el seu propi
+  retard, de manera que les seves altres sincronitzacions no canvien.
+- **Ruta mòbil.** `protocol::dispatch_mobile_protocol_request` envia aquests
+  deu mètodes a `protocol/pim.rs`, que pren l'`Engine` amb
+  `ffi::engine_for` (el de primer pla, o un de transitori), aplica la
+  mateixa protecció de Graph que l'escriptori i executa la funció compartida
+  amb `ffi::engine_block_on`. Els paràmetres són els de l'escriptori
   (`account`, `calendar`, `event`, `change_key`, `series`, `scope`,
   `notify`, `query`, `limit`, `id`, `version`, `book`, `person`); el
-  código Kotlin ya los enviaba así y no cambia.
-- **Sincronización en el móvil: refresco al pedir.** `calendar.events` con
-  `refresh` (y una escritura en un calendario de cuenta) lanza el refresco
-  de la ventana en el runtime del `Engine`, que sigue después de responder
-  y avisa con `calendar.synced` o `calendar.syncError`.
-- **Ampliación del 2026-10-13: refresco periódico, libretas y
-  recordatorios.** Un comando móvil más, `pim.refresh`
-  (`meron-core/src/pim/refresh.rs`), y tres que ya tenía el escritorio
-  (`google.contacts.sync`, `carddav.sync`, `carddav.list`), con su lógica
-  movida de `main.rs` a `pim::people` (`sync_source`, `google_sync`,
-  `source_sync`, `sources`); los brazos del escritorio las llaman y
-  responden igual.
-  - **Recordatorios compartidos.** `pim::reminders::take_due` decide qué
-    recordatorios han vencido (`calendar::reminders::due`, ADR-0056) y los marca como
-    dados antes de devolverlos, con la forma del evento
-    `calendar.reminder`. El vigilante de minuto del escritorio
-    (`spawn_reminder_watch`) la llama con las cuentas que tiene abiertas y
-    emite lo que devuelve, como antes; el móvil la llama desde
-    `pim.refresh` con las cuentas guardadas. El registro de «ya dado» es el
-    mismo, así que un recordatorio se da una vez sea quien sea quien
-    pregunte.
-  - **Refresco periódico.** `pim.refresh` entrega los recordatorios y, si
-    se le deja (`sync`), lee la ventana fija de ayer a cinco semanas vista
-    de cada cuenta con calendarios remotos cuya última lectura buena tenga
-    más de 15 minutos (`pim::calendar::sync_now`, el mismo refresco que
-    `spawn_sync`, esperado), y cada libreta Google o CardDAV con más de una
-    hora; crea la libreta de cada cuenta Google. Lo vencido se lee del
-    almacén (`synced_at`, `last_sync_at`), así que el proceso de una tarea
-    de fondo decide igual que el de primer plano; un fallo no se reintenta
-    antes de su intervalo en el mismo proceso. `only` limita la lectura a
-    calendarios o libretas y `force` lee aunque no haya vencido. El
-    escritorio no tenía temporizador para esto (refresca al abrir una vista
-    o al pulsar sincronizar) y sigue sin él.
-  - **Dónde corre.** En primer plano, la interfaz lo llama cada minuto
-    (solo recordatorios, sin red) y cada 15 minutos con lectura, y publica
-    los recordatorios por `MobileHost.notifyCalendarReminder` (canal propio
-    en Android, `UNUserNotificationCenter` en iOS). En segundo plano va
-    detrás del correo en el `WorkManager` de Android y en el
-    `BGAppRefreshTask` de iOS, que publican los recordatorios de la
-    respuesta. La lectura sigue las reglas del correo: tarea de fondo solo
-    con la sincronización de fondo activada y con red; en iOS, sin red si
-    el intervalo de comprobación es «Desactivado».
-  - **Errores visibles.** `calendar.syncError` y los fallos de libretas se
-    muestran como aviso no bloqueante en Calendario y Contactos. El de
-    permiso de Google ausente tiene su propia frase, porque en el móvil
-    reconectar no lo arregla.
+  codi Kotlin ja els enviava així i no canvia.
+- **Sincronització al mòbil: actualització a petició.** `calendar.events` amb
+  `refresh` (i una escriptura en un calendari de compte) llança
+  l'actualització de la finestra al runtime de l'`Engine`, que continua després
+  de respondre i avisa amb `calendar.synced` o `calendar.syncError`.
+- **Ampliació del 2026-10-13: actualització periòdica, llibretes i
+  recordatoris.** Una ordre mòbil més, `pim.refresh`
+  (`meron-core/src/pim/refresh.rs`), i tres que ja tenia l'escriptori
+  (`google.contacts.sync`, `carddav.sync`, `carddav.list`), amb la seva lògica
+  moguda de `main.rs` a `pim::people` (`sync_source`, `google_sync`,
+  `source_sync`, `sources`); els braços de l'escriptori les criden i
+  responen igual.
+  - **Recordatoris compartits.** `pim::reminders::take_due` decideix quins
+    recordatoris han vençut (`calendar::reminders::due`, ADR-0056) i els marca
+    com a donats abans de retornar-los, amb la forma de l'esdeveniment
+    `calendar.reminder`. El vigilant de cada minut de l'escriptori
+    (`spawn_reminder_watch`) la crida amb els comptes que té oberts i
+    emet el que retorna, com abans; el mòbil la crida des de
+    `pim.refresh` amb els comptes desats. El registre de «ja donat» és el
+    mateix, de manera que un recordatori es dona una vegada, sigui qui sigui
+    qui pregunti.
+  - **Refrescament periòdic.** `pim.refresh` lliura els recordatoris i, si
+    se li permet (`sync`), llegeix la finestra fixa d'ahir a cinc setmanes
+    vista de cada compte amb calendaris remots la darrera lectura bona dels
+    quals tingui més de 15 minuts (`pim::calendar::sync_now`, la mateixa
+    actualització que `spawn_sync`, esperat), i cada llibreta Google o CardDAV
+    amb més d'una hora; crea la llibreta de cada compte Google. El que ha
+    vençut es llegeix del magatzem (`synced_at`, `last_sync_at`), de manera
+    que el procés d'una tasca de fons decideix igual que el de primer pla;
+    una fallada no es reintenta abans del seu interval en el mateix procés.
+    `only` limita la lectura a calendaris o llibretes i `force` llegeix
+    encara que no hagi vençut. L'escriptori no tenia temporitzador per a
+    això (actualitza en obrir una visualització o en prémer sincronitzar) i
+    continua sense.
+  - **On s'executa.** En primer pla, la interfície el crida cada minut
+    (només recordatoris, sense xarxa) i cada 15 minuts amb lectura, i publica
+    els recordatoris per `MobileHost.notifyCalendarReminder` (canal propi
+    a Android, `UNUserNotificationCenter` a iOS). En segon pla va
+    darrere del correu al `WorkManager` d'Android i al
+    `BGAppRefreshTask` d'iOS, que publiquen els recordatoris de la
+    resposta. La lectura segueix les regles del correu: tasca de fons només
+    amb la sincronització de fons activada i amb xarxa; a iOS, sense xarxa si
+    l'interval de comprovació és «Desactivat».
+  - **Errors visibles.** `calendar.syncError` i les fallades de llibretes es
+    mostren com a avís no bloquejant a Calendari i Contactes. El de
+    permís de Google absent té la seva pròpia frase, perquè al mòbil
+    reconnectar no ho arregla.
 
-## Alternativas descartadas
+## Alternatives descartades
 
-- **Dejar los manejadores en `main.rs` y duplicarlos en `protocol/`:** dos
-  copias de reglas delicadas (versiones de contactos, conflictos CalDAV,
-  calendarios locales y suscritos, guarda de Graph) que acabarían
-  divergiendo; cada arreglo habría que hacerlo dos veces.
-- **Un almacén propio del móvil para calendario y contactos:** otra
-  arquitectura de plataforma, que la decisión del propietario excluye, y
-  una segunda verdad que sincronizar con la del núcleo.
-- **Pasar el `Writer` de stdout al código compartido:** ata la biblioteca
-  al proceso del escritorio; el móvil no tiene stdout que leer.
-- **Programar ya la sincronización periódica en el móvil:** depende de las
-  tareas de fondo de cada plataforma (WorkManager, `BGAppRefreshTask`) y
-  merece su propia decisión.
+- **Deixar els gestors a `main.rs` i duplicar-los a `protocol/`:** dues
+  còpies de regles delicades (versions de contactes, conflictes CalDAV,
+  calendaris locals i subscrits, protecció de Graph) que acabarien
+  divergint; cada correcció s'hauria de fer dues vegades.
+- **Un magatzem propi del mòbil per a calendari i contactes:** una altra
+  arquitectura de plataforma, que la decisió del propietari exclou, i
+  una segona veritat per sincronitzar amb la del nucli.
+- **Passar el `Writer` de stdout al codi compartit:** lliga la biblioteca
+  al procés de l'escriptori; el mòbil no té stdout per llegir.
+- **Programar ja la sincronització periòdica al mòbil:** depèn de les
+  tasques de fons de cada plataforma (WorkManager, `BGAppRefreshTask`) i
+  mereix la seva pròpia decisió.
 
-## Pruebas
+## Proves
 
-- Núcleo, por la entrada móvil (`invoke_mobile_protocol_json` con un
-  directorio de datos temporal):
-  - `mobile_calendar_commands_run_the_shared_core`: lista y oculta un
-    calendario local; crea, lee (comparado con lo que guarda la caché, que
-    es lo que responde el escritorio), detalla, edita (la clave de cambio
-    sube) y borra un evento con los parámetros exactos de Kotlin; rechaza
-    una serie en un calendario local y una ventana al revés con los mismos
-    mensajes que el escritorio.
-  - `mobile_people_commands_run_the_shared_core`: crea, lista, edita,
-    detecta una edición desfasada, rechaza una edición sin versión y borra
-    en la libreta local.
-  - `calendar_refresh_reports_over_the_event_channel` (`ffi.rs`): el
-    refresco que lanza `calendar.events` sigue tras responder y llega como
-    `calendar.synced` al canal de eventos.
-- `mobile_pim_refresh_raises_reminders_and_routes_book_sync`: por la
-  entrada móvil, `pim.refresh` da un recordatorio una vez con la forma del
-  escritorio, deja en paz una cuenta sin nada remoto, respeta `only` y
-  `force`, y `google.contacts.sync`, `carddav.sync` y `carddav.list`
-  responden con el código compartido.
-- `pim::reminders` (vencido una vez, evento movido, calendario oculto,
-  limpieza) y `pim::refresh` (ventana fija, intervalo de reintento).
-- `the_reminder_watch_uses_the_shared_reminders` (binario): el vigilante
-  del escritorio pregunta a `pim::reminders` por las cuentas abiertas, y lo
-  dado queda registrado donde mira el móvil.
-- Kotlin: `PimRefreshTest` (respuesta, parámetros, reglas de red y de tic,
-  avisos) y `PimSyncModelTest` (errores por cuenta o libreta, aviso).
-- Escritorio: las pruebas del despachador (`cargo test --bin meron-core`)
-  sin cambios, incluidas las de reintento de fondo, calendario local y
-  libreta local.
-- `cargo test --lib`, y `calendar::` con `TZ=Asia/Tokyo` y
+- Nucli, per l'entrada mòbil (`invoke_mobile_protocol_json` amb un
+  directori de dades temporal):
+  - `mobile_calendar_commands_run_the_shared_core`: llista i amaga un
+    calendari local; crea, llegeix (comparat amb el que desa la memòria cau,
+    que és el que respon l'escriptori), detalla, edita (la clau de canvi
+    puja) i suprimeix un esdeveniment amb els paràmetres exactes de Kotlin;
+    rebutja una sèrie en un calendari local i una finestra al revés amb els
+    mateixos missatges que l'escriptori.
+  - `mobile_people_commands_run_the_shared_core`: crea, llista, edita,
+    detecta una edició desfasada, rebutja una edició sense versió i suprimeix
+    a la llibreta local.
+  - `calendar_refresh_reports_over_the_event_channel` (`ffi.rs`):
+    l'actualització que llança `calendar.events` continua després de respondre
+    i arriba com a `calendar.synced` al canal d'esdeveniments.
+- `mobile_pim_refresh_raises_reminders_and_routes_book_sync`: per l'entrada
+  mòbil, `pim.refresh` dona un recordatori una vegada amb la forma de
+  l'escriptori, deixa en pau un compte sense res remot, respecta `only` i
+  `force`, i `google.contacts.sync`, `carddav.sync` i `carddav.list`
+  responen amb el codi compartit.
+- `pim::reminders` (vençut una vegada, esdeveniment mogut, calendari ocult,
+  neteja) i `pim::refresh` (finestra fixa, interval de reintent).
+- `the_reminder_watch_uses_the_shared_reminders` (binari): el vigilant
+  de l'escriptori pregunta a `pim::reminders` pels comptes oberts, i el que
+  s'ha donat queda registrat on mira el mòbil.
+- Kotlin: `PimRefreshTest` (resposta, paràmetres, regles de xarxa i de tic,
+  avisos) i `PimSyncModelTest` (errors per compte o llibreta, avís).
+- Escriptori: les proves del distribuïdor (`cargo test --bin oreneta-core`)
+  sense canvis, incloses les de reintent de fons, calendari local i
+  llibreta local.
+- `cargo test --lib`, i `calendar::` amb `TZ=Asia/Tokyo` i
   `TZ=America/Los_Angeles`.
 
-## Pendiente
+## Pendent
 
-- El OAuth de Google del móvil no pide `auth/calendar` ni
-  `contacts.readonly`: hasta que el propietario los añada (pantalla de
-  consentimiento, cliente OAuth del navegador y `GoogleAccountManagerAuth`)
-  y se reconecte la cuenta, el calendario y la libreta de una cuenta
-  Google fallan en el móvil, con un aviso que lo dice. Esta ampliación no
-  toca los permisos.
-- Recordatorios programados por adelantado: hoy se dan al llegar su hora
-  (tic de primer plano o tarea de fondo); con la app suspendida en iOS
-  pueden llegar tarde o perderse.
-- Exchange no tiene libreta que sincronizar (tampoco en escritorio: solo la
-  búsqueda en el directorio), y el móvil no tiene buzón Exchange propio.
-- El alta de CalDAV, suscripciones y CardDAV no se atiende en el móvil
-  (`calendar.createLocal` sí, para que un teléfono nuevo tenga dónde poner
-  un evento); las contraseñas de CalDAV y CardDAV están en el
-  llavero del escritorio.
-- Evidencia en dispositivo (Maestro).
+- L'OAuth de Google del mòbil no demana `auth/calendar` ni
+  `contacts.readonly`: fins que el propietari els afegeixi (pantalla de
+  consentiment, client OAuth del navegador i `GoogleAccountManagerAuth`)
+  i es reconnecti el compte, el calendari i la llibreta d'un compte
+  Google fallen al mòbil, amb un avís que ho diu. Aquesta ampliació no
+  toca els permisos.
+- Recordatoris programats per endavant: avui es donen quan arriba la seva hora
+  (tic de primer pla o tasca de fons); amb l'aplicació suspesa a iOS
+  poden arribar tard o perdre's.
+- Exchange no té llibreta per sincronitzar (tampoc a l'escriptori: només la
+  cerca al directori), i el mòbil no té bústia Exchange pròpia.
+- L'alta de CalDAV, subscripcions i CardDAV no s'atén al mòbil
+  (`calendar.createLocal` sí, perquè un telèfon nou tingui on posar
+  un esdeveniment); les contrasenyes de CalDAV i CardDAV són al
+  clauer de l'escriptori.
+- Evidència al dispositiu (Maestro).
 
-Hecho desde la primera versión de esta ADR (ampliación del 2026-10-13):
-sincronización periódica del calendario en el móvil, recordatorios
-(`calendar.reminder`) en el móvil como notificaciones locales,
-sincronización de libretas (Google, CardDAV) en el móvil y
-`calendar.syncError` en la interfaz móvil.
+Fet des de la primera versió d'aquesta ADR (ampliació del 2026-10-13):
+sincronització periòdica del calendari al mòbil, recordatoris
+(`calendar.reminder`) al mòbil com a notificacions locals,
+sincronització de llibretes (Google, CardDAV) al mòbil i
+`calendar.syncError` a la interfície mòbil.

@@ -25,6 +25,7 @@ import {
   sendNotice,
   type Notice,
 } from './organizerNotices'
+import { allDayOn } from '../lib/calendarDrag'
 
 /// Whether an account keeps calendars on its server. Exchange does, and so
 /// does a Google account signed in with Google. Plain IMAP has no calendar
@@ -172,10 +173,12 @@ export const calendar$ = observable({
   /// The event being read, or null. Separate from `editing`: opening an event
   /// asks "what is this", and only then "change this".
   viewing: null as CalendarEvent | null,
-  /// Why the last refresh from a server failed, if it did. Separate from
-  /// `error`, which belongs to something the reader just did: this one is
-  /// about the agenda on screen being older than it looks.
-  syncError: '',
+  /// Why the last refresh of each account's calendars failed, by account id.
+  /// Separate from `error`, which belongs to something the reader just did:
+  /// these are about the agenda on screen being older than it looks. Kept per
+  /// account so one account's good refresh does not hide another's failure
+  /// (#244).
+  syncErrors: {} as Record<string, CalendarSyncError>,
   view: 'agenda' as CalendarViewMode,
   /// The day the current view is anchored on, as local-midnight epoch ms.
   anchor: startOfDay(new Date()).getTime(),
@@ -514,25 +517,29 @@ export function writableCalendars(calendars: Calendar[]): Calendar[] {
 }
 
 /// Opens the editor on a new event, defaulting to the next round hour.
-export function newEvent(startAt?: number): EventDraft | null {
+///
+/// `end` gives it the range dragged or chosen on the grid instead of the
+/// default length (#267); `allDay` makes it an all-day event on that local day.
+export function newEvent(startAt?: number, options: { end?: number; allDay?: Date } = {}): EventDraft | null {
   const calendars = writableCalendars(calendar$.calendars.peek())
   const target = calendars.find((calendar) => calendar.is_default) ?? calendars[0]
   // With no calendar there is nowhere to put it, and inventing one would fail
   // at save time with a worse message.
   if (!target) return null
-  const start = startAt ?? Math.ceil(Date.now() / 1000 / 3600) * 3600
   // Calendar → General: how long a new event lasts and whether it reminds.
   const { defaultDuration, defaultReminder } = settings$.calendar.peek()
+  const start = startAt ?? Math.ceil(Date.now() / 1000 / 3600) * 3600
+  const times = options.allDay ? allDayOn(options.allDay) : { start, end: options.end ?? start + defaultDuration * 60 }
   const draft: EventDraft = {
     id: '',
     calendar_id: target.id,
     accountId: target.accountId,
     subject: '',
     location: '',
-    start,
-    end: start + defaultDuration * 60,
+    start: times.start,
+    end: times.end,
     ...(defaultReminder === null ? {} : { reminder_minutes: defaultReminder }),
-    all_day: false,
+    all_day: Boolean(options.allDay),
     is_recurring: false,
     is_cancelled: false,
     free_busy: '',
@@ -549,12 +556,20 @@ export function newEvent(startAt?: number): EventDraft | null {
 export function openCalendarOn(date: Date) {
   calendar$.anchor.set(startOfDay(date).getTime())
   calendar$.view.set('day')
-  ui$.peopleOpen.set(false)
-  ui$.tasksOpen.set(false)
-  ui$.notesOpen.set(false)
-  ui$.attachmentsOpen.set(false)
-  ui$.messagingOpen.set(false)
-  ui$.calendarOpen.set(true)
+  ui$.module.set('calendar')
+}
+
+/// A notice of missed reminders was clicked (#225): the calendar on the day
+/// it names ("YYYY-MM-DD", the reader's local day), in the week view when it
+/// says so ("week:YYYY-MM-DD", misses on several days), or on today when it
+/// names none it can read.
+export function openCalendarFromNotification(target: string) {
+  const week = target.startsWith('week:')
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(week ? target.slice('week:'.length) : target)
+  const date = match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date()
+  const real = match && date.getMonth() === Number(match[2]) - 1 && date.getDate() === Number(match[3])
+  openCalendarOn(real ? date : new Date())
+  if (week) calendar$.view.set('week')
 }
 
 export function openEvent(event: CalendarEvent) {
@@ -610,9 +625,80 @@ export async function respondToInvitation(event: CalendarEvent, response: Meetin
 /// what it last knew, and this is how a reader asks for another attempt
 /// without hunting through settings.
 export async function retrySync() {
-  calendar$.syncError.set('')
+  calendar$.syncErrors.set({})
   const { from, to } = calendar$.peek()
   if (to > from) await loadWindow(from, to, true)
+}
+
+/// Why the core says an account's calendars could not be refreshed, as the
+/// `reason` of `calendar.syncError` (#244). Anything it does not name, or an
+/// older core that names nothing, is `other`.
+export type CalendarSyncReason = 'api_disabled' | 'needs_consent' | 'needs_reconnect' | 'other'
+
+export type CalendarSyncError = {
+  reason: CalendarSyncReason
+  /// The core's own sentence, in English: for the log and a tooltip, not
+  /// the line the reader is shown.
+  message: string
+}
+
+const SYNC_REASONS: CalendarSyncReason[] = ['api_disabled', 'needs_consent', 'needs_reconnect', 'other']
+
+/// Records a `calendar.syncError` against its account.
+export function noteCalendarSyncError(detail?: { account?: string; message?: string; reason?: string }) {
+  const reason = SYNC_REASONS.find((known) => known === detail?.reason) ?? 'other'
+  calendar$.syncErrors.set({
+    ...calendar$.syncErrors.peek(),
+    [detail?.account ?? '']: { reason, message: detail?.message || 'calendar sync failed' },
+  })
+}
+
+/// A `calendar.synced` for an account clears that account's failure only;
+/// one that names no account clears them all.
+export function clearCalendarSyncError(account?: string) {
+  const errors = calendar$.syncErrors.peek()
+  if (!account) {
+    if (Object.keys(errors).length > 0) calendar$.syncErrors.set({})
+    return
+  }
+  if (!(account in errors)) return
+  calendar$.syncErrors.set(Object.fromEntries(Object.entries(errors).filter(([id]) => id !== account)))
+}
+
+/// What the reader is told about one account's failed refresh. A refusal
+/// with a known cause says what it is and who can fix it; anything else says
+/// the calendar may be out of date.
+export function calendarSyncErrorText(error: CalendarSyncError, account: string): string {
+  switch (error.reason) {
+    case 'api_disabled':
+      return t('calendar.syncFailedApiDisabled', {
+        account,
+        defaultValue:
+          'Google refused the calendars of {account}: the Google Calendar API is not enabled in the Google Cloud project this version of the app signs in with. Reconnecting the account does not fix it; whoever runs that project has to enable the API.',
+      })
+    case 'needs_consent':
+      return t('calendar.syncFailedNeedsConsent', {
+        account,
+        defaultValue:
+          'The account {account} has not given this app access to its calendars. Reconnect it and allow access to the calendar.',
+      })
+    case 'needs_reconnect':
+      return t('calendar.syncFailedNeedsReconnect', {
+        account,
+        defaultValue:
+          'The sign-in of the account {account} is no longer accepted, so its calendars cannot be refreshed. Reconnect it.',
+      })
+    default:
+      return t('calendar.syncFailedOther', {
+        account,
+        defaultValue: 'The calendars of {account} could not be refreshed; what you see may be out of date.',
+      })
+  }
+}
+
+/// The name an account goes by in a calendar notice: its address.
+export function calendarAccountLabel(accountId: string): string {
+  return accounts$.peek().find((account) => account.id === accountId)?.email || accountId
 }
 
 /// People matching what has been typed, for choosing who to invite.
@@ -717,10 +803,6 @@ export async function saveEvent(
 ) {
   calendar$.saving.set(true)
   calendar$.error.set('')
-  const byMail = notify && mailsNotices(kindOf(draft))
-  const sender = byMail ? noticeSender(draft, accounts$.peek()) : null
-  // The people the person was shown, and only them.
-  const people = byMail ? noticeRecipients(draft, sender) : []
   // The guests taken out in the editor, so a CalDAV copy drops them and
   // nobody it names that the editor never showed.
   const opened = calendar$.editing.peek()
@@ -731,52 +813,164 @@ export async function saveEvent(
           .map((person) => person.addr)
       : []
   try {
-    let savedId = draft.id
-    if (draft.id) {
-      await invoke('calendar.update', {
-        account_id: draft.accountId,
-        event: draft,
-        scope,
-        notify: byMail ? false : notify,
-        removed_attendees: removed,
-      })
-    } else {
-      const created = await invoke<{ event?: { id?: string; meeting_status?: string } }>('calendar.create', {
-        account_id: draft.accountId,
-        event: draft,
-        notify: byMail ? false : notify,
-      })
-      savedId = created?.event?.id ?? ''
-      // Said, not assumed: an account without Meet saves the event alone.
-      const status = created?.event?.meeting_status
-      if (status === 'failed')
-        showToast(
-          t('calendar.meetFailed', {
-            defaultValue: 'The event was saved, but Google did not create a Meet for it. This account may not allow it.',
-          }),
-          'error',
-        )
-      if (status === 'pending')
-        showToast(t('calendar.meetPending', { defaultValue: 'Google is still setting up the Meet; it appears shortly.' }))
-    }
-    closeEditor()
-    if (byMail) {
-      if (sender && savedId) await notifyAfterSave({ ...draft, id: savedId }, scope, sender, people)
-      else
-        showToast(
-          t('calendar.noticeNoSender', {
-            defaultValue: 'The event was saved, but no mail account here can tell the people on it.',
-          }),
-          'error',
-        )
-    }
-    const { from, to } = calendar$.peek()
-    if (to > from) await loadWindow(from, to, false)
+    await writeEvent(draft, scope, notify, removed, closeEditor)
   } catch (err) {
     // Left open with the message: closing would lose what was typed, and the
     // server rejecting a save is exactly when that matters most.
     calendar$.error.set(String(err))
     calendar$.saving.set(false)
+  }
+}
+
+/// Writes an event to its calendar, creating or updating it, then tells the
+/// people on it when asked and re-reads the window. Shared by the editor and
+/// by moving an event on the grid (#266), so both reach the server, and its
+/// conflict rules, the same way. `written` runs once the server has it.
+/// Throws what the core refuses; nothing is written then.
+async function writeEvent(
+  draft: EventDraft,
+  scope: EditScope,
+  notify: boolean,
+  removed: string[],
+  written: () => void,
+) {
+  const byMail = notify && mailsNotices(kindOf(draft))
+  const sender = byMail ? noticeSender(draft, accounts$.peek()) : null
+  // The people the person was shown, and only them.
+  const people = byMail ? noticeRecipients(draft, sender) : []
+  let savedId = draft.id
+  if (draft.id) {
+    await invoke('calendar.update', {
+      account_id: draft.accountId,
+      event: draft,
+      scope,
+      notify: byMail ? false : notify,
+      removed_attendees: removed,
+    })
+  } else {
+    const created = await invoke<{ event?: { id?: string; meeting_status?: string } }>('calendar.create', {
+      account_id: draft.accountId,
+      event: draft,
+      notify: byMail ? false : notify,
+    })
+    savedId = created?.event?.id ?? ''
+    // Said, not assumed: an account without Meet saves the event alone.
+    const status = created?.event?.meeting_status
+    if (status === 'failed')
+      showToast(
+        t('calendar.meetFailed', {
+          defaultValue: 'The event was saved, but Google did not create a Meet for it. This account may not allow it.',
+        }),
+        'error',
+      )
+    if (status === 'pending')
+      showToast(t('calendar.meetPending', { defaultValue: 'Google is still setting up the Meet; it appears shortly.' }))
+  }
+  written()
+  if (byMail) {
+    if (sender && savedId) await notifyAfterSave({ ...draft, id: savedId }, scope, sender, people)
+    else
+      showToast(
+        t('calendar.noticeNoSender', {
+          defaultValue: 'The event was saved, but no mail account here can tell the people on it.',
+        }),
+        'error',
+      )
+  }
+  const { from, to } = calendar$.peek()
+  if (to > from) await loadWindow(from, to, false)
+}
+
+/// Why an event cannot be moved or resized here, or null when it can. A
+/// read-only calendar or a subscription belongs to whoever publishes it; a
+/// calendar that is not loaded is not known to be writable, so it is not
+/// assumed to be.
+///
+/// An Exchange calendar is refused too, for now (#266): the core's Exchange
+/// update overwrites a newer change made on the server instead of refusing it
+/// (`AlwaysOverwrite`), and rewrites the notes as plain text and every guest
+/// as required. A gesture that rewrites all that to change an hour would
+/// degrade the event without a word, so moving it stays in the editor until
+/// the core writes only what changed and refuses a stale version.
+export type ChangeRefusal =
+  | { reason: 'read_only'; calendar: string }
+  | { reason: 'exchange'; calendar: string }
+  | { reason: 'unknown_calendar' }
+
+export function changeRefusal(
+  event: Pick<CalendarEvent, 'calendar_id' | 'accountId'>,
+  calendars: Calendar[],
+): ChangeRefusal | null {
+  const calendar = calendars.find((c) => c.id === event.calendar_id && c.accountId === event.accountId)
+  if (!calendar) return { reason: 'unknown_calendar' }
+  if (calendar.read_only || calendar.kind === 'subscribed') return { reason: 'read_only', calendar: calendar.name }
+  // An account calendar is Google's only for a Google sign-in; any other
+  // account that keeps calendars is Exchange (accountSupportsCalendar).
+  if (calendar.kind === 'account') {
+    const account = accounts$.peek().find((candidate) => candidate.id === event.accountId)
+    if (!account) return { reason: 'unknown_calendar' }
+    if (account.auth_type !== 'gmail_oauth') return { reason: 'exchange', calendar: calendar.name }
+  }
+  return null
+}
+
+/// What the reader is told when a move or a resize is refused before anything
+/// is sent.
+export function changeRefusalText(refusal: ChangeRefusal): string {
+  if (refusal.reason === 'read_only')
+    return t('calendar.moveReadOnly', {
+      calendar: refusal.calendar,
+      defaultValue: 'The calendar {calendar} is read-only: its events cannot be moved or changed here.',
+    })
+  if (refusal.reason === 'exchange')
+    return t('calendar.moveExchange', {
+      calendar: refusal.calendar,
+      defaultValue:
+        'Events of the Exchange calendar {calendar} cannot be dragged yet: saving the move could overwrite changes made elsewhere and rewrite its notes and guests. Open the event to change it.',
+    })
+  return t('calendar.moveUnknownCalendar', {
+    defaultValue: 'The calendar of this event is not loaded yet, so it cannot be changed. Try again in a moment.',
+  })
+}
+
+/// The event as it is written back with new times: the window's copy, with
+/// its people and notes read again for an account calendar, whose update
+/// writes both from what it is sent (#266). What is read is what is written:
+/// guests or notes removed on the server since the window was loaded are not
+/// put back. Null when they cannot be read: the move is then refused rather
+/// than made without them.
+export async function completeForWrite(event: CalendarEvent): Promise<CalendarEvent | null> {
+  if (kindOf(event) !== 'account') return event
+  const details = await loadEventDetails(event)
+  if (!details) return null
+  return { ...event, attendees: details.attendees ?? [], description: details.description ?? '' }
+}
+
+/// Writes an event moved or resized on the grid (#266), with the version it
+/// was read at: the core refuses it when the server holds a newer change, and
+/// nothing is overwritten. A refusal is said and the window read again from
+/// the server, so what is shown is what is there. Returns whether it was
+/// written.
+export async function rescheduleEvent(
+  draft: EventDraft,
+  scope: EditScope = 'occurrence',
+  notify = false,
+): Promise<boolean> {
+  let written = false
+  try {
+    await writeEvent(draft, scope, notify, [], () => {
+      written = true
+    })
+    return true
+  } catch (err) {
+    const reason = err instanceof Error && err.message ? err.message : String(err)
+    showToast(
+      written ? reason : t('calendar.moveFailed', { reason, defaultValue: 'The event was not moved: {reason}' }),
+      'error',
+    )
+    const { from, to } = calendar$.peek()
+    if (to > from) await loadWindow(from, to, true)
+    return written
   }
 }
 

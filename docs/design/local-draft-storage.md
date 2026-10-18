@@ -1,70 +1,78 @@
-# Almacén de borradores locales (#169)
+# Magatzem d'esborranys locals (#169)
 
-Contrato de implementación bajo [ADR-0010](../adr/0010-full-profile-local-recovery.md).
-Esta entrega prepara el almacén; la conexión al editor, migración de localStorage,
-imágenes insertadas y respuestas rápidas corresponde a #170. No entrega todavía
-recuperación del editor ni una copia completa.
+Contracte d'implementació sota l'[ADR-0010](../adr/0010-full-profile-local-recovery.md).
+Aquest lliurament prepara el magatzem; la connexió a l'editor, la migració de
+localStorage, les imatges inserides i les respostes ràpides corresponen a #170.
+Encara no lliura la recuperació de l'editor ni una còpia completa.
 
-## Documento y confirmación
+## Document i confirmació
 
-Un identificador local opaco y estable identifica el borrador, independientemente
-de su Message-ID remoto. Un documento JSON versión 1 conserva identidad, cuenta,
-destinatarios, asunto, cuerpos y adjuntos con sus bytes base64 y metadatos. Los
-campos adicionales se conservan. No se sustituye un adjunto por su ruta temporal.
-Referencias a imágenes del caché requieren captura de bytes en #170 antes de
-declarar el borrador completo para una copia.
+Un identificador local opac i estable identifica l'esborrany, independentment del
+seu Message-ID remot. Un document JSON versió 1 conserva la identitat, el compte,
+els destinataris, l'assumpte, els cossos i els adjunts amb els seus bytes en
+base64 i les metadades. Els camps addicionals es conserven. Un adjunt no se
+substitueix pel seu camí temporal. Les referències a imatges de la memòria cau
+requereixen capturar-ne els bytes a #170 abans de declarar l'esborrany complet
+per a una còpia.
 
-La base existente almacena documento y revisión juntos en una transacción. Usa
-el cifrado de base existente; el modo de tests sin llavero sigue siendo sintético.
-La confirmación se devuelve después del commit, con sincronización SQLite FULL
-para esa escritura. Error de validación, cuota, espacio o escritura no sustituye
-el documento previo. Un resultado incierto debe releerse; no se reintenta con una
-revisión adivinada. Las pruebas de proceso no certifican fallo eléctrico físico.
+La base de dades existent emmagatzema el document i la revisió junts en una
+transacció. Fa servir el xifratge de la base de dades existent; el mode de proves
+sense clauer continua sent sintètic. La confirmació es retorna després del
+commit, amb la sincronització SQLite FULL per a aquesta escriptura. Un error de
+validació, de quota, d'espai o d'escriptura no substitueix el document previ. Un
+resultat incert s'ha de tornar a llegir; no es reintenta amb una revisió
+endevinada. Les proves de procés no certifiquen una fallada elèctrica física.
 
-## Concurrencia y ciclo de vida
+## Concurrència i cicle de vida
 
-Crear exige revisión esperada 0. Actualizar o descartar exige la revisión leída;
-el commit incrementa la revisión y devuelve su valor. Un conflicto devuelve la
-revisión vigente y si fue descartado, sin sobrescribir ni crear copias ocultas.
-El cliente conserva sus cambios hasta resolverlo explícitamente (#170).
+Crear exigeix la revisió esperada 0. Actualitzar o descartar exigeix la revisió
+llegida; el commit incrementa la revisió i en retorna el valor. Un conflicte
+retorna la revisió vigent i si s'ha descartat, sense sobreescriure ni crear
+còpies ocultes. El client conserva els seus canvis fins que es resol
+explícitament (#170).
 
-Descartar vacía el documento y mantiene un tombstone: ni creación ni actualización
-tardía pueden resucitar ese identificador. No se purgan tombstones en esta entrega.
-Descartar un identificador aún no guardado también crea tombstone para bloquear
-su primera escritura tardía. Cada nuevo borrador usa un nuevo identificador.
+Descartar buida el document i manté una làpida (tombstone): ni una creació ni
+una actualització tardana poden ressuscitar aquell identificador. En aquest
+lliurament no s'esporguen les làpides. Descartar un identificador encara no desat
+també crea una làpida per bloquejar-ne la primera escriptura tardana. Cada
+esborrany nou fa servir un identificador nou.
 
-Cambiar de cuenta se guarda junto al contenido mediante la misma revisión; no
-copia el borrador entre cuentas. Eliminar una cuenta no elimina el borrador local:
-se conserva para recuperar contenido, sin autorizar envío desde una identidad
-ausente. Envío pendiente, fallido o incierto no descarta automáticamente nada.
-Listar puede filtrar por cuenta; leer y modificar requieren el identificador
-local completo. Ninguna operación toca proveedores, red ni colas de envío.
+El canvi de compte es desa juntament amb el contingut mitjançant la mateixa
+revisió; no copia l'esborrany entre comptes. Eliminar un compte no elimina
+l'esborrany local: es conserva per recuperar-ne el contingut, sense autoritzar
+l'enviament des d'una identitat absent. Un enviament pendent, fallit o incert no
+descarta res automàticament. El llistat pot filtrar per compte; llegir i
+modificar requereixen l'identificador local complet. Cap operació no toca
+proveïdors, la xarxa ni les cues d'enviament.
 
-## Límites y lectura
+## Límits i lectura
 
-Identificador: 1–128 caracteres ASCII alfanuméricos, guion o subrayado. Documento
-serializado: hasta 64 MiB; cuerpos HTML y texto: hasta 8 MiB cada uno; campos de
-cabecera: hasta 64 KiB; hasta 64 adjuntos y 40 MiB de bytes adjuntos en conjunto.
-Se valida base64 y tamaño declarado exacto, IDs de adjunto únicos, MIME y nombre
-acotados. Máximo 256 borradores activos; tombstones no cuentan como activos.
-No se trunca ni se elimina automáticamente contenido para cumplir esos límites.
-El transporte del núcleo admite respuestas hasta 65 MiB para el documento de
-64 MiB y su envoltorio. Un fallo de lectura o exceso del límite rechaza las
-peticiones pendientes explícitamente, sin registrar el contenido recibido.
-También invalida el transporte y detiene su proceso; las siguientes peticiones
-fallan sin escribir. Se requiere reiniciar la aplicación para abrir otro núcleo.
+Identificador: 1–128 caràcters ASCII alfanumèrics, guionet o guió baix. Document
+serialitzat: fins a 64 MiB; cossos HTML i de text: fins a 8 MiB cadascun; camps
+de capçalera: fins a 64 KiB; fins a 64 adjunts i 40 MiB de bytes adjunts en
+conjunt. Es validen el base64 i la mida declarada exacta, els identificadors
+d'adjunt únics, i el MIME i el nom limitats. Màxim 256 esborranys actius; les
+làpides no compten com a actives. No es trunca ni s'elimina automàticament
+contingut per complir aquests límits. El transport del nucli admet respostes de
+fins a 65 MiB per al document de 64 MiB i el seu embolcall. Un error de lectura o
+un excés del límit rebutja explícitament les sol·licituds pendents, sense
+registrar el contingut rebut. També invalida el transport i n'atura el procés;
+les sol·licituds següents fallen sense escriure. Cal reiniciar l'aplicació per
+obrir un altre nucli.
 
-Los listados devuelven solo identificador/cuenta/revisión/fecha, no todos los
-bytes. Leer devuelve un documento validado o error explícito; datos corruptos y
-versiones futuras nunca se convierten silenciosamente en un borrador vacío.
-#170 debe mostrar fallos/conflictos, conservar la copia legacy hasta confirmar
-la migración y detener captura completa si hay escrituras sin confirmar.
+Els llistats només retornen identificador/compte/revisió/data, no tots els
+bytes. Llegir retorna un document validat o un error explícit; les dades
+corruptes i les versions futures no es converteixen mai silenciosament en un
+esborrany buit. #170 ha de mostrar els errors i els conflictes, conservar la
+còpia antiga fins que es confirmi la migració i aturar la captura completa si hi
+ha escriptures sense confirmar.
 
-## Validación requerida
+## Validació requerida
 
-Migración idempotente sin pérdida; reapertura de texto, identidad y adjuntos;
-conflictos entre conexiones; descarte frente a primera escritura tardía;
-cambio/ausencia de cuenta; límites, formato futuro, corrupción; rollback ante
-fallo y base de solo lectura. Revisión técnica/producto y CI del commit exacto.
-La activación en el editor está en [editor-draft-recovery.md](editor-draft-recovery.md) (#170);
-la aceptación nativa sigue pendiente.
+Migració idempotent sense pèrdua; reobertura de text, identitat i adjunts;
+conflictes entre connexions; descart davant de la primera escriptura tardana;
+canvi o absència de compte; límits, format futur, corrupció; reversió
+(rollback) davant d'un error i base de dades de només lectura. Revisió tècnica i
+de producte i CI del commit exacte. L'activació a l'editor és a
+[editor-draft-recovery.md](editor-draft-recovery.md) (#170); l'acceptació nativa
+continua pendent.

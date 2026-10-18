@@ -234,7 +234,7 @@ internal fun MeronMobileState.closeBackupPassphrase() {
  * silently overwrite each other, and `.json` because the file is plain JSON
  * whose envelope stays readable even when the payload is encrypted.
  */
-internal fun backupFileName(nowMillis: Long = currentTimeMillis()): String = "meron-backup-${isoDate(nowMillis)}.json"
+internal fun backupFileName(nowMillis: Long = currentTimeMillis()): String = "oreneta-backup-${isoDate(nowMillis)}.json"
 
 /**
  * `YYYY-MM-DD` in UTC for an epoch-millis instant.

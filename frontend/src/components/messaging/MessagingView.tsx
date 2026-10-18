@@ -3,6 +3,8 @@ import { useValue } from '@legendapp/state/react'
 import {
   AlertTriangle,
   AtSign,
+  Bell,
+  BellOff,
   Check,
   CheckCheck,
   Clock,
@@ -13,7 +15,7 @@ import {
   Send,
   Users,
 } from 'lucide-react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { applyMention, mentionCandidates, mentionQuery, mentionsKept } from '../../lib/chatMentions'
 import {
   answerStatusRequest,
@@ -40,6 +42,10 @@ import {
   sendChat,
   sendChatFile,
   refreshConversations,
+  mutedConversations$,
+  setConversationMuted,
+  statusPermissions$,
+  stopSharingStatus,
   type ChatMessage,
   type ChatRoom,
   type OwnShow,
@@ -59,7 +65,9 @@ const input = 'rounded-control-sm border border-border bg-app px-2.5 py-1.5 text
  * link saved only when the person asks. Presence, mentions and private
  * messages (ADR-0055): the person's status and their contacts', @mentions
  * offered from who is in the room and marked when received, and private
- * conversations with someone in a room.
+ * conversations with someone in a room. Who may see the person's status
+ * (with "Stop sharing"), muting a conversation and the unread mentions of
+ * each group and of the account (ADR-0064).
  */
 export function MessagingView() {
   const { t } = useTranslation()
@@ -73,6 +81,7 @@ export function MessagingView() {
   const invitations = useValue(messaging$.invitations)
   const uploads = useValue(messaging$.uploads)
   const contacts = useValue(chatPresence$.contacts)
+  const mutedList = useValue(mutedConversations$)
   const occupants = useValue(chatPresence$.occupants)
   const [joining, setJoining] = useState<{ room: string; nick: string; password: string } | null>(null)
   const [newChat, setNewChat] = useState('')
@@ -128,6 +137,20 @@ export function MessagingView() {
     window.setTimeout(() => composer.current?.setSelectionRange?.(next.caret, next.caret), 0)
   }
   const roomUploads = Object.entries(uploads).filter(([, u]) => u.conversation === conversation)
+  // Unread mentions across the account's groups; a lower bound when any group
+  // had more unread messages than the core looked at.
+  const mentionTotal = rooms.reduce((sum, r) => sum + (r.unread_mentions ?? 0), 0)
+  const mentionTotalCapped = rooms.some((r) => !!r.mentions_capped)
+  // From the core's own list, so a conversation without messages yet shows it too.
+  const isMuted = (c: string) => mutedList.account === account && mutedList.list.includes(c)
+  const muted = isMuted(conversation)
+  const toggleMute = async () => {
+    try {
+      await setConversationMuted(conversation, !muted)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : String(error), 'error')
+    }
+  }
   const startJoin = (room = '') => setJoining({ room, nick: me?.jid.split('@')[0] ?? '', password: '' })
   const join = async () => {
     if (!joining) return
@@ -162,10 +185,11 @@ export function MessagingView() {
   }
 
   return (
-    <div className="flex min-w-0 flex-1 bg-chats">
+    <div data-region="content" className="flex min-w-0 flex-1 bg-chats">
       <section
         aria-label={t('messaging.conversations', { defaultValue: 'Conversations' })}
-        className={`flex w-72 shrink-0 flex-col border-r border-border max-[769px]:w-full ${conversation ? 'max-[769px]:hidden' : ''}`}
+        data-region="folders"
+        className={`flex w-72 shrink-0 flex-col border-e border-border max-[769px]:w-full ${conversation ? 'max-[769px]:hidden' : ''}`}
       >
         <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
           <CompactNavigation />
@@ -191,9 +215,23 @@ export function MessagingView() {
           ) : (
             <span className="truncate text-sm font-semibold text-primary">{accounts[0].jid}</span>
           )}
+          {(mentionTotal > 0 || mentionTotalCapped) && (
+            <MentionBadge
+              count={mentionTotal}
+              capped={mentionTotalCapped}
+              label={
+                mentionTotalCapped
+                  ? t('messaging.mentionsTotalMore', {
+                      count: mentionTotal,
+                      defaultValue: 'Unread mentions in your groups: {count} or more',
+                    })
+                  : t('messaging.mentionsTotal', { count: mentionTotal, defaultValue: 'Unread mentions in your groups: {count}' })
+              }
+            />
+          )}
           <span
             role="status"
-            className={`ml-auto text-caption ${state === 'online' ? 'text-success' : 'text-secondary'}`}
+            className={`ms-auto text-caption ${state === 'online' ? 'text-success' : 'text-secondary'}`}
             title={status[account]?.message}
           >
             {state === 'online'
@@ -203,6 +241,7 @@ export function MessagingView() {
         </header>
         <OwnStatus key={account} />
         <StatusRequests />
+        {online && <StatusPermissions key={account} />}
         <form
           className="flex gap-1.5 border-b border-border px-3 py-2"
           onSubmit={(e) => {
@@ -329,6 +368,9 @@ export function MessagingView() {
                       name={r.room}
                       last={r.last_body || roomStateLabel(r, t)}
                       unread={r.unread}
+                      mentions={r.unread_mentions}
+                      mentionsCapped={r.mentions_capped}
+                      muted={isMuted(r.room)}
                       current={r.room === conversation}
                       group
                       onOpen={() => void openConversation(r.room)}
@@ -348,6 +390,7 @@ export function MessagingView() {
                     name={inRoom ? `${inRoom.nick} (${inRoom.room})` : c.conversation}
                     last={c.last_body}
                     unread={c.unread}
+                    muted={isMuted(c.conversation)}
                     current={c.conversation === conversation}
                     privateInRoom={!!inRoom}
                     show={seen?.show}
@@ -433,7 +476,7 @@ export function MessagingView() {
                   </span>
                   <button
                     type="button"
-                    className="ml-auto text-caption font-normal text-secondary underline cursor-pointer"
+                    className="ms-auto text-caption font-normal text-secondary underline cursor-pointer"
                     onClick={() =>
                       void confirmAction({
                         title: t('messaging.leaveTitle', { defaultValue: 'Leave this group?' }),
@@ -450,6 +493,39 @@ export function MessagingView() {
                   </button>
                 </>
               )}
+              {/* A toggle whose name stays the same; pressed means muted. */}
+              <button
+                type="button"
+                aria-pressed={muted}
+                aria-label={t('messaging.mute', { defaultValue: 'Mute notifications' })}
+                aria-describedby={muted ? 'chat-muted-hint' : undefined}
+                onClick={() => void toggleMute()}
+                title={
+                  muted
+                    ? t('messaging.mutedHint', {
+                        defaultValue:
+                          'No notifications from this conversation, not even mentions. New messages still count as unread.',
+                      })
+                    : t('messaging.mute', { defaultValue: 'Mute notifications' })
+                }
+                className={`${openRoom ? '' : 'ms-auto '}flex min-h-7 shrink-0 items-center rounded-control-sm px-1.5 font-normal cursor-pointer hover:bg-hover ${
+                  muted ? 'text-accent' : 'text-secondary'
+                }`}
+              >
+                {muted ? (
+                  <BellOff size={16} strokeWidth={1.75} aria-hidden="true" />
+                ) : (
+                  <Bell size={16} strokeWidth={1.75} aria-hidden="true" />
+                )}
+              </button>
+              {muted && (
+                <span id="chat-muted-hint" className="sr-only">
+                  {t('messaging.mutedHint', {
+                    defaultValue:
+                      'No notifications from this conversation, not even mentions. New messages still count as unread.',
+                  })}
+                </span>
+              )}
             </header>
             {openRoom && showPeople && (
               <ul
@@ -464,7 +540,7 @@ export function MessagingView() {
                     <button
                       type="button"
                       onClick={() => void openPrivate(openRoom.room, o.nick)}
-                      className="ml-auto text-accent underline cursor-pointer"
+                      className="ms-auto text-accent underline cursor-pointer"
                     >
                       {t('messaging.writePrivately', { nick: o.nick, defaultValue: 'Write privately to {nick}' })}
                     </button>
@@ -488,7 +564,7 @@ export function MessagingView() {
                 {roomUploads.map(([id, u]) => (
                   <li key={id} className="flex items-center gap-2 text-secondary">
                     <FileText size={14} strokeWidth={1.75} aria-hidden="true" />
-                    <span className="truncate text-primary">{u.name}</span>
+                    <span dir="auto" className="truncate text-primary">{u.name}</span>
                     {u.error ? (
                       <>
                         <span role="alert" className="text-danger">
@@ -497,7 +573,7 @@ export function MessagingView() {
                         <button
                           type="button"
                           onClick={() => dismissChatUpload(id)}
-                          className="ml-auto underline cursor-pointer"
+                          className="ms-auto underline cursor-pointer"
                         >
                           {t('messaging.dismiss', { defaultValue: 'Dismiss' })}
                         </button>
@@ -516,7 +592,7 @@ export function MessagingView() {
                         <button
                           type="button"
                           onClick={() => void cancelChatUpload(id)}
-                          className="ml-auto underline cursor-pointer"
+                          className="ms-auto underline cursor-pointer"
                         >
                           {t('buttons.cancel', { defaultValue: 'Cancel' })}
                         </button>
@@ -538,7 +614,7 @@ export function MessagingView() {
                   id="chat-mention-suggestions"
                   role="listbox"
                   aria-label={t('messaging.mentionSuggestions', { defaultValue: 'People to mention' })}
-                  className="absolute bottom-full left-4 z-10 mb-1 flex min-w-48 flex-col rounded-control-sm border border-border bg-raised py-1 text-sm shadow-lg"
+                  className="absolute bottom-full start-4 z-10 mb-1 flex min-w-48 flex-col rounded-control-sm border border-border bg-raised py-1 text-sm shadow-lg"
                 >
                   {suggestions.map((nick, index) => (
                     <li
@@ -568,6 +644,7 @@ export function MessagingView() {
                 aria-activedescendant={suggestions.length > 0 ? `chat-mention-${active % suggestions.length}` : undefined}
                 value={draft}
                 rows={2}
+                dir={draft ? 'auto' : undefined}
                 onChange={(e) => {
                   setDraft(e.target.value)
                   setCaret(e.target.selectionStart ?? e.target.value.length)
@@ -597,7 +674,7 @@ export function MessagingView() {
                     void send()
                   }
                 }}
-                className={`${input} flex-1 resize-none`}
+                className={`${input} bidi-plaintext flex-1 resize-none`}
               />
               <button
                 type="button"
@@ -781,6 +858,120 @@ function StatusRequests() {
   )
 }
 
+/**
+ * Who may see the person's status, as the server's contact list says
+ * (ADR-0064), and stopping it, only on a click and after confirming. Unknown
+ * until the server has said; never shown as "nobody" before that.
+ */
+function StatusPermissions() {
+  const { t } = useTranslation()
+  const allowed = useValue(statusPermissions$.allowed)
+  const more = useValue(statusPermissions$.more)
+  const [open, setOpen] = useState(false)
+  // Asked to stop; the list changes when the server says so. A new word
+  // from the server, or half a minute without one, offers the button again.
+  const [stopping, setStopping] = useState<string[]>([])
+  useEffect(() => setStopping([]), [allowed])
+  const title = t('messaging.permissions.title', { defaultValue: 'Who can see your status' })
+  const stop = async (jid: string) => {
+    const ok = await confirmAction({
+      title: t('messaging.permissions.stopTitle', { jid, defaultValue: 'Stop sharing your status with {jid}?' }),
+      message: t('messaging.permissions.stopMessage', {
+        defaultValue: 'They will see you as offline. To see your status again, they have to ask, and you decide.',
+      }),
+      confirmLabel: t('messaging.permissions.stop', { defaultValue: 'Stop sharing' }),
+      cancelLabel: t('buttons.cancel'),
+    })
+    if (!ok) return
+    setStopping((list) => [...list, jid])
+    try {
+      await stopSharingStatus(jid)
+      window.setTimeout(() => setStopping((list) => list.filter((j) => j !== jid)), STOP_WAIT_MS)
+    } catch (error) {
+      setStopping((list) => list.filter((j) => j !== jid))
+      showToast(error instanceof Error ? error.message : String(error), 'error')
+    }
+  }
+  return (
+    <div className="border-b border-border px-3 py-1.5">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className="text-caption text-accent underline cursor-pointer"
+      >
+        {title}
+        {allowed && (
+          <span className="text-secondary">
+            {' '}
+            ({allowed.length}
+            {more ? '+' : ''})
+          </span>
+        )}
+      </button>
+      {open &&
+        (allowed === null ? (
+          <p className="text-2xs text-secondary">
+            {t('messaging.permissions.unknown', { defaultValue: 'Not known yet: the chat server has not said.' })}
+          </p>
+        ) : allowed.length === 0 ? (
+          <p className="text-2xs text-secondary">
+            {t('messaging.permissions.none', { defaultValue: 'Nobody can see your status.' })}
+          </p>
+        ) : (
+          <ul aria-label={title} className="mt-1 flex max-h-40 flex-col gap-1 overflow-y-auto text-caption">
+            {allowed.map((jid) => (
+              <li key={jid} className="flex items-center gap-2">
+                <span dir="auto" className="truncate text-primary">
+                  {jid}
+                </span>
+                {stopping.includes(jid) ? (
+                  <span className="ms-auto shrink-0 text-secondary">
+                    {t('messaging.permissions.stopping', { defaultValue: 'Stopping…' })}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void stop(jid)}
+                    aria-label={t('messaging.permissions.stopNamed', {
+                      jid,
+                      defaultValue: 'Stop sharing your status with {jid}',
+                    })}
+                    className="ms-auto shrink-0 text-secondary underline cursor-pointer"
+                  >
+                    {t('messaging.permissions.stop', { defaultValue: 'Stop sharing' })}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        ))}
+      {open && more && allowed && (
+        <p className="text-2xs text-secondary">
+          {t('messaging.permissions.more', { count: allowed.length, defaultValue: 'Only the first {count} are shown.' })}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/** How long "Stopping…" waits for the server before offering the button again. */
+const STOP_WAIT_MS = 30_000
+
+/** A group's or the account's unread mentions: `@N`, or `@N+` for a lower bound. */
+function MentionBadge({ count, capped, label }: { count: number; capped?: boolean; label: string }) {
+  return (
+    <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-accent/15 px-1.5 text-2xs font-semibold text-accent">
+      <AtSign size={10} strokeWidth={2} aria-hidden="true" />
+      <span aria-hidden="true">
+        {count}
+        {capped ? '+' : ''}
+      </span>
+      <span className="sr-only">{label}</span>
+    </span>
+  )
+}
+
 /** A contact's status in the conversation's header, or asking to see it. */
 function ContactStatus({ jid, show, status, online }: { jid: string; show?: string; status?: string; online: boolean }) {
   const { t } = useTranslation()
@@ -855,6 +1046,9 @@ function ConversationButton({
   group,
   privateInRoom,
   show,
+  mentions = 0,
+  mentionsCapped = false,
+  muted,
   onOpen,
 }: {
   name: string
@@ -865,6 +1059,11 @@ function ConversationButton({
   privateInRoom?: boolean
   /** A contact's status, when known. */
   show?: string
+  /** A group's unread mentions, and whether that is a lower bound. */
+  mentions?: number
+  mentionsCapped?: boolean
+  /** Muted by the person: no notification from it. */
+  muted?: boolean
   onOpen: () => void
 }) {
   const { t } = useTranslation()
@@ -873,7 +1072,7 @@ function ConversationButton({
       type="button"
       aria-current={current}
       onClick={onOpen}
-      className={`flex w-full flex-col gap-0.5 px-3 py-2 text-left cursor-pointer ${
+      className={`flex w-full flex-col gap-0.5 px-3 py-2 text-start cursor-pointer ${
         current ? 'bg-accent/10' : 'hover:bg-hover'
       }`}
     >
@@ -881,11 +1080,32 @@ function ConversationButton({
         {group && <Users size={14} strokeWidth={1.75} className="shrink-0 text-secondary" aria-hidden="true" />}
         {privateInRoom && <Lock size={12} strokeWidth={1.75} className="shrink-0 text-secondary" aria-hidden="true" />}
         {show && <PresenceDot show={show} />}
-        <span className="truncate text-sm font-semibold text-primary">{name}</span>
+        <span dir="auto" className="truncate text-sm font-semibold text-primary">{name}</span>
         {show && <span className="sr-only">{showLabel(show, t)}</span>}
-        {unread > 0 && (
-          <span className="ml-auto rounded-full bg-accent px-1.5 text-2xs font-semibold text-on-accent">
-            {t('messaging.unread', { count: unread, defaultValue: '{count} new' })}
+        {muted && (
+          <>
+            <BellOff size={12} strokeWidth={1.75} className="shrink-0 text-secondary" aria-hidden="true" />
+            <span className="sr-only">{t('messaging.muted', { defaultValue: 'Muted' })}</span>
+          </>
+        )}
+        {(unread > 0 || mentions > 0 || mentionsCapped) && (
+          <span className="ms-auto flex shrink-0 items-center gap-1">
+            {(mentions > 0 || mentionsCapped) && (
+              <MentionBadge
+                count={mentions}
+                capped={mentionsCapped}
+                label={
+                  mentionsCapped
+                    ? t('messaging.unreadMentionsMore', { count: mentions, defaultValue: 'Unread mentions: {count} or more' })
+                    : t('messaging.unreadMentions', { count: mentions, defaultValue: 'Unread mentions: {count}' })
+                }
+              />
+            )}
+            {unread > 0 && (
+              <span className="rounded-full bg-accent px-1.5 text-2xs font-semibold text-on-accent">
+                {t('messaging.unread', { count: unread, defaultValue: '{count} new' })}
+              </span>
+            )}
           </span>
         )}
       </span>
@@ -948,7 +1168,7 @@ function Bubble({ message, room }: { message: ChatMessage; room?: string }) {
   const group = !!room
   const mine = message.direction === 'out'
   const mention = group && !mine && !!message.mention
-  const time = new Date(message.stamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const time = new Date(message.stamp * 1000).toLocaleTimeString(intlLocale(), { hour: '2-digit', minute: '2-digit' })
   const states: Record<string, { icon: typeof Check; label: string }> = {
     sending: { icon: Clock, label: t('messaging.state.sending', { defaultValue: 'Sending' }) },
     sent: { icon: Check, label: t('messaging.state.sent', { defaultValue: 'Sent' }) },
@@ -987,7 +1207,8 @@ function Bubble({ message, room }: { message: ChatMessage; room?: string }) {
         <FileCard message={message} mine={mine} />
       ) : (
         <span
-          className={`whitespace-pre-wrap break-words rounded-panel px-3 py-1.5 text-sm ${
+          dir="auto"
+          className={`bidi-plaintext whitespace-pre-wrap break-words rounded-panel px-3 py-1.5 text-sm ${
             mine ? 'bg-accent text-on-accent' : 'bg-raised text-primary'
           } ${mention ? 'ring-2 ring-accent' : ''}`}
         >

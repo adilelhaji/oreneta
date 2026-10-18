@@ -19,11 +19,12 @@ import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { useEscapeKey } from '../../lib/useEscapeKey'
 import { syncMail } from '../../states/mail'
-import { openCommandPalette, ui$ } from '../../states/ui'
+import { openCommandPalette, ui$, type AppModule } from '../../states/ui'
 import { formatShortcut, isMac, type ShortcutId } from '../../lib/shortcuts'
 import { MenuItem } from '../menu/MenuItem'
 import { pauseNotifications, resumeNotifications, type PauseChoice } from '../../states/notifications'
 import { useQuietState } from './QuietIndicator'
+import { menuLeft } from '../../lib/direction'
 
 /** The chord a menu row triggers, so the keystroke is learnable from the menu. */
 function Hint({ id }: { id: ShortcutId }) {
@@ -79,7 +80,8 @@ export function QuickSettingsMenu({
         style={{
           width: menuWidth,
           maxHeight: Math.max(0, viewportHeight - edge - 8),
-          left: Math.max(8, Math.min(anchor.x / zoom, viewportWidth - menuWidth - 8)),
+          // The anchor is the menu's inline-start edge (ADR-0061).
+          left: menuLeft(anchor.x / zoom, menuWidth, viewportWidth, 8),
           ...(anchor.placement === 'up' ? { bottom: edge } : { top: edge }),
         }}
         onContextMenu={(e) => {
@@ -87,26 +89,23 @@ export function QuickSettingsMenu({
           e.stopPropagation()
         }}
       >
-        {[
-          { key: 'mail', label: t('chat.backToChats'), icon: Mail },
-          { key: 'calendar', label: t('calendar.title'), icon: CalendarDays },
-          { key: 'people', label: t('people.title'), icon: BookUser },
-          { key: 'tasks', label: t('tasks.title'), icon: ListTodo },
-          { key: 'notes', label: t('notes.title', { defaultValue: 'Notes' }), icon: StickyNote },
-          { key: 'attachments', label: t('attachmentsView.title', { defaultValue: 'Attachments' }), icon: Paperclip },
-          { key: 'messaging', label: t('messaging.title', { defaultValue: 'Chat' }), icon: MessagesSquare },
-        ].map(({ key, label, icon: Icon }) => (
+        {(
+          [
+            { key: 'mail', label: t('chat.backToChats'), icon: Mail },
+            { key: 'calendar', label: t('calendar.title'), icon: CalendarDays },
+            { key: 'people', label: t('people.title'), icon: BookUser },
+            { key: 'tasks', label: t('tasks.title'), icon: ListTodo },
+            { key: 'notes', label: t('notes.title', { defaultValue: 'Notes' }), icon: StickyNote },
+            { key: 'attachments', label: t('attachmentsView.title', { defaultValue: 'Attachments' }), icon: Paperclip },
+            { key: 'chat', label: t('messaging.title', { defaultValue: 'Chat' }), icon: MessagesSquare },
+          ] satisfies { key: AppModule; label: string; icon: typeof Mail }[]
+        ).map(({ key, label, icon: Icon }) => (
           <MenuItem
             key={key}
             icon={<Icon size={16} strokeWidth={1.75} aria-hidden="true" />}
             label={label}
             onClick={() => {
-              ui$.calendarOpen.set(key === 'calendar')
-              ui$.peopleOpen.set(key === 'people')
-              ui$.tasksOpen.set(key === 'tasks')
-              ui$.notesOpen.set(key === 'notes')
-              ui$.attachmentsOpen.set(key === 'attachments')
-              ui$.messagingOpen.set(key === 'messaging')
+              ui$.module.set(key)
               onClose()
             }}
           />

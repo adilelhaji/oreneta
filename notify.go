@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -20,7 +21,7 @@ type nativeLabels struct {
 	trayShow, trayHide, trayHideTooltip, trayQuit         string
 	trayDoNotDisturb                                      string
 	newMessage, newMessageCount, noSubject, unknownSender string
-	reminderStarted                                       string
+	reminderStarted, reminderStartedOn, missedReminders   string
 }
 
 var (
@@ -32,7 +33,8 @@ var (
 		newMessage:       "New message",
 		newMessageCount:  "{count, plural, one {1 new message} other {{count} new messages}}",
 		noSubject:        "(no subject)", unknownSender: "unknown sender",
-		reminderStarted: "Started at {time}",
+		reminderStarted: "Started at {time}", reminderStartedOn: "Started on {date} at {time}",
+		missedReminders: "{count, plural, one {1 missed reminder} other {{count} missed reminders}}",
 	}
 )
 
@@ -43,6 +45,9 @@ func (a *App) currentNativeLabels() nativeLabels {
 }
 
 func (a *App) setNativeLabels(payload map[string]any) (any, error) {
+	// Last, with every lock here released: a missed-reminders notice held
+	// for the reader's language can go now (#225).
+	defer a.missedRemindersCanSpeak()
 	nativeLabelsMu.Lock()
 	set := func(field *string, key string) {
 		if value, ok := payload[key].(string); ok && value != "" {
@@ -59,6 +64,8 @@ func (a *App) setNativeLabels(payload map[string]any) (any, error) {
 	set(&currentLabels.noSubject, "noSubject")
 	set(&currentLabels.unknownSender, "unknownSender")
 	set(&currentLabels.reminderStarted, "reminderStarted")
+	set(&currentLabels.reminderStartedOn, "reminderStartedOn")
+	set(&currentLabels.missedReminders, "missedReminders")
 	labels := currentLabels
 	// Released before trayMenuMu is taken: trayReady holds trayMenuMu while it
 	// reads the labels, so holding both here in the other order would deadlock.
@@ -190,6 +197,8 @@ func (a *App) handleSidecarEvent(name string, detail any) {
 		a.notifyNewMail(detail)
 	case "calendar.reminder":
 		a.notifyReminder(detail)
+	case "calendar.missedReminders":
+		a.notifyMissedReminders(detail)
 	case "tasks.reminder":
 		a.notifyTaskReminder(detail)
 	case "chat.notify":
@@ -354,14 +363,13 @@ func (a *App) notifyReminder(detail any) {
 	if !ok || notificationsSuppressed(quietReminder) {
 		return
 	}
+	// Subject and place are someone else's words (an invitation's): one line
+	// each, shown as text (plainBody), never read as markup.
 	subject, _ := m["subject"].(string)
 	location, _ := m["location"].(string)
+	subject, location = notificationLine(subject, notificationTextMax), notificationLine(location, notificationTextMax)
 	allDay, _ := m["all_day"].(bool)
-	start, _ := m["start"].(float64)
 	account, _ := m["account"].(string)
-
-	localTime, _ := m["local_time"].(string)
-	localDate, _ := m["local_date"].(string)
 	started, _ := m["started"].(bool)
 	labels := a.currentNativeLabels()
 
@@ -370,23 +378,20 @@ func (a *App) notifyReminder(detail any) {
 	}
 
 	// The body answers "when", which is the whole point of a reminder; the
-	// place follows, since that is what decides whether to set off now. The
-	// core says the start on the clock of the zone the machine is in now
-	// (local_time, ADR-0056): Go reads its zone once, at start, so after a
-	// change of zone its own reading would be the old clock's. It also says
-	// the date when it is not today's (local_date), and whether the event had
-	// already started, as one reminded late, after a sleep, can have.
-	var body string
-	switch {
-	case allDay:
-		body = localDate
-	case localTime != "":
-		body = strings.TrimSpace(localDate + " " + localTime)
-	case start > 0:
-		body = time.Unix(int64(start), 0).Format("15:04")
-	}
+	// place follows, since that is what decides whether to set off now. It
+	// also says whether the event had already started, as one reminded late,
+	// after a sleep, can have.
+	body := reminderWhen(m)
 	if started && !allDay && body != "" {
-		body = strings.ReplaceAll(labels.reminderStarted, "{time}", body)
+		// Not today: the date has a phrase of its own, as "at 2026-10-20
+		// 09:00" reads wrong in most languages (#231).
+		localDate, _ := m["local_date"].(string)
+		localTime, _ := m["local_time"].(string)
+		if localDate != "" && localTime != "" {
+			body = strings.NewReplacer("{date}", localDate, "{time}", localTime).Replace(labels.reminderStartedOn)
+		} else {
+			body = strings.ReplaceAll(labels.reminderStarted, "{time}", body)
+		}
 	}
 	if location != "" {
 		if body != "" {
@@ -396,10 +401,49 @@ func (a *App) notifyReminder(detail any) {
 	}
 
 	dispatchNotification(a, notification{
-		title:   subject,
-		body:    body,
-		account: account,
+		title:     subject,
+		body:      body,
+		account:   account,
+		plainBody: true,
 	})
+}
+
+// reminderWhen is when a reminder's event starts, as a calendar.reminder
+// detail says it. The core says the start on the clock of the zone the
+// machine is in now (local_time, ADR-0056): Go reads its zone once, at
+// start, so after a change of zone its own reading would be the old clock's.
+// It also says the date when it is not today's (local_date).
+func reminderWhen(m map[string]any) string {
+	allDay, _ := m["all_day"].(bool)
+	start, _ := m["start"].(float64)
+	localTime, _ := m["local_time"].(string)
+	localDate, _ := m["local_date"].(string)
+	switch {
+	case allDay:
+		return localDate
+	case localTime != "":
+		return strings.TrimSpace(localDate + " " + localTime)
+	case start > 0:
+		return time.Unix(int64(start), 0).Format("15:04")
+	}
+	return ""
+}
+
+// notificationTextMax is how many characters of a text someone else wrote
+// (an event's subject or place) a notification line shows.
+const notificationTextMax = 80
+
+// notificationLine fits a text someone else wrote to one line of a
+// notification: control characters and runs of white space become one
+// space, so a line break in a subject cannot fake further lines, and it is
+// cut to max characters.
+func notificationLine(s string, max int) string {
+	words := strings.FieldsFunc(s, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) })
+	runes := []rune(strings.Join(words, " "))
+	if len(runes) > max {
+		return string(runes[:max-1]) + "…"
+	}
+	return string(runes)
 }
 
 // notifyTaskReminder raises the OS notification for a task reminder

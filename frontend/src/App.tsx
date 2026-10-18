@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { ui$ } from './states/ui'
+import { ui$, type AppModule } from './states/ui'
+import { useTranslation } from './lib/i18n'
 import { mail$ } from './states/mail'
 import { compose$ } from './states/compose'
 import { accounts$ } from './states/accounts'
@@ -46,6 +47,7 @@ import { DesignCatalogue } from './components/dialog/DesignCatalogue'
 import { SweepDialog } from './components/dialog/SweepDialog'
 
 export default function App() {
+  const { t } = useTranslation()
   const mainRef = useRef<HTMLElement | null>(null)
   const kanbanPaneRef = useRef<HTMLDivElement | null>(null)
   const system = useValue(ui$.system)
@@ -56,12 +58,7 @@ export default function App() {
   const threadListWidth = useValue(settings$.threadListWidth)
   const kanbanPaneThreadId = useValue(kanban$.paneThreadId)
   const kanbanPaneWidth = useValue(settings$.kanbanPaneWidth)
-  const calendarOpen = useValue(ui$.calendarOpen)
-  const peopleOpen = useValue(ui$.peopleOpen)
-  const tasksOpen = useValue(ui$.tasksOpen)
-  const notesOpen = useValue(ui$.notesOpen)
-  const attachmentsOpen = useValue(ui$.attachmentsOpen)
-  const messagingOpen = useValue(ui$.messagingOpen)
+  const activeModule = useValue(ui$.module)
   const taskEditor = useValue(ui$.taskEditor)
   const setupOpen = useValue(ui$.setupOpen)
   const settingsOpen = useValue(ui$.settingsOpen)
@@ -73,6 +70,18 @@ export default function App() {
   const sweepTarget = useValue(ui$.sweep)
 
   useAppEffects()
+
+  // The name each module gives <main>: the one its own heading and its rail
+  // button already use.
+  const moduleNames: Record<AppModule, string> = {
+    mail: t('shell.region.mail'),
+    calendar: t('calendar.title'),
+    people: t('people.title'),
+    tasks: t('tasks.title'),
+    notes: t('notes.title'),
+    chat: t('messaging.title'),
+    attachments: t('attachmentsView.title'),
+  }
 
   const showKanbanMessagePane = !!kanbanPaneThreadId || composeTabs.some((tab) => tab.id === activeComposeTab)
 
@@ -92,36 +101,39 @@ export default function App() {
       <MacTitleBar />
       <ConnectivityBanner />
       <UpdateBanner />
-      <main ref={mainRef} className="flex min-h-0 w-full flex-1 overflow-hidden">
+      {/* One <main>, named after the module on screen (ADR-0068 §1). The rail
+          and the mail navigation are still inside it until the folder pane
+          and the module strip replace them (ADR-0068 §9). */}
+      <main ref={mainRef} aria-label={moduleNames[activeModule]} className="flex min-h-0 w-full flex-1 overflow-hidden">
         <ErrorBoundary label="side navigation">
           <SideNav />
         </ErrorBoundary>
-        {!peopleOpen && !calendarOpen && !tasksOpen && !notesOpen && !attachmentsOpen && !messagingOpen && !activeBoardId && (
+        {activeModule === 'mail' && !activeBoardId && (
           <ErrorBoundary label="mail navigation">
             <MailNavigation />
           </ErrorBoundary>
         )}
-        {peopleOpen ? (
+        {activeModule === 'people' ? (
           <ErrorBoundary label="people">
             <PeopleView />
           </ErrorBoundary>
-        ) : calendarOpen ? (
+        ) : activeModule === 'calendar' ? (
           <ErrorBoundary label="calendar">
             <CalendarView />
           </ErrorBoundary>
-        ) : tasksOpen ? (
+        ) : activeModule === 'tasks' ? (
           <ErrorBoundary label="tasks">
             <TasksView />
           </ErrorBoundary>
-        ) : notesOpen ? (
+        ) : activeModule === 'notes' ? (
           <ErrorBoundary label="notes">
             <NotesView />
           </ErrorBoundary>
-        ) : attachmentsOpen ? (
+        ) : activeModule === 'attachments' ? (
           <ErrorBoundary label="attachments">
             <AttachmentsView />
           </ErrorBoundary>
-        ) : messagingOpen ? (
+        ) : activeModule === 'chat' ? (
           <ErrorBoundary label="messaging">
             <MessagingView />
           </ErrorBoundary>
@@ -134,14 +146,14 @@ export default function App() {
           )}
         </ErrorBoundary>
         )}
-        {calendarOpen || peopleOpen || tasksOpen || notesOpen || attachmentsOpen || messagingOpen ? null : !activeBoardId ? (
+        {activeModule !== 'mail' ? null : !activeBoardId ? (
           <ErrorBoundary label="conversation">
             <MessagePane />
           </ErrorBoundary>
         ) : showKanbanMessagePane ? (
           <div
             ref={kanbanPaneRef}
-            className="relative flex shrink-0 overflow-hidden border-l border-border bg-chat max-[600px]:w-full"
+            className="relative flex shrink-0 overflow-hidden border-s border-border bg-chat max-[600px]:w-full"
             style={{ width: `${kanbanPaneWidth}%`, minWidth: 320 }}
           >
             {/* The width is a percentage of the app shell, kept in settings. */}
@@ -151,40 +163,42 @@ export default function App() {
             </ErrorBoundary>
           </div>
         ) : null}
-
-        <AppHotkeys />
-        <CommandPalette />
-        <ShortcutsDialog />
-        <AboutDialog />
-        <ChangelogDialog />
-
-        {/* Settings first so the add-account dialog (setupOpen), opened from within
-          Settings, layers on top and returns here when closed. */}
-        {settingsOpen && <SettingsDialog />}
-        {setupOpen && <AccountDialog />}
-        {addFeedAccount && <AddFeedDialog />}
-        {editFeed && <FeedEditDialog />}
-        {scheduledSendsOpen && <ScheduledSendsDialog />}
-        {ruleLogOpen && <RuleLogDialog />}
-        {catalogueOpen && <DesignCatalogue />}
-        {/* Keyed by the task, so moving from one to another starts from that one's fields. */}
-        {taskEditor && <TaskDialog key={`${taskEditor.threadId}:${taskEditor.id}`} />}
-        <QuickActionDialog />
-        <AwaitingDialog />
-        <MergeDialog />
-        {sweepTarget && (
-          <SweepDialog
-            accountId={sweepTarget.accountId}
-            folder={sweepTarget.folder}
-            sender={sweepTarget.sender}
-            onClose={() => ui$.sweep.set(null)}
-          />
-        )}
-
-        <AppToast />
-        <AppConfirm />
-        <CertificateTrustDialog />
       </main>
+
+      {/* Dialogs, toasts and confirmations are siblings of the regions, not
+          part of the module in <main> (ADR-0068 §1). */}
+      <AppHotkeys />
+      <CommandPalette />
+      <ShortcutsDialog />
+      <AboutDialog />
+      <ChangelogDialog />
+
+      {/* Settings first so the add-account dialog (setupOpen), opened from within
+        Settings, layers on top and returns here when closed. */}
+      {settingsOpen && <SettingsDialog />}
+      {setupOpen && <AccountDialog />}
+      {addFeedAccount && <AddFeedDialog />}
+      {editFeed && <FeedEditDialog />}
+      {scheduledSendsOpen && <ScheduledSendsDialog />}
+      {ruleLogOpen && <RuleLogDialog />}
+      {catalogueOpen && <DesignCatalogue />}
+      {/* Keyed by the task, so moving from one to another starts from that one's fields. */}
+      {taskEditor && <TaskDialog key={`${taskEditor.threadId}:${taskEditor.id}`} />}
+      <QuickActionDialog />
+      <AwaitingDialog />
+      <MergeDialog />
+      {sweepTarget && (
+        <SweepDialog
+          accountId={sweepTarget.accountId}
+          folder={sweepTarget.folder}
+          sender={sweepTarget.sender}
+          onClose={() => ui$.sweep.set(null)}
+        />
+      )}
+
+      <AppToast />
+      <AppConfirm />
+      <CertificateTrustDialog />
     </div>
   )
 }

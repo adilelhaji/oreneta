@@ -12,6 +12,8 @@ import {
 import i18n, { useTranslation } from '../../lib/i18n'
 import {
   calendar$,
+  calendarAccountLabel,
+  calendarSyncErrorText,
   loadCalendars,
   loadCurrentView,
   navigateCalendar,
@@ -29,9 +31,13 @@ import { WeekView } from './WeekView'
 import { EventEditor } from './EventEditor'
 import { EventDetails } from './EventDetails'
 import { CalendarList } from './CalendarList'
+import { CalendarDnd } from './CalendarDnd'
+import { MiniCalendar } from './MiniCalendar'
+import { MoveQuestions, MoveStatus } from './MoveQuestions'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
 import { EventContextMenu, type EventContextMenuState } from './EventContextMenu'
 import { settings$ } from '../../states/settings'
+import { accounts$ } from '../../states/accounts'
 import { isoWeekday } from '../../lib/calendarWeek'
 
 /// The calendar surface: one header — period, navigation, view switcher — over
@@ -42,7 +48,10 @@ export function CalendarView() {
   const view = useValue(calendar$.view)
   const anchor = useValue(calendar$.anchor)
   const loading = useValue(calendar$.loading)
-  const syncError = useValue(calendar$.syncError)
+  // Only for accounts still here: a removed account never syncs again to
+  // clear its notice. Re-read so a notice names its account by its address.
+  const accountIds = new Set(useValue(accounts$).map((account) => account.id))
+  const syncErrors = Object.entries(useValue(calendar$.syncErrors)).filter(([id]) => accountIds.has(id))
   // Read so the header follows a change of the week's first day or work week.
   useValue(settings$.calendarWeekStart)
   const calendarPrefs = useValue(settings$.calendar)
@@ -63,7 +72,7 @@ export function CalendarView() {
   ]
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
+    <div data-region="content" className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
       <EventEditor />
       <EventDetails />
       {menu && <EventContextMenu state={menu} onClose={() => setMenu(null)} />}
@@ -73,7 +82,7 @@ export function CalendarView() {
         <h1 className="min-w-0 wrap-anywhere text-heading-sm font-bold text-primary">{periodLabel(view, anchor, t)}</h1>
         {loading && <RefreshCw size={14} className="shrink-0 animate-spin text-secondary" strokeWidth={1.75} />}
 
-        <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center gap-2">
+        <div className="ms-auto flex min-w-0 max-w-full flex-wrap items-center gap-2">
           {view !== 'agenda' && (
             <div className="flex items-center gap-0.5">
               <NavButton label={t('calendar.previousPeriod')} onClick={() => navigateCalendar(-1)}>
@@ -141,18 +150,26 @@ export function CalendarView() {
 
       {/* A refresh that failed. Said where the agenda is, because what is
           wrong is the agenda: it still shows what it last knew, which looks
-          exactly like being current. */}
-      {syncError && (
+          exactly like being current. One line per account, naming it and,
+          when the core knows it, the cause (#244). */}
+      {syncErrors.length > 0 && (
         <div
           role="status"
           className="flex shrink-0 flex-wrap items-center gap-2 border-b border-warning/30 bg-warning-soft px-4 py-2"
         >
           <TriangleAlert size={14} className="shrink-0 text-warning" strokeWidth={1.75} />
-          <p className="min-w-0 flex-1 basis-40 wrap-anywhere text-caption text-warning">
-            {t('calendar.staleWarning', {
-              defaultValue: 'Could not reach the server; what you see may be out of date.',
-            })}
-          </p>
+          <div className="min-w-0 flex-1 basis-40">
+            {syncErrors.map(([accountId, error]) => (
+              <p
+                key={accountId}
+                data-sync-error={error.reason}
+                title={error.message}
+                className="wrap-anywhere text-caption text-warning"
+              >
+                {calendarSyncErrorText(error, calendarAccountLabel(accountId))}
+              </p>
+            ))}
+          </div>
           <button
             type="button"
             onClick={() => void retrySync()}
@@ -163,13 +180,28 @@ export function CalendarView() {
         </div>
       )}
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col min-[769px]:flex-row">
-        <CalendarList />
-        {view === 'agenda' && <AgendaList onEventMenu={onEventMenu} />}
-        {view === 'month' && <MonthView onEventMenu={onEventMenu} />}
-        {view === 'week' && <WeekView days={7} onEventMenu={onEventMenu} />}
-        {view === 'day' && <WeekView days={1} onEventMenu={onEventMenu} />}
+      <div className="relative shrink-0">
+        <MoveStatus />
       </div>
+      <MoveQuestions />
+
+      {/* One drag and drop for the views and the mini calendar beside them, so
+          an event held in the week can be dropped on a day of another month. */}
+      <CalendarDnd>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col min-[769px]:flex-row">
+          <div
+            data-region="folders"
+            className="flex shrink-0 flex-col border-border bg-raised min-[769px]:w-48 min-[769px]:border-e"
+          >
+            <MiniCalendar />
+            <CalendarList />
+          </div>
+          {view === 'agenda' && <AgendaList onEventMenu={onEventMenu} />}
+          {view === 'month' && <MonthView onEventMenu={onEventMenu} />}
+          {view === 'week' && <WeekView days={7} onEventMenu={onEventMenu} />}
+          {view === 'day' && <WeekView days={1} onEventMenu={onEventMenu} />}
+        </div>
+      </CalendarDnd>
     </div>
   )
 }

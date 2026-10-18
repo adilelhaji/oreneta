@@ -1,235 +1,244 @@
-# Proxy para todas las conexiones salientes
+# Servidor intermediari per a totes les connexions sortints
 
-Qué conexiones usan el proxy de la aplicación, cómo, y qué no puede usarlo.
+Quines connexions fan servir el servidor intermediari (proxy) de l'aplicació,
+com, i què no el pot fer servir.
 
-## Dónde vive el ajuste
+## On viu l'opció de configuració
 
-- **Núcleo** (`meron-core/src/proxy.rs`): un proxy global en la tabla
-  `settings` (clave `proxy`) y, por cuenta, una elección `ProxyChoice`:
-  heredar el global (por defecto), conexión directa o un proxy propio.
-  Tipos: HTTP CONNECT y SOCKS5; los nombres de host los resuelve siempre el
-  proxy, nunca el resolvedor local.
-- **RPC `proxy.route`** (`{account?}`): devuelve `{"proxy": null}` (directo)
-  o `{"proxy": {mode, host, port, username, password}}`. Con cuenta sigue la
-  elección de esa cuenta; una cuenta que aún no existe (se está añadiendo)
-  hereda el global. Un proxy global activado pero incompleto (sin host o
-  puerto) o con un modo desconocido es un **error**, no «sin proxy».
+- **Nucli** (`meron-core/src/proxy.rs`): un servidor intermediari global a la
+  taula `settings` (clau `proxy`) i, per compte, una elecció `ProxyChoice`:
+  heretar el global (per defecte), connexió directa o un servidor intermediari
+  propi. Tipus: HTTP CONNECT i SOCKS5; els noms d'amfitrió els resol sempre el
+  servidor intermediari, mai el resolutor local.
+- **RPC `proxy.route`** (`{account?}`): retorna `{"proxy": null}` (directe)
+  o `{"proxy": {mode, host, port, username, password}}`. Amb compte, segueix
+  l'elecció d'aquell compte; un compte que encara no existeix (s'està afegint)
+  hereta el global. Un servidor intermediari global activat però incomplet (sense
+  amfitrió o port) o amb un mode desconegut és un **error**, no «sense servidor
+  intermediari».
 
-### Proxy elegido pero inutilizable (#192)
+### Servidor intermediari triat però inutilitzable (#192)
 
-El núcleo nunca convierte un proxy elegido en una conexión directa:
+El nucli no converteix mai un servidor intermediari triat en una connexió directa:
 
-- **Global.** El slot del proceso tiene cuatro estados: apagado, proxy,
-  inutilizable (con el motivo) y no leído (con el motivo). Solo «nada
-  guardado» y `mode` `"off"` o `""` son «apagado». Un modo con servidor o
-  puerto vacíos, un puerto fuera de 1–65535, un modo desconocido o un valor
-  que no se puede leer como ajuste (no es un objeto, `mode` no es texto) son
-  «inutilizable». `publish_global` lo publica al arrancar y al guardar, en
-  escritorio y en móvil.
-- **No leído.** Si el ajuste no se puede leer al arrancar (o en móvil no se
-  abre el almacén en `init`), el estado es «no leído» y las conexiones se
-  rechazan. `reload_if_unreadable` lo vuelve a leer antes de cada comando
-  del sidecar, de cada `ensure_valid_creds` y de cada comando móvil, así que
-  un fallo pasajero se recupera solo.
-- **Por cuenta.** `ProxyChoice::Unusable` guarda tal cual un proxy propio que
-  no se puede usar (para que los ajustes lo muestren) y lo rechaza; ya no se
-  sustituye por el global ni por una conexión directa. Una entrada vacía o
-  ausente sigue siendo «heredar el global».
-- **Contrato.** `proxy::global()` y `ProxyChoice::resolve()` devuelven
-  `Result<Option<ProxyConfig>>`: `None` es directo y el error se propaga en
-  cada llamador (IMAP, SMTP, POP3, ManageSieve, Graph, renovación de tokens,
-  sonda de certificado, chat, enlaces a la nube y todo `proxy::agent()`).
-- **Límites conocidos.** Los libros CardDAV guardados sin cuenta y las listas de tareas CalDAV no
-  cuelgan de ninguna cuenta de correo: usan el proxy global (#193). Los
-  sockets IMAP ya abiertos y las escuchas IDLE conservan su
-  conexión hasta reconectar.
+- **Global.** L'espai del procés té quatre estats: desactivat, servidor
+  intermediari, inutilitzable (amb el motiu) i no llegit (amb el motiu). Només
+  «res desat» i `mode` `"off"` o `""` són «desactivat». Un mode amb el servidor o
+  el port buits, un port fora de l'interval 1–65535, un mode desconegut o un
+  valor que no es pot llegir com a opció de configuració (no és un objecte,
+  `mode` no és text) són «inutilitzable». `publish_global` ho publica en
+  arrencar i en desar, a l'escriptori i al mòbil.
+- **No llegit.** Si l'opció no es pot llegir en arrencar (o, al mòbil, no s'obre
+  el magatzem a `init`), l'estat és «no llegit» i les connexions es
+  rebutgen. `reload_if_unreadable` la torna a llegir abans de cada ordre
+  del sidecar, de cada `ensure_valid_creds` i de cada ordre mòbil, de manera que
+  una fallada passatgera es recupera sola.
+- **Per compte.** `ProxyChoice::Unusable` desa tal qual un servidor intermediari
+  propi que no es pot fer servir (perquè la configuració el mostri) i el
+  rebutja; ja no se substitueix pel global ni per una connexió directa. Una
+  entrada buida o absent continua sent «heretar el global».
+- **Contracte.** `proxy::global()` i `ProxyChoice::resolve()` retornen
+  `Result<Option<ProxyConfig>>`: `None` és directe i l'error es propaga a
+  cada punt que el crida (IMAP, SMTP, POP3, ManageSieve, Graph, renovació de
+  testimonis (tokens), sondeig de certificat, xat, enllaços al núvol i tot `proxy::agent()`).
+- **Límits coneguts.** Les llibretes CardDAV desades sense compte i les llistes de tasques CalDAV no
+  depenen de cap compte de correu: fan servir el servidor intermediari global
+  (#193). Els sòcols IMAP ja oberts i les escoltes IDLE conserven la seva
+  connexió fins que es tornen a connectar.
 
-### Qué ve la persona cuando se rechaza el proxy (#201)
+### Què veu la persona quan es rebutja el servidor intermediari (#201)
 
-- **Forma del error.** Es un `proxy::UnusableProxy`, cuyo texto empieza
-  por `UNUSABLE_PREFIX` y dice de quién es el ajuste:
-  `proxy setting unusable (app): …` (proxy global, también si no se pudo
-  leer) o `proxy setting unusable (account): …` (proxy propio de la
-  cuenta). Lo es todo rechazo de un ajuste inutilizable (sin servidor o
-  puerto, tipo desconocido, ajuste ilegible) y, en las peticiones HTTP
-  (`ProxyChoice::agent`, `proxy::agent`, `proxied_agent`,
-  `scoped_ureq_proxy`: Graph, renovación de tokens, nube, archivos del
-  chat…), un servidor que el cliente HTTP no admite: con un espacio, con
-  el puerto escrito en el campo del servidor o con letras fuera de ASCII.
-  Es un contrato: escritorio y móvil leen el error de sincronización como
-  texto.
-- **Escritorio** (`ConnectivityBanner`): en lugar de «Unresolved sync
-  issue», la cuenta dice que su conexión se rechazó por el ajuste del
-  proxy de la app o por el suyo propio, con «recovery not verified», y el
-  botón abre Ajustes → Red (sección `network`) o el proxy de esa cuenta
-  (`accountNetwork`). Un proxy que no contesta (`connect to proxy
-  host:port`) muestra su dirección y abre el proxy propio de la cuenta si
-  lo tiene, si no el global. Del error solo se guarda esa clasificación.
-  Al guardar el proxy global (o el de la cuenta) se borra la
-  clasificación de los fallos que culpaban a ese ajuste: siguen como
-  «Unresolved sync issue — recovery not verified».
-- **Móvil** (`MobileConnectivity.kt`): la misma distinción y el mismo
-  destino en el aviso de error de sincronización; sin cuenta conocida
-  abre Ajustes → Red. Los ajustes abren en la sección de red, cuya
-  posición sale de la misma lista que construye la pantalla
+- **Forma de l'error.** És un `proxy::UnusableProxy`, el text del qual comença
+  per `UNUSABLE_PREFIX` i diu de qui és l'opció de configuració:
+  `proxy setting unusable (app): …` (servidor intermediari global, també si no
+  s'ha pogut llegir) o `proxy setting unusable (account): …` (servidor
+  intermediari propi del compte). Ho és tot rebuig d'una opció inutilitzable
+  (sense servidor o port, tipus desconegut, opció il·legible) i, en les peticions
+  HTTP (`ProxyChoice::agent`, `proxy::agent`, `proxied_agent`,
+  `scoped_ureq_proxy`: Graph, renovació de testimonis, núvol, fitxers del
+  xat…), un servidor que el client HTTP no admet: amb un espai, amb
+  el port escrit al camp del servidor o amb lletres fora d'ASCII.
+  És un contracte: l'escriptori i el mòbil llegeixen l'error de sincronització
+  com a text.
+- **Escriptori** (`ConnectivityBanner`): en lloc d'«Unresolved sync
+  issue», el compte diu que la seva connexió s'ha rebutjat per l'opció del
+  servidor intermediari de l'aplicació o per la seva pròpia, amb «recovery not
+  verified», i el botó obre Configuració → Xarxa (secció `network`) o el servidor
+  intermediari d'aquell compte (`accountNetwork`). Un servidor intermediari que
+  no respon (`connect to proxy host:port`) mostra la seva adreça i obre el
+  servidor intermediari propi del compte si en té, i si no, el global. De l'error
+  només es desa aquesta classificació. En desar el servidor intermediari global
+  (o el del compte) s'esborra la classificació de les fallades que s'atribuïen
+  a aquella opció: continuen com a «Unresolved sync issue — recovery not verified».
+- **Mòbil** (`MobileConnectivity.kt`): la mateixa distinció i la mateixa
+  destinació a l'avís d'error de sincronització; sense un compte conegut,
+  obre Configuració → Xarxa. La configuració s'obre a la secció de xarxa, la
+  posició de la qual surt de la mateixa llista que construeix la pantalla
   (`SettingsRows`).
-- **Microsoft Graph:** el rechazo es `ErrorKind::AppProxyUnusable` o
-  `AccountProxyUnusable` (y `auth::Failure` igual al renovar el token),
-  no `Transport` ni `Unavailable`, ni una petición de volver a iniciar
-  sesión. Su texto es `Microsoft Graph: proxy setting unusable (app)`.
-  El diálogo de alta de Graph muestra el mensaje del proxy en lugar del
-  código (`app_proxy_unusable`).
-- **Sin reintento:** `is_transient_sync_error` nunca toma un rechazo de
-  proxy por un fallo de red pasajero, diga lo que diga su motivo.
-- **Límites conocidos (#201).**
-  - Un fallo sin cuenta (fila «unattributed» del escritorio) no muestra
-    el mensaje del proxy ni el botón de Red.
-  - Solo la sincronización de correo lo muestra así. El envío, los
-    calendarios, los contactos, el chat, RSS y las actualizaciones
-    enseñan sus propios errores genéricos.
-  - En los sockets de correo (IMAP, SMTP, POP3, ManageSieve) un servidor
-    que el cliente HTTP no admitiría no se rechaza de antemano: falla al
-    conectar con el proxy y se muestra como proxy que no contesta, o como
-    fallo genérico si la dirección no se puede leer. Un servidor escrito
-    como URL (`http://proxy.corp`) tampoco se rechaza en HTTP: falla al
-    conectar.
+- **Microsoft Graph:** el rebuig és `ErrorKind::AppProxyUnusable` o
+  `AccountProxyUnusable` (i `auth::Failure` igual en renovar el testimoni),
+  no `Transport` ni `Unavailable`, ni una petició de tornar a iniciar
+  la sessió. El seu text és `Microsoft Graph: proxy setting unusable (app)`.
+  El diàleg d'alta de Graph mostra el missatge del servidor intermediari en lloc
+  del codi (`app_proxy_unusable`).
+- **Sense reintents:** `is_transient_sync_error` no pren mai un rebuig del
+  servidor intermediari per una fallada de xarxa passatgera, digui el que digui
+  el seu motiu.
+- **Límits coneguts (#201).**
+  - Una fallada sense compte (fila «unattributed» de l'escriptori) no mostra
+    el missatge del servidor intermediari ni el botó de Xarxa.
+  - Només la sincronització del correu ho mostra així. L'enviament, els
+    calendaris, els contactes, el xat, l'RSS i les actualitzacions
+    mostren els seus propis errors genèrics.
+  - En els sòcols de correu (IMAP, SMTP, POP3, ManageSieve), un servidor
+    que el client HTTP no admetria no es rebutja per endavant: falla en
+    connectar amb el servidor intermediari i es mostra com un servidor
+    intermediari que no respon, o com una fallada genèrica si l'adreça no es pot
+    llegir. Un servidor escrit com a URL (`http://proxy.corp`) tampoc no es
+    rebutja en HTTP: falla en connectar.
 
-## Conexiones
+## Connexions
 
-| Conexión | Dónde | Ruta |
+| Connexió | On | Ruta |
 |---|---|---|
-| IMAP, SMTP, POP3, ManageSieve, Graph, EWS, Google Calendar y contactos, calendarios CalDAV y suscripciones de calendario | núcleo, `ProxyChoice::agent()` o la ruta de la cuenta | proxy de la cuenta o global |
-| Libros CardDAV guardados sin cuenta (los que se añaden desde la interfaz) y listas de tareas CalDAV, feeds, idiomas de traducción, changelog | núcleo, `proxy::agent()` | global |
-| Búsqueda de ajustes en móvil | núcleo, `protocol/accounts.rs` | global; con proxy se salta la consulta SRV, y un proxy inutilizable es **error** |
-| Asistente con proveedor remoto | núcleo, `assistant::agent` | global |
-| Asistente local (un programa en este equipo) | núcleo, `assistant::agent` | siempre directo, sin proxy de la aplicación ni del entorno (#195) |
-| Enlaces a la nube (Nextcloud/ownCloud) | núcleo, `cloud/mod.rs` | global; si el proxy no se puede usar, **error** (antes caía en silencio a directo) |
-| Búsqueda de ajustes del servidor (autoconfig, ISPDB) | puente Go, `autodiscover.go` | global |
-| Intercambio OAuth y userinfo de Google | puente Go, `oauth.go` | global (la cuenta aún no existe) |
-| Imagen de la cuenta | puente Go, `paste_image.go` | proxy de esa cuenta |
-| Comprobación y descarga de actualizaciones | puente Go, `update.go` | global |
-| Renovación de tokens OAuth de IMAP/SMTP | núcleo, `imap::refresh_oauth_token` con `ProxyChoice::agent()` | proxy de la cuenta o global; directa no usa `HTTP_PROXY`; con el global apagado sí lo respeta (defaults de `ureq`) |
+| IMAP, SMTP, POP3, ManageSieve, Graph, EWS, Google Calendar i contactes, calendaris CalDAV i subscripcions de calendari | nucli, `ProxyChoice::agent()` o la ruta del compte | servidor intermediari del compte o global |
+| Llibretes CardDAV desades sense compte (les que s'afegeixen des de la interfície) i llistes de tasques CalDAV, canals, idiomes de traducció, registre de canvis | nucli, `proxy::agent()` | global |
+| Cerca de la configuració al mòbil | nucli, `protocol/accounts.rs` | global; amb servidor intermediari se salta la consulta SRV, i un servidor intermediari inutilitzable és un **error** |
+| Assistent amb proveïdor remot | nucli, `assistant::agent` | global |
+| Assistent local (un programa en aquest equip) | nucli, `assistant::agent` | sempre directe, sense el servidor intermediari de l'aplicació ni el de l'entorn (#195) |
+| Enllaços al núvol (Nextcloud/ownCloud) | nucli, `cloud/mod.rs` | global; si el servidor intermediari no es pot fer servir, **error** (abans passava en silenci a directe) |
+| Cerca de la configuració del servidor (autoconfig, ISPDB) | pont Go, `autodiscover.go` | global |
+| Intercanvi OAuth i userinfo de Google | pont Go, `oauth.go` | global (el compte encara no existeix) |
+| Imatge del compte | pont Go, `paste_image.go` | servidor intermediari d'aquell compte |
+| Comprovació i baixada d'actualitzacions | pont Go, `update.go` | global |
+| Renovació de testimonis OAuth d'IMAP/SMTP | nucli, `imap::refresh_oauth_token` amb `ProxyChoice::agent()` | servidor intermediari del compte o global; la directa no fa servir `HTTP_PROXY`; amb el global desactivat sí que el respecta (valors per defecte d'`ureq`) |
 
-Cambio de #201: la renovación de tokens OAuth de IMAP/SMTP sigue la
-elección de la cuenta. Antes una cuenta «directa» la hacía con los
-defaults de `ureq`, que leen `HTTP_PROXY`; ahora va directa de verdad.
+Canvi de #201: la renovació de testimonis OAuth d'IMAP/SMTP segueix
+l'elecció del compte. Abans, un compte «directe» la feia amb els
+valors per defecte d'`ureq`, que llegeixen `HTTP_PROXY`; ara va directa de debò.
 
-En el puente Go, `netproxy.go` pide la ruta al núcleo y construye un
-`http.Transport` con `Proxy` de `net/http` (`http://` para HTTP CONNECT,
-`socks5://` para SOCKS5, que envía el nombre de host al proxy). Sin proxy se
-conserva el comportamiento anterior (variables `HTTP(S)_PROXY`). Se mantienen
-los plazos de antes (6 s autoconfig, 10 s imagen, 20 s manifiesto; la
-descarga sin plazo total pero con límites de TLS y cabeceras).
+Al pont Go, `netproxy.go` demana la ruta al nucli i construeix un
+`http.Transport` amb `Proxy` de `net/http` (`http://` per a HTTP CONNECT,
+`socks5://` per a SOCKS5, que envia el nom d'amfitrió al servidor intermediari).
+Sense servidor intermediari es conserva el comportament anterior (variables
+`HTTP(S)_PROXY`). Es mantenen els temps d'espera d'abans (6 s autoconfig, 10 s imatge,
+20 s manifest; la baixada sense temps d'espera total però amb límits de TLS i de
+capçaleres).
 
-**Falla cerrado:** si el núcleo no responde, el ajuste no se puede usar o el
-proxy no contesta, la petición falla; nunca se reintenta directa.
+**Es tanca en cas d'error (fail closed):** si el nucli no respon, l'opció no es pot fer servir o el
+servidor intermediari no respon, la petició falla; no es torna a provar mai
+directament.
 
-Con proxy, la búsqueda de ajustes se salta la consulta DNS SRV (RFC 6186):
-DNS no pasa por un proxy HTTP/SOCKS y preguntar al resolvedor local
-revelaría el dominio fuera del proxy. Se cae a la suposición
-`imap.<dominio>`/`smtp.<dominio>`.
+Amb servidor intermediari, la cerca de la configuració se salta la consulta DNS
+SRV (RFC 6186): el DNS no passa per un servidor intermediari HTTP/SOCKS i
+preguntar al resolutor local revelaria el domini fora del servidor intermediari.
+Es recorre a la suposició `imap.<domini>`/`smtp.<domini>`.
 
-## Lo que no usa el proxy
+## El que no fa servir el servidor intermediari
 
-El asistente local (#195): su dirección solo puede ser este equipo
-(`localhost`, `127.0.0.0/8` o `::1`, comprobado sobre el host ya analizado)
-y se llama con `ProxyChoice::Direct`, así que ni el proxy de la aplicación
-ni `HTTP_PROXY` ven el correo que la persona eligió no enviar fuera. Un
-proxy global inutilizable tampoco lo bloquea. El asistente, local o remoto,
-no sigue redirecciones: una llevaría el correo y la clave de este equipo a
-otro host, o de HTTPS a HTTP, sin pasar las comprobaciones de la dirección.
+L'assistent local (#195): la seva adreça només pot ser aquest equip
+(`localhost`, `127.0.0.0/8` o `::1`, comprovat sobre l'amfitrió ja analitzat)
+i es crida amb `ProxyChoice::Direct`, de manera que ni el servidor intermediari
+de l'aplicació ni `HTTP_PROXY` veuen el correu que la persona ha triat no enviar
+fora. Un servidor intermediari global inutilitzable tampoc no el bloqueja.
+L'assistent, local o remot, no segueix redireccions: una redirecció duria el
+correu i la clau d'aquest equip a un altre amfitrió, o d'HTTPS a HTTP, sense
+passar les comprovacions de l'adreça.
 
-Las imágenes y medios remotos que carga la vista web (imágenes en mensajes,
-fotos de Gravatar/DuckDuckGo) y la página de inicio de sesión que se abre en
-el navegador: los carga el motor web o el navegador del sistema, que no
-sabe del proxy de la aplicación. Así lo dice `docs/privacy.html`.
+Les imatges i els mitjans remots que carrega la visualització web (imatges als
+missatges, fotos de Gravatar/DuckDuckGo) i la pàgina d'inici de sessió que s'obre
+al navegador: els carrega el motor web o el navegador del sistema, que no
+coneix el servidor intermediari de l'aplicació. Així ho diu `docs/privacy.html`.
 
-## Búsqueda de ajustes solo a petición
+## Cerca de la configuració només a petició
 
-Antes la búsqueda se lanzaba al salir del campo de correo y enviaba la
-dirección a `autoconfig.<dominio>` y el dominio a la base de Mozilla. Ahora
-solo se lanza con el botón «Find settings online» de
-`AccountDialogCustom`, con una nota que nombra a quién se pregunta. El
-asistente ya no la lanza al pulsar «Continue» ni en la configuración manual.
-Además, la dirección va codificada en el parámetro `emailaddress` y se
-rechaza un dominio con sintaxis de URL.
+Abans, la cerca s'iniciava en sortir del camp de l'adreça electrònica i enviava
+l'adreça a `autoconfig.<domini>` i el domini a la base de dades de Mozilla. Ara
+només s'inicia amb el botó «Find settings online» d'`AccountDialogCustom`, amb
+una nota que anomena a qui es pregunta. L'assistent ja no la inicia en prémer
+«Continue» ni a la configuració manual.
+A més, l'adreça va codificada al paràmetre `emailaddress` i es
+rebutja un domini amb sintaxi d'URL.
 
-## Imagen de la cuenta (#194)
+## Imatge del compte (#194)
 
-`avatar_url` es siempre una copia local (`/media/…`) o vacío; la interfaz
-dibuja las iniciales mientras no haya copia. Si la descarga por la ruta de la
-cuenta falla, la URL de origen se guarda aparte en `accounts.avatar_source`
-(esquema 63), nunca se muestra, y se reintenta al arrancar, al restaurar una
-copia de seguridad y al cambiar un ajuste de proxy (con 2 s de espera y una
-sola ejecución en marcha, porque el ajuste se guarda en cada pulsación).
-`account.setAvatar` aplica el resultado de un reintento solo si la cuenta
-sigue como se leyó (`expect_avatar_url`, `expect_avatar_source`), de modo que
-una descarga lenta no pisa lo que la persona eligió entretanto. Un guardado
-desde ajustes que no se puede descargar conserva la imagen anterior y
-responde `pending: true`. `account.list` vacía cualquier dirección que no sea
-una copia local. Móvil carga sus imágenes por su cuenta y no se toca.
+`avatar_url` és sempre una còpia local (`/media/…`) o buida; la interfície
+dibuixa les inicials mentre no hi hagi còpia. Si la baixada per la ruta del
+compte falla, l'URL d'origen es desa a part a `accounts.avatar_source`
+(esquema 63), no es mostra mai, i es torna a provar en arrencar, en restaurar una
+còpia de seguretat i en canviar una opció del servidor intermediari (amb 2 s
+d'espera i una sola execució en curs, perquè l'opció es desa a cada pulsació).
+`account.setAvatar` aplica el resultat d'un reintent només si el compte
+continua tal com es va llegir (`expect_avatar_url`, `expect_avatar_source`), de
+manera que una baixada lenta no sobreescriu el que la persona ha triat mentrestant.
+Un desament des de la configuració que no es pot baixar conserva la imatge
+anterior i respon `pending: true`. `account.list` buida qualsevol adreça que no
+sigui una còpia local. El mòbil carrega les seves imatges pel seu compte i no es
+toca.
 
-## Pruebas
+## Proves
 
-- Go (`netproxy_test.go`): proxy HTTP de prueba que registra peticiones y
-  `CONNECT` (con credenciales `Proxy-Authorization`); servidor SOCKS5 de
-  prueba que registra el destino y comprueba que llega el nombre sin
-  resolver; sin proxy va directo; ajustes inválidos, núcleo ausente y proxy
-  que no escucha dan error sin tocar el destino; autodiscover, imagen
-  (por cuenta) y actualización pasan por el proxy; escape de la dirección.
-- Núcleo: `strict_global` y, para #192, `only_nothing_saved_or_off_reads_as_no_proxy`,
+- Go (`netproxy_test.go`): servidor intermediari HTTP de prova que registra les
+  peticions i `CONNECT` (amb credencials `Proxy-Authorization`); servidor SOCKS5
+  de prova que registra la destinació i comprova que hi arriba el nom sense
+  resoldre; sense servidor intermediari va directe; opcions no vàlides, nucli
+  absent i servidor intermediari que no escolta donen error sense tocar la
+  destinació; autodiscover, imatge (per compte) i actualització passen pel
+  servidor intermediari; escapament de l'adreça.
+- Nucli: `strict_global` i, per a #192, `only_nothing_saved_or_off_reads_as_no_proxy`,
   `an_account_proxy_that_cannot_be_read_is_refused_too`,
   `a_half_filled_account_proxy_is_kept_and_refused_not_replaced`,
   `an_unusable_app_proxy_refuses_every_connection_instead_of_going_direct`,
-  `a_proxy_setting_that_cannot_be_read_holds_connections_until_it_can` y
+  `a_proxy_setting_that_cannot_be_read_holds_connections_until_it_can` i
   `an_account_with_an_unusable_proxy_opens_no_socket` (proxy.rs);
   `proxy_route_follows_the_account_and_fails_closed` (store/tests.rs);
   `mobile_autodiscover_refuses_to_look_up_through_an_unusable_proxy`
   (protocol/tests.rs); `an_unusable_proxy_is_an_error_and_never_a_direct_connection`
-  (cloud/tests.rs). Para #201:
+  (cloud/tests.rs). Per a #201:
   `every_refusal_says_proxy_setting_unusable_and_whose_setting_it_is`
   (proxy.rs); `a_proxy_setting_that_cannot_be_used_is_a_proxy_error_and_not_retried`
   (graph/tests.rs), `a_proxy_setting_that_cannot_be_used_is_a_proxy_failure_not_unavailable`
   (graph/auth/tests.rs), `a_proxy_refusal_while_refreshing_the_grant_stays_a_proxy_error`
   (graph/mail/tests.rs); `an_unusable_proxy_setting_is_not_retried_as_a_passing_failure`
-  y `graph_failures_do_not_enter_imap_retry_policy` (main.rs);
+  i `graph_failures_do_not_enter_imap_retry_policy` (main.rs);
   `a_server_the_http_client_cannot_use_is_that_setting_being_unusable`
   (proxy.rs), `a_proxy_server_the_http_client_cannot_use_is_a_proxy_error_too`
   (graph/tests.rs), `a_proxy_server_the_http_client_cannot_use_is_a_proxy_failure_too`
   (graph/auth/tests.rs), `a_shared_mailbox_refused_by_its_proxy_names_whose_setting_it_is`
   (engine.rs).
-- Núcleo, asistente (#195, assistant.rs):
+- Nucli, assistent (#195, assistant.rs):
   `a_local_provider_is_reached_directly_even_with_an_app_proxy_set`,
   `a_remote_provider_still_goes_through_the_app_proxy`,
   `an_unusable_app_proxy_refuses_a_remote_provider_but_never_holds_a_local_one`,
   `a_redirect_from_the_provider_is_not_followed`,
-  `local_mode_accepts_every_form_of_this_computer_including_ipv6` y
+  `local_mode_accepts_every_form_of_this_computer_including_ipv6` i
   `local_mode_refuses_hosts_that_are_not_this_computer`.
-- Frontend (`AccountDialogCustom.test.tsx`): escribir y salir del campo no
-  llama a `account.autodiscover`; el botón sí, y la nota nombra el dominio y
-  Mozilla; los servidores se pueden escribir sin búsqueda.
-  `ConnectivityBanner.test.tsx`, `lib/proxyProblems.test.ts` y
+- Frontend (`AccountDialogCustom.test.tsx`): escriure i sortir del camp no
+  crida `account.autodiscover`; el botó sí, i la nota anomena el domini i
+  Mozilla; els servidors es poden escriure sense cerca.
+  `ConnectivityBanner.test.tsx`, `lib/proxyProblems.test.ts` i
   `AccountDialogGraph.test.tsx`
-  (#201): un proxy global incompleto abre Ajustes → Red, uno propio abre
-  el proxy de esa cuenta, y cualquier otro fallo sigue abriendo la cuenta.
-- Móvil (`MobileConnectivityTest.kt`, `SettingsRowsTest.kt`, #201): la
-  misma distinción, y la sección de red donde la ponen las filas de encima.
-- Las pruebas que publican un proxy global inutilizable toman
-  `TEST_GLOBAL_LOCK` para escribir. Las que conectan por la ruta global
-  con un servidor local toman `steady_global()` para leer (RSS, nube,
-  archivos del chat, intercambio de código OAuth en móvil) o usan
-  `ProxyChoice::Direct` (Google Calendar, EWS, POP3), para no ver ese
-  proxy a medias. `load_global` también toma la lectura, y con él
-  `Engine::new`, `ffi::init` y la restauración de copias: una prueba que
-  ya tiene `steady_global()` no puede hacer nada de eso, así que las que
-  abren un motor no lo toman.
+  (#201): un servidor intermediari global incomplet obre Configuració → Xarxa, un
+  de propi obre el servidor intermediari d'aquell compte, i qualsevol altra
+  fallada continua obrint el compte.
+- Mòbil (`MobileConnectivityTest.kt`, `SettingsRowsTest.kt`, #201): la
+  mateixa distinció, i la secció de xarxa on la posen les files de sobre.
+- Les proves que publiquen un servidor intermediari global inutilitzable prenen
+  `TEST_GLOBAL_LOCK` per escriure. Les que es connecten per la ruta global
+  amb un servidor local prenen `steady_global()` per llegir (RSS, núvol,
+  fitxers del xat, intercanvi de codi OAuth al mòbil) o fan servir
+  `ProxyChoice::Direct` (Google Calendar, EWS, POP3), per no veure aquell
+  servidor intermediari a mig configurar. `load_global` també pren la lectura, i
+  amb ell `Engine::new`, `ffi::init` i la restauració de còpies: una prova que
+  ja té `steady_global()` no pot fer res d'això, de manera que les que
+  obren un motor no el prenen.
 - `the_oauth_token_refresh_follows_the_account_route` (imap.rs): la
-  renovación de tokens va por el proxy propio, directa aunque haya
-  global, por el global, y un proxy propio inutilizable la rechaza sin
-  enviar nada.
-- Imagen de la cuenta (`avatar_download_test.go`, `oauth_avatar_test.go`,
-  `Avatar.test.tsx`, `accounts.test.ts`, y en el núcleo
+  renovació de testimonis va pel servidor intermediari propi, directa encara que
+  n'hi hagi un de global, pel global, i un servidor intermediari propi
+  inutilitzable la rebutja sense enviar res.
+- Imatge del compte (`avatar_download_test.go`, `oauth_avatar_test.go`,
+  `Avatar.test.tsx`, `accounts.test.ts`, i al nucli
   `an_account_picture_and_its_source_are_set_apart`,
-  `a_late_avatar_update_does_not_overwrite_a_newer_choice`): una descarga
-  fallida nunca guarda ni entrega una dirección remota, el reintento usa la
-  ruta de la cuenta y guarda la copia, y las solicitudes se agrupan.
+  `a_late_avatar_update_does_not_overwrite_a_newer_choice`): una baixada
+  fallida no desa ni lliura mai una adreça remota, el reintent fa servir la
+  ruta del compte i desa la còpia, i les sol·licituds s'agrupen.

@@ -5,8 +5,8 @@
   <name>Oreneta</name>
   <summary>Fast/secure mail client with kanban and chat views</summary>
 
-  <developer id="jp.nonbili">
-    <name>Nonbili Inc.</name>
+  <developer>
+    <name>Adil El Haji</name>
   </developer>
 
   <metadata_license>CC-BY-SA-4.0</metadata_license>
@@ -35,23 +35,23 @@
   <launchable type="desktop-id">io.github.adilelhaji.oreneta.desktop</launchable>
   <screenshots>
     <screenshot>
-      <image>https://raw.githubusercontent.com/nonbili/meron/25c4752e0597018d98e55b8b5d5f87c153bc646c/screenshots/kanban-board.png</image>
+      <image>https://raw.githubusercontent.com/adilelhaji/oreneta/25c4752e0597018d98e55b8b5d5f87c153bc646c/screenshots/kanban-board.png</image>
       <caption>Kanban board</caption>
     </screenshot>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/nonbili/meron/25c4752e0597018d98e55b8b5d5f87c153bc646c/screenshots/unified-inbox.png</image>
+      <image>https://raw.githubusercontent.com/adilelhaji/oreneta/25c4752e0597018d98e55b8b5d5f87c153bc646c/screenshots/unified-inbox.png</image>
       <caption>Unified inbox</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/nonbili/meron/25c4752e0597018d98e55b8b5d5f87c153bc646c/screenshots/media-gallery.png</image>
+      <image>https://raw.githubusercontent.com/adilelhaji/oreneta/25c4752e0597018d98e55b8b5d5f87c153bc646c/screenshots/media-gallery.png</image>
       <caption>Media gallery</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/nonbili/meron/25c4752e0597018d98e55b8b5d5f87c153bc646c/screenshots/media-grid.png</image>
+      <image>https://raw.githubusercontent.com/adilelhaji/oreneta/25c4752e0597018d98e55b8b5d5f87c153bc646c/screenshots/media-grid.png</image>
       <caption>Media grid</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/nonbili/meron/25c4752e0597018d98e55b8b5d5f87c153bc646c/screenshots/themes.png</image>
+      <image>https://raw.githubusercontent.com/adilelhaji/oreneta/25c4752e0597018d98e55b8b5d5f87c153bc646c/screenshots/themes.png</image>
       <caption>Themes</caption>
     </screenshot>
   </screenshots>

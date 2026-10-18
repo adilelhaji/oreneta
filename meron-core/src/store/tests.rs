@@ -955,6 +955,315 @@ fn moving_a_cached_message_transfers_its_judgment_before_source_delete() {
     );
 }
 
+// ---- Undoing a spam judgment (#254) -----------------------------------------
+
+/// Everything the learned spam filter knows about one account, in a fixed
+/// order: the explicit judgments (with their snapshots), the sender counts,
+/// the subject word counts and the verdict of every cached message. Two equal
+/// snapshots mean the filter cannot tell the two moments apart.
+type SpamLearning = (
+    Vec<(i64, i64, String, String)>,
+    Vec<(String, i64, i64)>,
+    Vec<(String, i64, i64)>,
+    Vec<(i64, Option<i64>)>,
+);
+
+fn spam_learning(conn: &Connection, account: &str) -> SpamLearning {
+    let judgments = conn
+        .prepare(
+            "SELECT message_id, spam, from_addr, subject FROM spam_judgments
+              WHERE account = ?1 ORDER BY message_id",
+        )
+        .unwrap()
+        .query_map([account], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+        .unwrap()
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .unwrap();
+    let senders = conn
+        .prepare("SELECT addr, spam_count, ham_count FROM sender_spam WHERE account = ?1 ORDER BY addr")
+        .unwrap()
+        .query_map([account], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .unwrap()
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .unwrap();
+    let words = conn
+        .prepare("SELECT word, spam_count, ham_count FROM spam_triggers WHERE account = ?1 ORDER BY word")
+        .unwrap()
+        .query_map([account], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .unwrap()
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .unwrap();
+    let verdicts = conn
+        .prepare("SELECT id, spam FROM messages WHERE account = ?1 ORDER BY id")
+        .unwrap()
+        .query_map([account], |r| Ok((r.get(0)?, r.get(1)?)))
+        .unwrap()
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .unwrap();
+    (judgments, senders, words, verdicts)
+}
+
+/// An account with two conversations from the same sender in its inbox and
+/// a third from someone else, every verdict already computed.
+fn spam_undo_conn() -> Connection {
+    let conn = test_conn();
+    conn.execute("INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')", []).unwrap();
+    let header = |uid: u32, from: &str, subject: &str, thread: &str| MessageHeader {
+        uid,
+        from_addr: from.into(),
+        subject: subject.into(),
+        message_id: format!("{thread}@example.com"),
+        thread_key: thread.into(),
+        date: i64::from(uid),
+        ..Default::default()
+    };
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            header(1, "spammer@example.com", "Claim your prize now", "t-1"),
+            header(2, "spammer@example.com", "Prize waiting for you", "t-2"),
+            header(3, "friend@example.com", "Lunch tomorrow", "t-3"),
+        ],
+    )
+    .unwrap();
+    rejudge_spam(&conn, "acct", false).unwrap();
+    conn
+}
+
+#[test]
+fn reverting_a_mark_as_junk_leaves_the_learning_as_it_was_before() {
+    let conn = spam_undo_conn();
+    let before = spam_learning(&conn, "acct");
+
+    let recorded = record_spam_judgment_change(&conn, "acct", "INBOX", "t-1", true)
+        .unwrap()
+        .unwrap();
+    assert_eq!(recorded.sender, "spammer@example.com");
+    assert_eq!(recorded.change.before, None);
+    assert_eq!(
+        recorded.change.after,
+        Some(SpamJudgmentState {
+            spam: true,
+            from_addr: "spammer@example.com".into(),
+            subject: "Claim your prize now".into(),
+        })
+    );
+    assert_ne!(spam_learning(&conn, "acct"), before);
+
+    let inverse = revert_spam_judgment(&conn, &recorded.change).unwrap();
+    assert_eq!(inverse, Some(recorded.change.inverse()));
+    assert_eq!(spam_learning(&conn, "acct"), before);
+}
+
+#[test]
+fn reverting_a_not_junk_puts_the_earlier_spam_judgment_back() {
+    let conn = spam_undo_conn();
+    record_spam_judgment(&conn, "acct", "INBOX", "t-1", true).unwrap();
+    let before = spam_learning(&conn, "acct");
+
+    let recorded = record_spam_judgment_change(&conn, "acct", "INBOX", "t-1", false)
+        .unwrap()
+        .unwrap();
+    assert_eq!(recorded.change.before.as_ref().map(|s| s.spam), Some(true));
+    assert_eq!(recorded.change.after.as_ref().map(|s| s.spam), Some(false));
+    assert_eq!(sender_spam_counts(&conn, "acct", "spammer@example.com"), (0, 1));
+
+    assert!(revert_spam_judgment(&conn, &recorded.change).unwrap().is_some());
+    assert_eq!(spam_learning(&conn, "acct"), before);
+    assert_eq!(sender_spam_counts(&conn, "acct", "spammer@example.com"), (1, 0));
+}
+
+#[test]
+fn reverting_keeps_a_later_judgment_of_another_message_from_the_same_sender() {
+    let conn = spam_undo_conn();
+    let first = record_spam_judgment_change(&conn, "acct", "INBOX", "t-1", true)
+        .unwrap()
+        .unwrap();
+    // Made afterwards, on its own: the undo of the first must not touch it.
+    record_spam_judgment(&conn, "acct", "INBOX", "t-2", true).unwrap();
+    assert_eq!(sender_spam_counts(&conn, "acct", "spammer@example.com"), (2, 0));
+
+    assert!(revert_spam_judgment(&conn, &first.change).unwrap().is_some());
+
+    // Everything the filter knows is what the later judgment alone taught
+    // it, the subject word both share ("prize") included.
+    let only_later = spam_undo_conn();
+    record_spam_judgment(&only_later, "acct", "INBOX", "t-2", true).unwrap();
+    assert_eq!(spam_learning(&conn, "acct"), spam_learning(&only_later, "acct"));
+    let prize: (i64, i64) = conn
+        .query_row(
+            "SELECT spam_count, ham_count FROM spam_triggers WHERE account = 'acct' AND word = 'prize'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(prize, (1, 0));
+    assert_eq!(sender_spam_counts(&conn, "acct", "spammer@example.com"), (1, 0));
+    let judged: Vec<String> = conn
+        .prepare(
+            "SELECT m.thread_key FROM spam_judgments j JOIN messages m ON m.id = j.message_id
+              WHERE j.account = 'acct'",
+        )
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    assert_eq!(judged, vec!["t-2".to_string()]);
+}
+
+#[test]
+fn reverting_after_the_same_message_was_judged_again_changes_nothing() {
+    let conn = spam_undo_conn();
+    let marked = record_spam_judgment_change(&conn, "acct", "INBOX", "t-1", true)
+        .unwrap()
+        .unwrap();
+    // The reader said "not spam" about the same message since.
+    record_spam_judgment(&conn, "acct", "INBOX", "t-1", false).unwrap();
+    let later = spam_learning(&conn, "acct");
+
+    assert_eq!(revert_spam_judgment(&conn, &marked.change).unwrap(), None);
+    assert_eq!(spam_learning(&conn, "acct"), later);
+}
+
+#[test]
+fn reverting_a_repeated_judgment_changes_nothing() {
+    let conn = spam_undo_conn();
+    record_spam_judgment(&conn, "acct", "INBOX", "t-1", true).unwrap();
+    let before = spam_learning(&conn, "acct");
+
+    let repeated = record_spam_judgment_change(&conn, "acct", "INBOX", "t-1", true)
+        .unwrap()
+        .unwrap();
+    assert_eq!(repeated.change.before, repeated.change.after);
+    assert_eq!(spam_learning(&conn, "acct"), before);
+
+    assert!(revert_spam_judgment(&conn, &repeated.change).unwrap().is_some());
+    assert_eq!(spam_learning(&conn, "acct"), before);
+}
+
+#[test]
+fn reverting_the_revert_puts_the_judgment_back() {
+    let conn = spam_undo_conn();
+    let recorded = record_spam_judgment_change(&conn, "acct", "INBOX", "t-1", true)
+        .unwrap()
+        .unwrap();
+    let marked = spam_learning(&conn, "acct");
+    let inverse = revert_spam_judgment(&conn, &recorded.change).unwrap().unwrap();
+
+    // What the undo does when the move back fails: the learning returns to
+    // what the mark left, so nothing of the undo is half done.
+    assert_eq!(revert_spam_judgment(&conn, &inverse).unwrap(), Some(recorded.change.clone()));
+    assert_eq!(spam_learning(&conn, "acct"), marked);
+}
+
+#[test]
+fn reverting_does_nothing_for_a_message_gone_from_the_cache_or_another_account() {
+    let conn = spam_undo_conn();
+    let recorded = record_spam_judgment_change(&conn, "acct", "INBOX", "t-1", true)
+        .unwrap()
+        .unwrap();
+    let marked = spam_learning(&conn, "acct");
+
+    let elsewhere = SpamJudgmentChange { account: "other".into(), ..recorded.change.clone() };
+    assert_eq!(revert_spam_judgment(&conn, &elsewhere).unwrap(), None);
+    assert_eq!(spam_learning(&conn, "acct"), marked);
+
+    // The inverse of a revert names a judgment to put back on a message the
+    // cache no longer holds: there is nothing to put it on.
+    let inverse = revert_spam_judgment(&conn, &recorded.change).unwrap().unwrap();
+    delete_messages_by_uid(&conn, "acct", "INBOX", &[1]).unwrap();
+    let gone = spam_learning(&conn, "acct");
+    assert_eq!(revert_spam_judgment(&conn, &inverse).unwrap(), None);
+    assert_eq!(spam_learning(&conn, "acct"), gone);
+}
+
+/// The whole undo as the app runs it: the mark records on the junk folder's
+/// row, the undo reverts there and then moves the conversation back.
+#[test]
+fn undoing_a_junk_move_reverts_on_the_junk_row_before_moving_back() {
+    let conn = spam_undo_conn();
+    // An earlier "not spam" on the inbox row, which the mark replaces.
+    record_spam_judgment(&conn, "acct", "INBOX", "t-1", false).unwrap();
+    let header = |uid: u32| MessageHeader {
+        uid,
+        from_addr: "spammer@example.com".into(),
+        subject: "Claim your prize now".into(),
+        message_id: "t-1@example.com".into(),
+        thread_key: "t-1".into(),
+        date: 1,
+        ..Default::default()
+    };
+
+    // Mark as junk: the server MOVE mints a junk row, the judgment follows it.
+    upsert_messages(&conn, "acct", "Junk", &[header(40)]).unwrap();
+    preserve_spam_judgments_for_move(&conn, "acct", "INBOX", "Junk", &[1]).unwrap();
+    delete_messages_by_uid(&conn, "acct", "INBOX", &[1]).unwrap();
+    let before_mark = spam_learning(&conn, "acct");
+    let recorded = record_spam_judgment_change(&conn, "acct", "Junk", "t-1", true)
+        .unwrap()
+        .unwrap();
+    assert_eq!(sender_spam_counts(&conn, "acct", "spammer@example.com"), (1, 0));
+
+    // Undo: revert first, on the row the mark judged.
+    assert!(revert_spam_judgment(&conn, &recorded.change).unwrap().is_some());
+    assert_eq!(spam_learning(&conn, "acct"), before_mark);
+    // Then the move back carries the restored "not spam" to the inbox row.
+    upsert_messages(&conn, "acct", "INBOX", &[header(5)]).unwrap();
+    preserve_spam_judgments_for_move(&conn, "acct", "Junk", "INBOX", &[40]).unwrap();
+    delete_messages_by_uid(&conn, "acct", "Junk", &[40]).unwrap();
+    assert_eq!(sender_spam_counts(&conn, "acct", "spammer@example.com"), (0, 1));
+    let restored: (i64, String) = conn
+        .query_row(
+            "SELECT j.spam, m.folder FROM spam_judgments j JOIN messages m ON m.id = j.message_id
+              WHERE j.account = 'acct'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(restored, (0, "INBOX".to_string()));
+}
+
+/// The change crosses the app as JSON and comes back from it: its shape is
+/// part of the `mail.recordSpamJudgment` / `mail.revertSpamJudgment` contract.
+#[test]
+fn a_spam_judgment_change_round_trips_as_json_and_rejects_unknown_fields() {
+    let change = SpamJudgmentChange {
+        account: "acct".into(),
+        message_id: 7,
+        before: None,
+        after: Some(SpamJudgmentState { spam: true, from_addr: "a@example.com".into(), subject: "Win".into() }),
+    };
+    let value = serde_json::to_value(&change).unwrap();
+    assert_eq!(
+        value,
+        json!({
+            "account": "acct",
+            "message_id": 7,
+            "before": null,
+            "after": { "spam": true, "from_addr": "a@example.com", "subject": "Win" },
+        })
+    );
+    assert_eq!(serde_json::from_value::<SpamJudgmentChange>(value).unwrap(), change);
+    assert!(serde_json::from_value::<SpamJudgmentChange>(json!({
+        "account": "acct", "message_id": 7, "before": null, "after": null, "extra": 1,
+    }))
+    .is_err());
+    assert!(serde_json::from_value::<SpamJudgmentChange>(json!({ "account": "acct" })).is_err());
+    // `null` is a value, a missing key is a malformed change: read as "no
+    // row", it would delete the judgment the row holds.
+    assert!(serde_json::from_value::<SpamJudgmentChange>(json!({
+        "account": "acct", "message_id": 7, "after": null,
+    }))
+    .is_err());
+    assert!(serde_json::from_value::<SpamJudgmentChange>(json!({
+        "account": "acct", "message_id": 7, "before": null,
+    }))
+    .is_err());
+}
+
 #[test]
 fn subject_words_seen_repeatedly_in_confirmed_spam_flag_a_later_message() {
     let conn = test_conn();
@@ -3531,6 +3840,68 @@ fn concurrent_first_open_runs_migrations_once() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// Opens of one file in one process wait for a migration that holds its
+/// write lock longer than the busy timeout, instead of failing with
+/// "database is locked" (#227).
+#[test]
+fn concurrent_opens_wait_for_a_migration_longer_than_the_busy_timeout() {
+    let dir = std::env::temp_dir().join(format!("meron-store-test-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("meron.db");
+    db::slow_migration::next_for(&path, std::time::Duration::from_secs(6));
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(6));
+    let handles = (0..6)
+        .map(|_| {
+            let path = path.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                db::open_at(&path).map(|_| ())
+            })
+        })
+        .collect::<Vec<_>>();
+
+    for handle in handles {
+        handle.join().unwrap().unwrap();
+    }
+    assert!(db::slow_migration::spent(), "the migration held its lock");
+
+    let conn = Connection::open(&path).unwrap();
+    let version: i64 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(version, db::SCHEMA_VERSION);
+
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A store already current is opened without its write lock, so a writer
+/// elsewhere does not hold it up; one whose body cache is not current still
+/// gets it done (#227).
+#[test]
+fn a_current_store_opens_without_the_write_lock() {
+    let dir = std::env::temp_dir().join(format!("meron-store-test-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("meron.db");
+    drop(db::open_at(&path).unwrap());
+
+    let writer = Connection::open(&path).unwrap();
+    writer.execute_batch("BEGIN IMMEDIATE").unwrap();
+    db::open_at(&path).expect("opened while another connection writes");
+    writer.execute_batch("ROLLBACK").unwrap();
+
+    writer.execute("DELETE FROM meta WHERE key = 'body_cache_version'", []).unwrap();
+    let conn = db::open_at(&path).unwrap();
+    let cache: Option<String> = conn
+        .query_row("SELECT value FROM meta WHERE key = 'body_cache_version'", [], |r| r.get(0))
+        .optional()
+        .unwrap();
+    assert!(cache.is_some(), "the body cache was brought up to date");
+    drop((conn, writer));
+
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn upgrade_from_main_v30_preserves_label_links_and_adds_tasks_and_spam() {
     let conn = test_conn();
@@ -4266,7 +4637,7 @@ fn delete_draft_sibling_copies_drops_hidden_same_id_rows() {
 }
 
 #[test]
-fn delete_quick_reply_drafts_in_thread_removes_only_meron_drafts() {
+fn delete_quick_reply_drafts_in_thread_removes_only_app_drafts_old_and_new() {
     use crate::imap::MessageHeader;
     let conn = test_conn();
     let draft = |uid: u32, thread_key: &str, message_id: &str| MessageHeader {
@@ -4282,17 +4653,23 @@ fn delete_quick_reply_drafts_in_thread_removes_only_meron_drafts() {
         "acct",
         "Drafts",
         &[
+            // Minted before the rename: still the app's own, still cleaned up.
             draft(10, "root@mail.example", "meron-draft-old@meron"),
-            draft(11, "root@mail.example", "meron-draft-new@meron"),
+            draft(11, "root@mail.example", "oreneta-draft-new@oreneta"),
             draft(12, "root@mail.example", "manual-draft@example.com"),
             draft(13, "other@mail.example", "meron-draft-other@meron"),
+            draft(14, "root@mail.example", "Oreneta-Draft-Upper@Oreneta"),
+            // Only the fallback-domain form is matched, as before the rename.
+            draft(15, "root@mail.example", "oreneta-draft-foreign@example.com"),
+            // Another thread keeps its drafts.
+            draft(16, "other@mail.example", "oreneta-draft-other@oreneta"),
         ],
     )
     .unwrap();
 
     let deleted =
         delete_quick_reply_drafts_in_thread(&conn, "acct", "Drafts", "root@mail.example").unwrap();
-    assert_eq!(deleted, 2);
+    assert_eq!(deleted, 3);
     let uids: Vec<u32> = conn
         .prepare("SELECT uid FROM messages WHERE folder = 'Drafts' ORDER BY uid")
         .unwrap()
@@ -4300,7 +4677,7 @@ fn delete_quick_reply_drafts_in_thread_removes_only_meron_drafts() {
         .unwrap()
         .collect::<rusqlite::Result<_>>()
         .unwrap();
-    assert_eq!(uids, vec![12, 13]);
+    assert_eq!(uids, vec![12, 13, 15, 16]);
 }
 
 #[test]

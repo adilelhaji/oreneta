@@ -1,141 +1,142 @@
-# Libreta de contactos local (#41, ADR-0012, paso 1)
+# Llibreta de contactes local (#41, ADR-0012, pas 1)
 
-## Qué hace
+## Què fa
 
-- **Personas** tiene un botón «Nuevo contacto». Los contactos de la libreta
-  local tienen «Editar» y «Eliminar». Los de libretas sincronizadas (CardDAV,
-  Google, Exchange) siguen siendo de solo lectura y no muestran esos botones.
-- Los contactos locales se guardan solo en este equipo, y el editor lo dice.
-  No tienen cuenta, así que eliminar una cuenta no los toca (ADR-0011).
-- Un contacto necesita nombre o correo. Las filas vacías no se guardan, y los
-  correos se guardan en minúsculas, igual que los sincronizados.
+- **Persones** té un botó «Contacte nou». Els contactes de la llibreta local
+  tenen «Edita» i «Suprimeix». Els de llibretes sincronitzades (CardDAV, Google,
+  Exchange) continuen sent de només lectura i no mostren aquests botons.
+- Els contactes locals només es desen en aquest equip, i l'editor ho indica. No
+  tenen compte, de manera que eliminar un compte no els afecta (ADR-0011).
+- Un contacte necessita un nom o un correu. Les files buides no es desen, i els
+  correus es desen en minúscules, igual que els sincronitzats.
 
-## Versiones y conflictos
+## Versions i conflictes
 
-- `people.version` (migración 37) guarda la versión con la que se leyó cada
-  contacto. Para la libreta local es un contador; para CardDAV será el ETag
-  (paso 2).
-- Editar o borrar exige la versión leída. Si no coincide, porque otra ventana
-  lo cambió o lo borró, no se escribe nada y el núcleo devuelve la copia
+- `people.version` (migració 37) desa la versió amb què es va llegir cada
+  contacte. Per a la llibreta local és un comptador; per a CardDAV serà l'ETag
+  (pas 2).
+- Editar o suprimir exigeix la versió llegida. Si no coincideix, perquè una altra
+  finestra l'ha canviat o suprimit, no s'escriu res i el nucli retorna la còpia
   actual.
-- El editor muestra entonces las dos versiones. «Conservar la mía» guarda
-  sobre la versión actual. «Quedarme con la guardada» descarta los cambios.
-  Si el contacto se borró, las opciones son «Crearlo de nuevo» o «Descartar».
-- Borrar desde una versión antigua no borra nada y avisa.
+- Aleshores l'editor mostra les dues versions. «Conserva la meva» desa sobre la
+  versió actual. «Queda't amb la desada» descarta els canvis. Si el contacte
+  s'ha suprimit, les opcions són «Torna'l a crear» o «Descarta».
+- Suprimir des d'una versió antiga no suprimeix res i avisa.
 
-## Órdenes del puente
+## Ordres del pont
 
-- `people.save {id?, version?, person}`: crea o edita. Responde
-  `{ok, id, version}` o `{conflict: true, current}`. Una edición sin versión se
-  rechaza.
-- `people.delete {id, version}`: borra. Responde lo mismo.
-- `people.list` añade `version` y `editable` a cada contacto.
+- `people.save {id?, version?, person}`: crea o edita. Respon
+  `{ok, id, version}` o `{conflict: true, current}`. Una edició sense versió es
+  rebutja.
+- `people.delete {id, version}`: suprimeix. Respon el mateix.
+- `people.list` afegeix `version` i `editable` a cada contacte.
 
-## Pruebas
+## Proves
 
-| Nivel | Qué cubre |
+| Nivell | Què cobreix |
 |---|---|
-| N1 almacén (`store/local_people/tests.rs`) | Alta y limpieza de campos; edición que avanza la versión; edición desde una versión antigua (no escribe y devuelve la copia actual); edición de un contacto borrado; borrado desde una versión antigua; rechazo de contactos vacíos; un contacto sincronizado no se puede escribir por esta vía |
-| N1 despachador (`main.rs`) | Alta, listado con `editable`, conflicto entre dos ventanas, edición sin versión y borrado |
-| Go (`people_write_test.go`) | Sin núcleo en marcha, una escritura falla en vez de fingir que guardó |
-| N2 vista (`PersonEditor.test.tsx`) | Alta desde la cabecera; botones solo en contactos editables; conflicto: se ven las dos copias y «Conservar la mía» guarda sobre la versión actual; «Descartar» no escribe |
+| N1 magatzem (`store/local_people/tests.rs`) | Alta i neteja de camps; edició que fa avançar la versió; edició des d'una versió antiga (no escriu i retorna la còpia actual); edició d'un contacte suprimit; supressió des d'una versió antiga; rebuig de contactes buits; un contacte sincronitzat no es pot escriure per aquesta via |
+| N1 distribuïdor (`main.rs`) | Alta, llistat amb `editable`, conflicte entre dues finestres, edició sense versió i supressió |
+| Go (`people_write_test.go`) | Sense el nucli en marxa, una escriptura falla en lloc de fingir que ha desat |
+| N2 vista (`PersonEditor.test.tsx`) | Alta des de la capçalera; botons només en contactes editables; conflicte: es veuen les dues còpies i «Conserva la meva» desa sobre la versió actual; «Descarta» no escriu |
 
-## Paso 2: libretas CardDAV
+## Pas 2: llibretes CardDAV
 
-### Qué se puede hacer
+### Què es pot fer
 
-Los contactos de una libreta CardDAV se pueden editar y borrar, y al crear un
-contacto se elige «Este equipo» o una libreta CardDAV editable. El editor dice
-dónde se guarda el cambio. Al borrar un contacto de servidor, el aviso recuerda
-que desaparece para todas las apps que leen esa libreta. Google y Exchange
-siguen siendo de solo lectura (ADR-0012).
+Els contactes d'una llibreta CardDAV es poden editar i suprimir, i en crear un
+contacte es tria «Aquest equip» o una llibreta CardDAV editable. L'editor indica
+on es desa el canvi. En suprimir un contacte de servidor, l'avís recorda que
+desapareix per a totes les aplicacions que llegeixen aquella llibreta. Google
+continua sent de només lectura (ADR-0012); les persones d'Exchange s'editen des
+d'ADR-0066.
 
-### Qué guarda la sincronización
+### Què desa la sincronització
 
-- De cada tarjeta: su URL (`people.href`, migración 38) y su ETag
+- De cada targeta: el seu URL (`people.href`, migració 38) i el seu ETag
   (`people.version`).
-- De cada libreta: si el servidor deja escribir en ella, según
+- De cada llibreta: si el servidor hi permet escriure, segons
   `current-user-privilege-set` (`contact_sources.writable`). Si el servidor
-  dice que no, no se ofrece editar. Si no dice nada, se permite editar y un
-  rechazo del servidor se muestra.
+  diu que no, no s'ofereix editar. Si no diu res, es permet editar i es mostra
+  el rebuig del servidor, si n'hi ha.
 
-### Cómo se escribe
+### Com s'escriu
 
-- **Editar.** Se lee la tarjeta actual. Si su ETag no es el que se leyó, no
-  se escribe nada y se devuelve la copia del servidor. Si coincide, se
-  modifica la tarjeta del servidor y se envía con `If-Match`. Un `412` entre
-  la lectura y la escritura también es un conflicto.
-- **Solo cambian las líneas tocadas** (`contacts::vcard_write`). Se conserva
-  todo lo que la app no muestra: direcciones, cumpleaños, foto, UID, campos
-  propios de otros clientes y la etiqueta de Apple que va con cada correo.
-  - Un correo o teléfono que sigue igual conserva su línea original.
-  - Al cambiar el nombre se reescriben `FN` y `N`. `N` lleva el nombre entero
-    como nombre de pila, sin adivinar apellidos.
-- **Crear.** Se envía una tarjeta vCard 3.0 nueva con `If-None-Match: *`. Si
-  el servidor no devuelve el ETag, se vuelve a leer la tarjeta.
-- **Borrar.** Se envía `DELETE` con `If-Match`.
-- **Nunca se escribe sin versión conocida** ni en otro servidor que el de la
-  libreta: la contraseña no sale de ahí (#28).
+- **Editar.** Es llegeix la targeta actual. Si el seu ETag no és el que es va
+  llegir, no s'escriu res i es retorna la còpia del servidor. Si coincideix, es
+  modifica la targeta del servidor i s'envia amb `If-Match`. Un `412` entre la
+  lectura i l'escriptura també és un conflicte.
+- **Només canvien les línies tocades** (`contacts::vcard_write`). Es conserva
+  tot el que l'aplicació no mostra: adreces, aniversaris, foto, UID, camps propis
+  d'altres clients i l'etiqueta d'Apple que va amb cada correu.
+  - Un correu o un telèfon que no canvia conserva la línia original.
+  - En canviar el nom es reescriuen `FN` i `N`. `N` porta el nom sencer com a
+    nom de pila, sense endevinar cognoms.
+- **Crear.** S'envia una targeta vCard 3.0 nova amb `If-None-Match: *`. Si el
+  servidor no retorna l'ETag, es torna a llegir la targeta.
+- **Suprimir.** S'envia `DELETE` amb `If-Match`.
+- **No s'escriu mai sense una versió coneguda** ni en un servidor diferent del
+  de la llibreta: la contrasenya no en surt (#28).
 
-### Corrección encontrada por el camino
+### Correcció trobada pel camí
 
-`ORG` se cortaba en un `;` escapado: «Acme\; Ltd» se leía «Acme». Ahora se
-separa solo por `;` sin escapar, igual que `N`.
+`ORG` es tallava en un `;` escapat: «Acme\; Ltd» es llegia «Acme». Ara només se
+separa per `;` sense escapar, igual que `N`.
 
-### Pruebas del paso 2
+### Proves del pas 2
 
-| Nivel | Qué cubre |
+| Nivell | Què cobreix |
 |---|---|
-| N1 (`contacts/vcard_write_tests.rs`) | Una tarjeta de Apple editada conserva ADR, BDAY, foto, UID y etiquetas; quitar un correo quita su etiqueta; renombrar; números con distinto espaciado; tarjeta nueva de ida y vuelta; líneas plegadas sin partir caracteres |
-| N1 (`carddav/write_tests.rs`, servidor falso con estado) | `If-Match` correcto; conflicto sin escritura; «Conservar la mía»; tarjeta borrada en el servidor; alta con `If-None-Match` y ETag leído de nuevo; borrado desde una versión antigua; nada se envía a otro servidor; nunca se escribe sin versión |
-| N1 (`carddav/client_tests.rs`) | Permisos: lectura sola, `write`, `all` y sin respuesta |
-| N3 (`integration_contact_writes_test.go`, Radicale 3.5.4) | Editar conservando BDAY y ADR; cambio en el servidor → conflicto sin escritura, y «Conservar la mía» después; alta en la libreta; borrado desde una versión antigua rechazado, y después correcto |
-| N2 (`PersonEditor.test.tsx`) | Elegir libreta al crear; editar un contacto de servidor con su versión, indicando dónde se guarda |
+| N1 (`contacts/vcard_write_tests.rs`) | Una targeta d'Apple editada conserva ADR, BDAY, foto, UID i etiquetes; treure un correu en treu l'etiqueta; reanomenar; números amb un espaiat diferent; targeta nova d'anada i tornada; línies plegades sense partir caràcters |
+| N1 (`carddav/write_tests.rs`, servidor fals amb estat) | `If-Match` correcte; conflicte sense escriptura; «Conserva la meva»; targeta suprimida al servidor; alta amb `If-None-Match` i ETag tornat a llegir; supressió des d'una versió antiga; no s'envia res a un altre servidor; no s'escriu mai sense versió |
+| N1 (`carddav/client_tests.rs`) | Permisos: només lectura, `write`, `all` i sense resposta |
+| N3 (`integration_contact_writes_test.go`, Radicale 3.5.4) | Editar conservant BDAY i ADR; canvi al servidor → conflicte sense escriptura, i «Conserva la meva» després; alta a la llibreta; supressió des d'una versió antiga rebutjada, i després correcta |
+| N2 (`PersonEditor.test.tsx`) | Triar la llibreta en crear; editar un contacte de servidor amb la seva versió, indicant on es desa |
 
-La prueba N3 se ejecutó en local contra Radicale 3.5.4 instalado aquí, en
-lugar de Docker. En CI se ejecuta con la imagen Docker del arnés.
+La prova N3 es va executar en local contra Radicale 3.5.4 instal·lat aquí, en
+lloc de Docker. A la CI s'executa amb la imatge Docker de l'arnès.
 
-## Paso 3: vCard y duplicados
+## Pas 3: vCard i duplicats
 
-### Importar y exportar vCard
+### Importar i exportar vCard
 
-- **Exportar** guarda un `.vcf` con todos los contactos o con los que muestra
-  la búsqueda. Cada tarjeta indica su origen en `X-ORENETA-SOURCE`. El
-  archivo se escribe solo para el propietario, como una copia de seguridad.
-- **Importar** se hace en dos pasos:
-  - primero, una vista previa: cuántos contactos hay, cuáles se dejan fuera
-    por no tener ni nombre ni correo, y una muestra de nombres. No se guarda
-    nada;
-  - después se importa a «Este equipo» o a una libreta CardDAV editable.
-- **Reglas de la importación:**
-  - Un contacto ya presente en el destino (mismo nombre y mismo primer correo)
-    se salta, así que importar dos veces no duplica la libreta.
-  - El primer fallo detiene la importación y se informa cuántos se llegaron
-    a importar.
-  - Se rechazan los archivos de más de 20 MB y los que no son vCard.
-- **Fotos:** hoy no se guardan, así que no se exportan. Tampoco se descargan
-  nunca fotos remotas.
+- **Exportar** desa un `.vcf` amb tots els contactes o amb els que mostra la
+  cerca. Cada targeta indica el seu origen a `X-ORENETA-SOURCE`. El fitxer
+  s'escriu només per al propietari, com una còpia de seguretat.
+- **Importar** es fa en dos passos:
+  - primer, una previsualització: quants contactes hi ha, quins es deixen fora
+    per no tenir ni nom ni correu, i una mostra de noms. No es desa res;
+  - després s'importa a «Aquest equip» o a una llibreta CardDAV editable.
+- **Regles de la importació:**
+  - Un contacte ja present a la destinació (el mateix nom i el mateix primer
+    correu) s'omet, de manera que importar dues vegades no duplica la
+    llibreta.
+  - El primer error atura la importació i s'informa de quants s'han arribat a
+    importar.
+  - Es rebutgen els fitxers de més de 20 MB i els que no són vCard.
+- **Fotos:** avui no es desen, de manera que no s'exporten. Tampoc no es baixen
+  mai fotos remotes.
 
-### Duplicados
+### Duplicats
 
-- La app sugiere contactos que comparten correo, en cualquier libreta. Nunca
-  los une por su cuenta.
-- «Misma persona: enlazar» los muestra como uno solo en la lista. La ficha
-  muestra «Copias enlazadas», con cada origen y un botón «Desenlazar».
-- «No es la misma» se recuerda y no se vuelve a sugerir.
-- Un enlace es solo local: no borra, no fusiona y no escribe nada en ningún
+- L'aplicació suggereix contactes que comparteixen correu, en qualsevol
+  llibreta. No els uneix mai pel seu compte.
+- «La mateixa persona: enllaça» els mostra com un de sol a la llista. La fitxa
+  mostra «Còpies enllaçades», amb cada origen i un botó «Desenllaça».
+- «No és la mateixa» es recorda i no es torna a suggerir.
+- Un enllaç és només local: no suprimeix, no fusiona i no escriu res en cap
   servidor.
-- Sobrevive a la resincronización, porque los ids son estables, y desaparece
-  al borrar el contacto o su cuenta.
+- Sobreviu a la resincronització, perquè els identificadors són estables, i
+  desapareix en suprimir el contacte o el seu compte.
 
-### Pruebas del paso 3
+### Proves del pas 3
 
-| Nivel | Qué cubre |
+| Nivell | Què cobreix |
 |---|---|
-| N1 | Exportación con origen; vista previa (descartes, no vCard, tamaño); detección de duplicados exactos; sugerencias, enlace que sobrevive a resincronizar, desenlace, «no es la misma», enlace con contactos inexistentes |
-| N1 despachador | Vista previa sin guardar nada; importar dos veces sin duplicar; exportar |
-| N2 | Importación con vista previa y confirmación; exportación de lo que se ve; sugerir, enlazar, ver las copias y desenlazar |
+| N1 | Exportació amb origen; previsualització (descarts, no vCard, mida); detecció de duplicats exactes; suggeriments, enllaç que sobreviu a la resincronització, desenllaç, «no és la mateixa», enllaç amb contactes inexistents |
+| N1 distribuïdor | Previsualització sense desar res; importar dues vegades sense duplicar; exportar |
+| N2 | Importació amb previsualització i confirmació; exportació del que es veu; suggerir, enllaçar, veure les còpies i desenllaçar |
 
-## Siguiente
+## Següent
 
-Google y Exchange, cuando se cumplan sus condiciones (ADR-0012).
+Google, quan se'n compleixin les condicions (ADR-0012, #144).

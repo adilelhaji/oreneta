@@ -47,7 +47,7 @@ export function SendLaterMenu({
         <Clock size={16} strokeWidth={1.75} />
       </button>
       {open && (
-        <div className="absolute bottom-full right-0 z-50 mb-2 min-w-[15rem] rounded-control border border-border bg-panel p-1 shadow-raised">
+        <div className="absolute bottom-full end-0 z-50 mb-2 min-w-[15rem] rounded-control border border-border bg-panel p-1 shadow-raised">
           {sendLaterChoices().map((choice) => (
             <MenuItem
               key={choice.key}

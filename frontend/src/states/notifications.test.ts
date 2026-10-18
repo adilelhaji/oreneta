@@ -74,8 +74,12 @@ it('plays the chosen sounds at the chosen volume, but not for a muted account', 
   emit('mail.newMessages', { account: 'b', count: 1, muted: true })
   emit('calendar.reminder', { subject: 'Stand-up' })
   emit('tasks.reminder', { title: 'Pay rent' })
+  // Missed reminders sound when the bridge shows them, not when they arrive.
+  emit('calendar.missedReminders', { count: 2, day: '2026-10-20', reminders: [] })
+  emit('calendar.missedRemindersShown', { count: 2 })
   expect(played).toEqual([
     ['marimba', 35],
+    ['bell', 35],
     ['bell', 35],
     ['bell', 35],
   ])

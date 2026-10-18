@@ -1,60 +1,67 @@
-# ADR-0016: Perfiles aislados
+# ADR-0016: Perfils aïllats
 
-- Estado: aceptada; tomada por delegación y revisada por el propietario
+- Estat: acceptada; presa per delegació i revisada pel propietari
   el 2026-10-12.
-- Fecha: 2026-10-11.
-- Alcance: primera entrega de #99.
+- Data: 2026-10-11.
+- Abast: primer lliurament de #99.
 
-## Inventario previo
+## Inventari previ
 
-Había un único juego de datos por instalación:
-- la base cifrada y el registro en `<config>/oreneta`;
-- la caché de adjuntos en `<cache>/oreneta`;
-- los secretos en el llavero bajo el servicio `meron`, con entradas por
-  cuenta y una de nombre fijo para la clave de la base;
-- los borradores abiertos y las cachés de tema, letra e idioma en el
-  `localStorage` del webview, compartido por todo lo que se abra en el
-  equipo.
+Hi havia un únic joc de dades per instal·lació:
+- la base xifrada i el registre a `<config>/oreneta`;
+- la memòria cau d'adjunts a `<cache>/oreneta`;
+- els secrets al clauer sota el servei `meron`, amb entrades per
+  compte i una de nom fix per a la clau de la base;
+- els esborranys oberts i les memòries cau de tema, lletra i idioma al
+  `localStorage` del webview, compartit per tot el que s'obri a
+  l'equip.
 
-No existían perfiles ni grupos de cuentas.
+No existien perfils ni grups de comptes.
 
-## Alternativas
+## Alternatives
 
-1. **Un proceso y una ventana por perfil (elegida).** Cada perfil tiene su
-   carpeta, su caché, sus entradas de llavero y su bloqueo de instancia
-   única. Abrir otro perfil lanza la aplicación con `--profile=<id>`; si ya
-   está abierto, se trae al frente.
-2. **Cambiar de perfil dentro del mismo proceso.** Exige vaciar toda la
-   memoria del puente, del núcleo y de la interfaz (búsquedas,
-   notificaciones, colas de envío) sin dejarse nada. Un olvido mezclaría
-   datos, y es justo lo que la issue prohíbe.
-3. **Reiniciar la aplicación al cambiar.** Es más seguro que la opción 2,
-   pero cierra el trabajo sin guardar del perfil que se deja.
+1. **Un procés i una finestra per perfil (escollida).** Cada perfil té la seva
+   carpeta, la seva memòria cau, les seves entrades de clauer i el seu bloqueig d'instància
+   única. Obrir un altre perfil llança l'aplicació amb `--profile=<id>`; si ja
+   és obert, es porta al davant.
+2. **Canviar de perfil dins del mateix procés.** Exigeix buidar tota la
+   memòria del pont, del nucli i de la interfície (cerques,
+   notificacions, cues d'enviament) sense deixar-se res. Un oblit barrejaria
+   dades, i és just el que la incidència prohibeix.
+3. **Reiniciar l'aplicació en canviar.** És més segur que l'opció 2,
+   però tanca la feina sense desar del perfil que es deixa.
 
-## Decisión
+## Decisió
 
-- La instalación existente es el perfil `default` y conserva sus rutas y
-  nombres de llavero: no hay migración.
-- Los demás perfiles viven en `profiles/<id>` dentro de las carpetas de
-  configuración y caché. Sus entradas de llavero se llaman
-  `profile:<id>/<nombre>`, de modo que dos perfiles con la misma cuenta no
-  comparten secretos ni clave de base.
-- El binario del núcleo y las actualizaciones descargadas son de la
-  instalación, no del perfil.
-- El puente escribe el perfil en la página
-  (`<meta name="oreneta-profile">`) antes de que corra ningún script. La
-  página usa claves de `localStorage` propias de cada perfil; el perfil por
-  defecto mantiene las suyas.
-- La lista de perfiles es un archivo JSON escrito de forma atómica. Si está
-  dañada se informa y no se reescribe; se abre el perfil por defecto. Un
-  perfil desconocido o mal formado en la línea de órdenes también abre el
-  perfil por defecto, sin crear uno vacío.
-- Solo se borra desde fuera un perfil que nunca se abrió: el que tiene datos
-  guarda secretos en el llavero que solo se encuentran desde dentro.
+- La instal·lació existent és el perfil `default` i conserva els seus camins i
+  noms de clauer: no hi ha migració. (El servei del clauer canvia amb #248:
+  vegeu la nota posterior.)
+- Els altres perfils viuen a `profiles/<id>` dins de les carpetes de
+  configuració i memòria cau. Les seves entrades de clauer s'anomenen
+  `profile:<id>/<nombre>`, de manera que dos perfils amb el mateix compte no
+  comparteixen secrets ni clau de base.
+- El binari del nucli i les actualitzacions baixades són de la
+  instal·lació, no del perfil.
+- El pont escriu el perfil a la pàgina
+  (`<meta name="oreneta-profile">`) abans que s'executi cap script. La
+  pàgina fa servir claus de `localStorage` pròpies de cada perfil; el perfil per
+  defecte manté les seves.
+- La llista de perfils és un fitxer JSON escrit de manera atòmica. Si està
+  malmesa, s'informa i no es reescriu; s'obre el perfil per defecte. Un
+  perfil desconegut o mal format a la línia d'ordres també obre el
+  perfil per defecte, sense crear-ne un de buit.
+- Només se suprimeix des de fora un perfil que no s'ha obert mai: el que té dades
+  guarda secrets al clauer que només es troben des de dins.
 
-## Pendiente
+## Pendent
 
-- Borrar un perfil con datos, desde dentro, quitando antes sus cuentas.
-- Grupos de cuentas e inclusión explícita en las carpetas globales.
-- Verificación nativa (N4) en Windows: dos perfiles abiertos a la vez, el
-  llavero de Windows con nombres de perfil y la ventana correcta al frente.
+- Suprimir un perfil amb dades, des de dins, traient abans els seus comptes.
+- Grups de comptes i inclusió explícita a les carpetes globals.
+- Verificació nativa (N4) a Windows: dos perfils oberts alhora, el
+  clauer de Windows amb noms de perfil i la finestra correcta al davant.
+
+## Nota posterior
+
+- 2026-10-17 (#248): el servei del clauer passa de `meron` a `oreneta`. Els
+  noms de les entrades, `profile:<id>/<nom>` inclòs, no canvien; les entrades
+  que hi ha es mouen automàticament (ADR-0063).

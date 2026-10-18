@@ -12,32 +12,41 @@
 //!   are read again (`pim::reminders`), and its reminder follows that read
 //!   like a moved event's.
 //!
-//! A look gives each reminder not yet recorded whose time has come, once,
-//! while it is still of use:
+//! A look gives each reminder not yet recorded whose time has come, once:
 //!
 //! - its event has not started (on time, or synced in after its time); or
-//! - it was not yet due at the previous look and its event has not ended: it
-//!   came due while nobody looked (the machine asleep, the app closed, the
-//!   clock moved on), or a change of zone brought it forward.
+//! - it was not yet due at the previous look: it came due while nobody looked
+//!   (the machine asleep, the app closed, the clock moved on), or a change of
+//!   zone brought it forward.
 //!
-//! A reminder whose event ended before anyone looked is not given. One set
-//! for the start is given by the first look from the start; an event with
-//! no length counts as on for its first minute.
+//! A reminder that came due while nobody looked and whose event ended before
+//! the look is missed: it is given too, once, but marked so that the hosts
+//! show a look's missed reminders as one notice, not a burst (#225). One set
+//! for the start is given by the first look from the start; an event with no
+//! length counts as on for its first minute.
 
 use anyhow::Result;
 use chrono::{FixedOffset, Offset as _, TimeZone};
 use rusqlite::{params, Connection, OptionalExtension as _};
+use serde::{Deserialize, Serialize};
 
 use super::Event;
 
-/// How far back a previous look is believed: the life of the record of
-/// reminders given (`forget_old_reminders`), so nothing older can be given
-/// twice.
+/// How far back a previous look is believed: no reminder that rang longer
+/// ago than this is given, so its record need not outlive it (#222).
 pub const MAX_GAP: i64 = 14 * 86_400;
 
 /// How far an all-day event's local midnight can be from its stored UTC one,
 /// with room to spare: no zone is more than 14 hours from UTC.
 const ZONE_SLACK: i64 = 2 * 86_400;
+
+/// How long after its event's start a record of a reminder given is kept
+/// (`forget_old_reminders`): by then the reminder rang longer ago than any
+/// look gives one ([`MAX_GAP`]), wherever the reader is ([`ZONE_SLACK`]), and
+/// the event has started, so it cannot be given again. Kept by the event, not
+/// by when it was given: a reminder set weeks ahead stays recorded until its
+/// event is past (#222).
+pub const GIVEN_KEPT: i64 = MAX_GAP + ZONE_SLACK;
 
 /// How long an event with no length counts as on: a look's tick.
 pub const ZERO_LENGTH_ON: i64 = 60;
@@ -56,7 +65,10 @@ pub struct Timing {
 
 /// An event's [`Timing`] in `zone`; `None` when it has no reminder.
 pub fn timing<Tz: TimeZone>(event: &Event, zone: &Tz) -> Option<Timing> {
-    let minutes = event.reminder_minutes?;
+    // Before the start, never after: the readers only keep alarms before it,
+    // and the record of reminders given (`GIVEN_KEPT`) relies on a reminder
+    // never ringing after its event's start. Anything else rings at the start.
+    let minutes = event.reminder_minutes?.max(0);
     let (start, end) = if event.all_day {
         let start = local_midnight(zone, event.start)?;
         // An all-day end is exclusive: the midnight after its last day.
@@ -141,6 +153,84 @@ pub fn record_look<Tz: TimeZone>(conn: &Connection, account: &str, now: i64, zon
 /// added again starts with no gap to look into.
 pub fn forget_looks(conn: &Connection, account: &str) -> Result<()> {
     conn.execute("DELETE FROM meta WHERE key IN (?1, ?2)", params![look_key(account), reread_key(account)])?;
+    let missed = pending_missed(conn)?;
+    if missed.iter().any(|m| m.account == account) {
+        write_missed(conn, &missed.into_iter().filter(|m| m.account != account).collect::<Vec<_>>())?;
+    }
+    Ok(())
+}
+
+// ---- Missed reminders not yet shown (#225) -------------------------------------
+
+/// Where the missed reminders given but not yet shown are kept: one list for
+/// the whole store, so the notice survives the host quitting before it could
+/// show it (held at start, or through quiet hours).
+const MISSED_KEY: &str = "reminders.missed";
+
+/// A missed reminder recorded as given (`calendar_reminders_fired`) whose
+/// notice the host has not yet said it showed (`missed_shown`). Kept with its
+/// event, so the notice can be said again after a restart.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Missed {
+    pub account: String,
+    /// The record's key, `<event>@<start>`: what the host confirms.
+    pub key: String,
+    pub event: Event,
+}
+
+/// The key a missed reminder is known by, as its record of being given.
+pub fn missed_key(event: &Event) -> String {
+    format!("{}@{}", event.id, event.start)
+}
+
+/// The missed reminders not yet shown, oldest given first. A list that cannot
+/// be read is none: it is written whole again at the next missed reminder.
+pub fn pending_missed(conn: &Connection) -> Result<Vec<Missed>> {
+    let value: Option<String> =
+        conn.query_row("SELECT value FROM meta WHERE key = ?1", params![MISSED_KEY], |row| row.get(0)).optional()?;
+    Ok(value.and_then(|value| serde_json::from_str(&value).ok()).unwrap_or_default())
+}
+
+fn write_missed(conn: &Connection, missed: &[Missed]) -> Result<()> {
+    if missed.is_empty() {
+        conn.execute("DELETE FROM meta WHERE key = ?1", params![MISSED_KEY])?;
+    } else {
+        conn.execute(
+            "INSERT INTO meta(key, value) VALUES(?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![MISSED_KEY, serde_json::to_string(missed)?],
+        )?;
+    }
+    Ok(())
+}
+
+/// Records a missed reminder as given and keeps it until its notice is shown,
+/// both or neither: a crash in between can neither give it twice nor lose it.
+/// What is kept is bounded by the gap a look looks into: one whose event
+/// ended more than [`MAX_GAP`] ago is let go unshown.
+pub fn give_missed(conn: &Connection, account: &str, event: &Event, now: i64) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    super::mark_reminder_fired(&tx, account, &event.id, event.start, now)?;
+    let key = missed_key(event);
+    let mut missed: Vec<Missed> = pending_missed(&tx)?
+        .into_iter()
+        .filter(|m| m.event.end.max(m.event.start) >= now - MAX_GAP && !(m.account == account && m.key == key))
+        .collect();
+    missed.push(Missed { account: account.to_string(), key, event: event.clone() });
+    write_missed(&tx, &missed)?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// The host showed the notice holding these (account, key) pairs: they are
+/// let go. Others, given since, stay for the next notice.
+pub fn missed_shown(conn: &Connection, shown: &[(String, String)]) -> Result<()> {
+    let missed = pending_missed(conn)?;
+    let left: Vec<Missed> =
+        missed.iter().filter(|m| !shown.iter().any(|(a, k)| *a == m.account && *k == m.key)).cloned().collect();
+    if left.len() != missed.len() {
+        write_missed(conn, &left)?;
+    }
     Ok(())
 }
 
@@ -205,6 +295,9 @@ pub fn reread_due(conn: &Connection, account: &str, now: i64) -> Result<Option<i
 pub struct Due {
     pub event: Event,
     pub timing: Timing,
+    /// It came due while nobody looked and its event ended before this look:
+    /// given with the look's other missed reminders in one notice (#225).
+    pub missed: bool,
 }
 
 /// The reminders of `account` to give at `now` in `zone`, not yet recorded
@@ -240,10 +333,16 @@ pub fn due<Tz: TimeZone>(
             // the zone changed since; then in that look's offset, which is all
             // that is known of the zone it was in.
             let then = if moved { timing(&event, &previous.zone()) } else { Some(now_timing) };
-            now_timing.end > now && then.is_some_and(|then| then.fire_at > previous.at)
+            then.is_some_and(|then| then.fire_at > previous.at)
         });
         if ahead || came_due_since {
-            due.push(Due { event, timing: now_timing });
+            // Over before anyone looked: missed, for the grouped notice. A
+            // meeting the reader declined is no loss to report.
+            let missed = !ahead && now_timing.end <= now;
+            if missed && declined(&event) {
+                continue;
+            }
+            due.push(Due { event, timing: now_timing, missed });
         }
     }
     due.sort_by(|a, b| a.timing.start.cmp(&b.timing.start).then_with(|| a.event.id.cmp(&b.event.id)));
@@ -256,7 +355,7 @@ pub fn due<Tz: TimeZone>(
 fn candidates(conn: &Connection, account: &str, from: i64, to: i64) -> Result<Vec<Event>> {
     let mut stmt = conn.prepare(
         "SELECT e.calendar_id, e.event_id, e.subject, e.start_utc, e.end_utc,
-                e.all_day, e.location, e.reminder_minutes
+                e.all_day, e.location, e.reminder_minutes, e.my_response
          FROM calendar_events e
          JOIN calendars c
            ON c.account = e.account AND c.provider_id = e.calendar_id
@@ -264,7 +363,7 @@ fn candidates(conn: &Connection, account: &str, from: i64, to: i64) -> Result<Ve
            AND e.reminder_minutes IS NOT NULL
            AND e.is_cancelled = 0
            AND MAX(e.end_utc, e.start_utc) >= ?2
-           AND e.start_utc - (e.reminder_minutes * 60) <= ?3
+           AND e.start_utc - (MAX(e.reminder_minutes, 0) * 60) <= ?3
            AND NOT EXISTS (
                  SELECT 1 FROM calendar_reminders_fired f
                  WHERE f.account = e.account
@@ -282,11 +381,18 @@ fn candidates(conn: &Connection, account: &str, from: i64, to: i64) -> Result<Ve
                 all_day: row.get::<_, i64>(5)? != 0,
                 location: row.get(6)?,
                 reminder_minutes: row.get(7)?,
+                my_response: row.get::<_, Option<String>>(8)?.unwrap_or_default(),
                 ..Default::default()
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(events)
+}
+
+/// Whether the reader declined the meeting, as the providers that know say
+/// it: Exchange "decline", Google "declined".
+fn declined(event: &Event) -> bool {
+    matches!(event.my_response.to_ascii_lowercase().as_str(), "decline" | "declined")
 }
 
 #[cfg(test)]
@@ -430,6 +536,21 @@ mod tests {
         assert_eq!(timing(&event, &Madrid), Some(Timing { fire_at: start, start, end: start + ZERO_LENGTH_ON }));
     }
 
+    /// A reminder never rings after its event's start (#222): a negative
+    /// lead, which no reader keeps but a store could hold, rings at the
+    /// start, so the record of it is forgotten in time and cannot be given
+    /// twice.
+    #[test]
+    fn a_negative_reminder_rings_at_the_start() {
+        let start = at("2026-10-20T09:00:00Z");
+        let event = timed("after", start, -30);
+        assert_eq!(timing(&event, &Madrid).unwrap().fire_at, start);
+        let conn = store();
+        put(&conn, &[event]);
+        assert!(due(&conn, "acct", start - 60, &Madrid, None).unwrap().is_empty());
+        assert_eq!(ids(&due(&conn, "acct", start, &Madrid, None).unwrap()), ["after"], "found by the store too");
+    }
+
     /// Madrid's clocks go back on 25 October. Looked at on the 24th at 23:30
     /// (+02:00), then not until the 26th: a reminder 25 hours before the
     /// 26th (whose midnight is +01:00) rang at 00:00 on the 25th, after that
@@ -520,8 +641,14 @@ mod tests {
         assert!(super::due(&conn, "acct", now + 60, &Madrid, None).unwrap().is_empty(), "given once");
     }
 
+    fn missed(due: &[Due]) -> Vec<bool> {
+        due.iter().map(|d| d.missed).collect()
+    }
+
+    /// What rang in a gap is given once: on its own while its event is on,
+    /// marked missed when its event ended inside the gap (#225).
     #[test]
-    fn a_reminder_that_came_due_in_a_gap_is_given_while_its_event_is_still_on() {
+    fn a_reminder_that_came_due_in_a_gap_is_given_once_and_marked_missed_if_its_event_is_over() {
         let conn = store();
         let before = at("2026-10-20T08:00:00Z");
         put(
@@ -531,27 +658,66 @@ mod tests {
                 timed("standup", at("2026-10-20T09:00:00Z"), 15),
                 // Rang at 06:45, before the previous look: not this gap's.
                 timed("early", at("2026-10-20T07:00:00Z"), 15).with_end(at("2026-10-20T12:00:00Z")),
-                // Rang and ended inside the gap: no use any more.
+                // Rang and ended inside the gap: missed.
                 timed("over", at("2026-10-20T08:20:00Z"), 15).with_end(at("2026-10-20T08:40:00Z")),
             ],
         );
         let previous = Some(Previous { at: before, offset: 2 * 3_600 });
         let after = at("2026-10-20T09:20:00Z");
         let due = due(&conn, "acct", after, &Madrid, previous).unwrap();
-        assert_eq!(ids(&due), ["standup"]);
+        assert_eq!(ids(&due), ["over", "standup"]);
+        assert_eq!(missed(&due), [true, false]);
         give(&conn, &due, after);
         let previous = Some(Previous { at: after, offset: 2 * 3_600 });
         assert!(super::due(&conn, "acct", after + 60, &Madrid, previous).unwrap().is_empty(), "once");
     }
 
     #[test]
-    fn the_end_of_an_event_is_the_last_moment_its_missed_reminder_is_given() {
+    fn the_end_of_an_event_is_when_its_reminder_turns_missed() {
         let conn = store();
         let event = timed("standup", at("2026-10-20T09:00:00Z"), 15);
         put(&conn, &[event.clone()]);
         let previous = Some(Previous { at: at("2026-10-20T08:00:00Z"), offset: 0 });
-        assert_eq!(ids(&due(&conn, "acct", event.end - 1, &Madrid, previous).unwrap()), ["standup"]);
-        assert!(due(&conn, "acct", event.end, &Madrid, previous).unwrap().is_empty(), "ended");
+        let on = due(&conn, "acct", event.end - 1, &Madrid, previous).unwrap();
+        assert_eq!((ids(&on), missed(&on)), (vec!["standup"], vec![false]));
+        let ended = due(&conn, "acct", event.end, &Madrid, previous).unwrap();
+        assert_eq!((ids(&ended), missed(&ended)), (vec!["standup"], vec![true]), "ended");
+    }
+
+    /// Missed needs a gap: with no previous look (first ever, or just
+    /// upgraded) nothing is known to have been slept through, and an event
+    /// over by then is not given at all, as before.
+    #[test]
+    fn a_first_look_gives_nothing_as_missed() {
+        let conn = store();
+        put(&conn, &[timed("over", at("2026-10-20T08:00:00Z"), 15)]);
+        assert!(due(&conn, "acct", at("2026-10-20T10:00:00Z"), &Madrid, None).unwrap().is_empty());
+    }
+
+    /// A reminder that came due before the previous look and was not given
+    /// then (its event had started before anyone looked) is not missed later.
+    #[test]
+    fn a_reminder_due_before_the_previous_look_is_not_missed_later() {
+        let conn = store();
+        put(&conn, &[timed("early", at("2026-10-20T08:00:00Z"), 15)]);
+        let previous = Some(Previous { at: at("2026-10-20T08:30:00Z"), offset: 0 });
+        assert!(due(&conn, "acct", at("2026-10-20T10:00:00Z"), &Madrid, previous).unwrap().is_empty());
+    }
+
+    /// A meeting the reader declined (Exchange "decline", Google
+    /// "declined") is not reported as missed; one they accepted is.
+    #[test]
+    fn a_declined_meeting_is_not_missed() {
+        let conn = store();
+        let start = at("2026-10-20T09:00:00Z");
+        let answered = |id: &str, response: &str| Event { my_response: response.into(), ..timed(id, start, 15) };
+        put(
+            &conn,
+            &[answered("ews", "Decline"), answered("google", "declined"), answered("accepted", "accept")],
+        );
+        let previous = Some(Previous { at: at("2026-10-20T08:00:00Z"), offset: 0 });
+        let due = due(&conn, "acct", at("2026-10-20T11:00:00Z"), &Madrid, previous).unwrap();
+        assert_eq!((ids(&due), missed(&due)), (vec!["accepted"], vec![true]));
     }
 
     #[test]

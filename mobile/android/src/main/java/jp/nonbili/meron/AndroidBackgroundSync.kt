@@ -24,7 +24,7 @@ import java.util.Date
 import java.util.concurrent.TimeUnit
 
 private const val KEY_MANUAL_RUN = "jp.nonbili.meron.background_sync.MANUAL_RUN"
-private const val TAG = "MeronBgSync"
+private const val TAG = "Oreneta.BgSync"
 
 /** Redacted label for an account — a masked email, or the bare account id
  *  when there's no email. Never a secret (token/password). */

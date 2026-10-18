@@ -1,38 +1,38 @@
-# ADR-0008: Local diagnostics, configuration backup and staged updates
+# ADR-0008: Diagnòstic local, còpia de seguretat de la configuració i actualitzacions per etapes
 
-- Status: accepted
-- Date: 2026-09-10
-- Scope: issue #54 / capabilities C22 and C29
-- Approval: user selected options 1-A, 2-A and 3-A on 2026-09-10
-- Amendment: on 2026-10-05, [ADR-0010](0010-full-profile-local-recovery.md)
-  supersedes only the configuration-only limit in decision 2. The existing
-  configuration export remains available; decisions 1 and 3 are unchanged.
+- Estat: acceptada
+- Data: 2026-09-10
+- Abast: incidència #54 / capacitats C22 i C29
+- Aprovació: l'usuari va triar les opcions 1-A, 2-A i 3-A el 2026-09-10
+- Esmena: el 2026-10-05, l'[ADR-0010](0010-full-profile-local-recovery.md)
+  substitueix només el límit de només configuració de la decisió 2. L'exportació
+  de configuració existent continua disponible; les decisions 1 i 3 no canvien.
 
-## Decision
+## Decisió
 
-1. **Diagnostics are local-only.** Oreneta keeps bounded local logs in the
-   canonical `oreneta.log` file, redacts
-   email addresses and credential-like values before display/export, and never
-   sends telemetry by default. Export is explicit and user-reviewable.
-2. **Original configuration-only limit (extended by ADR-0010).** The existing backup format includes
-   accounts, settings and feeds, omits cached mail, and includes secrets only
-   when the user supplies a passphrase. Import must report failures instead of
-   silently claiming recovery.
-3. **Updates remain staged and user-confirmed.** The existing release manifest,
-   payload-size limit, SHA-256 verification and staged install are retained.
-   Automatic installation, remote telemetry and a new update service are
-   non-goals.
+1. **El diagnòstic és només local.** Oreneta manté registres locals limitats al
+   fitxer canònic `oreneta.log`, emmascara
+   les adreces de correu electrònic i els valors semblants a credencials abans de mostrar-los o exportar-los, i mai no
+   envia telemetria per defecte. L'exportació és explícita i l'usuari la pot revisar.
+2. **Límit original de només configuració (ampliat per l'ADR-0010).** El format de còpia de seguretat existent inclou
+   comptes, paràmetres i canals, omet el correu de la memòria cau i només inclou secrets
+   quan l'usuari proporciona una frase de pas. La importació ha d'informar de les fallades en lloc
+   d'afirmar en silenci que s'ha recuperat tot.
+3. **Les actualitzacions continuen sent per etapes i confirmades per l'usuari.** Es mantenen el manifest de versions
+   existent, el límit de mida de la càrrega, la verificació SHA-256 i la instal·lació per etapes.
+   La instal·lació automàtica, la telemetria remota i un servei d'actualitzacions nou queden
+   fora d'abast.
 
-## Consequences
+## Conseqüències
 
-- Privacy scope stays local and auditable without a new service or dependency.
-- A configuration restore is smaller and safer, but it does not restore cached
-  mail or provider sessions.
-- Hash verification protects integrity; authenticity/signature policy and
-  native rollback evidence remain separate follow-up work.
+- L'abast de privadesa continua sent local i auditable, sense cap servei ni dependència nous.
+- Una restauració de la configuració és més petita i més segura, però no restaura el correu
+  de la memòria cau ni les sessions del proveïdor.
+- La verificació del resum (hash) protegeix la integritat; la política d'autenticitat/signatura i
+  l'evidència de reversió nativa continuen sent treball de seguiment separat.
 
-## Validation boundary
+## Límit de la validació
 
-Synthetic tests may prove redaction, backup secret handling and update hash or
-staging behavior. They cannot certify provider interoperability, native Windows
-recovery or production update delivery.
+Les proves sintètiques poden demostrar l'emmascarament, la gestió dels secrets de la còpia de seguretat i el comportament
+del resum o de les etapes de les actualitzacions. No poden certificar la interoperabilitat amb els proveïdors, la recuperació
+nativa a Windows ni el lliurament d'actualitzacions en producció.

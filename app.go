@@ -225,6 +225,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.accountAddPassword(payload)
 	case "account.autodiscover":
 		return a.autodiscover(payload)
+	case "account.testConnection":
+		return a.accountTestConnection(payload)
 	case "account.probeCert":
 		return a.accountProbeCert(payload)
 	case "account.setCertPin":
@@ -575,6 +577,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.mailSpamReason(payload)
 	case "mail.recordSpamJudgment":
 		return a.mailRecordSpamJudgment(payload)
+	case "mail.revertSpamJudgment":
+		return a.mailRevertSpamJudgment(payload)
 	case "tasks.list":
 		return a.tasksList(payload)
 	case "tasks.get":
@@ -624,7 +628,9 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		"chat.rooms", "chat.join", "chat.leave", "chat.invitations", "chat.dismissInvitation",
 		"chat.sendFile", "chat.cancelUpload",
 		// Presence, mentions and private messages in rooms (ADR-0055).
-		"chat.presence", "chat.setPresence", "chat.subscribe", "chat.answerSubscription", "chat.occupants":
+		"chat.presence", "chat.setPresence", "chat.subscribe", "chat.answerSubscription", "chat.occupants",
+		// Muting one conversation (ADR-0064).
+		"chat.mute", "chat.muted":
 		return a.tasksPassthrough(command, payload)
 	// Standalone notes (#104): local only; the core decides everything.
 	case "notes.list", "notes.get", "notes.create", "notes.update", "notes.pin", "notes.trash", "notes.restore", "notes.purge":

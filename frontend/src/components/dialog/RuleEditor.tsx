@@ -56,7 +56,7 @@ export function RuleEditor({
           <SelectInput
             value={rule.account}
             onChange={(event) => onChange({ ...rule, account: event.target.value })}
-            className="min-w-0 flex-1 rounded-control py-1.5 pl-3 text-ui"
+            className="min-w-0 flex-1 rounded-control py-1.5 ps-3 text-ui"
           >
             <option value="">{t('rules.allAccounts')}</option>
             {accounts.map((account) => (
@@ -74,7 +74,7 @@ export function RuleEditor({
           <SelectInput
             value={rule.matchMode}
             onChange={(event) => onChange({ ...rule, matchMode: event.target.value as Rule['matchMode'] })}
-            className="rounded-control py-1 pl-2.5 text-xs"
+            className="rounded-control py-1 ps-2.5 text-xs"
           >
             <option value="all">{t('rules.match.all')}</option>
             <option value="any">{t('rules.match.any')}</option>
@@ -88,7 +88,7 @@ export function RuleEditor({
               onChange={(event) =>
                 setCondition(index, { ...condition, field: event.target.value as RuleCondition['field'] })
               }
-              className="w-32 shrink-0 rounded-control py-1.5 pl-2.5 text-xs"
+              className="w-32 shrink-0 rounded-control py-1.5 ps-2.5 text-xs"
             >
               {RULE_FIELDS.map((field) => (
                 <option key={field} value={field}>
@@ -99,7 +99,7 @@ export function RuleEditor({
             <SelectInput
               value={condition.op}
               onChange={(event) => setCondition(index, { ...condition, op: event.target.value as RuleCondition['op'] })}
-              className="w-36 shrink-0 rounded-control py-1.5 pl-2.5 text-xs"
+              className="w-36 shrink-0 rounded-control py-1.5 ps-2.5 text-xs"
             >
               {RULE_OPS.map((op) => (
                 <option key={op} value={op}>
@@ -148,7 +148,7 @@ export function RuleEditor({
               onChange={(event) =>
                 setAction(index, blankAction(event.target.value as RuleAction['type'], labels[0]?.id ?? ''))
               }
-              className="w-40 shrink-0 rounded-control py-1.5 pl-2.5 text-xs"
+              className="w-40 shrink-0 rounded-control py-1.5 ps-2.5 text-xs"
             >
               {ACTION_TYPES.map((type) => (
                 <option key={type} value={type}>
@@ -172,7 +172,7 @@ export function RuleEditor({
                   value={action.labelId}
                   onChange={(event) => setAction(index, { type: 'addLabel', labelId: event.target.value })}
                   aria-label={t('labels.label')}
-                  className="min-w-0 flex-1 rounded-control py-1.5 pl-2.5 text-xs"
+                  className="min-w-0 flex-1 rounded-control py-1.5 ps-2.5 text-xs"
                 >
                   {labels.map((label) => (
                     <option key={label.id} value={label.id}>
@@ -186,7 +186,7 @@ export function RuleEditor({
               title={t('rules.remove')}
               aria-label={t('rules.remove')}
               onClick={() => onChange({ ...rule, actions: rule.actions.filter((_, i) => i !== index) })}
-              className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+              className="ms-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
             >
               <X size={14} strokeWidth={1.75} />
             </button>

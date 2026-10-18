@@ -185,6 +185,22 @@ fn day_code(text: &str) -> Option<u8> {
 /// An RRULE `UNTIL`: a date, or a time in UTC (or floating), as the last
 /// minute of that day on this machine's clock, the way the editors store it.
 fn read_until(text: &str) -> Option<i64> {
+    read_until_in(text, &chrono::Local)
+}
+
+/// [`read_until`] in `zone`. A time in UTC is the date it falls on there
+/// (#221): RFC 5545 bounds the series at that instant, and an occurrence
+/// on that date at a time up to it belongs to the series. At UTC+12 and
+/// beyond, noon UTC on 31 December is already 1 January.
+///
+/// The rule keeps a date, not an instant, so this is exact when `UNTIL` is
+/// the last occurrence or the end of its day in the reader's zone (what
+/// Oreneta writes). Otherwise an occurrence on that date later than `UNTIL`
+/// is kept too: one more than the RFC's, as with an end of day in UTC
+/// (`…T235959Z`, which other clients write) read in any other zone. Writing
+/// the rule back ([`format`]) puts `UNTIL` at the end of that day here, so a
+/// foreign `UNTIL` comes out up to a day later for other clients (ADR-0053).
+fn read_until_in<Tz: TimeZone>(text: &str, zone: &Tz) -> Option<i64> {
     let day = if text.len() == 8 {
         NaiveDate::parse_from_str(text, "%Y%m%d").ok()?
     } else {
@@ -194,12 +210,12 @@ fn read_until(text: &str) -> Option<i64> {
         };
         let naive = NaiveDateTime::parse_from_str(body, "%Y%m%dT%H%M%S").ok()?;
         if utc {
-            chrono::Local.from_utc_datetime(&naive).date_naive()
+            zone.from_utc_datetime(&naive).date_naive()
         } else {
             naive.date()
         }
     };
-    resolve(&chrono::Local, day.and_hms_opt(23, 59, 0)?)
+    resolve(zone, day.and_hms_opt(23, 59, 0)?)
 }
 
 /// Reads an RRULE value (with or without the `RRULE:` name). Strict: any

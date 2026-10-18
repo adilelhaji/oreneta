@@ -1,14 +1,14 @@
-# ADR-0002: Remote label linking — local label, optional per-account link, two-way
+# ADR-0002: Vinculació d'etiquetes remotes: etiqueta local, vincle opcional per compte, en tots dos sentits
 
-- **Status:** Accepted
-- **Date:** 2026-09-07
-- **Deciders:** Adil El Haji (maintainer)
-- **Related:** [ADR-0001](0001-web-engine-and-extensions.md)
+- **Estat:** Acceptada
+- **Data:** 2026-09-07
+- **Decisors:** Adil El Haji (mantenidor)
+- **Relacionat:** [ADR-0001](0001-web-engine-and-extensions.md)
 
 ## Context
 
-Oreneta's labels are, today, local and per-conversation by design. The
-label store's own comment says so directly
+Les etiquetes d'Oreneta són, avui, locals i per conversa per disseny. El
+mateix comentari del magatzem d'etiquetes ho diu directament
 ([`frontend/src/states/labels.ts`](../../frontend/src/states/labels.ts)):
 
 > Local to this install, and the interface says so where it matters: an IMAP
@@ -16,136 +16,150 @@ label store's own comment says so directly
 > different thing again, so a label that appeared on one device and silently
 > not on another would be worse than one that never claimed to travel.
 
-The maintainer asked to add remote synchronization on top of this — a label
-made in Oreneta should be visible in Gmail, Outlook, or another IMAP client,
-and vice versa — while keeping the quick-filter-bar UI this ADR does not
-design (separate issue). Three servers, three different shapes for what a
-"label" is:
+El mantenidor va demanar afegir-hi sincronització remota: una etiqueta
+creada a Oreneta hauria de ser visible a Gmail, a Outlook o en un altre
+client IMAP, i a l'inrevés, tot mantenint la interfície de la barra de
+filtres ràpids, que aquest ADR no dissenya (incidència separada). Tres
+servidors, tres formes diferents del que és una «etiqueta»:
 
-| Server | What exists | Colour | Scope |
+| Servidor | Què existeix | Color | Abast |
 |---|---|---|---|
-| Gmail (IMAP) | `X-GM-LABELS`, gated behind the `X-GM-EXT-1` capability Oreneta already detects for `X-GM-THRID`/`X-GM-MSGID` ([`imap.rs:1786`](../../meron-core/src/imap.rs)) | Not exposed over IMAP | Per message |
-| Exchange (EWS) | `item:Categories` on the item, plus a master category list on the mailbox | Yes, on the master list | Per item |
-| Generic IMAP | Keywords (RFC 3501 §2.3.2), only usable if the server's `PERMANENTFLAGS` response includes `\*` | No | Per message |
+| Gmail (IMAP) | `X-GM-LABELS`, condicionat a la capacitat `X-GM-EXT-1`, que Oreneta ja detecta per a `X-GM-THRID`/`X-GM-MSGID` ([`imap.rs:1786`](../../meron-core/src/imap.rs)) | No exposat per IMAP | Per missatge |
+| Exchange (EWS) | `item:Categories` a l'element, més una llista mestra de categories a la bústia | Sí, a la llista mestra | Per element |
+| IMAP genèric | Paraules clau (RFC 3501 §2.3.2), només utilitzables si la resposta `PERMANENTFLAGS` del servidor inclou `\*` | No | Per missatge |
 
-Oreneta's label is per-**conversation**; every server's concept is per-
-**message**. And the store is currently a flat `{id, name, colour}` with no
-per-account field at all — the schema needs to grow, not just the sync logic.
+L'etiqueta d'Oreneta és per **conversa**; el concepte de cada servidor és
+per **missatge**. A més, el magatzem és ara mateix un `{id, name, colour}`
+pla sense cap camp per compte: l'esquema ha de créixer, no només la lògica
+de sincronització.
 
-The core already reconciles remote state for `\Seen`/`\Flagged` via CONDSTORE
-([`sync_flags`, `imap.rs:941`](../../meron-core/src/imap.rs)), which is the
-existing extension point this design follows rather than invents. Exchange's
-`starred` is currently hardcoded `false` with a comment explaining the sync
-path does not request the underlying MAPI property yet
-([`exchange.rs:2040`](../../meron-core/src/exchange.rs)) — the categories
-work in phase 6 of the approved plan is the natural place to close that gap
-too, since both are "the sync path needs to ask for one more property."
+El nucli ja reconcilia l'estat remot de `\Seen`/`\Flagged` mitjançant
+CONDSTORE ([`sync_flags`, `imap.rs:941`](../../meron-core/src/imap.rs)), que
+és el punt d'extensió existent que aquest disseny segueix en lloc
+d'inventar-ne un. El `starred` d'Exchange ara mateix és `false` fix al codi,
+amb un comentari que explica que el camí de sincronització encara no
+demana la propietat MAPI subjacent
+([`exchange.rs:2040`](../../meron-core/src/exchange.rs)): el treball de
+categories de la fase 6 del pla aprovat és el lloc natural per a tancar
+també aquest buit, ja que tots dos són casos de «el camí de sincronització
+ha de demanar una propietat més».
 
-## Decision
+## Decisió
 
-**Option A: a local label can carry an optional link to a remote concept,
-per account, matched by name. The link is opt-in — an unlinked label behaves
-exactly as it does today.**
+**Opció A: una etiqueta local pot portar un vincle opcional a un concepte
+remot, per compte, coincident pel nom. El vincle és opcional i s'activa
+explícitament: una etiqueta no vinculada es comporta exactament com avui.**
 
-### Data model
+### Model de dades
 
-`Label` gains a `links: Record<accountId, RemoteLink>` map (empty by
-default). A `RemoteLink` names what the label is bound to on that account:
-a Gmail label name, an Exchange category name (and its GUID once created on
-the mailbox's master list), or an IMAP keyword atom. A label with no entry
-for an account is purely local on that account, with no behaviour change.
+`Label` guanya un mapa `links: Record<accountId, RemoteLink>` (buit per
+defecte). Un `RemoteLink` indica a què està lligada l'etiqueta en aquell
+compte: un nom d'etiqueta de Gmail, un nom de categoria d'Exchange (i el
+seu GUID un cop creada a la llista mestra de la bústia) o un àtom de
+paraula clau IMAP. Una etiqueta sense entrada per a un compte és purament
+local en aquell compte, sense cap canvi de comportament.
 
-Linking is explicit, not automatic: the maintainer's earlier direction
-("Depende de O-02" in the approved work plan) treats matching by name as a
-one-time action the user takes per account — "link this label to the Gmail
-label of the same name" — not a background heuristic that silently merges
-two same-named-but-unrelated labels. The exact linking UI is a design
-question for a later issue; this ADR only fixes what the link *means* once
-made.
+La vinculació és explícita, no automàtica: la indicació anterior del
+mantenidor ("Depende de O-02" al pla de treball aprovat) tracta la
+coincidència pel nom com una acció única que l'usuari fa per compte
+—«vincula aquesta etiqueta a l'etiqueta de Gmail amb el mateix nom»—, no
+com una heurística en segon pla que fusiona en silenci dues etiquetes amb
+el mateix nom però sense relació. La interfície exacta de vinculació és una
+qüestió de disseny per a una incidència posterior; aquest ADR només fixa
+què *significa* el vincle un cop creat.
 
-### Assign / read contract
+### Contracte d'assignació i lectura
 
-- **Assigning** a linked label to a conversation writes it to **every
-  message in the thread** on the linked account. A label is per-conversation
-  locally and per-message remotely; there is no narrower remote unit to
-  write to without inventing one the server doesn't have.
-- **Reading** a linked label's membership on a conversation is the **union**
-  across the thread's messages: if any message in the thread carries the
-  remote label/category/keyword, the conversation shows the local label.
-  This mirrors how `unread`/`starred` already roll up per-thread today.
-- **Un-assigning** a linked label removes it from every message in the
-  thread that currently carries it.
+- **Assignar** una etiqueta vinculada a una conversa l'escriu a **cada
+  missatge del fil** al compte vinculat. Una etiqueta és per conversa
+  localment i per missatge remotament; no hi ha cap unitat remota més
+  petita on escriure sense inventar-ne una que el servidor no té.
+- **Llegir** la pertinença d'una etiqueta vinculada en una conversa és la
+  **unió** dels missatges del fil: si qualsevol missatge del fil porta
+  l'etiqueta, la categoria o la paraula clau remota, la conversa mostra
+  l'etiqueta local. Això reprodueix com `unread`/`starred` ja s'agreguen
+  avui per fil.
+- **Desassignar** una etiqueta vinculada la treu de cada missatge del fil
+  que la porta en aquell moment.
 
-### Conflict rules
+### Regles de conflicte
 
-- **Membership** (is this label on this conversation) is decided by the
-  server on every sync — the same rule `sync_flags` already applies to
-  `\Seen`/`\Flagged`. A remote change always wins over what Oreneta last
-  wrote; there is no local-wins mode.
-- **Colour** is decided locally, **except for Exchange**, where the
-  mailbox's master category list is authoritative — Exchange is the one
-  protocol here that actually carries a colour, so overriding it locally
-  would make the two disagree with no way to reconcile.
-- **Creating** a link where the named remote label/category doesn't exist
-  yet creates it on the server (Gmail: an IMAP `CREATE`-adjacent label
-  operation; Exchange: an entry on the master category list) rather than
-  silently failing to link.
+- La **pertinença** (si aquesta etiqueta és en aquesta conversa) la decideix
+  el servidor a cada sincronització, amb la mateixa regla que `sync_flags`
+  ja aplica a `\Seen`/`\Flagged`. Un canvi remot sempre guanya sobre el que
+  Oreneta va escriure per última vegada; no hi ha cap mode en què guanyi el
+  local.
+- El **color** es decideix localment, **excepte a Exchange**, on la llista
+  mestra de categories de la bústia té l'autoritat: Exchange és l'únic
+  protocol d'aquests que porta realment un color, de manera que
+  sobreescriure'l localment faria que tots dos discrepessin sense cap
+  manera de reconciliar-los.
+- **Crear** un vincle quan l'etiqueta o la categoria remota amb aquell nom
+  encara no existeix la crea al servidor (Gmail: una operació d'etiqueta
+  propera a un `CREATE` d'IMAP; Exchange: una entrada a la llista mestra de
+  categories) en lloc de fallar en silenci en vincular-la.
 
-### Unsupported servers
+### Servidors no compatibles
 
-A plain IMAP account whose `PERMANENTFLAGS` response does not include `\*`
-cannot carry a keyword-based link — the server has told the client, in
-band, that it does not support arbitrary flags. Oreneta's settings must say
-**"Not available on this account"** for that account, explicitly, rather
-than hiding the link option with no explanation or silently dropping the
-label on next sync. A label that appears to travel and does not is worse
-than one that never claimed to, per the reasoning already in
-`labels.ts` today — this ADR extends that reasoning to the remote case
-instead of contradicting it.
+Un compte IMAP simple la resposta `PERMANENTFLAGS` del qual no inclou `\*`
+no pot portar un vincle basat en paraules clau: el servidor ha dit al
+client, dins del mateix protocol, que no admet marques arbitràries. La
+configuració d'Oreneta ha de dir **«No disponible en aquest compte»** per a
+aquell compte, explícitament, en lloc d'amagar l'opció de vincle sense cap
+explicació o de descartar en silenci l'etiqueta a la sincronització
+següent. Una etiqueta que sembla que viatja i no ho fa és pitjor que una
+que mai no ho va pretendre, segons el raonament que ja hi ha avui a
+`labels.ts`; aquest ADR estén aquest raonament al cas remot en lloc de
+contradir-lo.
 
-### Order of implementation
+### Ordre d'implementació
 
-Per the approved work plan: **Gmail first** (phase 2), since it is the
-smallest gap to close (the `X-GM-EXT-1` capability detection already
-exists) and the label-chips UI issue depends on having at least one working
-protocol to filter against. **Exchange categories and IMAP keywords follow
-in phase 6**, alongside closing the Exchange `starred`-always-false gap
-noted above, since both are the same category of "sync path needs one more
-property" work.
+Segons el pla de treball aprovat: **primer Gmail** (fase 2), perquè és el
+buit més petit de tancar (la detecció de la capacitat `X-GM-EXT-1` ja
+existeix) i la incidència de la interfície de xips d'etiqueta depèn de
+tenir com a mínim un protocol que funcioni per a filtrar. **Les categories
+d'Exchange i les paraules clau IMAP venen a la fase 6**, juntament amb el
+tancament del buit de `starred` sempre fals d'Exchange esmentat abans,
+perquè tots dos són el mateix tipus de treball de «el camí de
+sincronització ha de demanar una propietat més».
 
-## Consequences
+## Conseqüències
 
-- The label store's contract grows from `{id, name, colour}` to include a
-  per-account `links` map; every existing caller of `labels.list` /
-  `labels.save` / `labels.assign`
-  ([`main.rs:2121,2133,2157`](../../meron-core/src/main.rs)) must be
-  reviewed against the new shape when phase 2 implements it — this ADR
-  does not implement it.
-- A conversation's label membership becomes, for linked labels, a
-  server-decided fact discovered on sync rather than a purely local one —
-  the UI must be able to show "this label was just removed remotely" the
-  same way it already shows a read receipt arriving from another client.
-- Assigning a linked label to a long thread is an N-message write, not a
-  single-record write; this has sync-cost and rate-limit implications
-  (particularly for Gmail) that the implementation issue must account for,
-  not this ADR.
-- Exchange is the only protocol where colour is not locally authoritative —
-  documented here so a future "why doesn't changing this label's colour
-  stick" bug report is answered by this record, not re-investigated.
+- El contracte del magatzem d'etiquetes creix de `{id, name, colour}` a
+  incloure un mapa `links` per compte; cada crida existent a `labels.list`
+  / `labels.save` / `labels.assign`
+  ([`main.rs:2121,2133,2157`](../../meron-core/src/main.rs)) s'ha de
+  revisar respecte de la forma nova quan la fase 2 la implementi; aquest
+  ADR no la implementa.
+- La pertinença d'una conversa a una etiqueta passa a ser, per a les
+  etiquetes vinculades, un fet decidit pel servidor i descobert en
+  sincronitzar en lloc d'un fet purament local: la interfície ha de poder
+  mostrar «aquesta etiqueta s'acaba de treure remotament» de la mateixa
+  manera que ja mostra una confirmació de lectura que arriba d'un altre
+  client.
+- Assignar una etiqueta vinculada a un fil llarg és una escriptura de N
+  missatges, no una escriptura d'un sol registre; això té implicacions de
+  cost de sincronització i de límits de freqüència (sobretot a Gmail) que ha
+  de tenir en compte la incidència d'implementació, no aquest ADR.
+- Exchange és l'únic protocol on el color no té autoritat local; queda
+  documentat aquí perquè un futur informe d'error del tipus «per què no es
+  manté el canvi de color d'aquesta etiqueta» el respongui aquest registre,
+  sense haver-lo de tornar a investigar.
 
-## Alternatives considered
+## Alternatives considerades
 
-- **B — Import only, never write.** Simpler and lower-risk (no write path
-  to a user's mailbox to get wrong), but does not deliver "synchronize,"
-  which was the actual request; rejected as answering a different, smaller
-  question than the one asked.
-- **C — Per-account labels, no local concept.** Drops the ability to label
-  a conversation consistently across accounts and breaks the existing rules
-  engine, which assigns local labels
-  ([`rules.go`](../../rules.go), `action_label` in
-  [`main.rs:4999`](../../meron-core/src/main.rs)); rejected, since it
-  removes a feature that exists today rather than only adding one.
-- **Local wins on conflict, instead of remote wins.** Considered and
-  rejected: a label is metadata about mail the user also reads in other
-  clients, and letting Oreneta silently overwrite what another client just
-  set would make Oreneta the odd one out, not the source of truth.
+- **B: només importar, no escriure mai.** Més simple i amb menys risc (cap
+  camí d'escriptura a la bústia d'un usuari que es pugui fer malament), però
+  no lliura «sincronitzar», que era la petició real; rebutjada perquè respon
+  una pregunta diferent i més petita que la que es va fer.
+- **C: etiquetes per compte, sense concepte local.** Elimina la possibilitat
+  d'etiquetar una conversa de manera coherent entre comptes i trenca el
+  motor de regles existent, que assigna etiquetes locals
+  ([`rules.go`](../../rules.go), `action_label` a
+  [`main.rs:4999`](../../meron-core/src/main.rs)); rebutjada, perquè elimina
+  una funcionalitat que existeix avui en lloc de només afegir-ne una.
+- **Guanya el local en cas de conflicte, en lloc del remot.** Considerada i
+  rebutjada: una etiqueta és una metadada sobre correu que l'usuari també
+  llegeix en altres clients, i deixar que Oreneta sobreescrigui en silenci
+  el que un altre client acaba de definir faria d'Oreneta la nota
+  discordant, no la font de veritat.

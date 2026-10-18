@@ -23,7 +23,7 @@ export function AttachmentImagePreview({
       aria-modal="true"
     >
       <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-3 text-white/90">
-        <span className="min-w-0 truncate text-xs font-semibold">{attachment.filename}</span>
+        <span dir="auto" className="min-w-0 truncate text-xs font-semibold">{attachment.filename}</span>
         <button
           type="button"
           onClick={(event) => {

@@ -1,90 +1,91 @@
-# Copia completa del perfil: decisiones pendientes (#171, #172, #173, #113)
+# Còpia completa del perfil: decisions pendents (#171, #172, #173, #113)
 
-Con fecha 2026-10-11. [ADR-0010](../adr/0010-full-profile-local-recovery.md)
-decide el qué. Este documento recoge lo que el ADR no fija y hay que decidir
-antes de escribir la captura. Cada punto lleva una propuesta; ninguna está
+Amb data 2026-10-11. L'[ADR-0010](../adr/0010-full-profile-local-recovery.md)
+decideix el què. Aquest document recull el que l'ADR no fixa i que cal decidir
+abans d'escriure la captura. Cada punt porta una proposta; cap no està
 implementada.
 
-## Estado de la rama
+## Estat de la branca
 
-- **Copia actual.** La copia que existe es la de configuración de ADR-0008
-  (`meron-core/src/backup.rs`): cuentas, ajustes, feeds y metadatos PGP/S/MIME.
-  Su importación se fusiona sobre la base en uso; no hay restauración aislada.
-- **Reutilizable con pruebas** (`backup/tests.rs`):
-  - PBKDF2 con 600 000 iteraciones y AES-256-GCM con AAD fija;
-  - rechazo de contraseña incorrecta, de texto cifrado manipulado, de versión
-    futura y de parámetros de derivación absurdos.
-- **Corregido el 2026-10-11.** Escribir una copia borraba la anterior antes de
-  escribir la nueva. Ahora se escribe aparte y se renombra al terminar, y un
-  fallo conserva la anterior intacta (`TestWritePrivateFileKeepsThePreviousBackupWhenTheWriteFails`).
+- **Còpia actual.** La còpia que existeix és la de configuració de l'ADR-0008
+  (`meron-core/src/backup.rs`): comptes, configuració, canals (feeds) i
+  metadades PGP/S/MIME. La seva importació es fusiona sobre la base de dades en
+  ús; no hi ha restauració aïllada.
+- **Reutilitzable amb proves** (`backup/tests.rs`):
+  - PBKDF2 amb 600 000 iteracions i AES-256-GCM amb AAD fixa;
+  - rebuig de contrasenya incorrecta, de text xifrat manipulat, de versió
+    futura i de paràmetres de derivació absurds.
+- **Corregit el 2026-10-11.** Escriure una còpia esborrava l'anterior abans
+  d'escriure la nova. Ara s'escriu a part i es reanomena en acabar, i un error
+  conserva l'anterior intacta (`TestWritePrivateFileKeepsThePreviousBackupWhenTheWriteFails`).
 
-## Decisiones
+## Decisions
 
-> **Resueltas el 2026-10-11 por delegación** en
-> [ADR-0017](../adr/0017-profile-archive-format.md), que toma age para el
-> cifrado en lugar de la composición propia del punto 1. Lo que sigue es la
-> propuesta original, conservada como registro.
+> **Resoltes el 2026-10-11 per delegació** a
+> l'[ADR-0017](../adr/0017-profile-archive-format.md), que adopta age per al
+> xifratge en lloc de la composició pròpia del punt 1. El que segueix és la
+> proposta original, conservada com a registre.
 
-1. **Cifrado de perfiles grandes.**
-   - AES-GCM de una sola pasada obliga a tener todo el archivo en memoria y a
-     ponerle un tope.
-   - Un perfil con años de correo supera con facilidad 1 GiB, así que hace
-     falta cifrar por bloques: cada bloque autenticado con su índice y un
-     indicador de último bloque, al estilo de la construcción STREAM.
-   - Es una composición nueva sobre primitivas existentes. ADR-0010 pide
-     reutilizar primitivas, no inventar construcciones. Necesita revisión
-     criptográfica.
-   - **Propuesta:** bloques de 1 MiB con AES-256-GCM, nonce = prefijo aleatorio
-     de 7 bytes + contador de 32 bits + byte de último bloque; clave derivada
-     con el PBKDF2 actual.
-   - **Alternativa:** tope de 512 MiB y una sola pasada en la primera versión.
-2. **Inventario.**
-   - Entra: la base completa (correo en caché, borradores locales, intentos de
-     envío, ajustes) y los medios en línea guardados.
-   - **Propuesta:** la caché de adjuntos (`appCacheDir()/attachments`) se
-     declara reconstruible y se excluye en el manifiesto.
-   - Hay estado de la interfaz en `localStorage` de WebView, como
-     `lib/sessionPref.ts`. **Propuesta:** se excluye y se declara.
-   - El ADR prohíbe llamar «completa» a una copia con omisiones sin resolver.
-     ¿Basta con declarar las exclusiones en el manifiesto?
-3. **Secretos.**
-   - Contraseñas del llavero, claves privadas PGP/S/MIME y concesiones de
-     Graph del almacén del sistema.
-   - **Propuesta:** fuera por defecto; dentro solo si la persona lo marca, en
-     una sección aparte del archivo con el mismo cifrado.
-   - Las concesiones de Graph no se copian nunca: se vuelve a iniciar sesión.
-4. **Clave de la base restaurada (Windows).**
-   - La copia lleva la base cifrada con una clave propia del archivo.
-   - Al activar hay dos opciones: volver a cifrar la base con la clave del
-     equipo, o guardar la clave del archivo en el Administrador de
-     credenciales.
-   - **Propuesta:** volver a cifrar con la clave del equipo. Así un perfil
-     restaurado no depende del archivo.
-5. **Límites y nombres.**
-   - **Propuesta:** extensión `.oreneta-profile`, tamaño máximo de entrada
-     declarado de 4 GiB, rutas relativas sin `..` ni unidades y espacio libre
-     mínimo de 2× el tamaño.
-6. **Copias programadas (#173).**
-   - **Propuesta:** desactivadas por defecto, carpeta elegida por la persona y
-     se conservan las 5 últimas. La última copia verificada no se borra nunca.
+1. **Xifratge de perfils grans.**
+   - AES-GCM d'una sola passada obliga a tenir tot l'arxiu en memòria i a
+     posar-hi un límit.
+   - Un perfil amb anys de correu supera fàcilment 1 GiB, de manera que cal
+     xifrar per blocs: cada bloc autenticat amb el seu índex i un indicador
+     d'últim bloc, a l'estil de la construcció STREAM.
+   - És una composició nova sobre primitives existents. L'ADR-0010 demana
+     reutilitzar primitives, no inventar construccions. Necessita revisió
+     criptogràfica.
+   - **Proposta:** blocs d'1 MiB amb AES-256-GCM, nonce = prefix aleatori de
+     7 bytes + comptador de 32 bits + byte d'últim bloc; clau derivada amb el
+     PBKDF2 actual.
+   - **Alternativa:** límit de 512 MiB i una sola passada a la primera versió.
+2. **Inventari.**
+   - Hi entra: la base de dades completa (correu a la memòria cau, esborranys
+     locals, intents d'enviament, configuració) i els fitxers multimèdia en
+     línia desats.
+   - **Proposta:** la memòria cau d'adjunts (`appCacheDir()/attachments`) es
+     declara reconstruïble i s'exclou al manifest.
+   - Hi ha estat de la interfície al `localStorage` del WebView, com
+     `lib/sessionPref.ts`. **Proposta:** s'exclou i es declara.
+   - L'ADR prohibeix anomenar «completa» una còpia amb omissions sense
+     resoldre. N'hi ha prou de declarar les exclusions al manifest?
+3. **Secrets.**
+   - Contrasenyes del clauer, claus privades PGP/S/MIME i concessions de Graph
+     del magatzem del sistema.
+   - **Proposta:** fora per defecte; dins només si la persona ho marca, en una
+     secció a part de l'arxiu amb el mateix xifratge.
+   - Les concessions de Graph no es copien mai: es torna a iniciar la sessió.
+4. **Clau de la base de dades restaurada (Windows).**
+   - La còpia porta la base de dades xifrada amb una clau pròpia de l'arxiu.
+   - En activar-la hi ha dues opcions: tornar a xifrar la base de dades amb la
+     clau de l'equip, o desar la clau de l'arxiu a l'Administrador de
+     credencials.
+   - **Proposta:** tornar a xifrar amb la clau de l'equip. Així un perfil
+     restaurat no depèn de l'arxiu.
+5. **Límits i noms.**
+   - **Proposta:** extensió `.oreneta-profile`, mida màxima d'entrada declarada
+     de 4 GiB, camins relatius sense `..` ni unitats i espai lliure mínim de 2×
+     la mida.
+6. **Còpies programades (#173).**
+   - **Proposta:** desactivades per defecte, carpeta triada per la persona i es
+     conserven les 5 últimes. L'última còpia verificada no s'esborra mai.
 
-## Qué se puede hacer sin decidir
+## Què es pot fer sense decidir
 
-- Captura de la base en una transacción inmediata, con `sqlcipher_export`
-  hacia una clave nueva.
-- Verificación del archivo: integridad de SQLite, `user_version` no futura y
-  validación de cada borrador.
-- Restauración en un directorio aislado con diario de activación y
-  recuperación tras interrupción.
-- Pruebas de corrupción byte a byte, truncamiento, rutas maliciosas y
-  escrituras concurrentes.
+- Captura de la base de dades en una transacció immediata, amb
+  `sqlcipher_export` cap a una clau nova.
+- Verificació de l'arxiu: integritat de SQLite, `user_version` no futura i
+  validació de cada esborrany.
+- Restauració en un directori aïllat amb diari d'activació i recuperació
+  després d'una interrupció.
+- Proves de corrupció byte a byte, truncament, camins maliciosos i escriptures
+  concurrents.
 
-Todo eso depende del formato del contenedor (punto 1). Empezar sin decidirlo
-obligaría a rehacer el formato.
+Tot això depèn del format del contenidor (punt 1). Començar sense decidir-ho
+obligaria a refer el format.
 
-## Necesita Windows nativo
+## Necessita Windows natiu
 
-- Renombrar el perfil con el sidecar o WebView2 abiertos.
-- Interrupción y disco lleno reales.
-- Ensayo de restauración sobre un candidato exacto
-  (`windows-validation.yml`).
+- Reanomenar el perfil amb el procés auxiliar (sidecar) o el WebView2 oberts.
+- Interrupció i disc ple reals.
+- Assaig de restauració sobre un candidat exacte (`windows-validation.yml`).

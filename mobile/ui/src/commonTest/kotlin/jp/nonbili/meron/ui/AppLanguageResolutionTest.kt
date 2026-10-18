@@ -60,6 +60,9 @@ class AppLanguageResolutionTest {
         assertEquals("en", resolveDeviceLanguageTag("en-GB"))
         // A bare language works too.
         assertEquals("ko", resolveDeviceLanguageTag("ko"))
+        // Catalan, Valencian included (#231).
+        assertEquals("ca", resolveDeviceLanguageTag("ca-ES"))
+        assertEquals("ca", resolveDeviceLanguageTag("ca-ES-valencia"))
     }
 
     @Test

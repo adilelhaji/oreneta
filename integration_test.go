@@ -688,8 +688,9 @@ func TestIntegrationMailFlow(t *testing.T) {
 			t.Fatalf("quick reply fixture has empty thread_key: %v", original)
 		}
 
-		// Same Message-ID shape the frontend mints (newDraftMessageId): the
-		// store-side thread cleanup only targets oreneta-draft-*@oreneta ids.
+		// The core's draft Message-ID shape on its fallback domain: the
+		// store-side thread cleanup targets oreneta-draft-*@oreneta (and the
+		// legacy meron-draft-*@meron) ids.
 		draftID := fmt.Sprintf("oreneta-draft-%s-itest@oreneta", nonce)
 		draftSubject := "Re: " + quickSubject
 		if _, err := sidecar.Call("save_draft", map[string]any{
@@ -2296,6 +2297,63 @@ func TestIntegrationMailFlow(t *testing.T) {
 			account, ok := item.(map[string]any)
 			if ok && str(account, "id") == id {
 				t.Fatalf("rejected account was stored anyway: %v", account)
+			}
+		}
+	})
+
+	t.Run("connection test reports each step and stores nothing", func(t *testing.T) {
+		// #269 against a real IMAP and submission server: the right password
+		// passes every step of both, a wrong one fails both sign-ins, and
+		// neither leaves an account behind.
+		id := "itest-connection-test"
+		params := func(password string) map[string]any {
+			return map[string]any{
+				"account":   id,
+				"host":      "127.0.0.1",
+				"port":      server.imapPort,
+				"tls":       false,
+				"smtp_host": "127.0.0.1",
+				"smtp_port": server.smtpPort,
+				"smtp_tls":  false,
+				"user":      "alice@maddy.test",
+				"password":  password,
+				"proxy":     map[string]any{"mode": "direct"},
+			}
+		}
+		stepStatus := func(report map[string]any, side string) []string {
+			serverReport, _ := report[side].(map[string]any)
+			steps, _ := serverReport["steps"].([]any)
+			out := []string{}
+			for _, raw := range steps {
+				step, _ := raw.(map[string]any)
+				out = append(out, fmt.Sprintf("%v:%v", step["step"], step["status"]))
+			}
+			return out
+		}
+		passing := callMap(t, sidecar, "account.testConnection", params(testPassword))
+		want := "[dns:ok tcp:ok tls:skipped auth:ok]"
+		for _, side := range []string{"incoming", "outgoing"} {
+			if got := fmt.Sprint(stepStatus(passing, side)); got != want {
+				t.Fatalf("%s steps = %s, want %s (%v)", side, got, want, passing)
+			}
+		}
+		if !boolValue(passing, "ok") {
+			t.Fatalf("report = %v, want ok", passing)
+		}
+		failing := callMap(t, sidecar, "account.testConnection", params("definitely-not-"+testPassword))
+		if boolValue(failing, "ok") {
+			t.Fatalf("a wrong password passed the test: %v", failing)
+		}
+		for _, side := range []string{"incoming", "outgoing"} {
+			if got := fmt.Sprint(stepStatus(failing, side)); got != "[dns:ok tcp:ok tls:skipped auth:failed]" {
+				t.Fatalf("%s steps = %s, want a failed sign-in (%v)", side, got, failing)
+			}
+		}
+		accounts, _ := callMap(t, sidecar, "account.list", map[string]any{})["accounts"].([]any)
+		for _, item := range accounts {
+			account, ok := item.(map[string]any)
+			if ok && str(account, "id") == id {
+				t.Fatalf("the connection test stored an account: %v", account)
 			}
 		}
 	})

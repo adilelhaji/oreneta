@@ -752,6 +752,63 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         );
     }
 
+    /// A meeting that came and went while the machine slept: the watch's
+    /// look on waking gathers its reminder into the one missed-reminders
+    /// notice, not a reminder of its own, and gives it once (#225).
+    #[tokio::test]
+    async fn the_reminder_watch_gathers_missed_reminders_into_one_notice() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let account = meron_core::archive::ACCOUNT;
+        // A fixed clock (2027-01-15 08:00 UTC); the zone is this machine's,
+        // as the watch's is, and nothing below depends on it.
+        let now = 1_800_000_000;
+        let start = now - 3 * 3_600;
+        {
+            let db = engine.db.lock().unwrap();
+            meron_core::archive::ensure_account(&db, now).unwrap();
+            calendar::upsert_calendars(&db, account, &[calendar::Calendar {
+                id: "local:home".into(),
+                name: "Home".into(),
+                enabled: true,
+                ..Default::default()
+            }])
+            .unwrap();
+            let meeting = calendar::Event {
+                id: "standup".into(),
+                calendar_id: "local:home".into(),
+                subject: "Standup".into(),
+                start,
+                end: start + 1_800,
+                reminder_minutes: Some(15),
+                ..Default::default()
+            };
+            calendar::replace_window(&db, account, "local:home", (now - 86_400, now + 86_400), &[meeting]).unwrap();
+            // Last looked at before the reminder rang; asleep since.
+            meron_core::calendar::reminders::record_look(&db, account, start - 3_600, &chrono::Local).unwrap();
+        }
+        let creds = store::load_account(&engine.db.lock().unwrap(), account).unwrap().unwrap();
+        engine.accounts.lock().await.insert(account.to_string(), creds);
+
+        let woke = look_for_reminders(&engine, now).await;
+        assert!(woke.reminders.is_empty(), "over: not a reminder of its own");
+        let missed = woke.missed.expect("one notice");
+        assert_eq!(missed["count"], 1);
+        assert_eq!(missed["reminders"][0]["event"], "standup");
+        assert_eq!(missed["reminders"][0]["started"], true);
+        let next = look_for_reminders(&engine, now + 60).await;
+        assert_eq!((next.reminders.len(), next.missed), (0, None), "given once");
+
+        // Not yet shown: a restart of the core says it again; once the host
+        // says it showed it (with the keys it held), no more.
+        let again = pim::reminders::pending_missed_notice(&engine, now + 120, &chrono::Local).expect("said again");
+        assert_eq!(again["keys"], missed["keys"]);
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let request = Request { id: 1, method: "reminders.missedShown".into(), params: json!({ "keys": missed["keys"] }) };
+        dispatch(&engine, &request, &writer).await.unwrap();
+        assert_eq!(pim::reminders::pending_missed_notice(&engine, now + 180, &chrono::Local), None);
+    }
+
     #[tokio::test]
     async fn the_local_address_book_saves_and_refuses_a_stale_edit() {
         use super::*;
@@ -1009,6 +1066,44 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         let list=dispatch(&engine,&request("account.list",json!({})),&writer).await.unwrap();
         assert_eq!(list["accounts"][0]["needs_reconnect"],true);
         assert!(!list.to_string().contains("access_token"));
+    }
+    /// #269: the connection test reports each step and stores nothing, and it
+    /// needs a password — typed, or the one already held for the account.
+    #[tokio::test]
+    async fn connection_test_stores_nothing_and_needs_a_password() {
+        use super::*;
+        let engine=Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer=Arc::new(Mutex::new(tokio::io::stdout()));
+        let request=|method:&str,params:Value|Request{id:1,method:method.into(),params};
+        let closed=std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let account="tested@example.test";
+        let params=json!({"account":account,"host":"127.0.0.1","port":closed,"tls":true,"smtp_host":"127.0.0.1","smtp_port":closed,"smtp_tls":true,"user":account,"password":"typed-secret","proxy":{"mode":"direct"}});
+        let report=dispatch(&engine,&request("account.testConnection",params.clone()),&writer).await.unwrap();
+        assert_eq!(report["ok"],false);
+        assert_eq!(report["incoming"]["steps"][1]["kind"],"refused");
+        assert_eq!(report["outgoing"]["steps"][1]["kind"],"refused");
+        assert!(!report.to_string().contains("typed-secret"));
+        assert!(store::load_account(&engine.db.lock().unwrap(),account).unwrap().is_none());
+        assert!(engine.accounts.lock().await.is_empty());
+
+        let mut without=params.clone();
+        without.as_object_mut().unwrap().remove("password");
+        let error=dispatch(&engine,&request("account.testConnection",without),&writer).await.unwrap_err();
+        assert!(error.to_string().contains("password required"),"{error}");
+
+        // "Save anyway" skips the test, never the password.
+        let mut anyway=params.clone();
+        anyway["validate"]=json!(false);
+        anyway["password"]=json!("");
+        let error=dispatch(&engine,&request("account.connect",anyway),&writer).await.unwrap_err();
+        assert!(error.to_string().contains("password required"),"{error}");
+        // Nor does a validated save of a new account without one: a server
+        // that took an empty password must not end up holding the account.
+        let mut validated=params.clone();
+        validated.as_object_mut().unwrap().remove("password");
+        let error=dispatch(&engine,&request("account.connect",validated),&writer).await.unwrap_err();
+        assert!(error.to_string().contains("password required"),"{error}");
+        assert!(store::load_account(&engine.db.lock().unwrap(),account).unwrap().is_none());
     }
     /// ADR-0050: `folders.move` end to end on the local archive, which is its
     /// own server, and refused on Exchange, which does not manage folders here.
@@ -1271,7 +1366,9 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         .await
         .unwrap_err();
 
-        let message = error.to_string();
+        // Callers report it with `{:#}`: the retry's error stays the typed
+        // source under the note about the first attempt (#244).
+        let message = format!("{error:#}");
         assert!(message.contains("network is unreachable"));
         assert!(message.contains("connection reset by peer"));
         assert_eq!(attempts.load(Ordering::SeqCst), 2);
@@ -1755,6 +1852,16 @@ fn spawn_reminder_watch(engine: Arc<Engine>, out: Writer) {
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         let mut resumed = Box::pin(engine.resume_signal.notified());
         resumed.as_mut().enable();
+        // Missed reminders the host had not shown when it last quit (held at
+        // start or through quiet hours): said again, until it says it showed
+        // them (`reminders.missedShown`, #225).
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|epoch| epoch.as_secs() as i64)
+            .unwrap_or_default();
+        if let Some(missed) = pim::reminders::pending_missed_notice(&engine, now, &chrono::Local) {
+            emit(&out, "calendar.missedReminders", missed).await;
+        }
         loop {
             if next_reminder_look(&mut ticker, resumed.as_mut()).await == ReminderWake::Resumed {
                 // Listening again before this look, so a resume that lands
@@ -1808,6 +1915,10 @@ async fn give_calendar_reminders(engine: &Arc<Engine>, out: &Writer, now: i64) {
     let look = look_for_reminders(engine, now).await;
     for detail in look.reminders {
         emit(out, "calendar.reminder", detail).await;
+    }
+    // What came due while nobody looked and is over: one notice (#225).
+    if let Some(missed) = look.missed {
+        emit(out, "calendar.missedReminders", missed).await;
     }
     // A floating time is read in the zone the machine is in when its calendar
     // is read: after a change of zone, read those again so their times, and
@@ -2510,6 +2621,27 @@ async fn sync_contact_source(engine: &Arc<Engine>, id: &str) -> anyhow::Result<(
     pim::people::sync_source(engine, id).await
 }
 
+/// Moves the keychain entries this profile names from the inherited `meron`
+/// service to `oreneta` in the background, so entries no request reads still
+/// move (ADR-0063). Each entry read before the sweep reaches it is moved on
+/// that read instead; failures are logged and tried again on the next start.
+fn spawn_keychain_migration(engine: &Arc<Engine>) {
+    if secrets::keyring_off() {
+        return;
+    }
+    let names = meron_core::profile_purge::keychain_names(&engine.db.lock().unwrap());
+    match names {
+        Ok(names) => {
+            tokio::task::spawn_blocking(move || secrets::migrate_legacy(&names));
+        }
+        Err(err) => meron_core::mlog!(
+            meron_core::log::Level::Warn,
+            "keyring",
+            "could not list the keychain entries to move; each is moved on its first read: {err:#}"
+        ),
+    }
+}
+
 #[tokio::main]
 async fn main() {
     // Tag panics consistently on stderr, which the desktop bridge copies into
@@ -2551,6 +2683,8 @@ async fn main() {
             return;
         }
     };
+
+    spawn_keychain_migration(&engine);
 
     // Resume IDLE for accounts whose credentials persisted across restarts.
     let known: Vec<String> = engine.accounts.lock().await.keys().cloned().collect();
@@ -3341,10 +3475,21 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "chat.subscribe" | "chat.answerSubscription" => {
             let account = req_str(p, "account")?;
             let jid = req_str(p, "jid")?.trim().to_lowercase();
-            anyhow::ensure!(
-                jid.split_once('@').is_some_and(|(local, domain)| !local.is_empty() && domain.contains('.') && !domain.contains('/')),
-                "an address looks like name@server.example"
-            );
+            // Denying, or no longer letting someone see the status, goes to any
+            // address the roster may hold (a gateway, a server without dots,
+            // ADR-0064); asking and allowing need a person's address.
+            let denying = req.method == "chat.answerSubscription" && p.get("allow").and_then(Value::as_bool) == Some(false);
+            if denying {
+                anyhow::ensure!(
+                    !jid.is_empty() && jid.parse::<tokio_xmpp::parsers::jid::BareJid>().is_ok(),
+                    "this is not a chat address"
+                );
+            } else {
+                anyhow::ensure!(
+                    jid.split_once('@').is_some_and(|(local, domain)| !local.is_empty() && domain.contains('.') && !domain.contains('/')),
+                    "an address looks like name@server.example"
+                );
+            }
             // Asked only on a live connection: nothing waits to go out later.
             let online = chat_status().lock().unwrap().get(&account).is_some_and(|s| s["state"] == "online");
             anyhow::ensure!(online, "this chat account is not connected; nothing was sent");
@@ -3373,6 +3518,22 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let live = chat_live().lock().unwrap().get(&account).cloned();
             let list = live.map(|live| live.lock().unwrap().occupants.list(&room)).unwrap_or_default();
             Ok(serde_json::to_value(list)?)
+        }
+        // Muting one conversation (ADR-0064): no system notification from
+        // it, while it still counts as unread. Who may see the person's
+        // status comes with `chat.presence` (`allowed`), and withdrawing a
+        // permission is `chat.answerSubscription` with `allow: false`.
+        "chat.muted" => {
+            let account = req_str(p, "account")?;
+            Ok(json!({ "muted": meron_core::chat::mute::muted(&engine.db.lock().unwrap(), &account)? }))
+        }
+        "chat.mute" => {
+            let account = req_str(p, "account")?;
+            let conversation = req_str(p, "conversation")?;
+            let muted = p.get("muted").and_then(Value::as_bool).context("missing muted")?;
+            meron_core::chat::account(&engine.db.lock().unwrap(), &account)?;
+            let list = meron_core::chat::mute::set_muted(&engine.db.lock().unwrap(), &account, &conversation, muted)?;
+            Ok(json!({ "muted": list }))
         }
         // Group chats (ADR-0044): joined by the person, joined again on each
         // connection, left by the person.
@@ -3415,9 +3576,10 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "chat.leave" => {
             let account = req_str(p, "account")?;
             let room = req_str(p, "room")?;
-            if let Some(joined) = meron_core::chat::room(&engine.db.lock().unwrap(), &account, &room)? {
+            // The nickname alone: listing the rooms also counts their mentions.
+            if let Some(nick) = meron_core::chat::room_nick(&engine.db.lock().unwrap(), &account, &room)? {
                 if let Some(tx) = chat_sessions().lock().unwrap().get(&account) {
-                    let _ = tx.send(meron_core::chat::xmpp::Command::Leave { room: room.clone(), nick: joined.nick });
+                    let _ = tx.send(meron_core::chat::xmpp::Command::Leave { room: room.clone(), nick });
                 }
             }
             meron_core::chat::leave_room(&engine.db.lock().unwrap(), &account, &room)?;
@@ -3434,7 +3596,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let room = req_str(p, "room")?;
             let db = engine.db.lock().unwrap();
             meron_core::chat::dismiss_invitation(&db, &account, &room)?;
-            if meron_core::chat::room(&db, &account, &room)?.is_none() {
+            if meron_core::chat::room_nick(&db, &account, &room)?.is_none() {
                 let _ = secrets::delete(&meron_core::chat::room_secret_key(&account, &room));
             }
             Ok(json!({ "ok": true }))
@@ -3453,7 +3615,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let meta = std::fs::metadata(&path).context("the file cannot be read")?;
             anyhow::ensure!(meta.is_file(), "only a file can be sent");
             let name = path.file_name().and_then(|n| n.to_str()).context("the file has no name")?.to_string();
-            let group = meron_core::chat::room(&engine.db.lock().unwrap(), &account, &conversation)?.is_some();
+            let group = meron_core::chat::room_nick(&engine.db.lock().unwrap(), &account, &conversation)?.is_some();
             let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
             let upload = meron_core::chat::xmpp::Upload {
                 id: upload_id.clone(),
@@ -3872,14 +4034,35 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let parsed = meron_core::protocol::mail::parse_thread_id(&thread_id)
                 .context("invalid thread_id")?;
             let db = engine.db.lock().unwrap();
-            let sender = store::record_spam_judgment(
+            let recorded = store::record_spam_judgment_change(
                 &db,
                 &parsed.account,
                 &parsed.folder,
                 &parsed.thread_key,
                 is_spam,
             )?;
-            Ok(json!({ "ok": true, "sender": sender }))
+            // `judgment` is what an undo hands back to
+            // `mail.revertSpamJudgment` (#254); null when there was no
+            // conversation to judge, so there is nothing to take back.
+            let (sender, judgment) = match recorded {
+                Some(recorded) => (Some(recorded.sender), Some(recorded.change)),
+                None => (None, None),
+            };
+            Ok(json!({ "ok": true, "sender": sender, "judgment": judgment }))
+        }
+
+        // Takes back one judgment change, given as `mail.recordSpamJudgment`
+        // answered it (#254, ADR-0005): the learned counts end as they were
+        // before it. `reverted` is false, and nothing changes, when a later
+        // judgment of the same message replaced it; `judgment` is then null,
+        // and otherwise the change this made, which reverts it in turn.
+        "mail.revertSpamJudgment" => {
+            let change: store::SpamJudgmentChange = serde_json::from_value(
+                p.get("judgment").cloned().context("missing judgment")?,
+            )
+            .context("invalid judgment")?;
+            let reverted = store::revert_spam_judgment(&engine.db.lock().unwrap(), &change)?;
+            Ok(json!({ "ok": true, "reverted": reverted.is_some(), "judgment": reverted }))
         }
 
         // Every local to-do, across every account and folder — message-tied
@@ -4426,8 +4609,8 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "google.contacts.sync" => pim::people::google_sync(engine, p).await,
 
         // An Exchange account's Contacts folder and its distribution lists
-        // (ADR-0058), read with the account's own sign-in. One book per
-        // account, like Google's.
+        // (ADR-0058), read with the account's own sign-in, and the contact
+        // folders under it, a book each (ADR-0066).
         "exchange.contacts.sync" => pim::exchange_book::sync(engine, p).await,
 
         "carddav.sync" => pim::people::source_sync(engine, p).await,
@@ -4436,11 +4619,15 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
 
         // Removing a source takes its people with it: they were a copy of
         // somebody else's book, and a copy with no origin can never be
-        // refreshed or told apart from a contact the reader typed.
+        // refreshed or told apart from a contact the reader typed. An
+        // Exchange account's book takes its contact folders with it
+        // (ADR-0066).
         "carddav.remove" => {
             let id = req_str(p, "id")?;
-            store::delete_contact_source(&engine.db.lock().unwrap(), &id)?;
-            let _ = meron_core::secrets::delete(&id);
+            let removed = pim::people::remove_source(&engine.db.lock().unwrap(), &id)?;
+            for id in removed {
+                let _ = meron_core::secrets::delete(&id);
+            }
             Ok(json!({ "ok": true }))
         }
 
@@ -6015,7 +6202,17 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             // created directly after Google's token exchange; IMAP validation
             // can be slow or network-dependent, and later sync/watch calls will
             // surface any mailbox access failure.
-            if p.get("validate").and_then(Value::as_bool).unwrap_or(true) {
+            let validate = p.get("validate").and_then(Value::as_bool).unwrap_or(true);
+            // A password or POP3 account needs a password, typed now or
+            // already held for this account — whether it is validated or saved
+            // through the person's explicit "Save anyway" (#269). The Go bridge
+            // leaves this to the core, which alone knows what is held; an empty
+            // one must not reach a server that would accept it.
+            anyhow::ensure!(
+                !(creds.auth_type == "password" || creds.is_pop3()) || !creds.password.is_empty() || !creds.ews_url.is_empty(),
+                "password required"
+            );
+            if validate {
                 if creds.is_pop3() {
                     // Signs in over TLS and leaves at once; nothing is
                     // downloaded or deleted until the first sync.
@@ -8319,6 +8516,32 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             )
         }
 
+        // Test a manually configured account's two servers step by step (#269):
+        // name lookup, TCP, TLS and sign-in, each reported. Nothing is stored —
+        // no account row, no secret, no pin — whatever the outcome. Editing an
+        // account without retyping its password tests the stored one, which
+        // stays in the core: the report never carries it.
+        "account.testConnection" => {
+            let mut request = meron_core::connection_test::TestRequest::from_params(p)?;
+            if request.login.password.is_empty() {
+                let id = req_str(p, "account").or_else(|_| req_str(p, "id")).unwrap_or_default();
+                let stored = if id.is_empty() {
+                    None
+                } else {
+                    let db = engine.db.lock().unwrap();
+                    store::load_account(&db, &id)?
+                };
+                if let Some(mut stored) = stored {
+                    let db = engine.db.lock().unwrap();
+                    engine.host.apply_secret(&db, &id, &mut stored);
+                    request.login.password = std::mem::take(&mut stored.password);
+                }
+            }
+            anyhow::ensure!(!request.login.password.is_empty(), "password required");
+            let report = meron_core::connection_test::run(&request).await;
+            Ok(serde_json::to_value(report)?)
+        }
+
         // Fetch the certificate a mail server presents, so the account dialog
         // can show it and let the user pin it. Needed for local bridges (Proton
         // Mail Bridge) whose self-signed leaf webpki refuses outright; nothing
@@ -8525,7 +8748,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                                 .unwrap_or_default()
                                 .trim();
                             if !url.starts_with("/media/wallpapers/") {
-                                anyhow::bail!("custom wallpaper URL must be a Meron wallpaper");
+                                anyhow::bail!("custom wallpaper URL must be an Oreneta wallpaper");
                             }
                             Some(json!({ "kind": "custom", "url": url }))
                         }
@@ -8746,6 +8969,22 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "system.resumed" => {
             engine.clear_all_pools();
             engine.resume_signal.notify_waiters();
+            Ok(json!({ "ok": true }))
+        }
+
+        // The host showed a missed-reminders notice (#225): the reminders it
+        // held, `keys: [{account, key}]`, are no longer said again at start.
+        "reminders.missedShown" => {
+            let shown: Vec<(String, String)> = p
+                .get("keys")
+                .and_then(Value::as_array)
+                .map(|keys| {
+                    keys.iter()
+                        .filter_map(|k| Some((k.get("account")?.as_str()?.to_string(), k.get("key")?.as_str()?.to_string())))
+                        .collect()
+                })
+                .unwrap_or_default();
+            pim::reminders::missed_shown(engine, &shown)?;
             Ok(json!({ "ok": true }))
         }
 

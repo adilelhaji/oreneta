@@ -1,30 +1,31 @@
-# Copias programadas (#173; ADR-0037)
+# Còpies programades (#173; ADR-0037)
 
-## Uso
+## Ús
 
-En **Ajustes → Copia de seguridad → Copias programadas**:
-- activar, elegir carpeta, cada día o cada semana, cuántas conservar y un
-  límite de espacio opcional;
-- la contraseña, confirmada, se guarda en el llavero del sistema;
-- **Copiar ahora** hace una copia en el momento;
-- se muestran la última copia buena, el último fallo (con «las copias
-  anteriores se conservan»), la próxima y la lista de las que se conservan,
-  marcando las que ya no están en la carpeta.
+A **Configuració → Còpia de seguretat → Còpies programades**:
+- activar-les, triar la carpeta, cada dia o cada setmana, quantes se'n conserven
+  i un límit d'espai opcional;
+- la contrasenya, confirmada, es desa al clauer del sistema;
+- **Copia ara** fa una còpia en aquell moment;
+- es mostren l'última còpia bona, l'última fallada (amb «les còpies
+  anteriors es conserven»), la següent i la llista de les que es conserven,
+  i es marquen les que ja no són a la carpeta.
 
-Un fallo de una copia programada se avisa aunque Ajustes esté cerrado.
+Es fa saber la fallada d'una còpia programada encara que Configuració estigui
+tancada.
 
-## Núcleo
+## Nucli
 
 `meron-core/src/backup_schedule/`, RPC `backupSchedule.status`,
-`backupSchedule.save`, `backupSchedule.runNow`, evento `backup.scheduled`.
-Comprueba cada 5 minutos, empezando 2 minutos después de abrir. Esquema 55.
-El puente da `backupSchedule.pickFolder` y pasa `MERON_APP_VERSION`.
+`backupSchedule.save`, `backupSchedule.runNow`, esdeveniment `backup.scheduled`.
+Comprova cada 5 minuts, començant 2 minuts després d'obrir l'aplicació. Esquema 55.
+El pont proporciona `backupSchedule.pickFolder` i passa `MERON_APP_VERSION`.
 
-## Pruebas
+## Proves
 
-| Nivel | Qué cubre |
+| Nivell | Què cobreix |
 |---|---|
-| N1 Rust (`backup_schedule/tests.rs`) | Apagada por omisión; una copia perdida se hace una vez y un fallo se reintenta a la hora; ajustes y carpeta (dentro del perfil, que lo contiene, inexistente, relativa); retención por número y por espacio sin borrar nunca la comprobada más reciente; copia real escrita, comprobada y legible; disco lleno que conserva todo; copia nueva corrupta que se borra y deja la buena con «conservar 1»; solo se borran archivos propios sin cambios (ni notas, ni copias manuales, ni un archivo sustituido); manual y programada nunca a la vez; parada a mitad (sin comprobar o `.part`) que se limpia al arrancar sin tocar `.part` ajenos; dos copias en el mismo segundo; perfil restaurado con las copias apagadas |
-| N1 despachador (`main.rs`) | Sin contraseña no se enciende; la contraseña no vuelve; copiar ahora deja una copia comprobada; manual y programada se excluyen |
-| N2 (`BackupScheduleGroup.test.tsx`) | Apagada por omisión; no se guarda sin carpeta ni contraseña confirmada; un cambio posterior no reenvía la contraseña; fallo visible con «se conservan»; copia ausente marcada; evento recibido con Ajustes abierto |
-| N4 pendiente | En Windows: copia con la aplicación en uso, disco lleno real, carpeta en unidad extraíble desconectada |
+| N1 Rust (`backup_schedule/tests.rs`) | Desactivada per defecte; una còpia perduda es fa una vegada i una fallada es torna a provar al cap d'una hora; configuració i carpeta (dins del perfil, que el conté, inexistent, relativa); retenció per nombre i per espai sense esborrar mai la comprovada més recent; còpia real escrita, comprovada i llegible; disc ple que ho conserva tot; còpia nova malmesa que s'esborra i deixa la bona amb «conserva'n 1»; només s'esborren fitxers propis sense canvis (ni notes, ni còpies manuals, ni un fitxer substituït); manual i programada mai alhora; aturada a mitges (sense comprovar o `.part`) que es neteja en arrencar sense tocar els `.part` d'altri; dues còpies en el mateix segon; perfil restaurat amb les còpies desactivades |
+| N1 distribuïdor (`main.rs`) | Sense contrasenya no s'activa; la contrasenya no es retorna; copiar ara deixa una còpia comprovada; manual i programada s'exclouen |
+| N2 (`BackupScheduleGroup.test.tsx`) | Desactivada per defecte; no es desa sense carpeta ni contrasenya confirmada; un canvi posterior no torna a enviar la contrasenya; fallada visible amb «es conserven»; còpia absent marcada; esdeveniment rebut amb Configuració oberta |
+| N4 pendent | A Windows: còpia amb l'aplicació en ús, disc ple real, carpeta en una unitat extraïble desconnectada |

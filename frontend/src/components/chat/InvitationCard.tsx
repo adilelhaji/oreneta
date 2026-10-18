@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CalendarCheck, CalendarX, CalendarClock, CalendarSearch } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { accounts$ } from '../../states/accounts'
 import { accountSupportsCalendar, calendar$, loadCalendars } from '../../states/calendar'
 import { canImportInto } from '../../states/calendarFiles'
@@ -23,13 +23,14 @@ import { Button } from '../button/Button'
 import { ConflictNote } from '../calendar/ConflictNote'
 import { DateAndTime } from '../calendar/EventEditor'
 
-function when(start: number, end: number, allDay: boolean): string {
+/** The meeting's time range, both ends in the interface language. */
+export function when(start: number, end: number, allDay: boolean): string {
   const from = new Date(start * 1000)
-  if (allDay) return from.toLocaleDateString(undefined, { dateStyle: 'full' })
+  if (allDay) return from.toLocaleDateString(intlLocale(), { dateStyle: 'full' })
   const to = new Date(end * 1000)
   const sameDay = from.toDateString() === to.toDateString()
-  return `${from.toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' })} – ${to.toLocaleString(
-    undefined,
+  return `${from.toLocaleString(intlLocale(), { dateStyle: 'full', timeStyle: 'short' })} – ${to.toLocaleString(
+    intlLocale(),
     sameDay ? { timeStyle: 'short' } : { dateStyle: 'medium', timeStyle: 'short' },
   )}`
 }

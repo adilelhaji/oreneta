@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { ChevronRight, Layers, Mail, X } from 'lucide-react'
+import { ChevronRight, Eye, EyeOff, Layers, Mail, X } from 'lucide-react'
 import { accounts$ } from '../../states/accounts'
 import { accountGroups$, inUnifiedScope, showAccountGroup, type AccountGroup } from '../../states/accountGroups'
 import { folderList, mail$, inboxUnread, moveFolder } from '../../states/mail'
@@ -21,9 +21,11 @@ import { unifiedFolders } from '../../lib/unifiedFolders'
 import { useTranslation } from '../../lib/i18n'
 import { folderColor, type FolderColorId } from '../../lib/folderColors'
 import { FOLDER_MOVE_BLOCK_TEXT, folderMoveBlock, folderMoveSourceBlock } from '../../lib/folderMoves'
+import { hiddenFolderIds } from '../../lib/folderHiding'
 import type { Account, Folder } from '../../types'
 import { FolderContextMenu } from './FolderContextMenu'
 import { FolderMoveDialog } from './FolderMoveDialog'
+import { documentDirection } from '../../lib/direction'
 
 /** Drag payload types, for other windows and drop targets that read them. */
 export const FOLDER_DRAG_TYPE = 'application/x-oreneta-folder'
@@ -32,6 +34,8 @@ export const FAVORITE_DRAG_TYPE = 'application/x-oreneta-favorite'
 /** What the folder rows need from the navigation around them (ADR-0050). */
 type FolderRowActions = {
   colorOf: (folder: Folder) => FolderColorId | undefined
+  /** Hidden from the tree (#273): such a row is only drawn while hidden folders are shown, or while it is open. */
+  isHidden: (folder: Folder) => boolean
   openMenu: (folder: Folder, at: { x: number; y: number }, trigger: HTMLElement | null, inFavorites?: boolean) => void
   /** Why the folder being dragged cannot land on `target`; null when it can, undefined when nothing is dragged. */
   dropBlock: (target: Folder | null) => string | null | undefined
@@ -47,7 +51,8 @@ function menuKey(event: KeyboardEvent<HTMLElement>): boolean {
 
 function keyboardMenuPoint(element: HTMLElement): { x: number; y: number } {
   const rect = element.getBoundingClientRect()
-  return { x: rect.left + 16, y: rect.bottom }
+  // A little in from the row's start edge, whichever side that is.
+  return { x: documentDirection() === 'rtl' ? rect.right - 16 : rect.left + 16, y: rect.bottom }
 }
 
 function ColorDot({ color }: { color: FolderColorId | undefined }) {
@@ -63,6 +68,17 @@ function ColorDot({ color }: { color: FolderColorId | undefined }) {
         defaultValue: 'Color: {color}',
       })}
     />
+  )
+}
+
+/** Marks a hidden folder while hidden folders are shown (#273). */
+function HiddenMark() {
+  const { t } = useTranslation()
+  return (
+    <>
+      <EyeOff size={14} strokeWidth={1.75} className="mail-folder-hidden-mark" aria-hidden="true" />
+      <span className="sr-only">{t('folders.hide.mark', { defaultValue: 'Hidden' })}</span>
+    </>
   )
 }
 
@@ -85,6 +101,7 @@ function FolderBranch({
   const current = node.folder?.id === selected || (node.folder?.role === 'inbox' && selected.toLowerCase() === 'inbox')
   const folder = node.folder
   const color = folder ? actions?.colorOf(folder) : undefined
+  const hidden = folder ? !!actions?.isHidden(folder) : false
   const dropHandlers =
     folder && actions
       ? {
@@ -136,6 +153,7 @@ function FolderBranch({
             title={node.folder.name}
             aria-current={current ? 'page' : undefined}
             data-folder-color={color}
+            data-folder-hidden={hidden ? '' : undefined}
             draggable={!!actions && actions.canDrag(node.folder)}
             onDragStart={(event) => actions?.startDrag(node.folder!, event)}
             onDragEnd={() => actions?.endDrag()}
@@ -154,6 +172,7 @@ function FolderBranch({
             <Icon size={16} strokeWidth={1.75} />
             <span>{node.name}</span>
             <ColorDot color={color} />
+            {hidden && <HiddenMark />}
             {node.folder.unread > 0 && <small>{node.folder.unread}</small>}
           </button>
         ) : (
@@ -414,13 +433,45 @@ export function MailNavigationView({
   const [moving, setMoving] = useState<Folder | null>(null)
   const [dragged, setDragged] = useState<Folder | null>(null)
   const [rootDrop, setRootDrop] = useState(false)
+  // Hidden folders (#273): shown again only on request, for as long as this
+  // account stays open; the hidden marks themselves are kept in folderPrefs.
+  const [showHiddenAsked, setShowHidden] = useState(false)
+  const [hideAnnouncement, setHideAnnouncement] = useState('')
+  const focusToggle = useRef(false)
+  const showHiddenButton = useRef<HTMLButtonElement | null>(null)
   const draggedRef = useRef<Folder | null>(null)
   const menuTrigger = useRef<HTMLElement | null>(null)
   const favoriteRefs = useValue(folderPrefs$.favorites)
   const colors = useValue(folderPrefs$.colors)
+  const hiddenRefs = useValue(folderPrefs$.hidden)
   const dropped = useValue(folderPrefs$.dropped)
+  const hiddenIds = hiddenFolderIds(folders, hiddenRefs)
+  const showHidden = showHiddenAsked && hiddenIds.size > 0
   const needle = query.trim().toLocaleLowerCase()
-  const tree = buildFolderTree(folders.filter((folder) => !needle || folder.name.toLocaleLowerCase().includes(needle)))
+  // The open folder stays in the tree even when hidden, so the navigation
+  // still shows where the list is; it leaves once another folder opens.
+  const isOpen = (folder: Folder) => folder.id === selectedFolder
+  const tree = buildFolderTree(
+    folders.filter(
+      (folder) =>
+        (showHidden || !hiddenIds.has(folder.id) || isOpen(folder)) &&
+        (!needle || folder.name.toLocaleLowerCase().includes(needle)),
+    ),
+  )
+
+  // Nothing hidden any more: the next folder hidden goes out of sight again.
+  // An empty list is a cache being reloaded, not the hidden folders going.
+  useEffect(() => {
+    if (!hiddenIds.size && folders.length) setShowHidden(false)
+  }, [hiddenIds.size, folders.length])
+
+  // A folder hidden from its own menu leaves the tree, and the focus with it:
+  // it lands on the switch that brings hidden folders back.
+  useEffect(() => {
+    if (!focusToggle.current) return
+    focusToggle.current = false
+    showHiddenButton.current?.focus()
+  })
   const active = accounts.find((account) => account.id === selectedAccount)
   const isRSS = active?.provider === 'rss' || active?.auth_type === 'rss'
   const everyAccount = allAccounts ?? accounts
@@ -440,6 +491,7 @@ export function MailNavigationView({
   const actions: FolderRowActions = {
     colorOf: (folder) =>
       colors.find((item) => item.accountId === folder.account_id && item.folderId === folder.id)?.color,
+    isHidden: (folder) => folder.account_id === selectedAccount && hiddenIds.has(folder.id),
     openMenu: (folder, at, trigger, inFavorites = false) => {
       if (folder.account_id === 'unified') return
       menuTrigger.current = trigger
@@ -488,7 +540,7 @@ export function MailNavigationView({
 
   const rootBlock = dragged ? actions.dropBlock(null) : undefined
   return (
-    <nav className="mail-navigation" aria-label={t('mailNavigation.title')}>
+    <nav data-region="folders" className="mail-navigation" aria-label={t('mailNavigation.title')}>
       <FavoritesSection
         favorites={favorites}
         favoriteCount={favoriteRefs.length}
@@ -578,6 +630,27 @@ export function MailNavigationView({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
+          {hiddenIds.size > 0 && (
+            <button
+              ref={showHiddenButton}
+              type="button"
+              className="mail-folder-hidden-toggle"
+              aria-pressed={showHidden}
+              onClick={() => setShowHidden(!showHidden)}
+            >
+              {showHidden ? (
+                <Eye size={16} strokeWidth={1.75} aria-hidden="true" />
+              ) : (
+                <EyeOff size={16} strokeWidth={1.75} aria-hidden="true" />
+              )}
+              <span>
+                {t('folders.hide.toggle', {
+                  count: hiddenIds.size,
+                  defaultValue: 'Show hidden folders ({count})',
+                })}
+              </span>
+            </button>
+          )}
           {tree.length ? (
             <ul className="mail-folder-tree">
               {tree.map((node) => (
@@ -607,6 +680,24 @@ export function MailNavigationView({
             menuTrigger.current = null
             setMoving(folder)
           }}
+          onHiddenChange={(folder, hidden) => {
+            setHideAnnouncement(
+              hidden
+                ? t('folders.hide.hidden', { folder: folder.name, defaultValue: '{folder} hidden' })
+                : t('folders.hide.shown', { folder: folder.name, defaultValue: '{folder} shown again' }),
+            )
+            // Out of sight now: its row is about to go, so the focus may not go back to it.
+            if (
+              hidden &&
+              !showHidden &&
+              folder.account_id === selectedAccount &&
+              !isOpen(folder) &&
+              !menu?.inFavorites
+            ) {
+              menuTrigger.current = null
+              focusToggle.current = true
+            }
+          }}
           onClose={closeMenu}
         />
       )}
@@ -622,6 +713,9 @@ export function MailNavigationView({
           }}
         />
       )}
+      <p className="sr-only" aria-live="polite">
+        {hideAnnouncement}
+      </p>
     </nav>
   )
 }

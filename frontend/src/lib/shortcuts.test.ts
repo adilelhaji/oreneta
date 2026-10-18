@@ -4,6 +4,7 @@ import {
   DEFAULT_SHORTCUTS,
   formatShortcut,
   isBareShortcut,
+  isFunctionKey,
   isMac,
   isShortcutCustomized,
   matchShortcut,
@@ -90,10 +91,64 @@ describe('keyboard zoom (#181)', () => {
 })
 
 describe('isBareShortcut', () => {
+  afterEach(() => setShortcutOverrides({}))
+
   it('is true for single-key and shift-only chords, false for mod chords', () => {
     expect(isBareShortcut('thread.next')).toBe(true)
     expect(isBareShortcut('thread.delete')).toBe(true)
     expect(isBareShortcut('palette.open')).toBe(false)
+  })
+
+  it('leaves out F1–F12, which type no text, with or without Shift (ADR-0068 §6)', () => {
+    expect(isBareShortcut('pane.next')).toBe(false)
+    expect(isBareShortcut('pane.prev')).toBe(false)
+    setShortcutOverrides({ 'thread.next': { key: 'F12' }, 'thread.prev': { shift: true, key: 'F1' } })
+    expect(isBareShortcut('thread.next')).toBe(false)
+    expect(isBareShortcut('thread.prev')).toBe(false)
+  })
+
+  it('puts the barrier back when F6 is rebound to a letter', () => {
+    setShortcutOverrides({ 'pane.next': { key: 'g' } })
+    expect(isBareShortcut('pane.next')).toBe(true)
+    expect(isBareShortcut('pane.prev')).toBe(false)
+  })
+})
+
+describe('isFunctionKey', () => {
+  it('is F1 to F12 and nothing else', () => {
+    for (let n = 1; n <= 12; n++) expect(isFunctionKey(`F${n}`)).toBe(true)
+    for (const key of ['F0', 'F13', 'F', 'f6', 'F6 ', 'Escape', '6']) expect(isFunctionKey(key)).toBe(false)
+  })
+})
+
+describe('region shortcuts (ADR-0068 §6)', () => {
+  afterEach(() => setShortcutOverrides({}))
+
+  it('binds F6 and Shift+F6 by default', () => {
+    expect(matchShortcut(keydown('F6'))).toBe('pane.next')
+    expect(matchShortcut(keydown('F6', { shiftKey: true }))).toBe('pane.prev')
+    expect(matchShortcut(keydown('F6', modKey))).toBeNull()
+    expect(formatShortcut('pane.next')).toEqual(['F6'])
+    expect(formatShortcut('pane.prev')).toEqual([shiftLabel, 'F6'])
+  })
+
+  it('collides with no other default binding', () => {
+    expect(shortcutConflict('pane.next', DEFAULT_SHORTCUTS['pane.next'])).toBeNull()
+    expect(shortcutConflict('pane.prev', DEFAULT_SHORTCUTS['pane.prev'])).toBeNull()
+  })
+
+  it('can be rebound, and the old key stops working', () => {
+    setShortcutOverrides({ 'pane.next': { key: 'F8' } })
+    expect(matchShortcut(keydown('F8'))).toBe('pane.next')
+    expect(matchShortcut(keydown('F6'))).toBeNull()
+    expect(shortcutForChord({ key: 'F8' })).toBe('pane.next')
+  })
+
+  it('records F6 in the rebinding recorder and keeps it through sanitising', () => {
+    expect(chordFromEvent(keydown('F6', { shiftKey: true }))).toEqual({ key: 'F6', shift: true })
+    expect(sanitizeShortcutOverrides({ 'pane.prev': { key: 'F7', shift: true } })).toEqual({
+      'pane.prev': { key: 'F7', shift: true },
+    })
   })
 })
 

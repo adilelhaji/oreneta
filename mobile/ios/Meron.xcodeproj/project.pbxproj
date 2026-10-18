@@ -197,6 +197,7 @@
 				en,
 				Base,
 				ar,
+				ca,
 				de,
 				el,
 				es,

@@ -1,125 +1,129 @@
-# ADR-0039: Listas de tareas en un servidor CalDAV
+# ADR-0039: Llistes de tasques en un servidor CalDAV
 
-- Estado: aceptada; tomada por delegación y revisada por el propietario
-  el 2026-10-12.
-- Fecha: 2026-10-12.
-- Alcance: #103, paso «CalDAV VTODO primero», sobre ADR-0013, ADR-0012 y
-  ADR-0018.
+- Estat: acceptada; presa per delegació i revisada pel propietari
+  el 2026-10-12. L'ADR-0070 (acceptada pel propietari el 2026-10-18) esmena
+  «Enllaç» (enllaç automàtic de les col·leccions de tasques d'un
+  servidor afegit a un compte), «Suprimir una llista enllaçada», la nota de
+  l'«Esquema 56» sobre la supressió per compte i l'aplicació de «Seguretat
+  (#28)».
+- Data: 2026-10-12.
+- Abast: #103, pas «CalDAV VTODO primer», sobre l'ADR-0013, l'ADR-0012 i
+  l'ADR-0018.
 
 ## Problema
 
-Las listas de ADR-0013 solo viven en este equipo. El siguiente paso
-acordado es sincronizarlas con CalDAV (VTODO), que se puede probar contra
-Radicale. Faltaba decidir:
+Les llistes de l'ADR-0013 només viuen en aquest equip. El pas següent
+acordat és sincronitzar-les amb CalDAV (VTODO), que es pot provar contra
+Radicale. Faltava decidir:
 
-- cómo se enlaza una lista;
-- qué pasa con los cambios hechos sin conexión;
-- cómo se resuelve un conflicto;
-- qué se conserva de lo que escribieron otros programas.
+- com s'enllaça una llista;
+- què passa amb els canvis fets sense connexió;
+- com es resol un conflicte;
+- què es conserva del que han escrit altres programes.
 
-## Decisión
+## Decisió
 
-- **Enlace:** una lista se enlaza con una sola colección del servidor. Se
-  añade con «Lista de tareas CalDAV…»: servidor y usuario, después la
-  colección y después el nombre aquí.
-  - La contraseña va al llavero, con el nombre `caldav-tasks:{lista}`, y
-    se añade a lo que purga ADR-0038.
-  - La lista se lee entera antes de añadirla. Si esa lectura falla, no se
-    añade nada y el diálogo dice por qué.
-  - Se ofrecen todas las colecciones de calendario. No se pregunta cuáles
-    aceptan tareas: si una no las acepta, lo dice la primera lectura.
-- **Cambios locales primero:** crear, editar, completar y borrar se
-  guardan aquí y se marcan como pendientes (`put` o `delete`).
-  - Una tarea borrada que ya está en el servidor queda oculta (lápida)
-    hasta que se borra allí, porque hace falta su versión para borrarla.
-  - No se envía nada en segundo plano. Se sincroniza al abrir Tareas y con
-    el botón «Sincronizar».
-- **Sincronizar una lista:**
-  1. **Enviar:** los cambios pendientes salen de uno en uno, cada uno con
-     su versión.
-     - Una tarea nueva va con `If-None-Match: *`. Su dirección se decide y
-       se guarda antes de enviarla, para que un reintento no cree otra
-       copia.
-     - Una edición va con `If-Match` y un borrado con `DELETE` e `If-Match`.
-     - Un 412 marca esa tarea en conflicto y detiene la cola de esa lista;
-       las demás listas siguen. Mientras la lista tenga un conflicto, no
-       envía nada más.
-     - Un error de red o del servidor detiene la sincronización y se guarda
-       como «último error». No se pierde nada local.
-  2. **Leer:** se piden todas las tareas de la colección (`REPORT` con
-     `VTODO`, sin ventana de tiempo). Es todo o nada: si un objeto no
-     vuelve, está en otro servidor o no se puede leer, la lectura falla y
-     lo local no cambia.
-  3. **Conciliar** por dirección del objeto:
+- **Enllaç:** una llista s'enllaça amb una sola col·lecció del servidor. S'hi
+  afegeix amb «Llista de tasques CalDAV…»: servidor i usuari, després la
+  col·lecció i després el nom aquí.
+  - La contrasenya va al clauer, amb el nom `caldav-tasks:{lista}`, i
+    s'afegeix al que purga l'ADR-0038.
+  - La llista es llegeix sencera abans d'afegir-la. Si aquesta lectura falla, no s'hi
+    afegeix res i el quadre de diàleg diu per què.
+  - S'ofereixen totes les col·leccions de calendari. No es pregunta quines
+    accepten tasques: si una no les accepta, ho diu la primera lectura.
+- **Canvis locals primer:** crear, editar, completar i suprimir es
+  desen aquí i es marquen com a pendents (`put` o `delete`).
+  - Una tasca suprimida que ja és al servidor queda oculta com a làpida (tombstone)
+    fins que se suprimeix allà, perquè en cal la versió per a suprimir-la.
+  - No s'envia res en segon pla. Se sincronitza en obrir Tasques i amb
+    el botó «Sincronitzar».
+- **Sincronitzar una llista:**
+  1. **Enviar:** els canvis pendents surten d'un en un, cadascun amb
+     la seva versió.
+     - Una tasca nova va amb `If-None-Match: *`. La seva adreça es decideix i
+       es desa abans d'enviar-la, perquè un reintent no en creï una altra
+       còpia.
+     - Una edició va amb `If-Match` i una supressió amb `DELETE` i `If-Match`.
+     - Un 412 marca aquesta tasca en conflicte i atura la cua d'aquesta llista;
+       les altres llistes continuen. Mentre la llista tingui un conflicte, no
+       envia res més.
+     - Un error de xarxa o del servidor atura la sincronització i es desa
+       com a «últim error». No es perd res local.
+  2. **Llegir:** es demanen totes les tasques de la col·lecció (`REPORT` amb
+     `VTODO`, sense finestra de temps). És tot o res: si un objecte no
+     torna, és en un altre servidor o no es pot llegir, la lectura falla i
+     el que és local no canvia.
+  3. **Conciliar** per adreça de l'objecte:
 
-     | Servidor | Aquí | Resultado |
+     | Servidor | Aquí | Resultat |
      |---|---|---|
-     | Cambió | Sin cambios | Se toma la copia del servidor |
-     | Cambió | Con cambios | Conflicto; no se sobrescribe ninguna |
-     | Desapareció | Sin cambios | Se borra aquí |
-     | Desapareció | Con cambios | Conflicto («borrada en el servidor») |
-     | Nueva | — | Se añade aquí |
-- **Conflictos (ADR-0012), sin fusión silenciosa.** La tarea muestra
-  «Conflicto» con dos acciones:
-  - «Conservar la mía»: lee la versión actual del servidor y vuelve a
-    poner la tarea en cola sobre esa versión, o la crea de nuevo en la
-    misma dirección si se borró allí. Después sincroniza.
-  - «Usar la del servidor»: toma la copia del servidor, o borra la tarea
-    aquí si allí ya no existe.
-- **Lo que se conserva:** al escribir sobre un objeto existente solo se
-  cambian las propiedades cuyo valor cambió aquí. Todo lo demás se queda
-  igual: X-, `CATEGORIES`, `RELATED-TO`, `VTIMEZONE`, otras alarmas.
-  `DTSTAMP` y `LAST-MODIFIED` se actualizan y `SEQUENCE` sube. Las tareas
-  nuevas llevan UID `<uuid>@oreneta`.
-- **Correspondencia de campos:**
-  - `SUMMARY` ↔ título y `DESCRIPTION` ↔ nota, con escapes.
-  - `DUE` ↔ fecha límite:
-    - una fecha sola es la medianoche local;
-    - una hora con `TZID` se lee en su zona, y una sin zona, como hora
+     | Ha canviat | Sense canvis | Es pren la còpia del servidor |
+     | Ha canviat | Amb canvis | Conflicte; no se'n sobreescriu cap |
+     | Ha desaparegut | Sense canvis | Se suprimeix aquí |
+     | Ha desaparegut | Amb canvis | Conflicte («suprimida al servidor») |
+     | Nova | — | S'afegeix aquí |
+- **Conflictes (ADR-0012), sense fusió silenciosa.** La tasca mostra
+  «Conflicte» amb dues accions:
+  - «Conservar la meva»: llegeix la versió actual del servidor i torna a
+    posar la tasca a la cua sobre aquesta versió, o la torna a crear a la
+    mateixa adreça si s'ha suprimit allà. Després sincronitza.
+  - «Fer servir la del servidor»: pren la còpia del servidor, o suprimeix la tasca
+    aquí si allà ja no existeix.
+- **El que es conserva:** en escriure sobre un objecte existent només es
+  canvien les propietats el valor de les quals ha canviat aquí. Tota la resta es queda
+  igual: X-, `CATEGORIES`, `RELATED-TO`, `VTIMEZONE`, altres alarmes.
+  `DTSTAMP` i `LAST-MODIFIED` s'actualitzen i `SEQUENCE` puja. Les tasques
+  noves porten UID `<uuid>@oreneta`.
+- **Correspondència de camps:**
+  - `SUMMARY` ↔ títol i `DESCRIPTION` ↔ nota, amb escapaments.
+  - `DUE` ↔ data límit:
+    - una data sola és la mitjanit local;
+    - una hora amb `TZID` es llegeix en la seva zona, i una sense zona, com a hora
       local;
-    - al escribir, una medianoche local va como `VALUE=DATE` y cualquier
-      otra hora, en UTC.
-  - `PRIORITY` ↔ prioridad: 1–4 es alta, 6–9 baja y 5, 0 o ninguna,
-    normal. Al escribir, alta es 1, baja es 9 y normal quita la propiedad.
-  - `STATUS:COMPLETED` y `COMPLETED` ↔ completada. Reabrir escribe
-    `NEEDS-ACTION` y quita `COMPLETED` y `PERCENT-COMPLETE`.
-  - La primera alarma con hora calculable ↔ recordatorio. Si el
-    recordatorio cambia aquí, las alarmas se sustituyen por una sola
-    `DISPLAY` con hora absoluta. Si no cambia, no se tocan.
-- **Tareas que se repiten** (`RRULE`, `RDATE` u ocurrencias cambiadas): se
-  muestran, pero no se editan ni se completan aquí; el mensaje lo dice.
-  Sí se pueden borrar.
-- **Mover una tarea** entre una lista del servidor y otra lista se rechaza
-  por ahora, con un mensaje.
-- **Borrar una lista enlazada** borra aquí la lista, sus tareas y su
-  contraseña. No toca nada del servidor, y el texto de confirmación lo dice.
-- **Seguridad (#28):** la contraseña solo va al origen de la colección.
-  Se comprueba al enlazar (con las reglas de `credentials_may_follow`
-  desde lo que se escribió) y en cada petición. Un objeto que el servidor
-  sitúa en otro origen hace fallar la lectura.
+    - en escriure, una mitjanit local va com a `VALUE=DATE` i qualsevol
+      altra hora, en UTC.
+  - `PRIORITY` ↔ prioritat: 1–4 és alta, 6–9 baixa i 5, 0 o cap,
+    normal. En escriure, alta és 1, baixa és 9 i normal treu la propietat.
+  - `STATUS:COMPLETED` i `COMPLETED` ↔ completada. Reobrir escriu
+    `NEEDS-ACTION` i treu `COMPLETED` i `PERCENT-COMPLETE`.
+  - La primera alarma amb hora calculable ↔ recordatori. Si el
+    recordatori canvia aquí, les alarmes se substitueixen per una sola
+    `DISPLAY` amb hora absoluta. Si no canvia, no es toquen.
+- **Tasques que es repeteixen** (`RRULE`, `RDATE` o ocurrències canviades): es
+  mostren, però no s'editen ni es completen aquí; el missatge ho diu.
+  Sí que es poden suprimir.
+- **Moure una tasca** entre una llista del servidor i una altra llista es rebutja
+  de moment, amb un missatge.
+- **Suprimir una llista enllaçada** suprimeix aquí la llista, les seves tasques i la seva
+  contrasenya. No toca res del servidor, i el text de confirmació ho diu.
+- **Seguretat (#28):** la contrasenya només va a l'origen de la col·lecció.
+  Es comprova en enllaçar (amb les regles de `credentials_may_follow`
+  a partir del que s'ha escrit) i a cada petició. Un objecte que el servidor
+  situa en un altre origen fa fallar la lectura.
 - **Esquema 56:**
-  - `task_lists`: `remote_url`, `remote_user`, `synced_at` y `last_error`;
+  - `task_lists`: `remote_url`, `remote_user`, `synced_at` i `last_error`;
   - `tasks`: `remote_href`, `remote_etag`, `remote_ics`, `pending`,
-    `conflict`, `recurring` y `sync_seq`.
+    `conflict`, `recurring` i `sync_seq`.
 
-  Ninguna columna se llama `account`, así que no entran en el borrado por
-  cuenta.
+  Cap columna no es diu `account`, de manera que no entren a la supressió per
+  compte.
 
-## Alternativas descartadas
+## Alternatives descartades
 
-- **Sincronizar en segundo plano con un temporizador:** sería la primera
-  tarea periódica de red de las tareas. Puede venir después. Abrir la vista
-  y el botón bastan para esta entrega.
-- **Que gane el último en escribir:** contradice ADR-0012.
-- **Mover entre listas** como borrar en una y crear en otra: puede perder
-  datos si falla a mitad. Se deja para cuando haga falta.
-- **Leer `supported-calendar-component-set`** para filtrar colecciones:
-  pide otra consulta por colección y el analizador actual no lee atributos.
-  La primera lectura ya informa de una colección que no sirve.
+- **Sincronitzar en segon pla amb un temporitzador:** seria la primera
+  tasca periòdica de xarxa de les tasques. Pot venir després. Obrir la visualització
+  i el botó són suficients per a aquest lliurament.
+- **Que guanyi l'últim que escriu:** contradiu l'ADR-0012.
+- **Moure entre llistes** com a suprimir en una i crear en una altra: pot perdre
+  dades si falla a mig camí. Es deixa per a quan calgui.
+- **Llegir `supported-calendar-component-set`** per a filtrar col·leccions:
+  demana una altra consulta per col·lecció i l'analitzador actual no llegeix atributs.
+  La primera lectura ja informa d'una col·lecció que no serveix.
 
-## Consecuencias
+## Conseqüències
 
-- Pruebas N1 con un servidor falso y N3 contra Radicale; el detalle está en
-  el [registro](../design/caldav-tasks.md).
-- Google Tasks, Graph To Do y EWS siguen pendientes, en ese orden
-  (ADR-0013). EWS llegó antes, con ADR-0058.
+- Proves N1 amb un servidor fals i N3 contra Radicale; el detall és
+  al [registre](../design/caldav-tasks.md).
+- Google Tasks, Graph To Do i EWS continuen pendents, en aquest ordre
+  (ADR-0013). EWS va arribar abans, amb l'ADR-0058.

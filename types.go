@@ -153,6 +153,9 @@ type AddPasswordAccountRequest struct {
 	SMTPCertPin string `json:"smtp_cert_pin"`
 	// "pop3" for a POP3 account (#97, ADR-0035); IMAP otherwise.
 	Incoming string `json:"incoming"`
+	// The person's explicit "Save anyway" after a connection test that did
+	// not pass (#269): the account is stored without validating it first.
+	SkipValidation bool `json:"skip_validation"`
 }
 
 type AddGmailOAuthRequest struct {
@@ -271,6 +274,9 @@ type ExchangedProfile struct {
 	RefreshToken string `json:"refresh_token"`
 	ExpiresIn    int64  `json:"expires_in"`
 	AuthCode     string `json:"auth_code"`
+	// calendarScope is calendarScopeGranted's answer for a Google token
+	// (#244), for the log only; it does not travel to the interface.
+	calendarScope string
 }
 
 type TokenExchangeResult struct {
@@ -280,6 +286,10 @@ type TokenExchangeResult struct {
 	// IDToken is the OIDC id_token Microsoft returns; Google omits it. Used to
 	// read the account email/name without an extra userinfo call.
 	IDToken string `json:"id_token"`
+	// Scope is the space-separated list of scopes actually granted. Google's
+	// consent screen lets a person untick a permission, so this can be less
+	// than what was asked for (#244).
+	Scope string `json:"scope"`
 }
 
 type GoogleUserInfo struct {

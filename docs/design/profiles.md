@@ -1,22 +1,22 @@
-# Perfiles (#99, ADR-0016)
+# Perfils (#99, ADR-0016)
 
-## Uso
+## Ús
 
-En **Ajustes → Perfiles** se crean, renombran y abren perfiles. Cada uno
-tiene sus propias cuentas, correo, contactos, notas, preferencias y
-contraseñas, y se abre en su propia ventana; la ventana muestra el nombre del
-perfil. El perfil existente se llama «Perfil principal».
+A **Configuració → Perfils** es creen, es reanomenen i s'obren perfils. Cadascun
+té els seus propis comptes, correu, contactes, notes, preferències i
+contrasenyes, i s'obre en una finestra pròpia; la finestra mostra el nom del
+perfil. El perfil existent es diu «Perfil principal».
 
-Otro perfil se puede borrar desde aquí si no está abierto. Si nunca se
-abrió, basta confirmar. Si tiene datos, hay que escribir su nombre; su
-núcleo borra antes sus entradas del llavero, y si no puede, se pregunta
-antes de borrar nada (ADR-0038).
+Un altre perfil es pot suprimir des d'aquí si no està obert. Si no s'ha obert
+mai, n'hi ha prou de confirmar-ho. Si té dades, cal escriure'n el nom; el seu
+nucli esborra abans les seves entrades del clauer i, si no pot, es pregunta
+abans d'esborrar res (ADR-0038).
 
-## Pruebas
+## Proves
 
-| Nivel | Qué cubre |
+| Nivell | Què cobreix |
 |---|---|
-| N1 Rust (`secrets.rs`, `profile_purge.rs`) | El perfil por defecto conserva los nombres de llavero; los demás llevan su id y no coinciden entre sí; la purga nombra cada tipo de secreto, borra los del perfil y no otros, y avisa si aparece un lugar nuevo que guarda secretos |
-| N1 Go (`profiles_test.go`) | Argumento y variable de entorno; crear con id legible y único; nombre vacío o repetido rechazado; renombrar y título de ventana; rutas, bloqueo y entorno del núcleo propios del perfil, binario y actualizaciones compartidos; perfil desconocido o mal formado abre el principal; lista dañada no se reescribe; un perfil sin datos se borra sin escribir su nombre; uno con datos solo con su nombre exacto, después de purgar su llavero; uno abierto (con su cerrojo tomado) no se borra; una purga fallida no borra nada salvo que se elija; la purga se ejecuta con el entorno del perfil que se borra; el núcleo real purga un perfil con nombre y rechaza el principal; abrir lanza un proceso y no lo hace dos veces; la página recibe el perfil y solo cambia el documento |
-| N2 (`profile.test.ts`, `ProfilesGroup.test.tsx`) | Claves de almacenamiento por perfil; lista, apertura, creación con aviso de nombre repetido; borrado con el nombre exacto y segunda pregunta si la purga falla |
-| N4 pendiente | Dos perfiles abiertos a la vez en Windows |
+| N1 Rust (`secrets.rs`, `profile_purge.rs`) | El perfil per defecte conserva els noms del clauer; els altres porten el seu id i no coincideixen entre ells; la purga anomena cada tipus de secret, esborra els del perfil i cap altre, i avisa si apareix un lloc nou que desa secrets |
+| N1 Go (`profiles_test.go`) | Argument i variable d'entorn; crear amb un id llegible i únic; nom buit o repetit rebutjat; reanomenar i títol de la finestra; camins, bloqueig i entorn del nucli propis del perfil, binari i actualitzacions compartits; un perfil desconegut o mal format obre el principal; una llista malmesa no es reescriu; un perfil sense dades se suprimeix sense escriure'n el nom; un amb dades, només amb el nom exacte, després de purgar-ne el clauer; un d'obert (amb el pany agafat) no se suprimeix; una purga fallida no esborra res tret que s'esculli; la purga s'executa amb l'entorn del perfil que se suprimeix; el nucli real purga un perfil amb nom i rebutja el principal; obrir llança un procés i no ho fa dues vegades; la pàgina rep el perfil i només canvia el document |
+| N2 (`profile.test.ts`, `ProfilesGroup.test.tsx`) | Claus d'emmagatzematge per perfil; llista, obertura, creació amb avís de nom repetit; supressió amb el nom exacte i segona pregunta si la purga falla |
+| N4 pendent | Dos perfils oberts alhora a Windows |

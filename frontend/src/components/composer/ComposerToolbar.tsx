@@ -103,7 +103,7 @@ export function ComposerToolbar({ editor, onSetLink }: { editor: Editor; onSetLi
         <Link2 size={16} strokeWidth={1.75} />
       </ToolbarButton>
       <span
-        className="ml-auto hidden items-center gap-1 pr-1 text-2xs font-medium text-secondary select-none min-[900px]:flex"
+        className="ms-auto hidden items-center gap-1 pe-1 text-2xs font-medium text-secondary select-none min-[900px]:flex"
         title={t('composer.toolbar.markdownHint')}
       >
         {t('composer.toolbar.markdown')}:

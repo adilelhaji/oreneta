@@ -40,11 +40,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Inbox
@@ -235,6 +233,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
+// The product name the drawer header and the About dialog show. The Kotlin
+// packages and modules keep Meron's name; what people read is Oreneta (#247).
+internal const val APP_DISPLAY_NAME = "Oreneta"
+
+// Where the About dialog's "Source code" link goes: this fork's repository, as
+// on desktop. The About dialog carries no donation links (#249).
+internal const val SOURCE_CODE_URL = "https://github.com/adilelhaji/oreneta"
+
 @Composable
 internal fun MailDrawer(
     accounts: List<AccountSummary>,
@@ -270,7 +276,7 @@ internal fun MailDrawer(
         ) {
             item {
                 Text(
-                    "Meron",
+                    APP_DISPLAY_NAME,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = chat.onSidebar,
@@ -438,46 +444,30 @@ internal fun AboutDialog(
         title = { Text(tr("about.title")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Meron", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(APP_DISPLAY_NAME, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
                     tr("about.version", mapOf("version" to appVersion)),
                     style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                // The lineage, as on desktop: Oreneta is a fork, and Meron's
+                // authors wrote most of what runs here.
+                Text(
+                    tr("about.forkOf"),
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     AboutLinkButton(
                         icon = Icons.Filled.Code,
                         label = tr("about.sourceCode"),
-                        onClick = { onOpenUrl("https://github.com/nonbili/meron") },
+                        onClick = { onOpenUrl(SOURCE_CODE_URL) },
                     )
                     AboutLinkButton(
                         icon = Icons.Filled.History,
                         label = tr("changelog.title"),
                         onClick = onShowChangelog,
                     )
-                    Text(
-                        tr("about.donate"),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        AboutLinkButton(
-                            icon = Icons.Filled.Favorite,
-                            label = tr("about.githubSponsors"),
-                            onClick = { onOpenUrl("https://github.com/sponsors/nonbili") },
-                        )
-                        AboutLinkButton(
-                            icon = Icons.Filled.Favorite,
-                            label = tr("about.liberapay"),
-                            onClick = { onOpenUrl("https://liberapay.com/nonbili") },
-                        )
-                        AboutLinkButton(
-                            icon = Icons.Filled.CreditCard,
-                            label = tr("about.paypal"),
-                            onClick = { onOpenUrl("https://www.paypal.com/paypalme/nonbili") },
-                        )
-                    }
                 }
             }
         },

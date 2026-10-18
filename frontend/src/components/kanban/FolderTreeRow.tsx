@@ -49,8 +49,8 @@ export function FolderTreeRow({
   return (
     <div>
       <div
-        className="flex items-center gap-1 rounded-control-sm py-1.5 pr-2 hover:bg-hover"
-        style={{ paddingLeft: depth * 18 + 4 }}
+        className="flex items-center gap-1 rounded-control-sm py-1.5 pe-2 hover:bg-hover"
+        style={{ paddingInlineStart: depth * 18 + 4 }}
       >
         <button
           type="button"

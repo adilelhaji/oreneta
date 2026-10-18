@@ -22,7 +22,7 @@ pub mod route;
 pub mod subscription;
 
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension as _};
 use serde::{Deserialize, Serialize};
 
 /// Where a calendar comes from.
@@ -754,12 +754,49 @@ pub fn mark_reminder_fired(
 }
 
 /// Drops records of reminders long past, so the table does not grow forever.
-/// A fortnight is well beyond any window a reminder could still be pending in.
+///
+/// A record is kept while its reminder could still be given: until the start
+/// it was given for ("<event>@<start>") is further back than any look gives
+/// a reminder for (`reminders::GIVEN_KEPT`). By when it was given, a reminder
+/// set more than that ahead of its event was forgotten before the event and
+/// given again (#222). Every record is gone once both its event's start and
+/// its giving are that far back, so the table holds what is ahead or recent.
+///
+/// A record from before the start was in its key (the event id alone) has
+/// only when it was given, and an id can itself end in "@<digits>". So a key
+/// is read as "<event>@<start>" only when that event is stored at that start;
+/// any other is purged by when it was given, as before: a legacy key is never
+/// kept on a number that only looks like a start, and a record whose event
+/// moved or went has no use left (a moved event is a new key).
 pub fn forget_old_reminders(conn: &Connection, now: i64) -> Result<()> {
-    conn.execute(
-        "DELETE FROM calendar_reminders_fired WHERE fired_at < ?1",
-        params![now - 14 * 24 * 3600],
-    )?;
+    let cutoff = now - reminders::GIVEN_KEPT;
+    let tx = conn.unchecked_transaction()?;
+    let old: Vec<(String, String)> = tx
+        .prepare("SELECT account, event_id FROM calendar_reminders_fired WHERE fired_at < ?1")?
+        .query_map(params![cutoff], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<Result<_, _>>()?;
+    for (account, key) in old {
+        // The start follows the last '@': event ids can hold one themselves.
+        let parsed = key.rsplit_once('@').and_then(|(id, start)| Some((id, start.parse::<i64>().ok()?)));
+        let start = match parsed {
+            Some((id, start)) => tx
+                .query_row(
+                    "SELECT 1 FROM calendar_events WHERE account = ?1 AND event_id = ?2 AND start_utc = ?3 LIMIT 1",
+                    params![account, id, start],
+                    |_| Ok(()),
+                )
+                .optional()?
+                .map(|()| start),
+            None => None,
+        };
+        if start.is_none_or(|start| start < cutoff) {
+            tx.execute(
+                "DELETE FROM calendar_reminders_fired WHERE account = ?1 AND event_id = ?2",
+                params![account, key],
+            )?;
+        }
+    }
+    tx.commit()?;
     Ok(())
 }
 
@@ -1007,6 +1044,89 @@ mod tests {
         )
         .unwrap();
         assert!(due_reminders(&conn, "acct", now).unwrap().is_empty(), "no repeat after upgrading");
+    }
+
+    /// Records are forgotten by their event's start, not by when they were
+    /// given (#222): one given weeks ahead is kept until its event is past.
+    #[test]
+    fn records_of_given_reminders_are_forgotten_by_their_events_start() {
+        let conn = store();
+        let now = 1_800_000_000i64;
+        let day = 86_400;
+        let keep = reminders::GIVEN_KEPT;
+        // The events kept records are read against: stored at their start.
+        upsert_calendars(&conn, "acct", &[a_calendar()]).unwrap();
+        let at = |id: &str, start: i64| event(id, start, start + 3_600);
+        replace_window(
+            &conn,
+            "acct",
+            "cal",
+            (0, now + 100 * day),
+            &[
+                at("ahead", now + 10 * day),
+                at("recent", now - keep + 60),
+                at("uid2@example.com", now + day),
+                // Moved since its reminder was given: the old key is no use.
+                at("moved", now + 5 * day),
+            ],
+        )
+        .unwrap();
+        mark_reminder_fired(&conn, "acct", "moved", now + 3 * day, now - 20 * day).unwrap();
+        // Given 20 days ago for an event still 10 days ahead.
+        mark_reminder_fired(&conn, "acct", "ahead", now + 10 * day, now - 20 * day).unwrap();
+        // Given 20 days ago for an event that started just inside the window.
+        mark_reminder_fired(&conn, "acct", "recent", now - keep + 60, now - 20 * day).unwrap();
+        // Given and started longer ago than the window.
+        mark_reminder_fired(&conn, "acct", "past", now - keep - 60, now - keep - 3_600).unwrap();
+        // Given just now, late, for an event that started long ago: kept
+        // until its giving is that far back too.
+        mark_reminder_fired(&conn, "acct", "late", now - 30 * day, now).unwrap();
+        // An id with an '@' of its own, as CalDAV UIDs have.
+        mark_reminder_fired(&conn, "acct", "uid@example.com", now - keep - 60, now - keep - 60).unwrap();
+        mark_reminder_fired(&conn, "acct", "uid2@example.com", now + day, now - keep - 60).unwrap();
+        // From before the start was in the key: by when it was given.
+        // A CalDAV UID with an '@' of its own and no start after it: by when
+        // it was given too, not mistaken for one with a start.
+        for (id, fired) in [
+            ("legacy-old", now - keep - 1),
+            ("legacy-new", now - 60),
+            ("uid3@example.com", now - keep - 1),
+            ("uid4@example.com", now - 60),
+            // A legacy id that ends in "@<digits>" (Codex review of #222): no
+            // event is stored at that "start", so it is not mistaken for one
+            // and kept until 2033, silencing that event; by when it was given.
+            ("meeting@2000000000", now - keep - 1),
+        ] {
+            conn.execute(
+                "INSERT INTO calendar_reminders_fired(account, event_id, fired_at) VALUES('acct', ?1, ?2)",
+                params![id, fired],
+            )
+            .unwrap();
+        }
+        forget_old_reminders(&conn, now).unwrap();
+        let mut left: Vec<String> = conn
+            .prepare("SELECT event_id FROM calendar_reminders_fired ORDER BY event_id")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        left.sort();
+        let mut want = vec![
+            format!("ahead@{}", now + 10 * day),
+            format!("late@{}", now - 30 * day),
+            "legacy-new".to_string(),
+            "uid4@example.com".to_string(),
+            format!("recent@{}", now - keep + 60),
+            format!("uid2@example.com@{}", now + day),
+        ];
+        want.sort();
+        assert_eq!(left, want);
+
+        // Later, every one of them is gone: the table stays bounded.
+        forget_old_reminders(&conn, now + 11 * day + keep).unwrap();
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM calendar_reminders_fired", [], |row| row.get(0)).unwrap();
+        assert_eq!(count, 0);
     }
 
     #[test]

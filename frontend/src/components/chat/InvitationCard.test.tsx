@@ -377,7 +377,7 @@ it('opens the organizer’s event in the editor with the proposed time, saving t
   const view = render(<InvitationCard message={proposal()} />)
   fireEvent.click(await view.findByRole('button', { name: 'Open in editor' }))
   const { calendar$: cal } = await import('../../states/calendar')
-  expect(ui$.calendarOpen.get()).toBe(true)
+  expect(ui$.module.get()).toBe('calendar')
   expect(cal.editing.get()).toMatchObject({
     id: kept.id,
     calendar_id: 'local:1',
@@ -409,7 +409,7 @@ it('opens the organizer’s event in the editor with the proposed time, saving t
   const sent = calls.find((c) => c.command === 'mail.send')!.payload
   expect(sent.to).toBe('cy@example.com')
   expect(sent.attachments[0].mime).toBe('text/calendar; method=REQUEST; charset=utf-8')
-  ui$.calendarOpen.set(false)
+  ui$.module.set('mail')
   cal.editing.set(null)
 })
 
@@ -453,4 +453,20 @@ it('a refused proposal only says so', async () => {
   expect(view.queryAllByRole('button')).toEqual([])
   await waitFor(() => expect(calls.length).toBeGreaterThan(0))
   expect(calls.some((c) => c.command === 'invite.counterStatus')).toBe(false)
+})
+
+it('formats both ends of the meeting range in the interface language', async () => {
+  const { when } = await import('./InvitationCard')
+  const { default: i18n, intlLocale } = await import('../../lib/i18n')
+  await i18n.changeLanguage('ca')
+  try {
+    const start = Date.UTC(2026, 9, 20, 9, 0) / 1000
+    const end = Date.UTC(2026, 9, 21, 17, 30) / 1000
+    const range = when(start, end, false)
+    const to = new Date(end * 1000).toLocaleString(intlLocale(), { dateStyle: 'medium', timeStyle: 'short' })
+    expect(range.endsWith(` – ${to}`)).toBe(true)
+    expect(range).not.toMatch(/\b(AM|PM|Oct)\b/)
+  } finally {
+    await i18n.changeLanguage('en')
+  }
 })

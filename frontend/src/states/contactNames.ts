@@ -5,7 +5,7 @@ import { useEffect } from 'react'
 import { observable } from '@legendapp/state'
 import { useValue } from '@legendapp/state/react'
 import { invoke } from '../lib/bridge'
-import i18n from '../lib/i18n'
+import i18n, { useTranslation } from '../lib/i18n'
 import {
   formatName,
   resolveDisplay,
@@ -33,7 +33,9 @@ export function namePrefs(): { display: Exclude<NameDisplay, 'auto'>; sort: Excl
 export function useContactNames() {
   const displayChoice = useValue(settings$.contactNameDisplay)
   const sortChoice = useValue(settings$.contactNameSort)
-  const lang = useValue(settings$.language) ?? language()
+  // The language the interface shows: subscribing re-renders on a change.
+  useTranslation()
+  const lang = language()
   const display = resolveDisplay(displayChoice, lang)
   const sort = resolveSort(sortChoice, lang)
   return {

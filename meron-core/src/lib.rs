@@ -19,6 +19,7 @@ pub mod cloud;
 pub mod carddav;
 pub mod changelog;
 pub mod chat;
+pub mod connection_test;
 pub mod contacts;
 pub mod conversation_page;
 pub mod crypto;
@@ -51,6 +52,7 @@ pub mod rss;
 pub mod rules;
 pub mod search;
 pub mod secrets;
+mod secrets_migration;
 #[cfg(target_os = "linux")]
 mod secrets_portal;
 pub mod smtp;

@@ -7,7 +7,7 @@ const menuItemBase =
   // leading-normal, not leading-none: labels that truncate clip their own
   // descenders when the line box is only as tall as the font size. The row
   // height is pinned by h-8 + items-center, so the taller line box costs nothing.
-  'flex min-h-8 w-full items-center gap-2 rounded-control-sm px-2 py-1 text-left text-ui font-normal leading-normal cursor-pointer transition-colors duration-(--duration-fast) disabled:cursor-not-allowed disabled:opacity-50'
+  'flex min-h-8 w-full items-center gap-2 rounded-control-sm px-2 py-1 text-start text-ui font-normal leading-normal cursor-pointer transition-colors duration-(--duration-fast) disabled:cursor-not-allowed disabled:opacity-50'
 
 /** Standard menu item. */
 export const menuItemClass = `${menuItemBase} text-primary enabled:hover:bg-hover`

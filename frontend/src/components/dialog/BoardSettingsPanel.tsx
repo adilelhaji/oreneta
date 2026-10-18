@@ -188,7 +188,7 @@ export function BoardPanel({ board }: { board: KanbanBoard }) {
           />
         )}
         <div className="min-w-0 flex-1">
-          <h2 className="text-title font-bold tracking-tight leading-tight truncate">{board.name}</h2>
+          <h2 dir="auto" className="text-title font-bold tracking-tight leading-tight truncate">{board.name}</h2>
           <p className="text-caption text-secondary mt-0.5 font-medium truncate">
             {t('kanban.board.subtitle', { count: columnCount })}
           </p>

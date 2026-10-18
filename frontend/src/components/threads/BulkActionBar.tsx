@@ -1,7 +1,8 @@
-import { copyBlocked, messageChangesBlocked } from '../../lib/mailCapabilities'
+import { copyBlocked, messageChangesBlocked, readOnlyTarget } from '../../lib/mailCapabilities'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   Archive,
+  Ban,
   ChevronRight,
   Copy,
   FolderInput,
@@ -27,11 +28,13 @@ import {
   bulkArchiveSelected,
   bulkCopySelectedToFolder,
   bulkDeleteSelected,
+  bulkMarkSelectedJunk,
   bulkMarkSelectedRead,
   bulkMarkSelectedUnread,
   bulkMoveSelectedToFolder,
   bulkStarSelected,
   ensureAccountFolders,
+  isJunkFolderId,
   mail$,
 } from '../../states/mail'
 import { IconButton } from '../button/IconButton'
@@ -41,6 +44,7 @@ import { MenuItem } from '../menu/MenuItem'
 import { settings$ } from '../../states/settings'
 import { startQuickAction } from '../../states/quickActions'
 import { bulkLabelSelected, labelCoverage, labels$ } from '../../states/labels'
+import { endAlignedX, flyoutX } from '../../lib/direction'
 
 export function BulkActionBar({
   items,
@@ -86,6 +90,16 @@ export function BulkActionBar({
   const canArchive = !readOnly && mailItems.length > 0 && mailItems.every((item) => !item.draft && !item.trash)
   const canMove = !readOnly && mailItems.length > 0 && !!singleAccountId
   const canCopy = !readOnly && mailItems.length > 0 && mailAccounts.length > 0
+  // Junk (#245): offered as a button, not only inside a menu, because a reader
+  // looking for it scans the bar, not the overflow. A draft is never junk. Filing
+  // junk manages the mailbox, which Graph does not offer at all (#141) — a
+  // stricter test than the message changes above.
+  const junkItems = mailItems.filter((item) => !item.draft)
+  const junkBlocked = junkItems.some((item) => readOnlyTarget(accounts, item.accountId))
+  // Everything already in junk: the useful gesture is taking it back out. A
+  // mixed selection files the rest as junk and leaves the junk ones alone.
+  // `foldersByAccount` above keeps this in step with the folder list.
+  const allInJunk = junkItems.length > 0 && junkItems.every((item) => isJunkFolderId(item.accountId, item.folderId))
 
   const loadCopyTargetFolders = async () => {
     if (copyLoadRef.current) return
@@ -132,7 +146,7 @@ export function BulkActionBar({
     const gap = 4
     const flyoutWidth = 190
     const rect = anchor.getBoundingClientRect()
-    const x = rect.right + gap + flyoutWidth > window.innerWidth ? rect.left - flyoutWidth - gap : rect.right + gap
+    const x = flyoutX(rect, flyoutWidth, gap, window.innerWidth)
     const y = rect.top
 
     setMoveFlyoutPosition((current) => {
@@ -153,7 +167,7 @@ export function BulkActionBar({
     const gap = 4
     const flyoutWidth = 230
     const rect = anchor.getBoundingClientRect()
-    const x = rect.right + gap + flyoutWidth > window.innerWidth ? rect.left - flyoutWidth - gap : rect.right + gap
+    const x = flyoutX(rect, flyoutWidth, gap, window.innerWidth)
     const y = rect.top
 
     setCopyFlyoutPosition((current) => {
@@ -205,6 +219,17 @@ export function BulkActionBar({
             onClick={() => setBulkSelection(selectableItems)}
           />
         )}
+        {junkItems.length > 0 && (
+          <IconButton
+            icon={Ban}
+            size="md"
+            radius="lg"
+            label={allInJunk ? t('threads.actions.markNotJunk') : t('threads.actions.markJunk')}
+            disabled={junkBlocked}
+            className="hover:bg-accent/10"
+            onClick={() => void bulkMarkSelectedJunk(junkItems, !allInJunk)}
+          />
+        )}
         <IconButton
           icon={MoreHorizontal}
           size="md"
@@ -214,7 +239,7 @@ export function BulkActionBar({
           className="hover:bg-accent/10"
           onClick={(event) => {
             const rect = event.currentTarget.getBoundingClientRect()
-            setMenu({ x: rect.right - 190, y: rect.bottom + 4 })
+            setMenu({ x: endAlignedX(rect, 190), y: rect.bottom + 4 })
           }}
         />
       </div>

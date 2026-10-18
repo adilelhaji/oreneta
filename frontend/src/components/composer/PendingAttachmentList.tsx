@@ -50,12 +50,12 @@ export function PendingAttachmentList({
               event.preventDefault()
               void openAttachment(att, onPreviewImage)
             }}
-            className="flex items-center gap-1.5 rounded-control border border-border/40 bg-chats px-2.5 py-1.5 shadow-xs max-w-[200px] text-left transition-colors hover:bg-hover cursor-pointer"
+            className="flex items-center gap-1.5 rounded-control border border-border/40 bg-chats px-2.5 py-1.5 shadow-xs max-w-[200px] text-start transition-colors hover:bg-hover cursor-pointer"
             title={att.filename}
           >
             <AttIcon size={14} className="shrink-0 text-accent" />
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-caption font-bold text-primary">{att.filename}</span>
+              <span dir="auto" className="truncate text-caption font-bold text-primary">{att.filename}</span>
               <span className="text-2xs text-secondary">{formatFileSize(att.size)}</span>
             </div>
             <button
@@ -64,7 +64,7 @@ export function PendingAttachmentList({
                 event.stopPropagation()
                 onRemove(att.id)
               }}
-              className="ml-1 shrink-0 rounded-full p-0.5 text-secondary transition-colors hover:bg-active cursor-pointer"
+              className="ms-1 shrink-0 rounded-full p-0.5 text-secondary transition-colors hover:bg-active cursor-pointer"
               title={t('composer.actions.removeAttachment')}
             >
               <X size={14} strokeWidth={1.75} />

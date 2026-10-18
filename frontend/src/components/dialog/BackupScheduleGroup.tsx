@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { observer } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { invoke } from '../../lib/bridge'
 import { showToast } from '../../states/ui'
 import {
@@ -14,7 +14,7 @@ import { formatFileSize } from '../chat/messageHelpers'
 import { SettingsGroup } from './AccountSettingsRows'
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error))
-const when = (seconds: number | null) => (seconds ? new Date(seconds * 1000).toLocaleString() : '')
+const when = (seconds: number | null) => (seconds ? new Date(seconds * 1000).toLocaleString(intlLocale()) : '')
 
 /**
  * Scheduled backups of the whole profile (#173, ADR-0037): off until turned

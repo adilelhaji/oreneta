@@ -1,113 +1,115 @@
-# ADR-0054: Archivado automático por antigüedad
+# ADR-0054: Arxivament automàtic per antiguitat
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan.
-- Fecha: 2026-10-13.
-- Alcance: #112 (fila SET-13 del libro de paridad, «Correo → Archivado
-  automático» de eM Client 10.4), sobre ADR-0014 (archivo local) y con la
-  programación de ADR-0037.
+- Estat: acceptada per delegació («Tomo yo la recomendada»); pendent de
+  revisió del propietari al final del pla.
+- Data: 2026-10-13.
+- Abast: #112 (fila SET-13 del registre d'acceptació, «Correu → Arxivament
+  automàtic» d'eM Client 10.4), sobre ADR-0014 (arxiu local) i amb la
+  programació d'ADR-0037.
 
-## Decisión
+## Decisió
 
-- **Apagado por omisión, y por cuenta.** Cada cuenta con servidor (IMAP,
-  Exchange por EWS, Microsoft Graph) tiene su política en
-  `auto_archive_policies` (esquema 62). POP3 y el archivo local no la
-  tienen: su correo ya está en este equipo.
-- **Qué dice una política:**
-  - antigüedad: N días (1–3650) o N meses (1–120); 6 meses por omisión;
-  - carpetas de origen: la Bandeja de entrada por omisión; cada carpeta
-    elegida puede tener su propia antigüedad;
-  - destino: la carpeta Archivo de la cuenta en el servidor, o el archivo
-    local; con el archivo local, opción de dejar también la copia del
+- **Desactivat per defecte, i per compte.** Cada compte amb servidor (IMAP,
+  Exchange per EWS, Microsoft Graph) té la seva política a
+  `auto_archive_policies` (esquema 62). POP3 i l'arxiu local no la
+  tenen: el seu correu ja és en aquest equip.
+- **Què diu una política:**
+  - antiguitat: N dies (1–3650) o N mesos (1–120); 6 mesos per defecte;
+  - carpetes d'origen: la Safata d'entrada per defecte; cada carpeta
+    triada pot tenir la seva pròpia antiguitat;
+  - destinació: la carpeta Arxiu del compte al servidor, o l'arxiu
+    local; amb l'arxiu local, opció de deixar també la còpia del
     servidor;
-  - excluidos por omisión: los mensajes marcados y los no leídos; dos
-    casillas los incluyen.
-- **Carpetas que nunca son origen:** Borradores, Bandeja de salida,
-  Papelera, No deseado y la propia carpeta Archivo (o «Todos» de Gmail).
-  Se reconocen por su papel (RFC 6154) y, si el servidor no lo dice, por su
-  nombre. Se muestran en Ajustes desactivadas, con el motivo; el núcleo las
-  rechaza aunque se le pidan.
-- **Qué es «más antiguo que N»:** la fecha del mensaje (`Date:`) es
-  anterior a la medianoche local del día que cae N días o N meses antes de
-  hoy. Un mensaje de ese mismo día no entra. Los meses son de calendario
-  (el 31 de marzo menos un mes es el 28 de febrero). Si ese día empieza en
-  un cambio de hora sin medianoche, cuenta desde la primera hora que
-  existe. Un mensaje sin fecha conocida no se archiva nunca.
-- **Vista previa y confirmación:**
-  - antes de encenderla, y cada vez que cambie algo que decida qué se mueve
-    (antigüedad, carpetas, destino, opciones), se muestra cuántos mensajes
-    de cada carpeta se moverían ahora, desde qué fecha y adónde;
-  - la vista previa no mueve nada y devuelve una huella (SHA-256 de la
-    cuenta y la política sin el «encendida»);
-  - el núcleo solo acepta encenderla con esa huella; una política cambiada
-    sin huella nueva queda sin confirmar y, por tanto, no corre;
-  - apagarla y volver a encenderla sin cambios no pide otra vista previa.
-- **Cuándo corre:** como las copias programadas (ADR-0037), mientras la
-  aplicación está abierta: una comprobación cada 5 minutos, la primera unos
-  2½ minutos después de abrir. Una vez al día; la primera, en la siguiente
-  comprobación tras confirmar. Una ejecución que no puede empezar (sin
-  conexión, sin carpeta Archivo) se reintenta una hora después, sin
-  adelantar la diaria. Las cuentas en pausa no corren. «Ejecutar ahora»
-  hace lo mismo a petición, con la política confirmada. Solo corre una
-  ejecución a la vez.
-- **Cómo se buscan los mensajes:**
-  - IMAP: se pregunta al servidor (`UID SEARCH SENTBEFORE`, con dos días de
-    margen) y se leen las cabeceras de lo encontrado; la fecha exacta, las
-    marcas y el Message-ID deciden;
-  - Graph y EWS no ofrecen esa búsqueda por esta vía: se usa lo
-    sincronizado aquí, de modo que solo se archiva lo que la aplicación ya
-    conoce de esa carpeta.
-- **Al Archivo del servidor:** la misma acción que «Archivar»: `UID MOVE`
-  (RFC 6851), o `COPY` + `\Deleted` + `EXPUNGE` si el servidor no tiene
-  MOVE; en Graph y EWS, el movimiento propio de cada uno. Se mueve en
-  tandas de 50; una tanda rechazada se anota mensaje a mensaje.
-- **Al archivo local (ADR-0014): copiar → comprobar → borrar.**
-  - se leen los bytes originales del servidor (`BODY.PEEK[]`, sin marcar
-    nada como leído) y se guardan en `Archived/<dirección>/<carpeta>` del
-    archivo local, con sus marcas de leído y marcado;
-  - la copia se vuelve a leer y se compara byte a byte con la del
-    servidor; si no coincide o no se puede leer, se borra la copia (es
-    nuestra) y el mensaje se queda en el servidor;
-  - solo con la copia comprobada se borra del servidor (`\Deleted` +
-    `UID EXPUNGE`), en tandas;
-  - solo es posible en cuentas IMAP: Graph y EWS no entregan aquí los bytes
-    originales, y la opción aparece desactivada con el motivo.
-- **Reanudable y sin duplicados:** cada paso queda en
-  `auto_archive_items` (copiado, comprobado). Si la ejecución se corta:
-  - entre copiar y comprobar, o entre comprobar y borrar, la siguiente
-    vuelve a leer el original, reconoce la copia ya hecha (por el diario, o
-    por Message-ID e igualdad de bytes) y no copia otra vez;
-  - nunca se borra del servidor sin comparar, en esa misma ejecución, los
-    bytes del servidor con una copia local; si el UID ahora nombra otro
-    mensaje, los bytes no coinciden y no se borra nada;
-  - en el peor caso queda el mensaje en los dos sitios, nunca en ninguno.
-  Con «dejar también en el servidor», lo archivado se recuerda (UID y
-  Message-ID) y no se vuelve a copiar cada día.
-- **Registro de cada ejecución** (`auto_archive_runs`, las 30 últimas por
-  cuenta): cuándo, si fue programada o a petición, destino, movidos,
-  copiados con copia en el servidor, no movidos, desaparecidos antes de su
-  turno y, para cada mensaje que no se movió, carpeta, asunto, paso (leer,
-  copiar, comprobar, borrar, mover) y motivo (hasta 200). Se ve en Ajustes
-  de la cuenta. Un fallo de una ejecución programada se avisa aunque
-  Ajustes esté cerrado.
-- **Al quitar la cuenta** se van con ella su política, su registro y su
-  diario (ADR-0011). Lo ya copiado al archivo local se queda.
-- **Restaurar un perfil** (ADR-0010) deja todas las políticas apagadas:
-  una copia restaurada en otro equipo no empieza a mover correo sola.
+  - exclosos per defecte: els missatges marcats i els no llegits; dues
+    caselles els inclouen.
+- **Carpetes que mai no són origen:** Esborranys, Safata de sortida,
+  Paperera, Correu brossa i la mateixa carpeta Arxiu (o «Tots» de Gmail).
+  Es reconeixen pel seu paper (RFC 6154) i, si el servidor no ho diu, pel seu
+  nom. Es mostren a Paràmetres desactivades, amb el motiu; el nucli les
+  rebutja encara que se li demanin.
+- **Què és «més antic que N»:** la data del missatge (`Date:`) és
+  anterior a la mitjanit local del dia que cau N dies o N mesos abans
+  d'avui. Un missatge d'aquell mateix dia no hi entra. Els mesos són de
+  calendari (el 31 de març menys un mes és el 28 de febrer). Si aquell dia
+  comença en un canvi d'hora sense mitjanit, compta des de la primera hora que
+  existeix. Un missatge sense data coneguda no s'arxiva mai.
+- **Previsualització i confirmació:**
+  - abans d'activar-la, i cada vegada que canviï alguna cosa que decideixi què
+    es mou (antiguitat, carpetes, destinació, opcions), es mostra quants
+    missatges de cada carpeta es mourien ara, des de quina data i cap a on;
+  - la previsualització no mou res i retorna una empremta (SHA-256 del
+    compte i la política sense l'«activada»);
+  - el nucli només accepta activar-la amb aquesta empremta; una política
+    canviada sense empremta nova queda sense confirmar i, per tant, no s'executa;
+  - desactivar-la i tornar-la a activar sense canvis no demana una altra
+    previsualització.
+- **Quan s'executa:** com les còpies programades (ADR-0037), mentre
+  l'aplicació és oberta: una comprovació cada 5 minuts, la primera uns
+  2½ minuts després d'obrir. Una vegada al dia; la primera, a la comprovació
+  següent després de confirmar. Una execució que no pot començar (sense
+  connexió, sense carpeta Arxiu) es reintenta una hora després, sense
+  avançar la diària. Els comptes en pausa no s'executen. «Executar ara»
+  fa el mateix a petició, amb la política confirmada. Només hi ha una
+  execució en marxa alhora.
+- **Com es cerquen els missatges:**
+  - IMAP: es pregunta al servidor (`UID SEARCH SENTBEFORE`, amb dos dies de
+    marge) i es llegeixen les capçaleres del que s'ha trobat; la data exacta,
+    les marques i el Message-ID decideixen;
+  - Graph i EWS no ofereixen aquesta cerca per aquesta via: es fa servir el
+    que s'ha sincronitzat aquí, de manera que només s'arxiva el que
+    l'aplicació ja coneix d'aquella carpeta.
+- **A l'Arxiu del servidor:** la mateixa acció que «Arxivar»: `UID MOVE`
+  (RFC 6851), o `COPY` + `\Deleted` + `EXPUNGE` si el servidor no té
+  MOVE; a Graph i EWS, el moviment propi de cadascun. Es mou en
+  tandes de 50; una tanda rebutjada s'anota missatge a missatge.
+- **A l'arxiu local (ADR-0014): copiar → comprovar → suprimir.**
+  - es llegeixen els bytes originals del servidor (`BODY.PEEK[]`, sense marcar
+    res com a llegit) i es desen a `Archived/<dirección>/<carpeta>` de
+    l'arxiu local, amb les seves marques de llegit i marcat;
+  - la còpia es torna a llegir i es compara byte a byte amb la del
+    servidor; si no coincideix o no es pot llegir, se suprimeix la còpia (és
+    nostra) i el missatge es queda al servidor;
+  - només amb la còpia comprovada se suprimeix del servidor (`\Deleted` +
+    `UID EXPUNGE`), en tandes;
+  - només és possible en comptes IMAP: Graph i EWS no lliuren aquí els bytes
+    originals, i l'opció apareix desactivada amb el motiu.
+- **Reprenible i sense duplicats:** cada pas queda a
+  `auto_archive_items` (copiat, comprovat). Si l'execució s'interromp:
+  - entre copiar i comprovar, o entre comprovar i suprimir, la següent
+    torna a llegir l'original, reconeix la còpia ja feta (pel diari, o
+    per Message-ID i igualtat de bytes) i no copia una altra vegada;
+  - mai no se suprimeix del servidor sense comparar, en aquesta mateixa
+    execució, els bytes del servidor amb una còpia local; si l'UID ara anomena
+    un altre missatge, els bytes no coincideixen i no se suprimeix res;
+  - en el pitjor cas el missatge queda als dos llocs, mai a cap.
+  Amb «deixar també al servidor», el que s'ha arxivat es recorda (UID i
+  Message-ID) i no es torna a copiar cada dia.
+- **Registre de cada execució** (`auto_archive_runs`, les 30 últimes per
+  compte): quan, si va ser programada o a petició, destinació, moguts,
+  copiats amb còpia al servidor, no moguts, desapareguts abans del seu
+  torn i, per a cada missatge que no es va moure, carpeta, assumpte, pas
+  (llegir, copiar, comprovar, suprimir, moure) i motiu (fins a 200). Es veu
+  a Paràmetres del compte. Una fallada d'una execució programada s'avisa
+  encara que Paràmetres estigui tancat.
+- **En treure el compte** se'n van amb ell la seva política, el seu registre
+  i el seu diari (ADR-0011). El que ja s'ha copiat a l'arxiu local es queda.
+- **Restaurar un perfil** (ADR-0010) deixa totes les polítiques desactivades:
+  una còpia restaurada en un altre equip no comença a moure correu tota sola.
 
-## Alternativas descartadas
+## Alternatives descartades
 
-- **Elegir los mensajes con la caché local también en IMAP:** solo vería
-  los mensajes recientes que la aplicación ha sincronizado y dejaría sin
-  archivar justo los más antiguos.
-- **Pedir confirmación antes de cada ejecución diaria:** la política
-  confirmada ya dice qué se mueve; preguntar cada día enseña a aceptar sin
-  leer. Cambiarla sí vuelve a preguntar.
-- **Mover al archivo local con MOVE del servidor y copiar después:** si la
-  copia fallara, el mensaje quedaría solo en una carpeta que no es la del
-  destino elegido. Copiar y comprobar antes de borrar no pierde nada.
-- **Archivar con la aplicación cerrada (tarea del sistema):** igual que en
-  ADR-0037, exige instalar algo fuera de la aplicación en cada plataforma.
-- **Contar la antigüedad por la fecha de llegada (INTERNALDATE):** cambia
-  al copiar o migrar buzones; la fecha del mensaje es la que la persona ve
-  en la lista.
+- **Triar els missatges amb la memòria cau local també a IMAP:** només veuria
+  els missatges recents que l'aplicació ha sincronitzat i deixaria sense
+  arxivar justament els més antics.
+- **Demanar confirmació abans de cada execució diària:** la política
+  confirmada ja diu què es mou; preguntar cada dia ensenya a acceptar sense
+  llegir. Canviar-la sí que torna a preguntar.
+- **Moure a l'arxiu local amb MOVE del servidor i copiar després:** si la
+  còpia fallés, el missatge quedaria només en una carpeta que no és la de la
+  destinació triada. Copiar i comprovar abans de suprimir no perd res.
+- **Arxivar amb l'aplicació tancada (tasca del sistema):** igual que a
+  ADR-0037, exigeix instal·lar alguna cosa fora de l'aplicació a cada
+  plataforma.
+- **Comptar l'antiguitat per la data d'arribada (INTERNALDATE):** canvia
+  en copiar o migrar bústies; la data del missatge és la que la persona veu
+  a la llista.

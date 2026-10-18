@@ -1,69 +1,86 @@
-# ADR 0004: Incremental Microsoft Graph adapter
+# ADR 0004: Adaptador incremental de Microsoft Graph
 
-Status: Accepted — 2026-09-09. Maintainer approved “sí, incorpóralo” after
-the explicit adapter/per-account/minimal-delegated-consent proposal in #46.
+Estat: Acceptada — 2026-09-09. El mantenidor va aprovar “sí, incorpóralo” després
+de la proposta explícita d'adaptador/per compte/consentiment delegat mínim a #46.
 
-## Decision
+## Decisió
 
-Add Microsoft Graph v1.0 for supported Exchange Online capabilities inside
-the existing Rust core. Keep Wails, the stdio bridge, IMAP/SMTP and on-premises
-EWS. Adoption is explicit per account, never inferred from an email domain.
-No automatic migration, protocol fallback, public service or app-only access.
-Existing OAuth grants remain unchanged; Outlook-resource tokens must never be
-reused as Graph grants. Consent and tenant policy are separate requirements.
+S'afegeix Microsoft Graph v1.0 per a les capacitats compatibles d'Exchange
+Online dins del nucli de Rust existent. Es mantenen Wails, el pont stdio,
+IMAP/SMTP i EWS local (on-premises). L'adopció és explícita per compte, mai
+deduïda d'un domini de correu electrònic. Sense migració automàtica, sense
+protocol alternatiu de reserva, sense servei públic ni accés només
+d'aplicació. Les concessions OAuth existents no canvien; els testimonis del
+recurs d'Outlook no s'han de reutilitzar mai com a concessions de Graph. El
+consentiment i la política del tenant (inquilí) són requisits separats.
 
-Request permissions incrementally: `Mail.ReadBasic` for folder/basic metadata
-discovery, `Mail.Read` for full reading, `Mail.ReadWrite` for editing (does not
-include sending), and separately `Mail.Send`, `Calendars.ReadWrite` or
-`Contacts.ReadWrite` when their feature is enabled. Shared-mailbox permissions
-and national-cloud endpoints require their own documented capability slices;
-the initial implementation targets the global service and signed-in mailbox.
+Els permisos es demanen de manera incremental: `Mail.ReadBasic` per a
+descobrir carpetes i metadades bàsiques, `Mail.Read` per a la lectura
+completa, `Mail.ReadWrite` per a l'edició (no inclou l'enviament) i, per
+separat, `Mail.Send`, `Calendars.ReadWrite` o `Contacts.ReadWrite` quan
+s'activa la funcionalitat corresponent. Els permisos de bústia compartida i
+els punts d'accés de núvols nacionals requereixen els seus propis
+fragments de capacitat documentats; la implementació inicial s'adreça al
+servei global i a la bústia de l'usuari que ha iniciat la sessió.
 
-## Contracts (#24 / #25)
+## Contractes (#24 / #25)
 
-- Graph IDs are opaque and case-sensitive, qualified by account and resource
-  kind. Send `Prefer: IdType="ImmutableId"` on every item request. A Graph ID
-  is not an IMAP UID, EWS ID or local conversation ID. Moves to archive
-  mailboxes/export-import can change it. Do not correlate by subject/address.
-- Page/delta links are opaque provider checkpoints bound to the originating
-  account and collection. Follow only validated HTTPS Graph v1.0 URLs for that
-  exact collection. Never forward bearer tokens through redirects. Fetch one
-  bounded page at a time; errors are not empty successful snapshots.
-- Preserve Graph error categories: reauthentication, access denied, not found,
-  conflict, throttled, checkpoint expired, unavailable, invalid response and
-  transport failure. Return retry delay without sleeping or blindly retrying.
-  Do not expose response bodies, credentials or checkpoint URLs in errors/logs.
-- A complete delta round may advance its checkpoint only atomically with the
-  corresponding cache changes. Incomplete reads must not delete local data.
-  A rejected checkpoint requires explicit resync, not merging a new first page
-  into an old traversal. Writes use concurrency tokens where supported;
-  uncertain sending is reconciled, never automatically repeated.
-- X1 changes no persistent schema, existing account or mail cache. Before
-  enabling Graph in the mail session pool, document/test the exact projection,
-  rollback, local-draft/label preservation and token-storage migration in its
-  implementation slice. This decision permits that additive integration, not
-  destructive conversion of an existing profile.
+- Els identificadors de Graph són opacs i distingeixen majúscules i
+  minúscules, qualificats per compte i tipus de recurs. Cal enviar
+  `Prefer: IdType="ImmutableId"` a cada petició d'element. Un identificador
+  de Graph no és un UID d'IMAP, un identificador d'EWS ni un identificador
+  de conversa local. Els trasllats a bústies d'arxiu o l'exportació i
+  importació el poden canviar. No es correlaciona per assumpte ni per adreça.
+- Els enllaços de pàgina i de delta són punts de control opacs del
+  proveïdor, lligats al compte i a la col·lecció d'origen. Només se segueixen
+  URL HTTPS de Graph v1.0 validats per a aquella col·lecció exacta. Mai no es
+  reenvien testimonis bearer a través de redireccions. S'obté una pàgina
+  limitada cada vegada; els errors no són captures buides correctes.
+- Es preserven les categories d'error de Graph: reautenticació, accés
+  denegat, no trobat, conflicte, limitació de peticions, punt de control
+  caducat, no disponible, resposta no vàlida i fallada de transport. Es
+  retorna el temps d'espera per a reintentar sense esperar ni reintentar a
+  cegues. No s'exposen cossos de resposta, credencials ni URL de punts de
+  control en errors ni registres.
+- Una ronda de delta completa només pot avançar el seu punt de control de
+  manera atòmica amb els canvis corresponents de la memòria cau. Les
+  lectures incompletes no han de suprimir dades locals. Un punt de control
+  rebutjat requereix una ressincronització explícita, no fusionar una primera
+  pàgina nova en un recorregut antic. Les escriptures fan servir testimonis
+  de concurrència quan s'admeten; un enviament incert es concilia, mai no es
+  repeteix automàticament.
+- X1 no canvia cap esquema persistent, compte existent ni memòria cau de
+  correu. Abans d'activar Graph al conjunt de sessions de correu, cal
+  documentar i provar, en el seu fragment d'implementació, la projecció
+  exacta, la reversió, la preservació d'esborranys locals i etiquetes i la
+  migració de l'emmagatzematge de testimonis. Aquesta decisió permet aquesta
+  integració additiva, no la conversió destructiva d'un perfil existent.
 
-## Delivery
+## Lliurament
 
-1. #125: native read adapter, explicit in-memory Graph grant, transport and
-   checkpoint contracts; fixture/loopback validation. Not a user-activatable
-   account backend, no OAuth exchange and no production account switch yet.
-2. Per-account OAuth/PKCE consent and separate secure credential lifecycle;
-   cancellation, refresh, revocation and explicit activation UI.
-3. Mail projection/delta recovery and read integration; then mutations,
-   drafts/send reconciliation and attachments with per-operation tests.
-4. Calendar/contacts and separately delegated capabilities; each remains an
-   explicit gap until implemented and tested. No beta API dependency by default.
-5. Controlled provider/native acceptance and installable exact-SHA artifacts.
-   No live-mail experiment, tenant reconfiguration or release is authorized here.
+1. #125: adaptador de lectura natiu, concessió de Graph explícita en memòria,
+   contractes de transport i de punt de control; validació amb fixtures (dades de prova) i
+   loopback. Encara no és un rerefons de compte que l'usuari pugui activar,
+   sense intercanvi OAuth i sense canvi de comptes de producció.
+2. Consentiment OAuth/PKCE per compte i cicle de vida de credencials segur i
+   separat; cancel·lació, renovació, revocació i interfície d'activació explícita.
+3. Projecció de correu, recuperació de delta i integració de lectura; després,
+   mutacions, conciliació d'esborranys i enviaments i fitxers adjunts amb
+   proves per operació.
+4. Calendari/contactes i capacitats delegades per separat; cadascuna continua
+   sent una mancança explícita fins que s'implementi i es provi. Sense
+   dependència de l'API beta per defecte.
+5. Acceptació controlada amb el proveïdor i nativa, i artefactes instal·lables
+   amb SHA exacte. Aquí no s'autoritza cap experiment amb correu real,
+   reconfiguració del tenant ni publicació.
 
-## Sources and limits
+## Fonts i límits
 
-Verified 2026-09-09: [permissions](https://learn.microsoft.com/en-us/graph/permissions-reference),
-[IDs](https://learn.microsoft.com/en-us/graph/outlook-immutable-id),
-[paging](https://learn.microsoft.com/en-us/graph/paging),
-[throttling](https://learn.microsoft.com/en-us/graph/throttling),
-[folder scope](https://learn.microsoft.com/en-us/graph/api/user-list-mailfolders?view=graph-rest-1.0).
-Graph availability is not eM Client parity. #46 retains account-exposure and
-unsupported-operation discovery; #22 retains product-wide acceptance.
+Verificat el 2026-09-09: [permisos](https://learn.microsoft.com/en-us/graph/permissions-reference),
+[identificadors](https://learn.microsoft.com/en-us/graph/outlook-immutable-id),
+[paginació](https://learn.microsoft.com/en-us/graph/paging),
+[limitació de peticions](https://learn.microsoft.com/en-us/graph/throttling),
+[abast de carpetes](https://learn.microsoft.com/en-us/graph/api/user-list-mailfolders?view=graph-rest-1.0).
+La disponibilitat de Graph no equival a la paritat amb eM Client. #46 conserva
+el descobriment de l'exposició de comptes i de les operacions no
+compatibles; #22 conserva l'acceptació de tot el producte.

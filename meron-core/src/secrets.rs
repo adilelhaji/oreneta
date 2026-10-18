@@ -5,15 +5,17 @@
 //! Inside Flatpak, oo7 uses the Secret portal to encrypt an app-private keyring.
 //! One entry per account holds a JSON blob; non-secret connection metadata (host,
 //! port, user, ...) stays in SQLite.
+//!
+//! Entries are written under the `oreneta` service. Those still under the
+//! inherited `meron` one are moved on first read and by a start-up sweep
+//! ([`crate::secrets_migration`], ADR-0063).
 
 use anyhow::{Context, Result};
 use keyring::Entry;
 use serde::{Deserialize, Serialize};
 
 use crate::imap::Creds;
-
-// OS keychain service name, matching the app name.
-const SERVICE: &str = "meron";
+use crate::secrets_migration::{CredentialStore, Migration};
 
 // Reserved keychain "account" holding the SQLCipher key for the local store.
 // The leading underscores keep it out of the real per-account id namespace.
@@ -101,8 +103,9 @@ fn off_mode_delete(account: &str) {
 // Linux talks to the keychain through `backend_*` below, which builds its own
 // entries inside the timeout wrapper.
 #[cfg(not(target_os = "linux"))]
-fn entry(account: &str) -> Result<Entry> {
-    Entry::new(SERVICE, account).with_context(|| format!("open keychain entry for {account}"))
+fn entry(service: &str, account: &str) -> Result<Entry> {
+    Entry::new(service, account)
+        .with_context(|| format!("open {service} keychain entry for {account}"))
 }
 
 // ---- Windows blob chunking --------------------------------------------------
@@ -224,6 +227,55 @@ fn scoped_for(profile: Option<&str>, account: &str) -> String {
     }
 }
 
+/// The platform keychain, as the migration sees it: one call per service.
+struct Platform;
+
+impl CredentialStore for Platform {
+    fn read(&self, service: &'static str, key: &str) -> Result<Option<String>> {
+        backend_load(service, key)
+    }
+
+    fn write(&self, service: &'static str, key: &str, blob: &str) -> Result<()> {
+        backend_store(service, key, blob)
+    }
+
+    fn delete(&self, service: &'static str, key: &str) -> Result<()> {
+        backend_delete(service, key)
+    }
+}
+
+fn keyring_log(level: crate::log::Level, message: &str) {
+    crate::mlog!(level, "keyring", "{message}");
+}
+
+/// Read a scoped entry, `oreneta` first and then `meron` (ADR-0063).
+fn vault_load(key: &str) -> Result<Option<String>> {
+    Migration::global().load(&Platform, &keyring_log, key)
+}
+
+/// Write a scoped entry under `oreneta`, retiring a `meron` copy it replaces.
+fn vault_store(key: &str, blob: &str) -> Result<()> {
+    Migration::global().store(&Platform, &keyring_log, key, blob)
+}
+
+/// Delete a scoped entry from both services.
+fn vault_delete(key: &str) -> Result<()> {
+    Migration::global().delete(&Platform, key)
+}
+
+/// Moves every entry this profile names from the `meron` service to
+/// `oreneta` now, instead of on each one's first read, so entries a session
+/// never reads move too (ADR-0063). `names` are unscoped, as the store keeps
+/// them ([`crate::profile_purge::keychain_names`]). Failures are logged, with
+/// counts and never values, and tried again on the next start.
+pub fn migrate_legacy(names: &[String]) {
+    if keyring_disabled() {
+        return;
+    }
+    let keys: Vec<String> = names.iter().map(|name| scoped(name)).collect();
+    Migration::global().migrate_all(&Platform, &keyring_log, &keys);
+}
+
 /// Store (or replace) an account's secrets in the OS keychain.
 pub fn store(account: &str, secrets: &Secrets) -> Result<()> {
     let blob = serde_json::to_string(secrets)?;
@@ -231,7 +283,7 @@ pub fn store(account: &str, secrets: &Secrets) -> Result<()> {
         off_mode_store(account, &blob);
         return Ok(());
     }
-    backend_store(&scoped(account), &blob)
+    vault_store(&scoped(account), &blob)
 }
 
 /// Load an account's secrets, or defaults if no entry exists.
@@ -239,7 +291,7 @@ pub fn load(account: &str) -> Result<Secrets> {
     let blob = if keyring_disabled() {
         off_mode_load(account)
     } else {
-        backend_load(&scoped(account))?
+        vault_load(&scoped(account))?
     };
     match blob {
         Some(blob) => Ok(serde_json::from_str(&blob).unwrap_or_default()),
@@ -252,17 +304,17 @@ pub fn load(account: &str) -> Result<Secrets> {
 pub(crate) fn graph_record_load(key: &str) -> Result<Option<String>> {
     anyhow::ensure!(key.starts_with("__oreneta_graph_v1_"), "invalid Graph key");
     anyhow::ensure!(!keyring_disabled(), "Graph secure storage unavailable");
-    backend_load(&scoped(key))
+    vault_load(&scoped(key))
 }
 pub(crate) fn graph_record_store(key: &str, value: &str) -> Result<()> {
     anyhow::ensure!(key.starts_with("__oreneta_graph_v1_"), "invalid Graph key");
     anyhow::ensure!(!keyring_disabled(), "Graph secure storage unavailable");
-    backend_store(&scoped(key), value)
+    vault_store(&scoped(key), value)
 }
 pub(crate) fn graph_record_delete(key: &str) -> Result<()> {
     anyhow::ensure!(key.starts_with("__oreneta_graph_v1_"), "invalid Graph key");
     anyhow::ensure!(!keyring_disabled(), "Graph secure storage unavailable");
-    backend_delete(&scoped(key))
+    vault_delete(&scoped(key))
 }
 
 // ---- Backends ---------------------------------------------------------------
@@ -275,35 +327,35 @@ pub(crate) fn graph_record_delete(key: &str) -> Result<()> {
 // run. macOS and Windows keep the plain synchronous path.
 
 #[cfg(target_os = "linux")]
-fn backend_store(account: &str, blob: &str) -> Result<()> {
+fn backend_store(service: &'static str, account: &str, blob: &str) -> Result<()> {
     let owned_account = account.to_owned();
     let owned_blob = blob.to_owned();
     with_service_fallback(
         move || {
             service_call("write", move || {
-                Entry::new(SERVICE, &owned_account)?.set_password(&owned_blob)
+                Entry::new(service, &owned_account)?.set_password(&owned_blob)
             })
         },
         || {
-            crate::secrets_portal::store(account, blob)
-                .with_context(|| format!("write keyring entry for {account}"))
+            crate::secrets_portal::store(service, account, blob)
+                .with_context(|| format!("write {service} keyring entry for {account}"))
         },
     )
 }
 
 #[cfg(all(not(target_os = "linux"), not(target_os = "windows")))]
-fn backend_store(account: &str, blob: &str) -> Result<()> {
-    write_entry(account, blob)
+fn backend_store(service: &'static str, account: &str, blob: &str) -> Result<()> {
+    write_entry(service, account, blob)
 }
 
 #[cfg(target_os = "windows")]
-fn backend_store(account: &str, blob: &str) -> Result<()> {
-    let live = read_entry(account)?.as_deref().and_then(parse_marker);
+fn backend_store(service: &'static str, account: &str, blob: &str) -> Result<()> {
+    let live = read_entry(service, account)?.as_deref().and_then(parse_marker);
     if fits_in_credential(blob) {
-        write_entry(account, blob)?;
+        write_entry(service, account, blob)?;
         // Best-effort cleanup: the secrets are safely stored either way, and a
         // failure here only leaves an unreferenced entry behind.
-        let _ = sweep_chunks(account);
+        let _ = sweep_chunks(service, account);
         return Ok(());
     }
     // Never touch the generation the current marker points at, so the stored
@@ -316,24 +368,25 @@ fn backend_store(account: &str, blob: &str) -> Result<()> {
         chunks.len()
     );
     for (index, chunk) in chunks.iter().enumerate() {
-        write_entry(&chunk_account(account, generation, index), chunk)?;
+        write_entry(service, &chunk_account(account, generation, index), chunk)?;
     }
     write_entry(
+        service,
         account,
         &format!("{CHUNKED_MARKER}{generation}:{}", chunks.len()),
     )?;
     // Best-effort cleanup: the secrets are safely stored either way, and a
     // failure here only leaves an unreferenced entry behind.
-    let _ = delete_chunks(account, generation ^ 1, 0..MAX_CHUNKS);
-    let _ = delete_chunks(account, generation, chunks.len()..MAX_CHUNKS);
+    let _ = delete_chunks(service, account, generation ^ 1, 0..MAX_CHUNKS);
+    let _ = delete_chunks(service, account, generation, chunks.len()..MAX_CHUNKS);
     Ok(())
 }
 
 #[cfg(not(target_os = "linux"))]
-fn write_entry(account: &str, blob: &str) -> Result<()> {
-    entry(account)?
+fn write_entry(service: &str, account: &str, blob: &str) -> Result<()> {
+    entry(service, account)?
         .set_password(blob)
-        .with_context(|| format!("write keychain entry for {account}"))
+        .with_context(|| format!("write {service} keychain entry for {account}"))
 }
 
 /// Delete a generation's chunk entries over `range` — a stale generation, or the
@@ -341,13 +394,20 @@ fn write_entry(account: &str, blob: &str) -> Result<()> {
 /// failure does not stop the sweep, so one undeletable entry can never hide the
 /// ones after it, and the first such error is returned once the range is done.
 #[cfg(target_os = "windows")]
-fn delete_chunks(account: &str, generation: u8, range: std::ops::Range<usize>) -> Result<()> {
+fn delete_chunks(
+    service: &str,
+    account: &str,
+    generation: u8,
+    range: std::ops::Range<usize>,
+) -> Result<()> {
     let mut failure = None;
     for index in range {
         let name = chunk_account(account, generation, index);
-        let deleted = entry(&name).and_then(|e| match e.delete_credential() {
+        let deleted = entry(service, &name).and_then(|e| match e.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(e) => Err(e).with_context(|| format!("delete keychain entry for {name}")),
+            Err(e) => {
+                Err(e).with_context(|| format!("delete {service} keychain entry for {name}"))
+            }
         });
         if let Err(e) = deleted {
             failure.get_or_insert(e);
@@ -358,18 +418,18 @@ fn delete_chunks(account: &str, generation: u8, range: std::ops::Range<usize>) -
 
 /// Drop every chunk entry for an account, in either generation.
 #[cfg(target_os = "windows")]
-fn sweep_chunks(account: &str) -> Result<()> {
-    let zero = delete_chunks(account, 0, 0..MAX_CHUNKS);
-    zero.and(delete_chunks(account, 1, 0..MAX_CHUNKS))
+fn sweep_chunks(service: &str, account: &str) -> Result<()> {
+    let zero = delete_chunks(service, account, 0, 0..MAX_CHUNKS);
+    zero.and(delete_chunks(service, account, 1, 0..MAX_CHUNKS))
 }
 
 #[cfg(target_os = "linux")]
-fn backend_load(account: &str) -> Result<Option<String>> {
+fn backend_load(service: &'static str, account: &str) -> Result<Option<String>> {
     let owned_account = account.to_owned();
     with_service_fallback(
         move || {
             service_call("read", move || {
-                match Entry::new(SERVICE, &owned_account)?.get_password() {
+                match Entry::new(service, &owned_account)?.get_password() {
                     Ok(blob) => Ok(Some(blob)),
                     Err(keyring::Error::NoEntry) => Ok(None),
                     Err(error) => Err(error),
@@ -377,20 +437,20 @@ fn backend_load(account: &str) -> Result<Option<String>> {
             })
         },
         || {
-            crate::secrets_portal::load(account)
-                .with_context(|| format!("read keyring entry for {account}"))
+            crate::secrets_portal::load(service, account)
+                .with_context(|| format!("read {service} keyring entry for {account}"))
         },
     )
 }
 
 #[cfg(all(not(target_os = "linux"), not(target_os = "windows")))]
-fn backend_load(account: &str) -> Result<Option<String>> {
-    read_entry(account)
+fn backend_load(service: &'static str, account: &str) -> Result<Option<String>> {
+    read_entry(service, account)
 }
 
 #[cfg(target_os = "windows")]
-fn backend_load(account: &str) -> Result<Option<String>> {
-    let Some(head) = read_entry(account)? else {
+fn backend_load(service: &'static str, account: &str) -> Result<Option<String>> {
+    let Some(head) = read_entry(service, account)? else {
         return Ok(None);
     };
     let Some((generation, count)) = parse_marker(&head) else {
@@ -399,59 +459,59 @@ fn backend_load(account: &str) -> Result<Option<String>> {
     let mut blob = String::new();
     for index in 0..count {
         let name = chunk_account(account, generation, index);
-        let chunk = read_entry(&name)?
-            .with_context(|| format!("missing keychain chunk {index} for {account}"))?;
+        let chunk = read_entry(service, &name)?
+            .with_context(|| format!("missing {service} keychain chunk {index} for {account}"))?;
         blob.push_str(&chunk);
     }
     Ok(Some(blob))
 }
 
 #[cfg(not(target_os = "linux"))]
-fn read_entry(account: &str) -> Result<Option<String>> {
-    match entry(account)?.get_password() {
+fn read_entry(service: &str, account: &str) -> Result<Option<String>> {
+    match entry(service, account)?.get_password() {
         Ok(blob) => Ok(Some(blob)),
         Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(e).with_context(|| format!("read keychain entry for {account}")),
+        Err(e) => Err(e).with_context(|| format!("read {service} keychain entry for {account}")),
     }
 }
 
 #[cfg(target_os = "linux")]
-fn backend_delete(account: &str) -> Result<()> {
+fn backend_delete(service: &'static str, account: &str) -> Result<()> {
     let owned_account = account.to_owned();
     with_service_fallback(
         move || {
             service_call("delete", move || {
-                match Entry::new(SERVICE, &owned_account)?.delete_credential() {
+                match Entry::new(service, &owned_account)?.delete_credential() {
                     Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
                     Err(error) => Err(error),
                 }
             })
         },
         || {
-            crate::secrets_portal::delete(account)
-                .with_context(|| format!("delete keyring entry for {account}"))
+            crate::secrets_portal::delete(service, account)
+                .with_context(|| format!("delete {service} keyring entry for {account}"))
         },
     )
 }
 
 #[cfg(target_os = "windows")]
-fn backend_delete(account: &str) -> Result<()> {
+fn backend_delete(service: &'static str, account: &str) -> Result<()> {
     // Chunks first: while the marker survives, a failed sweep leaves an account
     // that still loads rather than one pointing at half-deleted secrets.
-    sweep_chunks(account)?;
-    delete_entry(account)
+    sweep_chunks(service, account)?;
+    delete_entry(service, account)
 }
 
 #[cfg(all(not(target_os = "linux"), not(target_os = "windows")))]
-fn backend_delete(account: &str) -> Result<()> {
-    delete_entry(account)
+fn backend_delete(service: &'static str, account: &str) -> Result<()> {
+    delete_entry(service, account)
 }
 
 #[cfg(not(target_os = "linux"))]
-fn delete_entry(account: &str) -> Result<()> {
-    match entry(account)?.delete_credential() {
+fn delete_entry(service: &str, account: &str) -> Result<()> {
+    match entry(service, account)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(e).with_context(|| format!("delete keychain entry for {account}")),
+        Err(e) => Err(e).with_context(|| format!("delete {service} keychain entry for {account}")),
     }
 }
 
@@ -540,19 +600,26 @@ fn with_service_fallback<T>(
 ///
 /// Returns `Ok(None)` when the keychain is disabled (`MERON_KEYRING=off`,
 /// tests/headless), so the store falls back to plaintext exactly as before.
+///
+/// The key is read like any entry, `oreneta` first and then `meron`, and is
+/// moved on that read (ADR-0063). A read error is returned, never taken for
+/// a missing key: minting one then would lock the store out. A malformed
+/// `oreneta` key never hides a good `meron` one. Missing (first run) or
+/// malformed everywhere: a fresh key is minted and persisted.
 pub fn db_key() -> Result<Option<String>> {
     if keyring_disabled() {
         return Ok(None);
     }
-    match backend_load(&scoped(DB_KEY_ACCOUNT)).context("read db key from keychain")? {
-        Some(key) if is_hex_key(&key) => Ok(Some(key)),
-        // Missing (first run) or a malformed entry: mint and persist a fresh key.
-        Some(_) | None => {
-            let key = generate_db_key();
-            backend_store(&scoped(DB_KEY_ACCOUNT), &key).context("store db key in keychain")?;
-            Ok(Some(key))
-        }
-    }
+    Migration::global()
+        .db_key(
+            &Platform,
+            &keyring_log,
+            &scoped(DB_KEY_ACCOUNT),
+            &is_hex_key,
+            &generate_db_key,
+        )
+        .context("read or create the db key in the keychain")
+        .map(Some)
 }
 
 /// 32 random bytes (two v4 UUIDs' worth) rendered as 64 lowercase hex chars.
@@ -582,7 +649,7 @@ pub fn delete_db_key() -> Result<()> {
     if keyring_disabled() {
         return Ok(());
     }
-    backend_delete(&scoped(DB_KEY_ACCOUNT))
+    vault_delete(&scoped(DB_KEY_ACCOUNT))
 }
 
 /// Remove an account's secrets from the keychain. A missing entry is not an error.
@@ -591,7 +658,7 @@ pub fn delete(account: &str) -> Result<()> {
         off_mode_delete(account);
         return Ok(());
     }
-    backend_delete(&scoped(account))
+    vault_delete(&scoped(account))
 }
 
 #[cfg(test)]

@@ -1,40 +1,50 @@
-# General and per-folder columns (#160)
+# Columnes generals i per carpeta (#160)
 
-Implements accepted ADR 0009. In table view, **Columns** opens a draft editor:
-choose General view or Only this folder, toggle visibility, move columns with
-named up/down buttons, and enter widths from 64 to 640 CSS pixels. Subject remains
-visible and can use automatic width. Save applies the draft; Close/Escape discards
-it. Reset to default replaces the draft with the compact preset and still requires
-Save. Use general view immediately removes that folder's exception.
+Implementa l'ADR 0009, acceptat. A la visualització de taula, **Columnes** obre un
+editor d'esborrany: es tria Visualització general o Només aquesta carpeta, es
+commuta la visibilitat, es mouen les columnes amb botons amb nom d'amunt i avall, i
+s'introdueixen amplades de 64 a 640 píxels CSS. L'assumpte continua visible i pot
+fer servir l'amplada automàtica. Desa aplica l'esborrany; Tanca/Esc el descarta.
+Restableix el valor per defecte substitueix l'esborrany pel valor predefinit
+compacte i encara cal Desa. Fes servir la visualització general elimina
+immediatament l'excepció d'aquella carpeta.
 
-The general view is inherited by every account/folder pair without an override.
-An override is an independent snapshot. Updating the general layout does not
-overwrite it. IDs are exact pairs, including the existing unified account/roles;
-labels and display names are never storage keys. Search uses the current folder's
-layout, not another override namespace.
+La visualització general l'hereten tots els parells de compte i carpeta que no
+tenen una substitució. Una substitució és una instantània independent.
+Actualitzar la disposició general no la sobreescriu. Els ID són parells exactes,
+inclosos el compte unificat i els rols existents; les etiquetes i els noms
+visibles no són mai claus d'emmagatzematge. La cerca fa servir la disposició de
+la carpeta actual, no cap altre espai de noms de substitucions.
 
-Absent/invalid preferences retain the pre-existing proportional table. Explicit
-configuration uses the approved compact preset (120px sender, automatic subject,
-80px date, hidden 120px account). This distinction preserves existing users until
-their first explicit save. Invalid layouts are rejected as a unit; invalid folder
-entries are ignored and the first valid duplicate wins. Unknown future versions
-are retained verbatim during hydration and unrelated changes; editing stays
-disabled until an explicit reset of all column views or an app update.
+Les preferències absents o no vàlides conserven la taula proporcional que ja
+existia. La configuració explícita fa servir el valor predefinit compacte aprovat
+(remitent de 120 px, assumpte automàtic, data de 80 px, compte ocult de 120 px).
+Aquesta distinció preserva els usuaris existents fins al seu primer desament
+explícit. Les disposicions no vàlides es rebutgen en bloc; les entrades de carpeta
+no vàlides s'ignoren i guanya el primer duplicat vàlid. Les versions futures
+desconegudes es conserven literalment durant la hidratació i els canvis no
+relacionats; l'edició continua desactivada fins a un restabliment explícit de
+totes les visualitzacions de columnes o una actualització de l'aplicació.
 
-`mailbox_views` uses the existing preference fetch/write path and does not write
-on hydration. Only sender/subject/date headers sort, through the existing global
-whole-result sort preference. Account displays the known account name/email and
-does not pretend to sort. Selection remains outside configurable columns; the
-opened marker sits on the required subject even when sender is hidden. Oversized
-layouts scroll inside the existing list viewport, keeping paging and sticky
-headers in the same scrolling surface.
+`mailbox_views` fa servir el camí existent de lectura i escriptura de
+preferències i no escriu durant la hidratació. Només les capçaleres de remitent,
+assumpte i data ordenen, a través de la preferència global existent d'ordenació
+de tot el resultat. Compte mostra el nom o l'adreça del compte coneguts i no fa
+veure que ordena. La selecció continua fora de les columnes configurables; el
+marcador d'obert se situa a l'assumpte, que és obligatori, fins i tot quan el
+remitent està ocult. Les disposicions massa grans es desplacen dins de la
+finestra de la llista existent, de manera que la paginació i les capçaleres fixes
+queden a la mateixa superfície de desplaçament.
 
-Evidence includes validator boundaries and malformed/future versions; exact
-account/folder isolation and inheritance; hydration/persistence; draft cancellation,
-width errors and semantic error association; selection/open state with hidden
-sender; production-entry browser tests for keyboard, reload, folder navigation,
-future reset, light/dark, 600/1440px and 200% CSS zoom. Browser fixtures use synthetic
-mail and the existing bridge contract; they do not certify native DB restart or
-screen-reader behavior. New text is Spanish/English, with English fallback in the
-other catalogs pending translation. #36 retains remaining column capabilities,
-native acceptance and complete localization; no release is included.
+Les proves inclouen els límits del validador i les versions mal formades o
+futures; l'aïllament exacte per compte i carpeta i l'herència; la hidratació i la
+persistència; la cancel·lació de l'esborrany, els errors d'amplada i l'associació
+semàntica dels errors; l'estat de selecció i d'obert amb el remitent ocult; proves
+de navegador sobre el punt d'entrada de producció per al teclat, la recàrrega, la
+navegació entre carpetes, el restabliment de versions futures, clar i fosc,
+600/1440 px i un zoom CSS del 200 %. Els escenaris de prova (fixtures) de navegador fan servir correu
+sintètic i el contracte del pont existent; no certifiquen el reinici natiu de la
+base de dades ni el comportament amb lectors de pantalla. El text nou és en
+castellà i en anglès, amb l'anglès com a alternativa en els altres catàlegs a
+l'espera de traducció. #36 conserva les capacitats de columnes que queden,
+l'acceptació nativa i la localització completa; no s'inclou cap versió publicada.

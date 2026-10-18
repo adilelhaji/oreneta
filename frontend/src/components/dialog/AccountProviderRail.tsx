@@ -8,14 +8,14 @@ import { PROVIDERS } from './providerIcons'
 export function AccountProviderRail({ mode, setMode }: { mode: SetupMode; setMode: (mode: SetupMode) => void }) {
   const { t } = useTranslation()
   return (
-    <nav className="w-44 shrink-0 border-r border-border/70 p-3 flex flex-col gap-1 bg-raised overflow-y-auto">
+    <nav className="w-44 shrink-0 border-e border-border/70 p-3 flex flex-col gap-1 bg-raised overflow-y-auto">
       {PROVIDERS.map((p) => {
         const active = p.isActive(mode)
         return (
           <button
             key={p.id}
             onClick={() => setMode(p.mode)}
-            className={`flex items-center gap-2.5 rounded-control px-2.5 py-2 text-left transition-colors cursor-pointer ${
+            className={`flex items-center gap-2.5 rounded-control px-2.5 py-2 text-start transition-colors cursor-pointer ${
               active ? 'bg-accent/10' : 'hover:bg-hover'
             }`}
           >

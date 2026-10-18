@@ -158,18 +158,56 @@ fn hidden_calendars_and_unlisted_accounts_raise_nothing() {
     assert_eq!(take_due(&engine, &a(), NOW).len(), 1);
 }
 
-#[test]
-fn old_records_are_forgotten() {
-    let engine = engine_with(&[event("soon", NOW + 600, Some(15))]);
-    assert_eq!(take_due(&engine, &a(), NOW).len(), 1);
-    forget_old(&engine, NOW + 15 * 86_400);
-    let left: i64 = engine
+fn given_count(engine: &Arc<Engine>) -> i64 {
+    engine
         .db
         .lock()
         .unwrap()
         .query_row("SELECT COUNT(*) FROM calendar_reminders_fired", [], |row| row.get(0))
-        .unwrap();
-    assert_eq!(left, 0);
+        .unwrap()
+}
+
+/// Records of past events are still forgotten (#222): kept while their
+/// event is ahead or recent, gone once it started longer ago than any look
+/// gives a reminder for.
+#[test]
+fn old_records_are_forgotten() {
+    let engine = engine_with(&[event("soon", NOW + 600, Some(15))]);
+    assert_eq!(take_due(&engine, &a(), NOW).len(), 1);
+    forget_old(&engine, NOW + 600 + when::GIVEN_KEPT - 60);
+    assert_eq!(given_count(&engine), 1, "its event started within the window");
+    forget_old(&engine, NOW + 600 + when::GIVEN_KEPT + 60);
+    assert_eq!(given_count(&engine), 0);
+}
+
+/// A reminder set 20 days ahead of its event (Google allows four weeks, a
+/// VALARM any length) is given once: 15 days on, past the fortnight the
+/// record used to live, it is still recorded and is not given again, nor at
+/// any look up to the event (#222).
+#[test]
+fn a_reminder_set_weeks_ahead_is_given_once() {
+    let start = at("2026-11-20T09:00:00Z");
+    let engine = engine_with(&[event("conference", start, Some(20 * 24 * 60))]);
+    let rang = start - 20 * 86_400;
+    assert!(look(&engine, &a(), rang - 60, &Madrid).reminders.is_empty(), "not yet");
+    assert_eq!(names(&look(&engine, &a(), rang, &Madrid)), ["conference"]);
+    let later = rang + 15 * 86_400;
+    forget_old(&engine, later);
+    assert_eq!(given_count(&engine), 1, "kept while its event is ahead");
+    for now in [later, later + 60, start - 60, start] {
+        forget_old(&engine, now);
+        assert!(take_due(&engine, &a(), now).is_empty(), "the phone's look at {now}");
+        assert!(look(&engine, &a(), now, &Madrid).reminders.is_empty(), "the desktop's look at {now}");
+    }
+    // A look 15 days later with no look in between (the app closed all the
+    // while): the gap is still not a reason to give it again.
+    let closed = engine_with(&[event("conference", start, Some(20 * 24 * 60))]);
+    assert_eq!(names(&look(&closed, &a(), rang, &Madrid)), ["conference"]);
+    forget_old(&closed, later);
+    assert!(look(&closed, &a(), later, &Madrid).reminders.is_empty());
+    // Once the event is long past, the record goes.
+    forget_old(&engine, start + when::GIVEN_KEPT + 60);
+    assert_eq!(given_count(&engine), 0);
 }
 
 // ---- Suspend and resume (#209) ----------------------------------------------
@@ -206,12 +244,362 @@ fn a_suspend_that_ends_before_the_event_starts_gives_the_reminder_on_waking() {
     assert_eq!(names(&look(&engine, &a(), at("2026-10-20T08:50:00Z"), &Madrid)), ["standup"]);
 }
 
+// ---- Missed while asleep (#225) ---------------------------------------------
+
+fn missed(look: &Look) -> Vec<&str> {
+    look.missed
+        .as_ref()
+        .map(|notice| notice["reminders"].as_array().unwrap().iter().map(|d| d["event"].as_str().unwrap()).collect())
+        .unwrap_or_default()
+}
+
+/// Asleep from 08:30 to 10:00 through the whole of a 09:00 meeting: on
+/// waking its reminder is in the one missed-reminders notice, saying it
+/// started, and nothing is given again afterwards.
 #[test]
-fn a_reminder_whose_event_ended_during_a_suspend_is_not_given() {
+fn a_reminder_whose_event_ended_during_a_suspend_is_given_once_in_the_missed_notice() {
     let engine = engine_with(&[event("standup", at("2026-10-20T09:00:00Z"), Some(15))]);
-    assert!(look(&engine, &a(), at("2026-10-20T08:30:00Z"), &Madrid).reminders.is_empty());
+    assert!(look(&engine, &a(), at("2026-10-20T08:30:00Z"), &Madrid).missed.is_none());
     // Woke at 10:00, the very moment it ended.
-    assert!(look(&engine, &a(), at("2026-10-20T10:00:00Z"), &Madrid).reminders.is_empty());
+    let woke = at("2026-10-20T10:00:00Z");
+    let first = look(&engine, &a(), woke, &Madrid);
+    assert!(first.reminders.is_empty(), "not a reminder of its own");
+    let notice = first.missed.clone().expect("one notice");
+    assert_eq!(notice["count"], 1);
+    assert_eq!(notice["day"], "2026-10-20", "the day to open the calendar on");
+    let start = at("2026-10-20T09:00:00Z");
+    let mut plain = notice["reminders"][0].as_object().unwrap().clone();
+    assert_eq!((plain.remove("key"), plain.remove("at")), (Some(json!(format!("standup@{start}"))), Some(json!(start))));
+    assert_eq!(
+        Value::Object(plain),
+        reminder_detail("a", &event("standup", start, Some(15)), &Madrid, woke),
+        "each as a calendar.reminder says it, with its key and when it starts here",
+    );
+    assert_eq!(notice["keys"], json!([{ "account": "a", "key": format!("standup@{start}") }]));
+    assert_eq!(notice["reminders"][0]["started"], true);
+    assert_eq!(notice["reminders"][0]["local_time"], "11:00");
+    // The resume and the next tick both look: once.
+    assert_eq!(look(&engine, &a(), woke, &Madrid), Look::default());
+    assert_eq!(look(&engine, &a(), woke + 60, &Madrid), Look::default());
+}
+
+/// A night asleep over several meetings, on two accounts and two days:
+/// exactly one notice, with all of them, newest first, and the days they
+/// span.
+#[test]
+fn several_missed_reminders_make_exactly_one_notice_with_all_of_them() {
+    let engine = engine_with(&[
+        event("late", at("2026-10-19T21:00:00Z"), Some(15)),
+        event("early", at("2026-10-20T06:00:00Z"), Some(15)),
+        all_day("holiday", "2026-10-20", 0),
+    ]);
+    put_on(&engine, "b", calendar::CalendarKind::Local, &[event("other", at("2026-10-20T05:00:00Z"), Some(30))]);
+    let accounts = vec!["a".to_string(), "b".to_string()];
+    assert!(look(&engine, &accounts, at("2026-10-19T20:00:00Z"), &Madrid).missed.is_none());
+
+    let woke = at("2026-10-21T07:00:00Z");
+    let first = look(&engine, &accounts, woke, &Madrid);
+    assert!(first.reminders.is_empty());
+    assert_eq!(missed(&first), ["early", "other", "holiday", "late"], "newest first");
+    let notice = first.missed.unwrap();
+    assert_eq!(notice["count"], 4);
+    assert_eq!(notice["day"], "2026-10-20", "the most recent missed day, on the reader's clock");
+    assert_eq!(notice["first_day"], "2026-10-19", "and the first");
+    assert_eq!(notice["reminders"][1]["account"], "b");
+    assert_eq!(notice["reminders"][2]["local_date"], "2026-10-20");
+    assert_eq!(look(&engine, &accounts, woke + 60, &Madrid), Look::default(), "once");
+}
+
+/// A long absence: the notice says how many in all, details only the most
+/// recent few, and every one of them is recorded as given.
+#[test]
+fn a_notice_details_the_most_recent_missed_reminders_and_counts_them_all() {
+    let first = at("2026-10-20T06:00:00Z");
+    let events: Vec<_> = (0..25).map(|i| event(&format!("m{i:02}"), first + i * 3_600, Some(15))).collect();
+    let engine = engine_with(&events);
+    assert!(look(&engine, &a(), first - 7_200, &Madrid).missed.is_none());
+    let woke = look(&engine, &a(), first + 30 * 3_600, &Madrid);
+    let notice = woke.missed.clone().unwrap();
+    assert_eq!(notice["count"], 25);
+    assert_eq!(notice["reminders"].as_array().unwrap().len(), MISSED_DETAILED);
+    assert_eq!(missed(&woke)[0], "m24", "the most recent first");
+    assert_eq!(missed(&woke)[MISSED_DETAILED - 1], "m05");
+    assert_eq!(recorded(&engine), 25);
+    assert_eq!(look(&engine, &a(), first + 30 * 3_600 + 60, &Madrid), Look::default());
+}
+
+/// The look on waking runs before the calendars are read again, so a
+/// meeting that a sync during the gap brought in (or a calendar shown again)
+/// whose reminder rang and whose end passed in the gap is reported as missed
+/// too: what was in the store at the look is what it reports.
+#[test]
+fn an_event_synced_in_or_shown_again_during_the_gap_is_reported_as_missed() {
+    let engine = engine_with(&[]);
+    put_on(&engine, "b", calendar::CalendarKind::Local, &[event("shown", at("2026-10-20T09:30:00Z"), Some(15))]);
+    let hidden = |on: bool| {
+        let db = engine.db.lock().unwrap();
+        calendar::set_calendar_enabled(&db, "b", "local:home", !on).unwrap();
+    };
+    hidden(true);
+    let accounts = vec!["a".to_string(), "b".to_string()];
+    assert!(look(&engine, &accounts, at("2026-10-20T08:00:00Z"), &Madrid).missed.is_none());
+    // Asleep from 08:00 to 11:00. Meanwhile (before the look on waking) a
+    // sync brings in a 09:00 meeting, and the hidden calendar is shown again.
+    put(&engine, &[event("synced", at("2026-10-20T09:00:00Z"), Some(15))]);
+    hidden(false);
+    assert_eq!(missed(&look(&engine, &accounts, at("2026-10-20T11:00:00Z"), &Madrid)), ["shown", "synced"]);
+}
+
+fn recorded(engine: &Arc<Engine>) -> i64 {
+    engine
+        .db
+        .lock()
+        .unwrap()
+        .query_row("SELECT COUNT(*) FROM calendar_reminders_fired", [], |row| row.get(0))
+        .unwrap()
+}
+
+/// One look on waking: the meeting still on is given on its own, as since
+/// #209 ("Started at …"); the one already over goes in the notice.
+#[test]
+fn a_reminder_still_on_is_given_on_its_own_beside_the_missed_notice() {
+    let engine = engine_with(&[
+        event("over", at("2026-10-20T08:45:00Z"), Some(15)).with_end(at("2026-10-20T09:00:00Z")),
+        event("review", at("2026-10-20T09:00:00Z"), Some(15)),
+    ]);
+    assert!(look(&engine, &a(), at("2026-10-20T08:00:00Z"), &Madrid).reminders.is_empty());
+    let woke = look(&engine, &a(), at("2026-10-20T09:10:00Z"), &Madrid);
+    assert_eq!(names(&woke), ["review"]);
+    assert_eq!(woke.reminders[0]["started"], true);
+    assert_eq!(missed(&woke), ["over"]);
+}
+
+/// Paused or muted, nothing is shown: neither the notice nor anything later.
+#[test]
+fn a_paused_or_muted_account_shows_no_missed_reminders() {
+    let engine = Arc::new(Engine::new(Box::new(MemoryHost)).unwrap());
+    let account = crate::archive::ACCOUNT;
+    crate::archive::ensure_account(&engine.db.lock().unwrap(), NOW).unwrap();
+    put_on(
+        &engine,
+        account,
+        calendar::CalendarKind::Local,
+        &[event("standup", at("2026-10-20T09:00:00Z"), Some(15)), event("lunch", at("2026-10-20T12:00:00Z"), Some(15))],
+    );
+    let accounts = vec![account.to_string()];
+    let set = |pref: &str, on: bool| {
+        crate::store::set_account_pref(&engine.db.lock().unwrap(), account, pref, on).unwrap();
+    };
+    assert!(look(&engine, &accounts, at("2026-10-20T08:30:00Z"), &Madrid).missed.is_none());
+    for pref in ["paused", "muted"] {
+        set(pref, true);
+        let (asleep, woke) = if pref == "paused" { ("08:30", "10:30") } else { ("10:30", "13:30") };
+        let woke = look(&engine, &accounts, at(&format!("2026-10-20T{woke}:00Z")), &Madrid);
+        assert_eq!(woke, Look::default(), "{pref}: nothing since {asleep}");
+        set(pref, false);
+    }
+    assert_eq!(look(&engine, &accounts, at("2026-10-20T13:31:00Z"), &Madrid), Look::default(), "nor later");
+}
+
+/// Missed while the app was closed, then a sleep and a resume: the notice
+/// comes once, and neither a restart nor a resume brings it back.
+#[test]
+fn a_missed_reminder_is_not_given_twice_across_a_restart_followed_by_a_resume() {
+    let file = TempDb::new("missed");
+    let path = file.0.clone();
+    let events = [event("standup", at("2026-10-20T09:00:00Z"), Some(15))];
+    {
+        let engine = Arc::new(Engine::new(Box::new(FileHost(path.clone()))).unwrap());
+        put(&engine, &events);
+        assert_eq!(look(&engine, &a(), at("2026-10-20T08:30:00Z"), &Madrid), Look::default());
+    }
+    // Closed at 08:31, opened again at 10:30: the standup came and went.
+    {
+        let engine = Arc::new(Engine::new(Box::new(FileHost(path.clone()))).unwrap());
+        assert_eq!(missed(&look(&engine, &a(), at("2026-10-20T10:30:00Z"), &Madrid)), ["standup"]);
+    }
+    // Opened again, asleep, woke, and a resync: nothing more.
+    let engine = Arc::new(Engine::new(Box::new(FileHost(path.clone()))).unwrap());
+    assert_eq!(look(&engine, &a(), at("2026-10-20T10:31:00Z"), &Madrid), Look::default());
+    assert_eq!(look(&engine, &a(), at("2026-10-20T12:00:00Z"), &Madrid), Look::default());
+    put(&engine, &events);
+    assert_eq!(look(&engine, &a(), at("2026-10-20T12:01:00Z"), &Madrid), Look::default());
+}
+
+/// A store file for a restart test, removed with its WAL files when the test
+/// ends, passed or failed. Made before the engines, so dropped after them.
+struct TempDb(std::path::PathBuf);
+
+impl TempDb {
+    fn new(name: &str) -> TempDb {
+        let file = TempDb(std::env::temp_dir().join(format!("oreneta-{name}-{}.db", std::process::id())));
+        file.remove();
+        file
+    }
+
+    fn remove(&self) {
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{suffix}", self.0.display()));
+        }
+    }
+}
+
+impl Drop for TempDb {
+    fn drop(&mut self) {
+        self.remove();
+    }
+}
+
+/// A missed reminder that could not be recorded is not shown (it could be
+/// shown twice) and the look is not recorded: the next look's notice has it.
+#[test]
+fn a_missed_reminder_that_could_not_be_recorded_is_in_the_next_notice() {
+    let engine = engine_with(&[
+        event("standup", at("2026-10-20T09:00:00Z"), Some(15)),
+        event("call", at("2026-10-20T09:00:00Z"), Some(20)),
+    ]);
+    assert!(look(&engine, &a(), at("2026-10-20T08:30:00Z"), &Madrid).missed.is_none());
+    engine
+        .db
+        .lock()
+        .unwrap()
+        .execute_batch(
+            "CREATE TRIGGER refuse_standup BEFORE INSERT ON calendar_reminders_fired
+             WHEN NEW.event_id LIKE 'standup@%' BEGIN SELECT RAISE(FAIL, 'disk full'); END;",
+        )
+        .unwrap();
+    let woke = at("2026-10-20T10:30:00Z");
+    let first = look(&engine, &a(), woke, &Madrid);
+    assert_eq!(missed(&first), ["call"]);
+    shown(&engine, &first);
+    engine.db.lock().unwrap().execute_batch("DROP TRIGGER refuse_standup").unwrap();
+    assert_eq!(missed(&look(&engine, &a(), woke + 60, &Madrid)), ["standup"]);
+    assert_eq!(look(&engine, &a(), woke + 120, &Madrid), Look::default(), "each once");
+}
+
+/// The host says it showed a notice, with the keys it held.
+fn shown(engine: &Arc<Engine>, look: &Look) {
+    let keys = look.missed.as_ref().unwrap()["keys"].as_array().unwrap();
+    let keys: Vec<(String, String)> = keys
+        .iter()
+        .map(|k| (k["account"].as_str().unwrap().to_string(), k["key"].as_str().unwrap().to_string()))
+        .collect();
+    missed_shown(engine, &keys).unwrap();
+}
+
+/// The host held the notice (at start, or through quiet hours) and quit, or
+/// crashed, before showing it: the reminders are recorded as given, so no
+/// look gives them again, but the core says the notice again at every start
+/// until the host says it showed it; then never again (#225 review).
+#[test]
+fn a_notice_held_when_the_host_quit_is_said_again_until_shown() {
+    let file = TempDb::new("held");
+    let path = file.0.clone();
+    let woke = at("2026-10-20T10:30:00Z");
+    let first = {
+        let engine = Arc::new(Engine::new(Box::new(FileHost(path.clone()))).unwrap());
+        put(&engine, &[event("standup", at("2026-10-20T09:00:00Z"), Some(15))]);
+        assert!(look(&engine, &a(), at("2026-10-20T08:30:00Z"), &Madrid).missed.is_none());
+        look(&engine, &a(), woke, &Madrid)
+        // Gone before the host showed it.
+    };
+    assert_eq!(missed(&first), ["standup"]);
+    let engine = Arc::new(Engine::new(Box::new(FileHost(path.clone()))).unwrap());
+    let again = pending_missed_notice(&engine, woke + 300, &Madrid).expect("said again at start");
+    assert_eq!(again["keys"], first.missed.as_ref().unwrap()["keys"]);
+    assert_eq!(look(&engine, &a(), woke + 360, &Madrid), Look::default(), "not given again by a look");
+    // Shown and confirmed: a later start says nothing.
+    shown(&engine, &first);
+    drop(engine);
+    let engine = Arc::new(Engine::new(Box::new(FileHost(path.clone()))).unwrap());
+    assert_eq!(pending_missed_notice(&engine, woke + 600, &Madrid), None);
+    assert_eq!(look(&engine, &a(), woke + 660, &Madrid), Look::default());
+}
+
+/// A notice not yet shown keeps what it had: a later one says the earlier
+/// reminders too, for the host to merge by key, and only those the host
+/// confirms are let go. Removing an account lets its own go.
+#[test]
+fn reminders_not_yet_shown_stay_in_later_notices_until_confirmed() {
+    let engine = engine_with(&[
+        event("first", at("2026-10-20T09:00:00Z"), Some(15)),
+        event("second", at("2026-10-20T13:00:00Z"), Some(15)),
+    ]);
+    assert!(look(&engine, &a(), at("2026-10-20T08:00:00Z"), &Madrid).missed.is_none());
+    let one = look(&engine, &a(), at("2026-10-20T11:00:00Z"), &Madrid);
+    assert_eq!(missed(&one), ["first"]);
+    let both = look(&engine, &a(), at("2026-10-20T15:00:00Z"), &Madrid);
+    assert_eq!(missed(&both), ["second", "first"], "the first is not shown yet");
+    assert_eq!(both.missed.as_ref().unwrap()["count"], 2);
+    shown(&engine, &one);
+    let left = pending_missed_notice(&engine, at("2026-10-20T15:01:00Z"), &Madrid).unwrap();
+    assert_eq!(left["count"], 1);
+    assert_eq!(left["reminders"][0]["event"], "second");
+    when::forget_looks(&engine.db.lock().unwrap(), "a").unwrap();
+    assert_eq!(pending_missed_notice(&engine, at("2026-10-20T15:02:00Z"), &Madrid), None, "with the account");
+}
+
+/// Newest is by when an event starts where the reader is, not by its stored
+/// start: in Tokyo an all-day event on the 21st starts at 15:00Z on the 20th,
+/// before a meeting at 20:00Z (05:00 on the 21st there), though its stored
+/// start, 00:00Z on the 21st, is later (#225 review).
+#[test]
+fn newest_first_is_by_the_local_start_of_each_event() {
+    let engine = engine_with(&[
+        all_day("holiday", "2026-10-21", 0),
+        event("early", at("2026-10-20T20:00:00Z"), Some(15)).with_end(at("2026-10-20T20:30:00Z")),
+    ]);
+    assert!(look(&engine, &a(), at("2026-10-20T14:00:00Z"), &Tokyo).missed.is_none());
+    let woke = look(&engine, &a(), at("2026-10-21T16:00:00Z"), &Tokyo);
+    assert_eq!(missed(&woke), ["early", "holiday"]);
+    let notice = woke.missed.unwrap();
+    assert_eq!(notice["reminders"][0]["at"], at("2026-10-20T20:00:00Z"));
+    assert_eq!(notice["reminders"][1]["at"], at("2026-10-21T00:00:00+09:00"));
+    assert_eq!(notice["reminders"][1]["start"], at("2026-10-21T00:00:00Z"), "the stored start, as before");
+}
+
+/// What is kept for the notice is bounded: a reminder kept unshown longer
+/// than a look looks back is let go when the next missed one is kept.
+#[test]
+fn reminders_kept_unshown_are_let_go_after_the_gap_a_look_looks_into() {
+    let engine = engine_with(&[
+        event("old", at("2026-10-01T09:00:00Z"), Some(15)),
+        event("new", at("2026-10-20T09:00:00Z"), Some(15)),
+    ]);
+    assert!(look(&engine, &a(), at("2026-10-01T08:00:00Z"), &Madrid).missed.is_none());
+    assert_eq!(missed(&look(&engine, &a(), at("2026-10-01T11:00:00Z"), &Madrid)), ["old"]);
+    assert!(look(&engine, &a(), at("2026-10-20T08:00:00Z"), &Madrid).missed.is_none());
+    let later = look(&engine, &a(), at("2026-10-20T11:00:00Z"), &Madrid);
+    assert_eq!(missed(&later), ["new"], "the old one, 19 days unshown, is let go");
+}
+
+/// The phone shows no notice of missed reminders yet: its look leaves them
+/// unrecorded, as before #225, and gives what is still on as always.
+#[test]
+fn the_phones_look_leaves_missed_reminders_as_before() {
+    let engine = engine_with(&[
+        event("over", at("2026-10-20T08:45:00Z"), Some(15)).with_end(at("2026-10-20T09:00:00Z")),
+        event("review", at("2026-10-20T09:00:00Z"), Some(15)),
+    ]);
+    assert!(take_due(&engine, &a(), at("2026-10-20T08:00:00Z")).is_empty());
+    let due = take_due(&engine, &a(), at("2026-10-20T09:10:00Z"));
+    assert_eq!(due.iter().map(|d| d["event"].as_str().unwrap()).collect::<Vec<_>>(), ["review"]);
+    let recorded: i64 = engine
+        .db
+        .lock()
+        .unwrap()
+        .query_row("SELECT COUNT(*) FROM calendar_reminders_fired WHERE event_id LIKE 'over@%'", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(recorded, 0, "not recorded as given");
+}
+
+trait WithEnd {
+    fn with_end(self, end: i64) -> Self;
+}
+impl WithEnd for calendar::Event {
+    fn with_end(self, end: i64) -> Self {
+        calendar::Event { end, ..self }
+    }
 }
 
 #[test]
@@ -256,8 +644,8 @@ fn a_paused_accounts_missed_reminders_are_not_saved_up() {
 /// closed, then a sleep and a resume, then a resync: each once.
 #[test]
 fn no_reminder_fires_twice_across_a_restart_followed_by_a_resume() {
-    let path = std::env::temp_dir().join(format!("oreneta-reminders-{}.db", std::process::id()));
-    let _ = std::fs::remove_file(&path);
+    let file = TempDb::new("reminders");
+    let path = file.0.clone();
     let events = [
         event("standup", at("2026-10-20T09:00:00Z"), Some(15)),
         calendar::Event { end: at("2026-10-20T11:00:00Z"), ..event("review", at("2026-10-20T10:00:00Z"), Some(30)) },
@@ -283,10 +671,6 @@ fn no_reminder_fires_twice_across_a_restart_followed_by_a_resume() {
         .query_row("SELECT COUNT(*) FROM calendar_reminders_fired", [], |row| row.get(0))
         .unwrap();
     assert_eq!(given, 2);
-    drop(engine);
-    for suffix in ["", "-wal", "-shm"] {
-        let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
-    }
 }
 
 // ---- Time zones (#209) ------------------------------------------------------
@@ -504,7 +888,7 @@ fn an_all_day_at_the_start_reminder_rings_at_the_local_midnight() {
 
 /// An event with no length counts as on for the minute it starts, so its
 /// "at the start" reminder is given by the look in that minute; one that
-/// comes later has missed it.
+/// comes later has missed it, and says so in the missed notice (#225).
 #[test]
 fn a_zero_length_events_at_the_start_reminder_is_given_in_its_first_minute() {
     let start = at("2026-10-20T09:00:00Z");
@@ -515,7 +899,9 @@ fn a_zero_length_events_at_the_start_reminder_is_given_in_its_first_minute() {
 
     let late = engine_with(&[deadline]);
     assert!(look(&late, &a(), start - 30, &Madrid).reminders.is_empty());
-    assert!(look(&late, &a(), start + 60, &Madrid).reminders.is_empty(), "its minute is over");
+    let after = look(&late, &a(), start + 60, &Madrid);
+    assert!(after.reminders.is_empty(), "its minute is over");
+    assert_eq!(missed(&after), ["deadline"]);
 }
 
 // ---- What a reminder says (#209 review) -----------------------------------------

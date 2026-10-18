@@ -1,3 +1,5 @@
+import { intlLocale } from './i18n'
+
 // Pure date helpers shared across the UI and state layers. The sidecar sends
 // `date` as Unix epoch seconds (0 when unknown); these format it for display in
 // the user's local time.
@@ -14,13 +16,13 @@ export function formatThreadDate(epochSeconds: number): string {
   if (!date) return ''
   const now = new Date()
   if (date.toDateString() === now.toDateString()) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+    return date.toLocaleTimeString(intlLocale(), { hour: '2-digit', minute: '2-digit', hour12: false })
   }
   const options: Intl.DateTimeFormatOptions =
     date.getFullYear() === now.getFullYear()
       ? { month: 'short', day: 'numeric' }
       : { month: 'short', day: 'numeric', year: 'numeric' }
-  return date.toLocaleDateString([], options)
+  return date.toLocaleDateString(intlLocale(), options)
 }
 
 /**
@@ -34,8 +36,8 @@ export function formatDeferredWhen(at: number, now = new Date()): string {
   const date = new Date(at * 1000)
   const sameDay = date.toDateString() === now.toDateString()
   return sameDay
-    ? date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-    : date.toLocaleString(undefined, {
+    ? date.toLocaleTimeString(intlLocale(), { hour: '2-digit', minute: '2-digit' })
+    : date.toLocaleString(intlLocale(), {
         weekday: 'short',
         hour: '2-digit',
         minute: '2-digit',
@@ -63,5 +65,5 @@ export function formatDueDate(dueAtEpochSeconds: number, now = new Date()): stri
     date.getFullYear() === now.getFullYear()
       ? { month: 'short', day: 'numeric' }
       : { month: 'short', day: 'numeric', year: 'numeric' }
-  return date.toLocaleDateString(undefined, options)
+  return date.toLocaleDateString(intlLocale(), options)
 }

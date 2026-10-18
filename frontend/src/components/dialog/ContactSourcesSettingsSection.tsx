@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { BookUser, RefreshCw, Trash2 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { accounts$ } from '../../states/accounts'
 import { confirmAction, showToast } from '../../states/ui'
 import {
   addBook,
   contactSources$,
   discoverBooks,
+  isExchangeFolderBook,
   loadContactSources,
   removeSource,
   syncExchangeContacts,
@@ -113,7 +114,7 @@ export function ContactSourcesSettingsSection() {
               >
                 <BookUser size={16} className="shrink-0 text-secondary" strokeWidth={1.75} />
                 <div className="min-w-0 flex-1">
-                  <span className="block truncate text-ui font-semibold">{source.name || source.url}</span>
+                  <span dir="auto" className="block truncate text-ui font-semibold">{source.name || source.url}</span>
                   {/* What went wrong, where it went wrong, rather than a red
                       dot somewhere else. */}
                   <span
@@ -122,7 +123,7 @@ export function ContactSourcesSettingsSection() {
                     {source.lastError
                       ? source.lastError
                       : source.lastSyncAt
-                        ? t('contacts.lastSynced', { when: new Date(source.lastSyncAt * 1000).toLocaleString() })
+                        ? t('contacts.lastSynced', { when: new Date(source.lastSyncAt * 1000).toLocaleString(intlLocale()) })
                         : t('contacts.neverSynced')}
                   </span>
                 </div>
@@ -143,26 +144,34 @@ export function ContactSourcesSettingsSection() {
                 >
                   <RefreshCw size={14} strokeWidth={1.75} />
                 </button>
-                <button
-                  type="button"
-                  title={t('contacts.remove')}
-                  aria-label={t('contacts.remove')}
-                  disabled={busy}
-                  onClick={() => {
-                    void confirmAction({
-                      title: t('contacts.removeTitle'),
-                      message: t('contacts.removeMessage', { name: source.name || source.url }),
-                      confirmLabel: t('contacts.remove'),
-                      cancelLabel: t('buttons.cancel'),
-                      tone: 'danger',
-                    }).then((yes) => {
-                      if (yes) void removeSource(source.id)
-                    })
-                  }}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-danger-soft hover:text-danger cursor-pointer disabled:opacity-40"
-                >
-                  <Trash2 size={14} strokeWidth={1.75} />
-                </button>
+                {/* A contact folder under an Exchange account's Contacts
+                    folder comes and goes with the account's book (ADR-0066). */}
+                {!isExchangeFolderBook(source) && (
+                  <button
+                    type="button"
+                    title={t('contacts.remove')}
+                    aria-label={t('contacts.remove')}
+                    disabled={busy}
+                    onClick={() => {
+                      void confirmAction({
+                        title: t('contacts.removeTitle'),
+                        message:
+                          source.kind === 'exchange' &&
+                          sources.some((other) => isExchangeFolderBook(other) && other.account === source.account)
+                            ? t('contacts.removeExchangeMessage', { name: source.name || source.url })
+                            : t('contacts.removeMessage', { name: source.name || source.url }),
+                        confirmLabel: t('contacts.remove'),
+                        cancelLabel: t('buttons.cancel'),
+                        tone: 'danger',
+                      }).then((yes) => {
+                        if (yes) void removeSource(source.id)
+                      })
+                    }}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-danger-soft hover:text-danger cursor-pointer disabled:opacity-40"
+                  >
+                    <Trash2 size={14} strokeWidth={1.75} />
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -184,7 +193,7 @@ export function ContactSourcesSettingsSection() {
             key={account.id}
             className="flex items-center justify-between gap-2 rounded-control border border-border bg-panel px-3 py-2"
           >
-            <span className="min-w-0 truncate text-ui text-primary">{account.email}</span>
+            <span dir="auto" className="min-w-0 truncate text-ui text-primary">{account.email}</span>
             <button
               type="button"
               disabled={busy}
@@ -247,9 +256,9 @@ export function ContactSourcesSettingsSection() {
                 type="button"
                 disabled={busy}
                 onClick={() => void keep(book)}
-                className="flex items-center justify-between gap-2 rounded-control-sm px-2 py-1.5 text-left text-ui transition-colors hover:bg-hover cursor-pointer disabled:opacity-50"
+                className="flex items-center justify-between gap-2 rounded-control-sm px-2 py-1.5 text-start text-ui transition-colors hover:bg-hover cursor-pointer disabled:opacity-50"
               >
-                <span className="truncate font-semibold text-primary">{book.name}</span>
+                <span dir="auto" className="truncate font-semibold text-primary">{book.name}</span>
                 <span className="truncate text-caption text-secondary">{book.url}</span>
               </button>
             ))}

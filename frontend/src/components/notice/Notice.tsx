@@ -55,7 +55,7 @@ export function Notice({
         {title && <p className="font-semibold">{title}</p>}
         <div className={clsx('text-secondary', title && 'mt-0.5')}>{children}</div>
       </div>
-      {action && <div className="ml-auto max-w-full shrink-0">{action}</div>}
+      {action && <div className="ms-auto max-w-full shrink-0">{action}</div>}
     </div>
   )
 }

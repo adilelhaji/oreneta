@@ -199,14 +199,14 @@ export function KanbanView({ boardId }: { boardId: string }) {
 
   if (accounts.length === 0) {
     return (
-      <section className="flex flex-1 border-r border-border bg-chats">
+      <section data-region="content" className="flex flex-1 border-e border-border bg-chats">
         <EmptyState title={t('empty.welcomeTitle')} text={t('empty.kanbanSetupText')} />
       </section>
     )
   }
 
   return (
-    <section className="flex flex-1 min-w-0 flex-col border-r border-border bg-chats max-[600px]:w-full">
+    <section data-region="content" className="flex flex-1 min-w-0 flex-col border-e border-border bg-chats max-[600px]:w-full">
       <div className="@container relative z-30 flex min-h-16 shrink-0 items-center gap-3 border-b border-border/50 bg-header px-4 py-3">
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           {board?.avatarUrl ? (
@@ -229,7 +229,7 @@ export function KanbanView({ boardId }: { boardId: string }) {
           >
             <div className="relative h-full min-w-0 flex-1">
               <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary"
+                className="absolute start-3 top-1/2 -translate-y-1/2 text-secondary"
                 size={14}
                 strokeWidth={1.75}
               />
@@ -243,7 +243,7 @@ export function KanbanView({ boardId }: { boardId: string }) {
                   else setSearchOpen(false)
                 }}
                 placeholder={t('kanban.searchBoard')}
-                className="h-full w-full border-0 bg-transparent py-1.5 pl-9.5 pr-8 text-xs text-primary outline-none placeholder-secondary transition-all"
+                className="h-full w-full border-0 bg-transparent py-1.5 ps-9.5 pe-8 text-xs text-primary outline-none placeholder-secondary transition-all"
               />
               {searchQuery && (
                 <button
@@ -251,7 +251,7 @@ export function KanbanView({ boardId }: { boardId: string }) {
                     kanban$.searchQuery.set('')
                     searchInputRef.current?.focus()
                   }}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-secondary hover:text-primary cursor-pointer transition-colors"
+                  className="absolute end-2.5 top-1/2 -translate-y-1/2 text-secondary hover:text-primary cursor-pointer transition-colors"
                   title={t('common.clearSearch')}
                 >
                   <X size={14} strokeWidth={1.75} />

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  Entitlements for the meron-core sidecar inside the App Store bundle.
+  Entitlements for the oreneta-core sidecar inside the App Store bundle.
 
   com.apple.security.inherit means the child adopts the parent's sandbox exactly
   as it stands at exec time, which is how it gets network access for IMAP/SMTP

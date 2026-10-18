@@ -66,7 +66,7 @@
       "section": "Appearance/Lists; Mail/Conversations",
       "outcome": "New profiles open conventional list and reader; explicit old modes remain",
       "status": "implemented-unverified",
-      "present": "#84 uses table/compact/traditional when preferences are absent; preserves explicit saved values; native certification pending",
+      "present": "#84 uses table/compact/traditional when preferences are absent; since #283 an absent list view is automatic (two-line rows below 520 px of list, the table above) and the list starts at 360 px; preserves explicit saved values; native certification pending",
       "code": "frontend/src/states/settings.ts",
       "acceptance": "Test missing vs saved preferences and production read/reply/select workflow",
       "platform": "Windows desktop",
@@ -79,6 +79,14 @@
           {
             "sha": "d5a8f977513fe8f412fb60cefc41a27f95fa8f75",
             "result": "https://github.com/adilelhaji/oreneta/actions/runs/34327478903"
+          },
+          {
+            "sha": "d70e518eafce9e7afd4ff2ee87af74db2578ab56",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "d70e518eafce9e7afd4ff2ee87af74db2578ab56",
+            "result": "frontend/baseline/autoListView.test.tsx"
           }
         ],
         "native": [],
@@ -104,6 +112,14 @@
           {
             "sha": "d5a8f977513fe8f412fb60cefc41a27f95fa8f75",
             "result": "https://github.com/adilelhaji/oreneta/actions/runs/34327478903"
+          },
+          {
+            "sha": "7d1d3f7b2fc59db86390f5214a3aa836446bfb3e",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "7d1d3f7b2fc59db86390f5214a3aa836446bfb3e",
+            "result": "frontend/src/lib/regions.test.ts"
           }
         ],
         "native": [],
@@ -137,6 +153,10 @@
           {
             "sha": "11af73db33e86be3da90036aaf5dbfdc89770879",
             "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "7d1d3f7b2fc59db86390f5214a3aa836446bfb3e",
+            "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
         "native": [],
@@ -149,7 +169,7 @@
       "section": "Appearance/Lists",
       "outcome": "Unread, open, focused and multi-selected rows have distinct meaning",
       "status": "implemented-unverified",
-      "present": "Table rows keep opened edge, unread dot/bold, checkbox tint and focus outline as separate signals; arrivals never join a bulk selection; keyboard/pointer production-entry cases in both cobalt themes (#154, #186); card-list polish and native evidence pending",
+      "present": "Table rows keep opened edge, unread dot/bold, checkbox tint and focus outline as separate signals; arrivals never join a bulk selection; keyboard/pointer production-entry cases in both cobalt themes (#154, #186); since #283 the default narrow list draws two-line rows (open row bg-active + 3 px start edge and aria-current; unread and selection tints unchanged), with open/select production-entry cases; card-list polish and native evidence pending",
       "code": "frontend/src/components/threads/ThreadTable.tsx",
       "acceptance": "Production-entry keyboard/pointer scenarios in both themes; reviewed selection excludes new arrivals",
       "platform": "Windows desktop",
@@ -252,7 +272,7 @@
       "section": "General/Shortcuts; Swipe",
       "outcome": "Custom shortcuts and touch actions without accidental destructive gestures",
       "status": "partial",
-      "present": "Keyboard shortcuts can be reassigned in the shortcuts dialog, including zoom; no touch/swipe actions exist",
+      "present": "Keyboard shortcuts can be reassigned in the shortcuts dialog, including zoom and the F6 / Shift+F6 region shortcuts (#306, ADR-0068; whether F6 reaches the page in WebView2 and WebKitGTK is pending native N4 evidence); no touch/swipe actions exist",
       "code": "frontend/src/lib/shortcuts.ts",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -265,6 +285,14 @@
           {
             "sha": "11af73db33e86be3da90036aaf5dbfdc89770879",
             "result": "frontend/src/lib/shortcuts.test.ts"
+          },
+          {
+            "sha": "7d1d3f7b2fc59db86390f5214a3aa836446bfb3e",
+            "result": "frontend/src/lib/shortcuts.test.ts"
+          },
+          {
+            "sha": "7d1d3f7b2fc59db86390f5214a3aa836446bfb3e",
+            "result": "frontend/src/lib/regions.test.ts"
           }
         ],
         "native": [],
@@ -433,7 +461,7 @@
       "section": "General/Folders",
       "outcome": "Folder rules, favorites, colors and account-scoped operations",
       "status": "partial",
-      "present": "Folder navigation and creation, favorites from any account with ordering, named contrast-checked folder colors, and moving folders by drag or menu with one IMAP RENAME (ADR-0050) are tested, including a real maddy server; moving folders on Microsoft Graph by folder id with recoverable uncertain outcomes (ADR-0057) is tested on the Graph fixtures; Exchange (EWS) folders named by path, with everything kept under the old names (cache, rules, tasks, snoozes, archiving, favorites, colors, board columns, saved searches) following them, and moved with MoveFolder after a fresh listing, never repeated, a lost answer settled by folder id on the next listing (ADR-0058), tested on recorded SOAP; no Microsoft 365 or Exchange provider evidence exists",
+      "present": "Folder navigation and creation, favorites from any account with ordering, named contrast-checked folder colors, and moving folders by drag or menu with one IMAP RENAME (ADR-0050) are tested, including a real maddy server; moving folders on Microsoft Graph by folder id with recoverable uncertain outcomes (ADR-0057) is tested on the Graph fixtures; Exchange (EWS) folders named by path, with everything kept under the old names (cache, rules, tasks, snoozes, archiving, favorites, colors, board columns, saved searches) following them, and moved with MoveFolder after a fresh listing, never repeated, a lost answer settled by folder id on the next listing (ADR-0058), tested on recorded SOAP; hiding folders and their subfolders from the folder tree and showing them again, as a local preference that never reaches a server, so hidden folders keep syncing, with the search options saying whether hidden folders are searched (#273), is tested on the navigation, its preferences and the search options; no Microsoft 365 or Exchange provider evidence exists",
       "code": "frontend/src/components/sidenav/MailNavigation.tsx",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -490,6 +518,22 @@
           {
             "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
             "result": "frontend/src/states/folderMove.test.ts"
+          },
+          {
+            "sha": "bbd6fbf15467ea31e62ee91b9e2f789f6ad830d8",
+            "result": "frontend/src/lib/folderHiding.test.ts"
+          },
+          {
+            "sha": "bbd6fbf15467ea31e62ee91b9e2f789f6ad830d8",
+            "result": "frontend/src/states/folderPrefs.test.ts"
+          },
+          {
+            "sha": "bbd6fbf15467ea31e62ee91b9e2f789f6ad830d8",
+            "result": "frontend/src/components/sidenav/MailNavigation.test.tsx"
+          },
+          {
+            "sha": "bbd6fbf15467ea31e62ee91b9e2f789f6ad830d8",
+            "result": "frontend/src/components/threads/SearchBuilder.test.tsx"
           }
         ],
         "native": [],
@@ -568,7 +612,7 @@
       "section": "Mail/Templates and Signatures; QuickText",
       "outcome": "Templates, account signatures and safe placeholder expansion",
       "status": "implemented-unverified",
-      "present": "Templates with escaped plain text (#40), per-account signatures and searchable QuickText with placeholders and a cursor mark (#88) are implemented and tested; native evidence pending",
+      "present": "Templates with escaped plain text (#40), per-account signatures and searchable QuickText with placeholders and a cursor mark (#88) are implemented and tested; a per-account choice of where the signature goes in replies and forwards (with the person's own text, above or below the quoted original, #277) is implemented and tested; native evidence pending",
       "code": "frontend/src/lib/placeholders.ts",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -593,6 +637,18 @@
           {
             "sha": "fe72de7c777718b2649969d18d40be84b96bfd0c",
             "result": "frontend/src/components/dialog/SignatureSettingsCard.test.tsx"
+          },
+          {
+            "sha": "cdf054e2fd7f2d0720c6e7d0603c2ad3b47774e8",
+            "result": "frontend/src/states/replyForwardCompose.test.ts"
+          },
+          {
+            "sha": "cdf054e2fd7f2d0720c6e7d0603c2ad3b47774e8",
+            "result": "frontend/src/components/dialog/SignatureSettingsCard.test.tsx"
+          },
+          {
+            "sha": "cdf054e2fd7f2d0720c6e7d0603c2ad3b47774e8",
+            "result": "frontend/src/components/composer/Composer.test.tsx"
           }
         ],
         "native": [],
@@ -670,9 +726,9 @@
       "section": "Mail/Blacklist and whitelist",
       "outcome": "Repeat-safe correction and explainable block/allow rules",
       "status": "implemented-unverified",
-      "present": "Idempotent per-message spam judgments preserved across moves (ADR-0005), sender block/allow lists and rules run exactly as previewed with no automatic filing (ADR-0028) are tested; native evidence pending",
+      "present": "Idempotent per-message spam judgments preserved across moves (ADR-0005), undoing a junk or not-junk change reverting exactly the judgment it recorded and not a later one (known limits in ADR-0005), for one conversation or a selection (#254), sender block/allow lists and rules run exactly as previewed with no automatic filing (ADR-0028) are tested; native evidence pending",
       "code": "meron-core/src/spam",
-      "acceptance": "Repeated identical judgments do not inflate evidence; replacement retracts the prior sender/subject contribution; missing threads and account isolation are safe; normal MOVE transfers stable-identity judgments before source deletion; no automatic filing",
+      "acceptance": "Repeated identical judgments do not inflate evidence; replacement retracts the prior sender/subject contribution; missing threads and account isolation are safe; normal MOVE transfers stable-identity judgments before source deletion; undoing a junk or not-junk change restores the sender/subject counts to their prior state and keeps a later judgment of the same message or of another message from the same sender; no automatic filing",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
       "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
@@ -695,6 +751,18 @@
           {
             "sha": "54628c360106a70b9bf88cea96ff341c278c8c57",
             "result": "frontend/src/components/dialog/SpamAndRuns.test.tsx"
+          },
+          {
+            "sha": "bdda62af54326dbf8f6af44f9470c3322ebfadde",
+            "result": "meron-core/src/store/tests.rs"
+          },
+          {
+            "sha": "bdda62af54326dbf8f6af44f9470c3322ebfadde",
+            "result": "spam_test.go"
+          },
+          {
+            "sha": "bdda62af54326dbf8f6af44f9470c3322ebfadde",
+            "result": "frontend/src/states/junkUndo.test.ts"
           }
         ],
         "native": [],
@@ -909,7 +977,7 @@
       "section": "Calendar/General; Weather",
       "outcome": "Calendar configuration and weather availability/privacy policy",
       "status": "partial",
-      "present": "Agenda/week/month views, local/Google/Exchange/CalDAV calendars and .ics; first day of week from the region or chosen, week numbers, shaded work hours and days, work-week view and new-event defaults (ADR-0051) are tested; weather is absent pending an owner decision",
+      "present": "Agenda/week/month views, local/Google/Exchange/CalDAV calendars and .ics; first day of week from the region or chosen, week numbers, shaded work hours and days, work-week view and new-event defaults (ADR-0051) are tested; in the day, work-week and week views events are moved and resized by dragging (15-minute grid, Escape cancels) or from the keyboard, dropped on a new mini calendar, and created by a dragged range, a slot's menu or the keyboard slot, with series asked about, read-only calendars refused and the core's conflict rules kept (#266, #267; Exchange events refused for grid moves pending an owner decision on the core's AlwaysOverwrite), tested in unit and Chromium e2e; weather is absent pending an owner decision",
       "code": "meron-core/src/calendar/mod.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -938,6 +1006,18 @@
           {
             "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
             "result": "frontend/src/components/calendar/WeekStart.test.tsx"
+          },
+          {
+            "sha": "809d3404f1d97f1fa57f3936c596aa547ba0a443",
+            "result": "frontend/src/lib/calendarDrag.test.ts"
+          },
+          {
+            "sha": "809d3404f1d97f1fa57f3936c596aa547ba0a443",
+            "result": "frontend/src/components/calendar/CalendarInteractions.test.tsx"
+          },
+          {
+            "sha": "809d3404f1d97f1fa57f3936c596aa547ba0a443",
+            "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
         "native": [],
@@ -950,7 +1030,7 @@
       "section": "Contacts/General",
       "outcome": "Names, fields, groups, duplicates and provenance in contact preferences",
       "status": "partial",
-      "present": "Local and CardDAV editing that never overwrites remote changes (ADR-0012), vCard import/export, reviewed duplicate links; first/last name display and sort preferences, local and CardDAV contact groups (vCard 4 and Apple forms), read-only Google labels and group expansion in the composer (ADR-0052), tested including Radicale; Exchange (EWS) Contacts folder read only with its distribution lists read and edited as groups, never overwriting a remote change (ChangeKey, NeverOverwrite) and keeping members who are no contact (ADR-0058), tested on recorded SOAP; Graph contact groups, Exchange contact subfolders and editing Exchange people absent",
+      "present": "Local and CardDAV editing that never overwrites remote changes (ADR-0012), vCard import/export, reviewed duplicate links; first/last name display and sort preferences, local and CardDAV contact groups (vCard 4 and Apple forms), read-only Google labels and group expansion in the composer (ADR-0052), tested including Radicale; Exchange (EWS) Contacts folder with its distribution lists read and edited as groups, never overwriting a remote change (ChangeKey, NeverOverwrite) and keeping members who are no contact (ADR-0058), tested on recorded SOAP; Exchange contact folders under Contacts read as address books of their own, and Exchange people created, edited and deleted from the change key read, never overwriting a remote change, sending only what changed (ADR-0066), tested on recorded SOAP; Graph contacts and contact groups absent",
       "code": "meron-core/src/store/local_people.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -995,6 +1075,18 @@
           {
             "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
             "result": "frontend/src/components/people/ExchangeGroups.test.tsx"
+          },
+          {
+            "sha": "4a27ae2bf901015f9d8e73ed214153ef6d1fb99c",
+            "result": "meron-core/src/exchange/book/tests.rs"
+          },
+          {
+            "sha": "4a27ae2bf901015f9d8e73ed214153ef6d1fb99c",
+            "result": "meron-core/src/pim/exchange_book/tests.rs"
+          },
+          {
+            "sha": "4a27ae2bf901015f9d8e73ed214153ef6d1fb99c",
+            "result": "frontend/src/components/people/ExchangeContacts.test.tsx"
           }
         ],
         "native": [],
@@ -1126,7 +1218,7 @@
       "section": "Chat/General",
       "outcome": "Chat presence/history/file preferences and account isolation",
       "status": "partial",
-      "present": "XMPP direct chat with archive, carbons, receipts and stream management (ADR-0036), plus group chats (MUC) and file sharing tested against a real Prosody (ADR-0044); own presence and status text (available, away, busy, invisible only where the server offers XEP-0186), contacts' presence by permission, @mentions with completion and highlighting, native notifications for direct messages and mentions that respect do not disturb and quiet hours, and private messages to room occupants (ADR-0055, #208), with Windows native delivery and the XEP-0186 invisible path not yet verified; managing who may see your status, auto-away on idle, per-conversation mute, an unread-mentions counter and other providers are absent",
+      "present": "XMPP direct chat with archive, carbons, receipts and stream management (ADR-0036), plus group chats (MUC) and file sharing tested against a real Prosody (ADR-0044); own presence and status text (available, away, busy, invisible only where the server offers XEP-0186), contacts' presence by permission, @mentions with completion and highlighting, native notifications for direct messages and mentions that respect do not disturb and quiet hours, and private messages to room occupants (ADR-0055, #208), with Windows native delivery and the XEP-0186 invisible path not yet verified; who may see the person's status from the server's roster (unknown until it answers) with stopping sharing after a confirmation, muting a direct, private or group conversation (no notifications, mentions included, still unread) and unread-mention counts per group and per account (ADR-0064, #256); auto-away on idle (ADR-0065 option A accepted, not implemented yet, #265) and other providers are absent",
       "code": "meron-core/src/chat/mod.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -1171,6 +1263,14 @@
           {
             "sha": "e92fe913ccd702d21f851bb0fa79781cfd029ef0",
             "result": "notify_chat_test.go"
+          },
+          {
+            "sha": "3bd15c9cd50f1905f512441d2647a828b3a85c51",
+            "result": "meron-core/src/chat/tests.rs"
+          },
+          {
+            "sha": "3bd15c9cd50f1905f512441d2647a828b3a85c51",
+            "result": "frontend/src/components/messaging/MessagingView.test.tsx"
           }
         ],
         "native": [],
@@ -1253,6 +1353,10 @@
           {
             "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
             "result": "frontend/src/lib/paneResize.test.ts"
+          },
+          {
+            "sha": "7d1d3f7b2fc59db86390f5214a3aa836446bfb3e",
+            "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
         "native": [],
@@ -1348,7 +1452,7 @@
       "section": "General/Language",
       "outcome": "Full locale coverage, long labels, RTL/CJK and native input",
       "status": "partial",
-      "present": "Interface catalogued in 19 languages including Arabic, Japanese and Chinese, with placeholder parity checks and remaining English strings translated; no right-to-left layout and no native IME evidence",
+      "present": "Interface catalogued in 19 languages including Arabic, Japanese and Chinese, with placeholder parity checks and remaining English strings translated. Arabic lays the interface out right to left (#226, ADR-0061): logical sides guarded by a test, mirrored icons, menus and arrow keys in reading order; subjects, names, addresses, bodies and composers keep their own direction; received mail gets per-block direction and outgoing mail declares its right-to-left blocks. Production-entry checks in Arabic cover the mailbox, reader and composer at 600/1024/1440 px in light and dark at 100% and the app's 200% zoom, and people, tasks, notes, calendar, chat and settings at 600/1024 px in light and dark, with axe; plus a context menu at the right edge and switching back to English; F6 / Shift+F6 go round the regions in the same order as in English, and the axe region rules pass on the mailbox and every module (#306). Remaining: native IME and native Windows (N4) evidence, kanban column dragging in right to left checked natively, a per-paragraph direction override in the composer, and lines mixing interface and people's text outside the reviewed screens",
       "code": "scripts/i18n/catalog.ts",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -1365,6 +1469,42 @@
           {
             "sha": "2773876f4afe8c84f9f0224f8a1ccc2213b47239",
             "result": "frontend/baseline/settingsDiscovery.test.tsx"
+          },
+          {
+            "sha": "13bb186a6999010f7aabc573c6e1e5b48240c9f6",
+            "result": "frontend/src/lib/physicalDirection.test.ts"
+          },
+          {
+            "sha": "13bb186a6999010f7aabc573c6e1e5b48240c9f6",
+            "result": "frontend/src/components/readingDirection.test.tsx"
+          },
+          {
+            "sha": "13bb186a6999010f7aabc573c6e1e5b48240c9f6",
+            "result": "frontend/src/components/mixedDirection.test.tsx"
+          },
+          {
+            "sha": "c6711442c968e03054378a15a8bba7a531549e3a",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "c73ae544ed5e04186626a5de53436d490a4b984c",
+            "result": "frontend/src/components/composer/composerHelpers.test.ts"
+          },
+          {
+            "sha": "c73ae544ed5e04186626a5de53436d490a4b984c",
+            "result": "frontend/src/lib/direction.test.ts"
+          },
+          {
+            "sha": "e6aff0bb9f3c2bdfdbd561d32e0fe95c0309ebdc",
+            "result": "frontend/src/components/mixedDirection.test.tsx"
+          },
+          {
+            "sha": "d4c50d840cf51cf7e8513b83b80dd6fcee8ba711",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "7d1d3f7b2fc59db86390f5214a3aa836446bfb3e",
+            "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
         "native": [],
@@ -1410,7 +1550,7 @@
       "section": "General/Reminders",
       "outcome": "Event reminders survive restart, suspend and timezone changes",
       "status": "implemented-unverified",
-      "present": "Event reminders are stored, fire once, fire again when the event moves and resume after restart; a reminder that came due during a suspend or while the app was closed fires once on the next look while its event is on, the watch looks at once on resume, all-day reminders follow the local midnight of the current zone, timed ones keep their instant and floating ones are re-read after a zone change (ADR-0056), all with automated tests including runs under other TZ values; native Windows suspend and zone-change evidence remains",
+      "present": "Event reminders are stored, fire once, fire again when the event moves and resume after restart; a reminder that came due during a suspend or while the app was closed fires once on the next look while its event is on, and one whose event ended meanwhile is shown once in a single grouped desktop notification of missed reminders, held through start-up and quiet hours rather than dropped, that opens the calendar on the most recent missed day or its week (#225; the phone does not show them yet), the watch looks at once on resume, all-day reminders follow the local midnight of the current zone, timed ones keep their instant and floating ones are re-read after a zone change (ADR-0056), all with automated tests including runs under other TZ values; native Windows suspend and zone-change evidence remains",
       "code": "meron-core/src/calendar/reminders.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -1435,6 +1575,18 @@
           {
             "sha": "52fd8469e3238841127ac244891d422c8d4a075d",
             "result": "notify_quiet_test.go"
+          },
+          {
+            "sha": "c66a63e916eeb101d872ab3eded340d9c61cbf14",
+            "result": "meron-core/src/pim/reminders/tests.rs"
+          },
+          {
+            "sha": "c66a63e916eeb101d872ab3eded340d9c61cbf14",
+            "result": "notify_quiet_test.go"
+          },
+          {
+            "sha": "c66a63e916eeb101d872ab3eded340d9c61cbf14",
+            "result": "frontend/src/states/calendarNotification.test.ts"
           }
         ],
         "native": [],

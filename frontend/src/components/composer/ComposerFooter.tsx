@@ -147,7 +147,7 @@ export function ComposerFooter({
           {rich ? t('composer.modes.richText') : t('composer.modes.plainText')}
         </button>
       </div>
-      <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-3">
+      <div className="ms-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-3">
         {saveStatus === 'saving' && (
           <span className="flex items-center gap-1.5 text-caption text-secondary">
             <RefreshCw size={14} className="animate-spin" strokeWidth={1.75} />

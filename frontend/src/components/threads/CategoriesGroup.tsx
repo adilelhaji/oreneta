@@ -16,6 +16,7 @@ import {
   type ConditionOp,
 } from '../../states/categories'
 import { SettingsGroup } from '../dialog/AccountSettingsRows'
+import { handleGroupArrowKeys } from '../../lib/direction'
 
 const FIELDS: ConditionField[] = ['from', 'to', 'cc', 'recipient', 'subject']
 const OPS: ConditionOp[] = ['contains', 'notContains', 'is', 'startsWith', 'endsWith']
@@ -131,6 +132,8 @@ export function CategoriesGroup() {
               role="radiogroup"
               aria-label={t('categories.colour', { defaultValue: 'Colour' })}
               className="flex gap-1"
+              // Arrows pick the next colour, sideways in reading order (ADR-0061).
+              onKeyDown={(event) => handleGroupArrowKeys(event, '[role="radio"]')}
             >
               {COLOURS.map((colour) => (
                 <button

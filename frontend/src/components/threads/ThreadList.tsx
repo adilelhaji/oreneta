@@ -74,7 +74,10 @@ import { ThreadTable, appliedListSort } from './ThreadTable'
 import { MailboxColumns } from './MailboxColumns'
 import { BulkActionBar } from './BulkActionBar'
 import { ThreadListResizer } from '../resizer/PaneResizers'
+import { useElementAtLeast } from '../resizer/useElementWidth'
+import { AUTO_TABLE_MIN_WIDTH, resolveListView } from './listView'
 import { accountGroups$ } from '../../states/accountGroups'
+import { endAlignedX } from '../../lib/direction'
 
 type ThreadListProps = {
   width?: number
@@ -98,6 +101,13 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
   const filteredThreads = useValue(getFilteredThreads)
   const filters = useValue(ui$.filters)
   const listView = useValue(settings$.listView)
+  const storedWidth = useValue(settings$.threadListWidth)
+  // The automatic view follows the width the list is drawn at, not the one
+  // remembered: a narrow window squeezes a wide list below it (#283). Only
+  // measured for that view, and only crossing the threshold re-renders.
+  const drawnWide = useElementAtLeast(listRef, AUTO_TABLE_MIN_WIDTH, listView === 'auto')
+  const drawnView = resolveListView(listView, drawnWide, width ?? storedWidth)
+  const narrowAuto = listView === 'auto' && drawnView === 'cards'
   const listSort = useValue(settings$.listSort)
   const threadsPagination = useValue(mail$.threadsPagination)
   const threadsCursor = useValue(mail$.threadsCursor)
@@ -347,9 +357,11 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
     <section
       ref={listRef}
       data-thread-list
+      data-list-view={drawnView}
+      data-region="content"
       // The remembered width is a preference, not a claim on the window: on a
       // narrow one the list gives way (down to 280px) before the reader does.
-      className={`relative flex w-full shrink-0 flex-col border-r border-border bg-chats min-[769px]:w-[var(--thread-list-width)] min-[769px]:min-w-[280px] min-[769px]:shrink ${
+      className={`relative flex w-full shrink-0 flex-col border-e border-border bg-chats min-[769px]:w-[var(--thread-list-width)] min-[769px]:min-w-[280px] min-[769px]:shrink ${
         mobilePane === 'threads' ? 'max-[769px]:flex' : 'max-[769px]:hidden'
       }`}
       onKeyDownCapture={(event) => {
@@ -365,7 +377,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
       ) : (
         // Less padding on the right than the left: the trailing icon buttons carry
         // their own, so px-4 on both sides left the row lopsided.
-        <div className="flex h-16 shrink-0 flex-row items-center gap-3 pl-4 pr-2 border-b border-border bg-white dark:bg-[#0f172a]/40">
+        <div className="flex h-16 shrink-0 flex-row items-center gap-3 ps-4 pe-2 border-b border-border bg-white dark:bg-[#0f172a]/40">
           <div className="flex items-center gap-2 w-full">
             {/* Current folder, doubling as a picker: switching here retargets the
               list the same way it retargets a kanban column. Capped so a deep
@@ -375,13 +387,13 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
                 accountId={selectedAccount}
                 folderId={selectedFolder}
                 label={folderLabel({ accountId: selectedAccount, folderId: selectedFolder }, folders, accounts, t)}
-                labelClassName="-ml-2 max-w-[40%] shrink-0 text-xs font-bold"
+                labelClassName="-ms-2 max-w-[40%] shrink-0 text-xs font-bold"
                 onSelect={(nextFolderId) => ui$.selectedFolder.set(nextFolderId)}
               />
             )}
             <div className="relative min-w-0 flex-1">
               <Search
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-secondary"
+                className="absolute start-2.5 top-1/2 -translate-y-1/2 text-secondary"
                 size={16}
                 strokeWidth={1.75}
               />
@@ -402,9 +414,9 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
                 // whether this search can do more than words.
                 title={isRSSAccount ? undefined : t('search.operatorsHint')}
                 className={clsx(
-                  'w-full rounded-control bg-hover py-2 pl-8 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent focus:border-transparent transition-all duration-120',
+                  'w-full rounded-control bg-hover py-2 ps-8 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent focus:border-transparent transition-all duration-120',
                   // The right padding only has to clear the clear button while there is one.
-                  query ? 'pr-8' : 'pr-3',
+                  query ? 'pe-8' : 'pe-3',
                 )}
               />
               {query && (
@@ -412,7 +424,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
                   type="button"
                   aria-label={t('common.clearSearch')}
                   onClick={() => ui$.query.set('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-secondary hover:text-primary cursor-pointer"
+                  className="absolute end-2.5 top-1/2 -translate-y-1/2 text-secondary hover:text-primary cursor-pointer"
                 >
                   <X size={16} strokeWidth={1.75} />
                 </button>
@@ -522,7 +534,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
                   className="min-[769px]:hidden"
                   onClick={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect()
-                    setQuickMenu({ x: rect.right - 208, y: rect.bottom })
+                    setQuickMenu({ x: endAlignedX(rect, 208), y: rect.bottom })
                   }}
                 />
               </>
@@ -545,7 +557,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
       <SearchUnderstoodBar />
 
       <ScheduledSendsBar />
-      {listView === 'table' && <MailboxColumns accountId={selectedAccount} folderId={selectedFolder} />}
+      {drawnView === 'table' && <MailboxColumns accountId={selectedAccount} folderId={selectedFolder} />}
 
       {/* Thread List Items */}
       <div
@@ -572,7 +584,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
           ) : (
             <EmptyState title={emptyStateTitle} text={emptyStateText} />
           )
-        ) : listView === 'table' ? (
+        ) : drawnView === 'table' ? (
           // The table is its own row renderer, so it takes the selection and
           // the context menu the cards already answer to rather than growing
           // its own copies of them.
@@ -611,7 +623,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
                     other ordering these headings would repeat down the page
                     and mean nothing. */}
                 {groupByDates && (
-                  <div className="sticky top-0 z-10 border-b border-border bg-chats/95 px-3 py-1 text-2xs font-bold uppercase tracking-wide text-secondary">
+                  <div data-date-group className="sticky top-0 z-10 border-b border-border bg-chats/95 px-3 py-1 text-2xs font-bold uppercase tracking-wide text-secondary">
                     {t(`dateGroup.${group.group}`)}
                   </div>
                 )}
@@ -632,6 +644,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
                       bulkSelected={!!bulkSelection[bulkItem.key]}
                       onQuickAction={(action) => runQuickAction(action, thread)}
                       onToggleSelect={desktopBulk ? () => toggleBulkSelection(bulkItem) : undefined}
+                      narrowAuto={narrowAuto}
                       onSelect={(event) => {
                         if (desktopBulk && (event.metaKey || event.ctrlKey)) {
                           toggleBulkSelection(bulkItem)

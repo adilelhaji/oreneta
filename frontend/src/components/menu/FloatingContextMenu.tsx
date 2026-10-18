@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useEscapeKey } from '../../lib/useEscapeKey'
+import { documentDirection, menuLeft } from '../../lib/direction'
 
 const noop = () => {}
 
@@ -36,19 +37,44 @@ export function FloatingContextMenu({
 
   useEscapeKey(onClose ?? noop, Boolean(onClose))
 
-  useLayoutEffect(() => {
+  // Placed from the latest props, also when only the menu's content changes
+  // size (a row that loads later re-renders that row, not this component).
+  const place = useRef<() => void>(() => {})
+  place.current = () => {
     const el = menuRef.current
     if (!el) return
 
+    // Measured at the window's left edge first: a menu shrinks to fit the
+    // room right of its `left`, so measured near the right edge (where a
+    // right-to-left menu is normally opened) its labels would wrap.
+    el.style.left = '0px'
     const { width, height } = el.getBoundingClientRect()
-    const desiredLeft = x + offset
+    // `x` is where the menu's inline-start edge goes: it extends rightwards
+    // from it in left-to-right and leftwards in right-to-left (ADR-0061).
+    const direction = documentDirection()
+    const left = menuLeft(direction === 'rtl' ? x - offset : x + offset, width, window.innerWidth, margin, direction)
     const desiredTop = y + offset
-    const left = Math.max(margin, Math.min(desiredLeft, window.innerWidth - width - margin))
     const top = Math.max(margin, Math.min(desiredTop, window.innerHeight - height - margin))
 
     el.style.left = `${left}px`
     el.style.top = `${top}px`
-  })
+  }
+
+  useLayoutEffect(() => place.current())
+
+  // A menu anchored by its end edge (right to left) must move when it grows.
+  useLayoutEffect(() => {
+    const el = menuRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    let last = el.offsetWidth
+    const observer = new ResizeObserver(() => {
+      if (el.offsetWidth === last) return
+      last = el.offsetWidth
+      place.current()
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   const content = (
     <>
@@ -65,7 +91,7 @@ export function FloatingContextMenu({
       <div
         ref={menuRef}
         className={className}
-        style={{ left: x + offset, top: y + offset }}
+        style={{ left: 0, top: y + offset }}
         onClick={onClick}
         onContextMenu={onContextMenu}
         {...dataProps}

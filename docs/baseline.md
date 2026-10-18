@@ -1,96 +1,96 @@
-# Functional and visual baseline
+# Línia base funcional i visual
 
-## Scope
+## Abast
 
-Reference code: `fe72de7c777718b2649969d18d40be84b96bfd0c` (2026-09-08).
-PRs #11, #18, #20 and #58 are integrated. [Main CI](https://github.com/adilelhaji/oreneta/actions/runs/34221227862)
-passed Go, Rust, frontend, mobile, Maddy integration and workflow policy.
-That run predates the browser fixture; new browser results belong to #59's own
-PR/main CI and must not be attributed to this historical reference run.
+Codi de referència: `fe72de7c777718b2649969d18d40be84b96bfd0c` (2026-09-08).
+Els PR #11, #18, #20 i #58 estan integrats. La [CI de main](https://github.com/adilelhaji/oreneta/actions/runs/34221227862)
+va superar Go, Rust, frontend, mòbil, integració amb Maddy i política de fluxos de treball.
+Aquella execució és anterior a la fixture (dades de prova) de navegador; els resultats nous del navegador corresponen a la CI del
+PR propi de #59 o de main i no s'han d'atribuir a aquesta execució històrica de referència.
 
-This is an internal engineering baseline, not pilot entry or provider approval.
-ADR-0001 (native Wails/Rust/Go/React) and ADR-0002 (explicit remote-label links)
-remain unchanged. #22 owns pilot participants, provider/platform matrix and exit
-criteria; #23 owns complete baseline acceptance.
+Aquesta és una línia base d'enginyeria interna, no l'entrada al pilot ni l'aprovació de proveïdors.
+L'ADR-0001 (Wails/Rust/Go/React natiu) i l'ADR-0002 (enllaços explícits a etiquetes remotes)
+no canvien. #22 és responsable dels participants del pilot, la matriu de proveïdors i plataformes i els criteris de
+sortida; #23 és responsable de l'acceptació completa de la línia base.
 
-## Visual evidence contract
+## Contracte d'evidència visual
 
-The isolated `frontend/baseline` test entry reuses production components, styles
-and built-in themes. It does not boot the app or access a real backend. Synthetic
-addresses use `example.test`; data, clock, locale, timezone and viewport are fixed.
-Mock commands are explicitly allowed; unknown commands are rejected. There is no
-mock fallback in the production bridge or application entry.
-The fixture has placeholder account fields but no credentials or secrets. App
-boot is absent and the in-memory transport cannot connect, independently of the
-account's `paused` flag. This is state-seeded component evidence, not proof of
-backend interaction or successful mail delivery.
+L'entrada de prova aïllada `frontend/baseline` reutilitza components, estils
+i temes integrats de producció. No arrenca l'aplicació ni accedeix a cap backend real. Les adreces
+sintètiques fan servir `example.test`; les dades, el rellotge, la configuració regional, el fus horari i la mida de visualització són fixos.
+Les ordres simulades estan permeses explícitament; les ordres desconegudes es rebutgen. No hi ha cap
+alternativa simulada al pont de producció ni a l'entrada de l'aplicació.
+La fixture té camps de compte de marcador de posició però cap credencial ni secret. L'arrencada
+de l'aplicació no hi és i el transport en memòria no es pot connectar, independentment de
+la marca `paused` del compte. Això és evidència de components amb estat precarregat, no prova
+d'interacció amb el backend ni de lliurament correcte de correu.
 
-CI captures light/dark inbox, reader, composer and tasks at 1440/1024/600 pixels.
-Artifacts identify the actual tested SHA and fixture checksum. Chromium captures
-are component evidence, not a native-webview end-to-end test. Existing Indigo
-defaults are captured as-is: the approved cobalt/navy direction is the subsequent
-comparison target in #32/#33, not silently applied by this baseline.
-Remote font imports are removed in the test-only build. Platform fallback fonts
-can change glyph metrics: screenshots are not pixel-comparable across different
-OS/font installations. Native WebKitGTK/WKWebView/WebView2 rendering, IME and
-Wails window integration are not validated by this Chromium harness. The Windows
-validation workflow has a separate native WebView2 zoom check using the keyboard
-path and UI Automation; its evidence is not interchangeable with these captures.
+La CI captura la safata d'entrada, el lector, el redactor i les tasques en clar/fosc a 1440/1024/600 píxels.
+Els artefactes identifiquen el SHA realment provat i la suma de verificació de la fixture. Les captures de
+Chromium són evidència de components, no una prova extrem a extrem en un webview natiu. Els valors per
+defecte Indigo existents es capturen tal com són: la direcció cobalt/marí aprovada és l'objectiu de
+la comparació que es farà a #32/#33, i aquesta línia base no l'aplica de manera silenciosa.
+Les importacions de fonts remotes s'eliminen a la compilació només de prova. Les fonts alternatives de la plataforma
+poden canviar les mètriques dels glifs: les captures de pantalla no són comparables píxel a píxel entre diferents
+instal·lacions de SO/fonts. La representació nativa de WebKitGTK/WKWebView/WebView2, l'IME i
+la integració de finestres de Wails no es validen amb aquest arnès de Chromium. El flux de treball
+de validació de Windows té una comprovació separada del zoom natiu de WebView2 que fa servir la ruta del teclat
+i UI Automation; la seva evidència no és intercanviable amb aquestes captures.
 
-Local validation host: Windows. Go/WebKitGTK, Rust, Docker/Maddy and mobile
-toolchains are unavailable locally; their CI results are recorded separately.
-The initial frontend run on the Spanish Windows host had 770 passing tests and
-four English-only date expectation failures, tracked in #60. Production locale
-behavior is not changed to make those tests pass.
-The #60 correction asserts native locale output and exact formatting options,
-including same-day and cross-year branches. Its affected suite passed 41 tests
-on that Spanish host; full-suite and CI results belong to #60's delivery commit.
+Amfitrió de validació local: Windows. Les cadenes d'eines de Go/WebKitGTK, Rust, Docker/Maddy i mòbil
+no estan disponibles localment; els seus resultats de CI es registren per separat.
+L'execució inicial del frontend a l'amfitrió Windows en castellà va tenir 770 proves superades i
+quatre fallades d'expectatives de data només en anglès, registrades a #60. El comportament de la configuració regional
+de producció no es canvia perquè aquestes proves passin.
+La correcció de #60 comprova la sortida regional nativa i les opcions de format exactes,
+incloses les branques del mateix dia i d'any diferent. La suite afectada va superar 41 proves
+en aquell amfitrió en castellà; els resultats de la suite completa i de la CI corresponen al commit de lliurament de #60.
 
-## Reproduction in CI
+## Reproducció a la CI
 
-The `frontend` job installs the root and frontend lockfiles, generates and
-validates catalogs, runs catalog tests, typecheck and Bun tests, then installs
-Playwright's pinned Chromium and runs `bun run baseline:verify`. The test runner
-owns its loopback-only Vite server; it is not a deployment script. The fixture
-runner is Playwright 1.63.0 with Bun 1.4.2 and Node 22 in CI.
+El job (tasca de CI) `frontend` instal·la els fitxers de bloqueig de l'arrel i del frontend, genera i
+valida els catàlegs, executa les proves de catàlegs, la comprovació de tipus i les proves de Bun, i després instal·la
+el Chromium fixat de Playwright i executa `bun run baseline:verify`. L'executor de proves
+gestiona el seu propi servidor Vite només de bucle local (loopback); no és un script de desplegament. L'executor
+de la fixture és Playwright 1.63.0 amb Bun 1.4.2 i Node 22 a la CI.
 
-Each of 24 captures produces a PNG and JSON provenance (checkout SHA, workflow
-SHA, fixture checksum, browser/runtime and display settings). CI uploads the
-`baseline-<workflow SHA>` artifact with the HTML report and failure traces. PR
-checkout SHAs may be GitHub's synthetic merge commit; provenance records both
-values rather than mislabelling branch-head tests as post-merge evidence.
+Cadascuna de les 24 captures produeix un PNG i una procedència JSON (SHA del checkout (còpia de treball), SHA del flux de treball,
+suma de verificació de la fixture, navegador/entorn d'execució i paràmetres de pantalla). La CI puja
+l'artefacte `baseline-<workflow SHA>` amb l'informe HTML i les traces de fallada. Els SHA de checkout
+dels PR poden ser el commit de fusió sintètic de GitHub; la procedència registra tots dos
+valors en lloc d'etiquetar erròniament les proves del cap de branca com a evidència posterior a la fusió.
 
-Historical defect (#34, corrected by #85): the strict `<600px` visibility rules
-left the reader outside the viewport from 600 through 768px while the list still
-occupied full width. Both 600px reader captures now require positive viewport
-visibility. See [mail boundaries](design/mail-boundaries.md) for the production
-boundary and zoom-equivalent checks; native zoom evidence is attached separately
-to the Windows validation run.
+Defecte històric (#34, corregit per #85): les regles de visibilitat estrictes `<600px`
+deixaven el lector fora de la finestra de visualització de 600 a 768 px mentre la llista encara
+ocupava tota l'amplada. Ara totes dues captures del lector a 600 px exigeixen visibilitat positiva
+a la finestra de visualització. Vegeu [límits del correu](design/mail-boundaries.md) per a les comprovacions de límits
+de producció i equivalents de zoom; l'evidència del zoom natiu s'adjunta per separat
+a l'execució de validació de Windows.
 
-## Capability ledger
+## Registre de capacitats
 
-| Capability | Implementation / automated evidence | Availability and limits |
+| Capacitat | Implementació / evidència automatitzada | Disponibilitat i límits |
 |---|---|---|
-| IMAP/SMTP mail and complex MIME | Rust/Go tests; synthetic Maddy integration; vendored IMAP parser tests (#19) | Implemented; no real-provider delivery certification |
-| Gmail labels | #20, store/translation tests | Explicit links; live Gmail/OAuth interoperability unverified |
-| Exchange/delegation/calendar | EWS backend, parser tests and probe examples | Tenant/platform support unverified; #46/#48 own continuity/delegation validation |
-| Contacts | CardDAV/Google/Exchange code and parsing tests | Incomplete-sync risk remains under #28 |
-| Local message-linked tasks | #18, Rust/Go/React tests | Local only; #42 owns recovery validation |
-| PGP/S/MIME and identity backup | #11, crypto and backup tests | External interoperability/trust remains #9/#12/#49; not certified by mocks |
-| Spam suggestions | #18, Rust/React tests | Suggestion-only; explainability/repeat safety remains #50 |
-| Design system | Current components/themes; synthetic browser captures | Approved art direction remains partly unimplemented; no accessibility certification |
-| Releases | #58 exact-SHA gate and 41 tests | Branch/tag administration and remaining gates under #26; no release launched |
+| Correu IMAP/SMTP i MIME complex | Proves Rust/Go; integració sintètica amb Maddy; proves de l'analitzador IMAP incorporat (#19) | Implementat; sense certificació de lliurament amb proveïdors reals |
+| Etiquetes de Gmail | #20, proves d'emmagatzematge/traducció | Enllaços explícits; interoperabilitat real amb Gmail/OAuth no verificada |
+| Exchange/delegació/calendari | Backend EWS, proves de l'analitzador i exemples de sondeig | Compatibilitat de tenant (inquilí de Microsoft 365)/plataforma no verificada; #46/#48 són responsables de la validació de continuïtat/delegació |
+| Contactes | Codi CardDAV/Google/Exchange i proves d'anàlisi | El risc de sincronització incompleta continua a #28 |
+| Tasques locals vinculades a missatges | #18, proves Rust/Go/React | Només locals; #42 és responsable de la validació de recuperació |
+| PGP/S/MIME i còpia de seguretat d'identitat | #11, proves de criptografia i de còpia de seguretat | La interoperabilitat/confiança externa continua a #9/#12/#49; no certificat per simulacions |
+| Suggeriments de correu brossa | #18, proves Rust/React | Només suggeriments; l'explicabilitat i la seguretat davant repeticions continuen a #50 |
+| Sistema de disseny | Components/temes actuals; captures sintètiques de navegador | La direcció artística aprovada continua parcialment sense implementar; sense certificació d'accessibilitat |
+| Versions publicades | Porta de SHA exacte de #58 i 41 proves | Administració de branques/etiquetes de git i portes restants a #26; no s'ha llançat cap publicació |
 
-## Reliability findings
+## Troballes de fiabilitat
 
-| Finding | Owner | Baseline status |
+| Troballa | Responsable | Estat a la línia base |
 |---|---|---|
-| H01: Sweep reviewed-set scope | #27 | Hypothesis; executable reproduction still required |
-| H02: incomplete CardDAV replacement | #28 | Hypothesis; executable reproduction still required |
-| H03: uncertain send/retry and Sent archival | #29 | Hypothesis; executable reproduction still required |
-| H04: sort/pagination and stale-row identity | #30 | #63 covers frontend propagation/stale views; #65 covers SQL/cursor key parity; remaining scope in [mailbox paging](mailbox-paging.md) |
-| H05: cross-provider search semantics | #31 | Hypothesis; executable reproduction still required |
-| H06 | #23 | Definition absent from inspected repository/issue bodies; not invented or reproduced |
+| H01: abast del conjunt revisat de Sweep | #27 | Hipòtesi; encara cal una reproducció executable |
+| H02: substitució CardDAV incompleta | #28 | Hipòtesi; encara cal una reproducció executable |
+| H03: enviament/reintent incert i arxivament a Enviats | #29 | Hipòtesi; encara cal una reproducció executable |
+| H04: ordenació/paginació i identitat de files obsoletes | #30 | #63 cobreix la propagació al frontend i les vistes obsoletes; #65 cobreix la paritat de claus SQL/cursor; l'abast restant és a [paginació de la bústia](mailbox-paging.md) |
+| H05: semàntica de cerca entre proveïdors | #31 | Hipòtesi; encara cal una reproducció executable |
+| H06 | #23 | Definició absent del repositori i dels cossos d'incidència inspeccionats; ni inventada ni reproduïda |
 
-These are tracked risks, not claims of observed production incidents. #23 stays
-open until its remaining reproductions and evidence are complete.
+Són riscos registrats, no afirmacions d'incidents de producció observats. #23 continua
+oberta fins que es completin les reproduccions i l'evidència restants.

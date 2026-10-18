@@ -1,317 +1,322 @@
-# ADR-0058: Exchange (EWS): mover carpetas, confirmación de entrega, listas de distribución y tareas
+# ADR-0058: Exchange (EWS): moure carpetes, confirmació de lliurament, llistes de distribució i tasques
 
-- Estado: aceptada por delegación (el propietario delegó las decisiones de
-  diseño de #211 y pidió la opción más prudente); pendiente de revisión del
-  propietario al final del plan.
-- Fecha: 2026-10-15.
-- Alcance: #211, la parte de Exchange (EWS) de cuatro filas de la paridad
-  con eM Client 10.4: SET-07 (#87, mover carpetas), SET-11 (#107,
-  confirmación de entrega), SET-19 (#41, grupos de contactos) y SET-20
-  (#103, tareas). Sobre ADR-0012, ADR-0013, ADR-0039, ADR-0048, ADR-0050,
-  ADR-0052 y ADR-0053. Microsoft Graph queda fuera (#210), y también la
-  evidencia con un servidor Exchange real (la ejecución N5 final).
+- Estat: acceptada per delegació (el propietari va delegar les decisions de
+  disseny de #211 i va demanar l'opció més prudent); pendent de revisió del
+  propietari al final del pla. ADR-0066 (2026-10-17) amplia el punt 3: les
+  carpetes de contactes sota Contactes i l'edició de les persones. ADR-0070
+  (acceptada pel propietari el 2026-10-18) esmena el primer punt del §4: la
+  llista de tasques arriba amb el compte, sense que calgui afegir-la a mà.
+- Data: 2026-10-15.
+- Abast: #211, la part d'Exchange (EWS) de quatre files de la paritat
+  amb eM Client 10.4: SET-07 (#87, moure carpetes), SET-11 (#107,
+  confirmació de lliurament), SET-19 (#41, grups de contactes) i SET-20
+  (#103, tasques). Sobre ADR-0012, ADR-0013, ADR-0039, ADR-0048, ADR-0050,
+  ADR-0052 i ADR-0053. Microsoft Graph en queda fora (#210), i també
+  l'evidència amb un servidor Exchange real (l'execució N5 final).
 
-## Contexto
+## Context
 
-El adaptador EWS ya leía y movía correo, el calendario, el directorio y la
-respuesta automática. Le faltaban cuatro cosas que IMAP, CalDAV y CardDAV
-ya tienen: mover una carpeta, pedir confirmación de entrega, los grupos de
-contactos y las tareas. El crate `ews` (bifurcación propia) modela
-`MoveFolder` y `IsDeliveryReceiptRequested`, pero da a todos los elementos
-una sola forma (`Message`) sin miembros, fecha de vencimiento ni estado de
-tarea, y no se puede cambiar sin publicar una versión nueva del crate.
+L'adaptador EWS ja llegia i movia correu, el calendari, el directori i la
+resposta automàtica. Li faltaven quatre coses que IMAP, CalDAV i CardDAV
+ja tenen: moure una carpeta, demanar confirmació de lliurament, els grups de
+contactes i les tasques. El crate `ews` (bifurcació pròpia) modela
+`MoveFolder` i `IsDeliveryReceiptRequested`, però dona a tots els elements
+una sola forma (`Message`) sense membres, data de venciment ni estat de
+tasca, i no es pot canviar sense publicar una versió nova del crate.
 
-## Decisión
+## Decisió
 
-### 1. Mover carpetas (SET-07)
+### 1. Moure carpetes (SET-07)
 
-- **Las carpetas de EWS se nombran por su ruta.** Hasta ahora el nombre de
-  cable de una carpeta era solo su nombre, así que «Bandeja de
-  entrada/Clientes» era `Clientes`, todas salían al nivel superior y dos
-  subcarpetas con el mismo nombre se pisaban. Ahora el nombre es la ruta
-  desde la raíz del buzón, con `/` como en IMAP: `INBOX/Clientes`,
-  `Proyectos/2026`. La raíz no se lista; una carpeta cuyo padre no está en
-  la lista (la raíz, o una carpeta de otra clase) empieza una ruta. Una
-  carpeta de servicio que no es de correo sigue sin listarse, pero sí da
-  su sitio a las suyas que lo son. Una cadena de padres que vuelve sobre
-  sí misma (error del servidor) se corta donde se repite.
-- **Una `/` dentro de un nombre de Exchange** se escribe como `∕` (barra de
-  división, U+2215), que se lee igual: Exchange la admite en un nombre y la
-  ruta la usa entre nombres. Para que dos nombres nunca den lo mismo (`A/B`
-  y `A∕B`), una `∕` que ya está en el nombre se escribe `\∕` y una barra
-  invertida `\\`: cada tramo se lee de vuelta como un solo nombre. Como
-  los nombres por ruta llegan con este mismo cambio, no hay nombres
-  guardados con otra forma que convertir.
-- **Todo lo guardado con el nombre antiguo sigue a su carpeta.** Al listar,
-  lo que estaba guardado con el nombre de antes (sin ruta) de una carpeta
-  que era la única con ese nombre, y cuya ruta aún no tiene nada, pasa a la
-  ruta nueva en una transacción, igual que en un movimiento: mensajes,
-  estado de sincronización, ids de Exchange, conversaciones pospuestas,
-  tareas hechas de una conversación, el registro de las reglas, el progreso
-  del archivado automático, las reglas de la cuenta que mueven correo allí
-  y la política de archivado automático (que sigue confirmada: nombra las
-  mismas carpetas). Nada se vuelve a descargar. Una prueba recorre todas
-  las columnas que nombran una carpeta y falla si una nueva no está
-  decidida (`folder_move::FOLDER_REFERENCES` o `NOT_MAIL_FOLDERS`). Las
-  reglas «para todas las cuentas» conservan su nombre: nombran una carpeta
-  de cada cuenta, y cambiarlo para una rompería las demás.
-- **La interfaz también lo sigue.** Los cambios de nombre quedan guardados
-  (`folder_renames`) hasta que la interfaz pide la lista de carpetas, que
-  los trae (`renames`, como al mover); favoritas, colores, columnas de los
-  tableros, búsquedas guardadas, la carpeta abierta y la última abierta los
-  siguen. No se quita ninguna favorita.
-- **Un nombre que tenían varias carpetas** (`Archivo` arriba y
-  `Bandeja de entrada/Archivo`) mezclaba las dos en la caché: se borra esa
-  caché y ambas se leen de nuevo. Todo esto pasa una sola vez por cuenta, la
-  primera vez que se listan sus carpetas con esta versión
-  (`ews_folder_paths`); después, una carpeta nueva que se llama como otra
-  es solo una carpeta nueva. Lo que nombraba ese nombre se queda en la
-  que sigue llamándose así, o deja de encontrar su carpeta: no se puede
-  saber cuál era.
-- **Un estado de sincronización que el servidor ya no acepta**
-  (`ErrorInvalidSyncStateData`) vuelve a empezar la carpeta, una vez.
-- **Mover es `MoveFolder`** con el id de la carpeta y el del padre nuevo
-  (o la raíz del buzón, `msgfolderroot`, para el nivel superior); las
-  subcarpetas y los elementos van con ella. Las reglas de ADR-0050 son las
-  mismas (`folder_move::plan_folder_move` sobre la lista guardada).
-- **Antes de mover se vuelve a listar la jerarquía.** Si la carpeta ya no
-  está donde decía la caché (movida, renombrada o borrada en otro
-  cliente), si el destino ya no existe o si allí ya hay una carpeta con ese
-  nombre, no se mueve nada y se pide refrescar. Es la regla de ADR-0012
-  aplicada a carpetas: nunca actuar sobre una imagen del buzón que ya no
-  es cierta.
-- **Nunca se repite.** Antes de enviarlo se guarda el movimiento con el id
-  de la carpeta y todos sus cambios de nombre (`ews_uncertain_moves`). Si
-  el servidor contesta, el registro se borra (hecho, o rechazado: nada se
-  movió). Si la respuesta se pierde, la sesión olvida su lista y la
-  siguiente lectura de carpetas busca la carpeta por su id: si está en la
-  ruta nueva, todo lo guardado con los nombres viejos la sigue, como tras
-  un movimiento contestado, y la interfaz se entera; si sigue donde
-  estaba, no se movió; en ambos casos el registro se borra.
-- La interfaz deja mover carpetas en cuentas de Exchange, con las mismas
-  reglas que IMAP; Graph las mueve por id desde ADR-0057 (#210).
+- **Les carpetes d'EWS s'anomenen per la seva ruta.** Fins ara el nom de
+  transmissió d'una carpeta era només el seu nom, de manera que «Bandeja de
+  entrada/Clientes» era `Clientes`, totes sortien al nivell superior i dues
+  subcarpetes amb el mateix nom es trepitjaven. Ara el nom és la ruta
+  des de l'arrel de la bústia, amb `/` com a IMAP: `INBOX/Clientes`,
+  `Proyectos/2026`. L'arrel no es llista; una carpeta el pare de la qual no
+  és a la llista (l'arrel, o una carpeta d'una altra classe) comença una
+  ruta. Una carpeta de servei que no és de correu continua sense llistar-se,
+  però sí que dona el seu lloc a les seves que ho són. Una cadena de pares
+  que torna sobre si mateixa (error del servidor) es talla on es repeteix.
+- **Una `/` dins d'un nom d'Exchange** s'escriu com a `∕` (barra de
+  divisió, U+2215), que es llegeix igual: Exchange l'admet en un nom i la
+  ruta la fa servir entre noms. Perquè dos noms no donin mai el mateix
+  (`A/B` i `A∕B`), una `∕` que ja és al nom s'escriu `\∕` i una barra
+  inversa `\\`: cada tram es torna a llegir com un sol nom. Com que
+  els noms per ruta arriben amb aquest mateix canvi, no hi ha noms
+  desats amb una altra forma que calgui convertir.
+- **Tot el que s'ha desat amb el nom antic segueix la seva carpeta.** En
+  llistar, el que estava desat amb el nom d'abans (sense ruta) d'una carpeta
+  que era l'única amb aquest nom, i la ruta de la qual encara no té res,
+  passa a la ruta nova en una transacció, igual que en un moviment:
+  missatges, estat de sincronització, ids d'Exchange, converses ajornades,
+  tasques fetes d'una conversa, el registre de les regles, el progrés
+  de l'arxivament automàtic, les regles del compte que hi mouen correu
+  i la política d'arxivament automàtic (que continua confirmada: anomena les
+  mateixes carpetes). No es torna a baixar res. Una prova recorre totes
+  les columnes que anomenen una carpeta i falla si n'hi ha una de nova que
+  no està decidida (`folder_move::FOLDER_REFERENCES` o `NOT_MAIL_FOLDERS`).
+  Les regles «per a tots els comptes» conserven el seu nom: anomenen una
+  carpeta de cada compte, i canviar-lo per a un trencaria els altres.
+- **La interfície també ho segueix.** Els canvis de nom queden desats
+  (`folder_renames`) fins que la interfície demana la llista de carpetes, que
+  els porta (`renames`, com en moure); les preferides, els colors, les
+  columnes dels taulers, les cerques desades, la carpeta oberta i l'última
+  oberta els segueixen. No es treu cap preferida.
+- **Un nom que tenien diverses carpetes** (`Archivo` a dalt i
+  `Bandeja de entrada/Archivo`) barrejava les dues a la memòria cau:
+  s'esborra aquesta memòria cau i totes dues es tornen a llegir. Tot això
+  passa una sola vegada per compte, la primera vegada que se'n llisten les
+  carpetes amb aquesta versió (`ews_folder_paths`); després, una carpeta
+  nova que es diu com una altra és només una carpeta nova. El que anomenava
+  aquest nom es queda en la que continua dient-se així, o deixa de trobar
+  la seva carpeta: no es pot saber quina era.
+- **Un estat de sincronització que el servidor ja no accepta**
+  (`ErrorInvalidSyncStateData`) torna a començar la carpeta, una vegada.
+- **Moure és `MoveFolder`** amb l'id de la carpeta i el del pare nou
+  (o l'arrel de la bústia, `msgfolderroot`, per al nivell superior); les
+  subcarpetes i els elements van amb ella. Les regles d'ADR-0050 són les
+  mateixes (`folder_move::plan_folder_move` sobre la llista desada).
+- **Abans de moure es torna a llistar la jerarquia.** Si la carpeta ja no
+  és on deia la memòria cau (moguda, reanomenada o suprimida en un altre
+  client), si la destinació ja no existeix o si allà ja hi ha una carpeta
+  amb aquest nom, no es mou res i es demana actualitzar. És la regla
+  d'ADR-0012 aplicada a carpetes: no actuar mai sobre una imatge de la
+  bústia que ja no és certa.
+- **No es repeteix mai.** Abans d'enviar-lo es desa el moviment amb l'id
+  de la carpeta i tots els seus canvis de nom (`ews_uncertain_moves`). Si
+  el servidor respon, el registre s'esborra (fet, o rebutjat: no es va
+  moure res). Si la resposta es perd, la sessió oblida la seva llista i la
+  lectura següent de carpetes cerca la carpeta pel seu id: si és a la
+  ruta nova, tot el que s'ha desat amb els noms vells la segueix, com
+  després d'un moviment respost, i la interfície se n'assabenta; si és on
+  era, no es va moure; en tots dos casos el registre s'esborra.
+- La interfície permet moure carpetes en comptes d'Exchange, amb les
+  mateixes regles que IMAP; Graph les mou per id des d'ADR-0057 (#210).
 
-### 2. Confirmación de entrega (SET-11)
+### 2. Confirmació de lliurament (SET-11)
 
-- Exchange recibe el mensaje como MIME (`CreateItem` con `MimeContent` y
-  `SendAndSaveCopy`), sin sobre SMTP. La petición va en el propio elemento,
-  junto al contenido: `IsDeliveryReceiptRequested` = `true`. Las
-  propiedades del elemento se aplican sobre el MIME.
-- Solo se escribe si quien envía la pidió (ADR-0048: el interruptor del
-  redactor, que empieza con el ajuste global). Sin pedirla, la petición al
-  servidor no cambia en nada.
-- El envío responde `delivery_receipt: "requested"` para Exchange: la
-  petición va en la solicitud. Que un servidor Exchange real la atienda
-  junto al MIME no está comprobado todavía (N5); hasta entonces la
-  documentación dice «se pide en la solicitud» y la interfaz no promete
-  más. El envío pasa por el mismo camino que Graph
-  (`send_mime_with_receipt` y `receipts::delivery_receipt`, ADR-0057):
-  Exchange siempre lleva la petición; Graph, donde ADR-0057 lo permite, y
-  si no responde `"unsupported"` con el motivo.
-- La confirmación de lectura sigue en la cabecera MIME
-  (`Disposition-Notification-To`), como decía ADR-0048; no se duplica en
+- Exchange rep el missatge com a MIME (`CreateItem` amb `MimeContent` i
+  `SendAndSaveCopy`), sense sobre SMTP. La petició va en el mateix element,
+  al costat del contingut: `IsDeliveryReceiptRequested` = `true`. Les
+  propietats de l'element s'apliquen sobre el MIME.
+- Només s'escriu si qui envia l'ha demanada (ADR-0048: l'interruptor del
+  redactor, que comença amb el paràmetre global). Sense demanar-la, la
+  petició al servidor no canvia en res.
+- L'enviament respon `delivery_receipt: "requested"` per a Exchange: la
+  petició va en la sol·licitud. Que un servidor Exchange real l'atengui
+  al costat del MIME encara no està comprovat (N5); fins aleshores la
+  documentació diu «es demana en la sol·licitud» i la interfície no promet
+  res més. L'enviament passa pel mateix camí que Graph
+  (`send_mime_with_receipt` i `receipts::delivery_receipt`, ADR-0057):
+  Exchange sempre porta la petició; Graph, on ADR-0057 ho permet, i
+  si no, respon `"unsupported"` amb el motiu.
+- La confirmació de lectura continua a la capçalera MIME
+  (`Disposition-Notification-To`), com deia ADR-0048; no es duplica a
   `IsReadReceiptRequested`.
-- Los avisos de entrega y de lectura que llegan se interpretan para todas
-  las cuentas, Exchange incluido, desde ADR-0057 (#210).
+- Els avisos de lliurament i de lectura que arriben s'interpreten per a tots
+  els comptes, Exchange inclòs, des d'ADR-0057 (#210).
 
-### 3. Listas de distribución como grupos de contactos (SET-19)
+### 3. Llistes de distribució com a grups de contactes (SET-19)
 
-- **Una libreta por cuenta de Exchange** (`exchange-<cuenta>`, tipo
-  `exchange`), como la de Google: se trae desde Ajustes → Personas con
-  «Leer los contactos de Exchange» y se vuelve a leer como las demás. Usa
-  el inicio de sesión de la cuenta; no guarda contraseña propia. Se va con
-  la cuenta.
-- **Personas:** los contactos de la carpeta Contactos (no sus subcarpetas),
-  de solo lectura, como dice ADR-0012 para Exchange. El nombre, nombre de
-  pila, apellido, empresa, direcciones (sin prefijo `SMTP:`; un
-  identificador de directorio `/O=…` no es una dirección) y teléfonos.
-- **Grupos:** cada lista de distribución de la carpeta es un grupo
-  (ADR-0052). Sus miembros:
-  - un contacto de la carpeta, por su id de elemento, que es el UID de la
-    persona en la libreta;
-  - alguien que no es contacto aquí (una dirección escrita o una entrada
-    del directorio) se guarda como `mailto:<dirección>` con el nombre y la
-    dirección que dio el servidor (columnas nuevas `name` y `addr` de
-    `contact_group_members`, esquema 65). Se ve en el grupo y el redactor
-    lo expande igual que a un contacto. Sin esto, una lista hecha con el
-    directorio de la organización (lo habitual) se vería vacía;
-  - una entrada sin dirección utilizable (una lista dentro de la lista, un
-    identificador de directorio) no se muestra, pero sigue en la lista.
-- **Escribir** (crear, renombrar, añadir o quitar miembros, borrar), con la
-  regla de ADR-0012:
-  - se lee la lista del servidor; si su clave de cambios (`ChangeKey`) no
-    es la leída, no se escribe nada y se devuelve la copia de allí;
-  - se envía solo la diferencia sobre lo que el editor veía: el nombre si
-    cambió (`SetItemField`), los miembros nuevos (`AppendToItemField`) y
-    los que se quitan, por la clave que el servidor dio a cada uno
-    (`DeleteItemField` sobre `distributionlist:Members:Member`). Un miembro
-    que el editor no veía no se toca;
-  - la escritura lleva la clave leída y
-    `ConflictResolution="NeverOverwrite"`: un cambio hecho entre la lectura
-    y la escritura lo rechaza el servidor
-    (`ErrorIrresolvableConflict`) y se devuelve la copia de allí;
-  - borrar una lista la manda a Elementos eliminados, tras comprobar su
-    clave como arriba (`DeleteItem` no compara claves);
-  - tras escribir se vuelve a leer la lista y se guarda tal como quedó;
-    un conflicto también guarda aquí la copia de allí (o quita la lista si
-    ya no está), así que «mírala otra vez y reinténtalo» parte de ella;
-  - nunca se escribe sin la clave leída: sin ella no se envía nada y es un
-    conflicto.
-- **Límite aceptado:** crear una lista no es idempotente. Si la respuesta a
-  la creación se pierde, la lista puede quedar creada en el servidor y
-  aparecer en la siguiente lectura de la libreta; volver a crearla a mano
-  haría una segunda. Las listas no tienen dónde guardar un id nuestro que se
-  pueda buscar, como las tareas, y buscar por nombre confundiría dos listas
-  que se llaman igual.
-- Un grupo de Exchange solo puede tener personas de la misma libreta, como
-  uno de CardDAV. Un miembro nuevo que es contacto se escribe por su id y su
-  primera dirección; una persona sin dirección no puede entrar.
+- **Una llibreta per compte d'Exchange** (`exchange-<cuenta>`, tipus
+  `exchange`), com la de Google: s'obté des de Paràmetres → Persones amb
+  «Llegir els contactes d'Exchange» i es torna a llegir com les altres. Fa
+  servir l'inici de sessió del compte; no desa cap contrasenya pròpia. Se'n
+  va amb el compte.
+- **Persones** (ampliat per ADR-0066): els contactes de la carpeta Contactes (no les seves
+  subcarpetes), de només lectura, com diu ADR-0012 per a Exchange. El nom,
+  el nom de pila, el cognom, l'empresa, les adreces (sense prefix `SMTP:`; un
+  identificador de directori `/O=…` no és una adreça) i els telèfons.
+- **Grups:** cada llista de distribució de la carpeta és un grup
+  (ADR-0052). Els seus membres:
+  - un contacte de la carpeta, pel seu id d'element, que és l'UID de la
+    persona a la llibreta;
+  - algú que no és contacte aquí (una adreça escrita o una entrada
+    del directori) es desa com a `mailto:<dirección>` amb el nom i
+    l'adreça que va donar el servidor (columnes noves `name` i `addr` de
+    `contact_group_members`, esquema 65). Es veu en el grup i el redactor
+    l'expandeix igual que un contacte. Sense això, una llista feta amb el
+    directori de l'organització (el més habitual) es veuria buida;
+  - una entrada sense adreça utilitzable (una llista dins de la llista, un
+    identificador de directori) no es mostra, però continua a la llista.
+- **Escriure** (crear, reanomenar, afegir o treure membres, suprimir), amb
+  la regla d'ADR-0012:
+  - es llegeix la llista del servidor; si la seva clau de canvis
+    (`ChangeKey`) no és la llegida, no s'escriu res i es retorna la còpia
+    d'allà;
+  - s'envia només la diferència sobre el que l'editor veia: el nom si
+    ha canviat (`SetItemField`), els membres nous (`AppendToItemField`) i
+    els que es treuen, per la clau que el servidor va donar a cadascun
+    (`DeleteItemField` sobre `distributionlist:Members:Member`). Un membre
+    que l'editor no veia no es toca;
+  - l'escriptura porta la clau llegida i
+    `ConflictResolution="NeverOverwrite"`: un canvi fet entre la lectura
+    i l'escriptura el rebutja el servidor
+    (`ErrorIrresolvableConflict`) i es retorna la còpia d'allà;
+  - suprimir una llista l'envia a Elements suprimits, després de comprovar
+    la seva clau com més amunt (`DeleteItem` no compara claus);
+  - després d'escriure es torna a llegir la llista i es desa tal com ha
+    quedat; un conflicte també desa aquí la còpia d'allà (o treu la llista
+    si ja no hi és), de manera que «torna-la a mirar i reintenta-ho» parteix
+    d'ella;
+  - no s'escriu mai sense la clau llegida: sense ella no s'envia res i és un
+    conflicte.
+- **Límit acceptat:** crear una llista no és idempotent. Si la resposta a
+  la creació es perd, la llista pot quedar creada al servidor i
+  aparèixer en la lectura següent de la llibreta; tornar-la a crear a mà
+  en faria una segona. Les llistes no tenen on desar un id nostre que es
+  pugui cercar, com les tasques, i cercar per nom confondria dues llistes
+  que es diuen igual.
+- Un grup d'Exchange només pot tenir persones de la mateixa llibreta, com
+  un de CardDAV. Un membre nou que és contacte s'escriu pel seu id i la seva
+  primera adreça; una persona sense adreça no hi pot entrar.
 
-### 4. Tareas (SET-20)
+### 4. Tasques (SET-20)
 
-- **Una lista por cuenta de Exchange**, enlazada a su carpeta Tareas: «Tareas
-  de Exchange de <cuenta>» en la vista de Tareas. Columna nueva
-  `task_lists.ews_account` (esquema 65). Se lee entera antes de añadirla; si
-  falla, no se añade. Se va con la cuenta (y sus tareas). El resto del
-  modelo es el de ADR-0039: cambios aquí primero, marcados como pendientes;
-  se sincroniza al abrir Tareas y con «Sincronizar».
-- **Correspondencia de campos:** `Subject` ↔ título; `Body` en texto ↔ nota;
-  `Importance` ↔ prioridad (baja, normal, alta); `DueDate` ↔ fecha límite,
-  que en Exchange es una fecha sin hora: se lee el día que nombra, en la
-  zona en que Exchange escribió su medianoche (como los eventos de día
-  entero), y es la medianoche de aquí; se escribe como `AAAA-MM-DDT00:00:00Z`.
-  Una hora de vencimiento puesta aquí no viaja: Exchange no la guarda.
-  `Status` `Completed` con `CompleteDate` ↔ completada (nunca una fecha
-  futura, que Exchange rechaza); reabrir escribe `NotStarted`.
-  `ReminderIsSet` y `ReminderDueBy` ↔ recordatorio.
-- **Escribir solo lo que cambió:** se guarda la copia del servidor tal como
-  se leyó, y una edición envía solo las propiedades que difieren
-  (`SetItemField`/`DeleteItemField`). Lo que otro cliente puso y aquí no se
-  ve (categorías, trabajo, propietario) no se toca.
-- **Conflictos (ADR-0012, ADR-0039):** cada escritura lleva la clave de
-  cambios leída y `NeverOverwrite`. Un rechazo marca la tarea en conflicto
-  y detiene la cola de la lista; la lectura marca en conflicto una tarea
-  cambiada en los dos lados o cambiada aquí y borrada allí. «Conservar la
-  mía» vuelve a poner la tarea en cola sobre la versión de allí (o la crea
-  de nuevo); «Usar la del servidor» toma la de allí. Borrar comprueba la
-  clave antes, porque `DeleteItem` no lo hace. Nunca se escribe sin la
-  clave leída: sin ella es un conflicto y no se envía nada.
-- **Un cambio que Exchange nunca aceptaría** («cada N años» con N > 1, una
-  regla sin vencimiento) se sabe antes de enviar: esa tarea queda apartada
-  con el motivo (`rejected: …`) y las demás de la lista siguen. Se vuelve a
-  intentar cuando la tarea cambia. El editor tampoco ofrece «cada N años»
-  en una lista de Exchange.
-- **Lectura por páginas** en orden de creación; el desplazamiento cuenta
-  todo lo que el servidor lista (la carpeta puede tener otras cosas) y una
-  tarea listada dos veces es una. Como las páginas por desplazamiento
-  pueden saltarse una tarea si otra desaparece entre dos páginas, una
-  tarea conocida aquí que la lectura no trajo se pide por su id antes de
-  darla por borrada; solo se borra aquí si el servidor dice que no
-  existe. Cada lista se sincroniza de una en una;
-  listas distintas no se esperan.
-- **Sin duplicados al reintentar:** antes de crear una tarea se guarda aquí
-  un id nuestro (`remote_href = new:<uuid>`) y se escribe en la tarea como
-  propiedad con nombre (`PublicStrings`, `OrenetaTaskUid`). Si la respuesta
-  se pierde, el siguiente intento busca ese id (`FindItem` con
-  restricción) y adopta la tarea que encuentra en vez de crear otra; la
-  lectura completa hace lo mismo. Es el equivalente de decidir la
-  dirección antes de enviar en CalDAV (ADR-0039).
-- **Repetición (ADR-0053), donde EWS la admite:** diaria, semanal (uno o
-  varios días), mensual por día o por enésimo día de la semana
-  (`RelativeMonthlyRecurrence`), anual por día o por enésimo día de la
-  semana en el mes del vencimiento; sin fin, hasta una fecha o N veces. Se
-  leen como regla RRULE explicitada y se escriben con `StartDate` = el
-  vencimiento. Completar una ocurrencia hace lo mismo que en CalDAV: la
-  tarea pasa a la siguiente ocurrencia (`DueDate`, `Recurrence` con lo que
-  queda, `StartDate`) y se crea una copia completada sin regla. No se marca
-  la serie como completada en el servidor, así que Exchange no genera
-  ocurrencias por su cuenta.
-- **Solo lectura:** una tarea con una regla que aquí no se escribe — las que
-  se regeneran N días después de completarse, varios días de la semana en
-  una regla mensual, «cualquier día laborable», anual en otro mes que el
-  del vencimiento, o una regla sin vencimiento — se muestra y se puede
-  borrar, pero no editar, con el aviso de ADR-0053. «Cada N años» con N > 1
-  no existe en EWS (ver arriba).
-- Mover una tarea entre una lista de Exchange y otra lista se rechaza, como
-  con CalDAV.
+- **Una llista per compte d'Exchange**, enllaçada a la seva carpeta Tasques:
+  «Tasques d'Exchange de <compte>» a la visualització de Tasques. Columna nova
+  `task_lists.ews_account` (esquema 65). Es llegeix sencera abans d'afegir-la;
+  si falla, no s'afegeix. Se'n va amb el compte (i les seves tasques). La
+  resta del model és el d'ADR-0039: canvis aquí primer, marcats com a
+  pendents; se sincronitza en obrir Tasques i amb «Sincronitzar».
+- **Correspondència de camps:** `Subject` ↔ títol; `Body` en text ↔ nota;
+  `Importance` ↔ prioritat (baixa, normal, alta); `DueDate` ↔ data límit,
+  que a Exchange és una data sense hora: es llegeix el dia que anomena, en la
+  zona en què Exchange va escriure la seva mitjanit (com els esdeveniments de
+  dia sencer), i és la mitjanit d'aquí; s'escriu com a `AAAA-MM-DDT00:00:00Z`.
+  Una hora de venciment posada aquí no viatja: Exchange no la desa.
+  `Status` `Completed` amb `CompleteDate` ↔ completada (mai una data
+  futura, que Exchange rebutja); reobrir escriu `NotStarted`.
+  `ReminderIsSet` i `ReminderDueBy` ↔ recordatori.
+- **Escriure només el que ha canviat:** es desa la còpia del servidor tal com
+  es va llegir, i una edició envia només les propietats que difereixen
+  (`SetItemField`/`DeleteItemField`). El que un altre client va posar i aquí
+  no es veu (categories, feina, propietari) no es toca.
+- **Conflictes (ADR-0012, ADR-0039):** cada escriptura porta la clau de
+  canvis llegida i `NeverOverwrite`. Un rebuig marca la tasca en conflicte
+  i atura la cua de la llista; la lectura marca en conflicte una tasca
+  canviada als dos costats o canviada aquí i suprimida allà. «Conservar la
+  meva» torna a posar la tasca a la cua sobre la versió d'allà (o la torna
+  a crear); «Utilitzar la del servidor» pren la d'allà. Suprimir comprova la
+  clau abans, perquè `DeleteItem` no ho fa. No s'escriu mai sense la
+  clau llegida: sense ella és un conflicte i no s'envia res.
+- **Un canvi que Exchange no acceptaria mai** («cada N anys» amb N > 1, una
+  regla sense venciment) se sap abans d'enviar: aquesta tasca queda apartada
+  amb el motiu (`rejected: …`) i les altres de la llista continuen. Es torna
+  a intentar quan la tasca canvia. L'editor tampoc no ofereix «cada N anys»
+  en una llista d'Exchange.
+- **Lectura per pàgines** en ordre de creació; el desplaçament compta
+  tot el que el servidor llista (la carpeta pot tenir altres coses) i una
+  tasca llistada dues vegades és una. Com que les pàgines per desplaçament
+  poden saltar-se una tasca si una altra desapareix entre dues pàgines, una
+  tasca coneguda aquí que la lectura no ha portat es demana pel seu id abans
+  de donar-la per suprimida; només se suprimeix aquí si el servidor diu que
+  no existeix. Cada llista se sincronitza d'una en una;
+  llistes diferents no s'esperen.
+- **Sense duplicats en reintentar:** abans de crear una tasca es desa aquí
+  un id nostre (`remote_href = new:<uuid>`) i s'escriu a la tasca com a
+  propietat amb nom (`PublicStrings`, `OrenetaTaskUid`). Si la resposta
+  es perd, l'intent següent cerca aquest id (`FindItem` amb
+  restricció) i adopta la tasca que troba en lloc de crear-ne una altra; la
+  lectura completa fa el mateix. És l'equivalent de decidir
+  l'adreça abans d'enviar a CalDAV (ADR-0039).
+- **Repetició (ADR-0053), on EWS l'admet:** diària, setmanal (un o
+  diversos dies), mensual per dia o per enèsim dia de la setmana
+  (`RelativeMonthlyRecurrence`), anual per dia o per enèsim dia de la
+  setmana en el mes del venciment; sense fi, fins a una data o N vegades. Es
+  llegeixen com a regla RRULE explicitada i s'escriuen amb `StartDate` = el
+  venciment. Completar una ocurrència fa el mateix que a CalDAV: la
+  tasca passa a l'ocurrència següent (`DueDate`, `Recurrence` amb el que
+  queda, `StartDate`) i es crea una còpia completada sense regla. No es marca
+  la sèrie com a completada al servidor, de manera que Exchange no genera
+  ocurrències pel seu compte.
+- **Només lectura:** una tasca amb una regla que aquí no s'escriu —les que
+  es regeneren N dies després de completar-se, diversos dies de la setmana en
+  una regla mensual, «qualsevol dia laborable», anual en un mes diferent del
+  del venciment, o una regla sense venciment— es mostra i es pot
+  suprimir, però no editar, amb l'avís d'ADR-0053. «Cada N anys» amb N > 1
+  no existeix a EWS (vegeu més amunt).
+- Moure una tasca entre una llista d'Exchange i una altra llista es rebutja,
+  com amb CalDAV.
 
-### Común
+### Comú
 
-- **SOAP escrito a mano** para listas y tareas (`exchange/soap.rs`): unas
-  pocas operaciones (`FindItem`, `GetItem`, `CreateItem`, `UpdateItem`,
-  `DeleteItem`) escritas como texto con los prefijos `m:` y `t:`, y la
-  respuesta leída con `quick-xml` (ya era dependencia directa) por nombre
-  local, como el lector WebDAV. Un fallo SOAP entero falla; un error por
-  elemento se informa con su código.
-- **Esquema 65** (el 64 es de #210, que entra antes):
-  `contact_group_members.name` y `.addr`; `task_lists.ews_account`;
-  `folder_renames`, `ews_folder_paths` y `ews_uncertain_moves`.
+- **SOAP escrit a mà** per a llistes i tasques (`exchange/soap.rs`): unes
+  poques operacions (`FindItem`, `GetItem`, `CreateItem`, `UpdateItem`,
+  `DeleteItem`) escrites com a text amb els prefixos `m:` i `t:`, i la
+  resposta llegida amb `quick-xml` (ja era dependència directa) per nom
+  local, com el lector WebDAV. Una fallada SOAP sencera falla; un error per
+  element s'informa amb el seu codi.
+- **Esquema 65** (el 64 és de #210, que entra abans):
+  `contact_group_members.name` i `.addr`; `task_lists.ews_account`;
+  `folder_renames`, `ews_folder_paths` i `ews_uncertain_moves`.
 
-## Alternativas descartadas
+## Alternatives descartades
 
-- **Mover carpetas de Exchange sin cambiar los nombres (lista plana):** el
-  movimiento no se vería y dos subcarpetas con el mismo nombre seguirían
-  pisándose; la jerarquía hace falta igualmente.
-- **Volver a descargar las subcarpetas en vez de llevar su caché a la ruta
-  nueva:** más simple, pero baja otra vez todo su correo por un cambio de
-  nombre.
-- **Guardar los ids de carpeta de Exchange en la base de datos** para
-  seguir cualquier renombrado hecho en otro cliente: es una tabla nueva
-  para un caso que la siguiente sincronización ya resuelve (como en IMAP).
-- **Ampliar el crate `ews`** con miembros y campos de tarea: obliga a
-  publicar una versión nueva de la bifurcación; el SOAP escrito a mano es
-  local, probado con respuestas grabadas y sin dependencias nuevas.
-- **`ConflictResolution="AutoResolve"` o escribir la lista entera de
-  miembros:** sobrescribiría el trabajo de otro cliente (ADR-0012).
-- **Ocultar los miembros que no son contactos,** como hace ADR-0052 con los
-  `mailto:` de CardDAV: en Exchange son la mayoría y las listas se verían
-  vacías.
-- **Marcar la serie como completada y dejar que Exchange genere la
-  siguiente ocurrencia:** depende de un comportamiento del servidor que no
-  se puede probar sin uno real; se hace igual que en CalDAV.
-- **Crear tareas sin id propio y aceptar un duplicado si se pierde la
-  respuesta:** contradice ADR-0039.
+- **Moure carpetes d'Exchange sense canviar els noms (llista plana):** el
+  moviment no es veuria i dues subcarpetes amb el mateix nom continuarien
+  trepitjant-se; la jerarquia cal igualment.
+- **Tornar a baixar les subcarpetes en lloc de portar la seva memòria cau a
+  la ruta nova:** més simple, però torna a baixar tot el seu correu per un
+  canvi de nom.
+- **Desar els ids de carpeta d'Exchange a la base de dades** per a
+  seguir qualsevol reanomenament fet en un altre client: és una taula nova
+  per a un cas que la sincronització següent ja resol (com a IMAP).
+- **Ampliar el crate `ews`** amb membres i camps de tasca: obliga a
+  publicar una versió nova de la bifurcació; el SOAP escrit a mà és
+  local, provat amb respostes enregistrades i sense dependències noves.
+- **`ConflictResolution="AutoResolve"` o escriure la llista sencera de
+  membres:** sobreescriuria la feina d'un altre client (ADR-0012).
+- **Amagar els membres que no són contactes,** com fa ADR-0052 amb els
+  `mailto:` de CardDAV: a Exchange són la majoria i les llistes es veurien
+  buides.
+- **Marcar la sèrie com a completada i deixar que Exchange generi
+  l'ocurrència següent:** depèn d'un comportament del servidor que no
+  es pot provar sense un de real; es fa igual que a CalDAV.
+- **Crear tasques sense id propi i acceptar un duplicat si es perd la
+  resposta:** contradiu ADR-0039.
 
-## Pendiente
+## Pendent
 
-- Evidencia con un servidor Exchange real (N5): que acepta
-  `IsDeliveryReceiptRequested` junto al MIME, los miembros de tipo contacto
-  escritos como se describe, y la conversión de `DueDate` en buzones con
-  zona horaria negativa.
-- Las subcarpetas de Contactos y otras carpetas de contactos o de tareas
-  del buzón; buzones compartidos más allá del principal de la cuenta.
-- Editar los contactos de Exchange (ADR-0012 los sigue dejando en solo
-  lectura).
-- Añadir a una lista de Exchange a alguien de otra libreta (como dirección
-  suelta).
-- Las tareas y listas de Exchange en el móvil.
-- Microsoft Graph: To Do y contactos de Graph (mover carpetas y
-  confirmación de entrega llegaron con ADR-0057, #210).
+- Evidència amb un servidor Exchange real (N5): que accepta
+  `IsDeliveryReceiptRequested` al costat del MIME, els membres de tipus
+  contacte escrits com es descriu, i la conversió de `DueDate` en bústies
+  amb zona horària negativa.
+- Altres carpetes de tasques de la bústia; bústies compartides més enllà de
+  la principal del compte. (Les carpetes de contactes sota Contactes van
+  arribar amb ADR-0066.)
+- Editar els contactes d'Exchange: fet a ADR-0066.
+- Afegir a una llista d'Exchange algú d'una altra llibreta (com a adreça
+  solta).
+- Les tasques i llistes d'Exchange al mòbil.
+- Microsoft Graph: To Do i contactes de Graph (moure carpetes i
+  confirmació de lliurament van arribar amb ADR-0057, #210).
 
-## Pruebas
+## Proves
 
-Todas con respuestas SOAP grabadas, sin servidor real:
+Totes amb respostes SOAP enregistrades, sense servidor real:
 
-- `exchange/tests/folder_moves.rs`: rutas, `/` en un nombre, cadena de
-  padres en bucle, caché del nombre plano que sigue a su carpeta (y otra
-  cuenta que no se toca), nombre compartido, movimiento (éxito, al nivel
-  superior, servidor cambiado desde la caché, rechazo del servidor,
-  respuesta perdida sin repetición, carpetas especiales).
-- `exchange/tests/delivery_receipts.rs` y `main.rs`: la petición en el
-  elemento, nada sin pedirla, rechazo, respuesta perdida; `requested` para
-  Exchange y `unsupported` para Graph.
-- `exchange/book/tests.rs` y `pim/exchange_book/tests.rs`: lectura de
-  contactos y listas, lectura que falla entera, diferencia enviada, copia
-  local obsoleta que no pisa el servidor, conflicto del servidor, error y
-  respuesta perdida, crear y borrar, dos cuentas aparte.
-- `exchange/tasks/tests.rs` y `task_sync/exchange/tests.rs`: campos, reglas
-  leídas y escritas, solo lo cambiado, edición, conflictos y su
-  resolución, error, creación con respuesta perdida sin duplicado,
-  ocurrencia completada, borrado, dos cuentas aparte.
-- `folder_move.rs`: todas las columnas que nombran una carpeta están
-  decididas; tareas, pospuestas, registro, progreso de archivado, reglas de
-  la cuenta y política confirmada siguen al cambio de nombre, y nada de otra
-  cuenta; los cambios de nombre se leen una vez por cuenta.
-- Frontend: `folderMoves.test.ts`, `folderMove.test.ts` (cambios de nombre
-  de una lista de carpetas), `ExchangeGroups.test.tsx`,
+- `exchange/tests/folder_moves.rs`: rutes, `/` en un nom, cadena de
+  pares en bucle, memòria cau del nom pla que segueix la seva carpeta (i un
+  altre compte que no es toca), nom compartit, moviment (èxit, al nivell
+  superior, servidor canviat des de la memòria cau, rebuig del servidor,
+  resposta perduda sense repetició, carpetes especials).
+- `exchange/tests/delivery_receipts.rs` i `main.rs`: la petició a
+  l'element, res sense demanar-la, rebuig, resposta perduda; `requested` per
+  a Exchange i `unsupported` per a Graph.
+- `exchange/book/tests.rs` i `pim/exchange_book/tests.rs`: lectura de
+  contactes i llistes, lectura que falla sencera, diferència enviada, còpia
+  local obsoleta que no trepitja el servidor, conflicte del servidor, error i
+  resposta perduda, crear i suprimir, dos comptes per separat.
+- `exchange/tasks/tests.rs` i `task_sync/exchange/tests.rs`: camps, regles
+  llegides i escrites, només el que ha canviat, edició, conflictes i la seva
+  resolució, error, creació amb resposta perduda sense duplicat,
+  ocurrència completada, supressió, dos comptes per separat.
+- `folder_move.rs`: totes les columnes que anomenen una carpeta estan
+  decidides; tasques, ajornades, registre, progrés d'arxivament, regles del
+  compte i política confirmada segueixen el canvi de nom, i res d'un altre
+  compte; els canvis de nom es llegeixen una vegada per compte.
+- Frontend: `folderMoves.test.ts`, `folderMove.test.ts` (canvis de nom
+  d'una llista de carpetes), `ExchangeGroups.test.tsx`,
   `ExchangeTaskLists.test.tsx`.

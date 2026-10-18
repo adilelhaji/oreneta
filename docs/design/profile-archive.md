@@ -1,47 +1,47 @@
-# Copia completa del perfil (#171, #172; ADR-0010, ADR-0017)
+# Còpia completa del perfil (#171, #172; ADR-0010, ADR-0017)
 
-## Uso
+## Ús
 
-En **Ajustes → Copia de seguridad → Perfil completo** hay tres acciones:
-- **Copiar…** pide una contraseña de al menos 8 caracteres, confirmada, y
-  dónde guardar el archivo `.oreneta-profile`.
-- **Comprobar…** abre un archivo en una carpeta privada, comprueba cada
-  entrada y la base, y dice qué contiene y qué no. El perfil en uso no se
+A **Configuració → Còpia de seguretat → Perfil complet** hi ha tres accions:
+- **Copia…** demana una contrasenya d'almenys 8 caràcters, confirmada, i
+  on es desa el fitxer `.oreneta-profile`.
+- **Comprova…** obre un fitxer en una carpeta privada, comprova cada
+  entrada i la base de dades, i diu què conté i què no. El perfil en ús no es
   toca.
-- **Restaurar…** hace lo mismo y después pide confirmación:
-  - El perfil en uso se aparta; no se borra.
-  - El restaurado entra con todas las cuentas en pausa; se sincroniza al
-    reanudar cada una, y sus contraseñas se piden de nuevo si el llavero no
-    las tiene.
-  - Los envíos programados quedan retenidos.
-  - La ventana se recarga.
+- **Restaura…** fa el mateix i després demana confirmació:
+  - El perfil en ús s'aparta; no s'esborra.
+  - El restaurat entra amb tots els comptes en pausa; se sincronitza en
+    reprendre cadascun, i les seves contrasenyes es tornen a demanar si el clauer
+    no les té.
+  - Els enviaments programats queden retinguts.
+  - La finestra es recarrega.
 
-Mientras el perfil anterior sigue apartado, la misma sección ofrece **Volver**
-(lo repone tal como estaba) o **Conservar** (lo borra).
+Mentre el perfil anterior continua apartat, la mateixa secció ofereix **Torna**
+(el reposa tal com era) o **Conserva** (l'esborra).
 
-## Cómo se activa
+## Com s'activa
 
-1. El núcleo deja preparada la restauración en `restore-staging/ready`:
-   - la base, recifrada con la clave del equipo;
-   - las cuentas en pausa, los envíos retenidos y ningún secreto;
-   - las imágenes;
+1. El nucli deixa preparada la restauració a `restore-staging/ready`:
+   - la base de dades, tornada a xifrar amb la clau de l'equip;
+   - els comptes en pausa, els enviaments retinguts i sense cap secret;
+   - les imatges;
    - `READY.json`.
-2. El puente detiene el núcleo y espera a que el proceso termine y su salida
-   se haya leído, para que Windows libere los archivos.
-3. Antes de mover nada, el puente escribe un diario con cada movimiento y si
-   había algo en su sitio. Después aparta la base, su WAL/SHM y las carpetas
-   de imágenes, y coloca las restauradas.
-4. Arranca el núcleo y le pide la lista de cuentas. Si no abre la base, se
-   deshace con el diario y se arranca sobre el perfil anterior.
-5. Al arrancar la aplicación, un diario a medias se deshace antes de que el
-   núcleo abra la base.
+2. El pont atura el nucli i espera que el procés acabi i que se n'hagi llegit la
+   sortida, perquè Windows alliberi els fitxers.
+3. Abans de moure res, el pont escriu un diari amb cada moviment i si hi havia
+   alguna cosa al seu lloc. Després aparta la base de dades, el seu WAL/SHM i les
+   carpetes d'imatges, i hi col·loca les restaurades.
+4. Arrenca el nucli i li demana la llista de comptes. Si no obre la base de
+   dades, es desfà amb el diari i s'arrenca sobre el perfil anterior.
+5. En arrencar l'aplicació, un diari a mitges es desfà abans que el nucli obri la
+   base de dades.
 
-## Pruebas
+## Proves
 
-| Nivel | Qué cubre |
+| Nivell | Què cobreix |
 |---|---|
-| N1 Rust (`profile_archive/tests.rs`) | Ida y vuelta con contraseña sola; nada legible en el archivo; la caché fuera; contraseña errónea, corta o archivo ajeno; 40 bytes cambiados y 4 cortes detectados; rutas maliciosas (`..`, absolutas, unidades, barras invertidas, `//`, `.`) y nombres repetidos; versión o esquema futuros y manifiesto falso; un fallo conserva la copia anterior; preparación recifrada, cuentas en pausa, envíos retenidos, sin secretos, sin restos tras un fallo y sin clave en equipo sin llavero |
-| N1 despachador (`main.rs`) | Exportar e inspeccionar sin tocar el perfil en uso; la clave de la base no sale del núcleo |
-| N1 Go (`restore_test.go`, `sidecar_restart_test.go`) | Intercambio completo y perfil anterior apartado; conservar; volver exactamente; corte tras cada paso, y a mitad de un paso, deshecho al arrancar; fallo a mitad que repone el anterior; nada sin archivo comprobado; el núcleo se detiene y reinicia como proceso nuevo; tiempos largos para copiar y restaurar |
-| N2 (`ProfileArchiveDialog.test.tsx`, `RestoreStatusRow.test.tsx`) | Contraseña mínima y confirmada; comprobación con contraseña errónea y lista de exclusiones; restaurar solo tras comprobar y confirmar; fallo que no recarga; volver y conservar |
-| N4 pendiente | En Windows: núcleo y WebView2 abiertos durante el intercambio, disco lleno e interrupción reales |
+| N1 Rust (`profile_archive/tests.rs`) | Anada i tornada només amb la contrasenya; res de llegible al fitxer; la memòria cau, fora; contrasenya errònia o curta, o fitxer aliè; 40 bytes canviats i 4 talls detectats; camins maliciosos (`..`, absoluts, unitats, barres inverses, `//`, `.`) i noms repetits; versió o esquema futurs i manifest fals; una fallada conserva la còpia anterior; preparació tornada a xifrar, comptes en pausa, enviaments retinguts, sense secrets, sense restes després d'una fallada i sense clau en un equip sense clauer |
+| N1 distribuïdor (`main.rs`) | Exportar i inspeccionar sense tocar el perfil en ús; la clau de la base de dades no surt del nucli |
+| N1 Go (`restore_test.go`, `sidecar_restart_test.go`) | Intercanvi complet i perfil anterior apartat; conservar; tornar exactament; tall després de cada pas, i a mitges d'un pas, desfet en arrencar; fallada a mitges que reposa l'anterior; res sense un fitxer comprovat; el nucli s'atura i es reinicia com a procés nou; temps llargs per copiar i restaurar |
+| N2 (`ProfileArchiveDialog.test.tsx`, `RestoreStatusRow.test.tsx`) | Contrasenya mínima i confirmada; comprovació amb contrasenya errònia i llista d'exclusions; restaurar només després de comprovar i confirmar; fallada que no recarrega; tornar i conservar |
+| N4 pendent | A Windows: nucli i WebView2 oberts durant l'intercanvi, disc ple i interrupció reals |

@@ -1,106 +1,106 @@
-# ADR-0051: Semana y horario laboral del calendario
+# ADR-0051: Setmana i horari laboral del calendari
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan.
-- Fecha: 2026-10-13.
-- Alcance: la fila SET-18 de la paridad con eM Client 10.4 (#100),
-  «Calendario → General». Las vistas de agenda, semana y mes, el cambio de
-  hora y los calendarios locales, de Google, Exchange y CalDAV ya estaban
-  resueltos y probados; faltaban el primer día de la semana, el horario
-  laboral y lo que trae un evento nuevo. El tiempo meteorológico queda fuera
-  (ver «Pendiente»).
+- Estat: acceptada per delegació («Tomo yo la recomendada»); pendent de
+  revisió del propietari al final del pla.
+- Data: 2026-10-13.
+- Abast: la fila SET-18 de la paritat amb eM Client 10.4 (#100),
+  «Calendari → General». Les visualitzacions d'agenda, setmana i mes, el canvi
+  d'hora i els calendaris locals, de Google, Exchange i CalDAV ja estaven
+  resolts i provats; faltaven el primer dia de la setmana, l'horari
+  laboral i el que porta un esdeveniment nou. El temps meteorològic queda fora
+  (vegeu «Pendent»).
 
-## Decisión
+## Decisió
 
-- **Dos filas en `settings`:**
+- **Dues files a `settings`:**
   - `calendar_week_start` (`settings$.calendarWeekStart`): `locale`,
-    `sunday`, `monday` o `saturday`. Va sola y como texto plano para que el
-    móvil pueda leerla con `app.prefsGet` sin entender un objeto;
-  - `calendar_general` (`settings$.calendar`): números de semana, inicio y
-    fin de la jornada (minutos desde medianoche), días laborables, «solo
-    semana laboral», duración y recordatorio de un evento nuevo. Al leerla,
-    cada campo inválido vuelve a su valor por omisión por separado
-    (`sanitizeCalendarPrefs`); una jornada que acaba antes de empezar vuelve
-    entera a 9:00–17:00.
-- **Primer día de la semana:**
-  - por omisión, el de la región del sistema (`navigator.languages[0]`), no
-    el del idioma de la interfaz: solo el del sistema trae región, y una
-    interfaz en inglés en Madrid sigue teniendo semanas de lunes;
-  - se toma de `Intl.Locale` (`getWeekInfo()` o `weekInfo`), que tienen
-    WebView2, WebKitGTK y JavaScriptCore; sin él, de una tabla con los datos
-    de CLDR por región (domingo: EE. UU., Canadá, Japón, Brasil, Portugal…;
-    sábado: Egipto, Irán, Golfo…; lunes: el resto, casi toda Europa). Un
-    idioma sin región toma la probable (`de` → DE, `fa` → IR);
-  - la persona puede fijar domingo, lunes o sábado; la opción regional dice
-    qué día significa («Predeterminado regional (lunes)»);
-  - lo usan las vistas de semana y mes (orden de columnas, cabeceras y rejilla
-    de seis semanas), la ventana que se pide al núcleo, la etiqueta del
-    periodo y los botones de días de una repetición semanal. Los campos de
-    fecha del editor son los nativos del sistema (`<input type="date">`) y
-    siguen la configuración regional del sistema, no esta preferencia.
-- **Números de semana** (opcional, apagado por omisión): ISO 8601 cuando la
-  semana empieza en lunes (la semana 1 contiene el primer jueves), sea cual
-  sea la región; si empieza otro día, la regla de la región: la semana 1 es
-  la primera con al menos `minimalDays` días del año, que en las regiones de
-  domingo y sábado es la que contiene el 1 de enero. `Intl` ya no da
-  `minimalDays` (se quitó de la propuesta), así que sale siempre de la tabla
-  de CLDR (4 en casi toda Europa, 1 en el resto). Los días se cuentan sobre
-  fechas, no sobre segundos, así que un cambio de hora no mueve una semana.
-  Se muestran en la esquina de la vista de semana («W42» en inglés) y en una columna a
-  la izquierda del mes.
-- **Horario y días laborables:**
-  - por omisión de 9:00 a 17:00, y laborables todos los días fuera del fin
-    de semana de la región (lunes a viernes en Europa y EE. UU.; domingo a
-    jueves en Egipto; en Irán, todos menos el viernes). Elegir días los fija
-    y deja de seguir a la región; siempre queda al menos uno;
-  - las vistas de día y semana sombrean las horas fuera de la jornada y los
-    días no laborables enteros, y se abren desplazadas a media hora antes del
-    inicio de la jornada;
-  - el sombreado se calcula en horas de reloj de pared, igual que la posición
-    de los eventos (`lib/calendarGrid`): un día de 23 o 25 horas sigue
-    sombreado de 0:00 a 9:00 y de 17:00 a 24:00, y su jornada sigue durando
-    ocho horas;
-  - «Semana laboral» en la barra de la vista de semana (y en Ajustes) oculta
-    los días no laborables; la etiqueta del periodo nombra los días que se
-    ven. Una semana sin ningún laborable se muestra entera. La vista de día
-    nunca se recorta.
-- **Evento nuevo:** dura lo elegido (60 minutos por omisión) y lleva el
-  recordatorio elegido (ninguno por omisión, como hasta ahora, para que nadie
-  empiece a recibir avisos por una opción nueva). Hacer doble clic en un día
-  del mes lo empieza al inicio de la jornada en vez de a las 9:00 fijas.
-- **Móvil:** la agenda lee `calendar_week_start` al abrirse. Con un día
-  fijado, la ventana de 14 días empieza en el primer día de la semana actual
-  (páginas de semanas enteras, como en el escritorio); con «regional» sigue
-  empezando hoy, porque el código común no tiene datos de semana por región.
-  Si la preferencia cambia y la agenda estaba en la ventana de hoy, se
-  recoloca; una ventana a la que se ha navegado no se mueve.
+    `sunday`, `monday` o `saturday`. Va sola i com a text pla perquè el
+    mòbil la pugui llegir amb `app.prefsGet` sense entendre un objecte;
+  - `calendar_general` (`settings$.calendar`): números de setmana, inici i
+    fi de la jornada (minuts des de mitjanit), dies laborables, «només
+    setmana laboral», durada i recordatori d'un esdeveniment nou. En llegir-la,
+    cada camp no vàlid torna al seu valor per defecte per separat
+    (`sanitizeCalendarPrefs`); una jornada que acaba abans de començar torna
+    sencera a 9:00–17:00.
+- **Primer dia de la setmana:**
+  - per defecte, el de la regió del sistema (`navigator.languages[0]`), no
+    el de l'idioma de la interfície: només el del sistema porta regió, i una
+    interfície en anglès a Madrid continua tenint setmanes de dilluns;
+  - es pren d'`Intl.Locale` (`getWeekInfo()` o `weekInfo`), que tenen
+    WebView2, WebKitGTK i JavaScriptCore; sense això, d'una taula amb les dades
+    de CLDR per regió (diumenge: EUA, Canadà, Japó, Brasil, Portugal…;
+    dissabte: Egipte, Iran, Golf…; dilluns: la resta, gairebé tot Europa). Un
+    idioma sense regió pren la probable (`de` → DE, `fa` → IR);
+  - la persona pot fixar diumenge, dilluns o dissabte; l'opció regional diu
+    quin dia significa («Predeterminat regional (dilluns)»);
+  - l'utilitzen les visualitzacions de setmana i mes (ordre de columnes,
+    capçaleres i graella de sis setmanes), la finestra que es demana al nucli,
+    l'etiqueta del període i els botons de dies d'una repetició setmanal. Els
+    camps de data de l'editor són els natius del sistema (`<input type="date">`)
+    i segueixen la configuració regional del sistema, no aquesta preferència.
+- **Números de setmana** (opcional, desactivat per defecte): ISO 8601 quan la
+  setmana comença en dilluns (la setmana 1 conté el primer dijous), sigui
+  quina sigui la regió; si comença un altre dia, la regla de la regió: la
+  setmana 1 és la primera amb almenys `minimalDays` dies de l'any, que a les
+  regions de diumenge i dissabte és la que conté l'1 de gener. `Intl` ja no
+  dona `minimalDays` (es va treure de la proposta), així que surt sempre de la
+  taula de CLDR (4 a gairebé tot Europa, 1 a la resta). Els dies es compten
+  sobre dates, no sobre segons, així que un canvi d'hora no mou una setmana.
+  Es mostren a la cantonada de la visualització de setmana («W42» en anglès) i
+  en una columna a l'esquerra del mes.
+- **Horari i dies laborables:**
+  - per defecte de 9:00 a 17:00, i laborables tots els dies fora del cap
+    de setmana de la regió (dilluns a divendres a Europa i als EUA; diumenge a
+    dijous a Egipte; a l'Iran, tots menys el divendres). Triar dies els fixa
+    i deixa de seguir la regió; sempre en queda almenys un;
+  - les visualitzacions de dia i setmana ombregen les hores fora de la jornada
+    i els dies no laborables sencers, i s'obren desplaçades a mitja hora abans
+    de l'inici de la jornada;
+  - l'ombrejat es calcula en hores de rellotge de paret, igual que la posició
+    dels esdeveniments (`lib/calendarGrid`): un dia de 23 o 25 hores continua
+    ombrejat de 0:00 a 9:00 i de 17:00 a 24:00, i la seva jornada continua
+    durant vuit hores;
+  - «Setmana laboral» a la barra de la visualització de setmana (i a
+    Paràmetres) amaga els dies no laborables; l'etiqueta del període anomena
+    els dies que es veuen. Una setmana sense cap dia laborable es mostra
+    sencera. La visualització de dia mai no es retalla.
+- **Esdeveniment nou:** dura el que s'ha triat (60 minuts per defecte) i porta
+  el recordatori triat (cap per defecte, com fins ara, perquè ningú no
+  comenci a rebre avisos per una opció nova). Fer doble clic en un dia
+  del mes el comença a l'inici de la jornada en lloc de fer-ho a les 9:00 fixes.
+- **Mòbil:** l'agenda llegeix `calendar_week_start` en obrir-se. Amb un dia
+  fixat, la finestra de 14 dies comença el primer dia de la setmana actual
+  (pàgines de setmanes senceres, com a l'escriptori); amb «regional» continua
+  començant avui, perquè el codi comú no té dades de setmana per regió.
+  Si la preferència canvia i l'agenda era a la finestra d'avui, es
+  recol·loca; una finestra a la qual s'ha navegat no es mou.
 
-## Alternativas descartadas
+## Alternatives descartades
 
-- **Tomar la región del idioma de la interfaz:** `es`, `ca` o `en` no dicen
-  dónde se vive; `en` sería EE. UU. y daría domingo a quien usa la interfaz
-  en inglés en Europa.
-- **Una sola fila con todo el calendario:** el móvil solo lee valores
-  simples de `app.prefsGet` (`parseAppPrefsResponse` descarta objetos), y el
-  primer día es lo único que necesita.
-- **ISO 8601 para todos los números de semana:** en EE. UU., Japón o Brasil
-  la semana del 1 de enero es la 1 y la cuentan en domingo; numerar con ISO
-  una rejilla de domingo da semanas partidas.
-- **Recordatorio de 15 minutos por omisión, como eM Client:** cambiaría lo
-  que hace hoy cada evento nuevo sin que nadie lo pida.
+- **Prendre la regió de l'idioma de la interfície:** `es`, `ca` o `en` no diuen
+  on es viu; `en` seria EUA i donaria diumenge a qui fa servir la interfície
+  en anglès a Europa.
+- **Una sola fila amb tot el calendari:** el mòbil només llegeix valors
+  simples d'`app.prefsGet` (`parseAppPrefsResponse` descarta objectes), i el
+  primer dia és l'únic que necessita.
+- **ISO 8601 per a tots els números de setmana:** als EUA, al Japó o al Brasil
+  la setmana de l'1 de gener és la 1 i la compten en diumenge; numerar amb ISO
+  una graella de diumenge dona setmanes partides.
+- **Recordatori de 15 minuts per defecte, com eM Client:** canviaria el que
+  fa avui cada esdeveniment nou sense que ningú ho demani.
 
-## Pendiente (#100 sigue abierta)
+## Pendent (#100 continua oberta)
 
-- **Tiempo meteorológico:** eM Client lo muestra en el calendario, pero
-  exige un servicio en línea (envía la ubicación a un tercero y puede
-  necesitar una clave de API). No se implementa: queda fuera de alcance hasta
-  que el propietario decida servicio, privacidad (qué ubicación se envía y
-  cuándo) y si la clave la pone la persona.
-- El primer día «regional» en el móvil (necesita datos de semana de la
-  plataforma: `java.time.temporal.WeekFields` en Android, `Calendar.firstWeekday`
-  en iOS).
-- Sombreado y números de semana en el móvil, que hoy solo tiene agenda.
-- Las agrupaciones del correo por «esta semana» (`lib/dateGroups.ts`) y los
-  atajos «el lunes por la mañana» siguen en semanas de lunes.
-- Comprobación nativa en Windows (WebView2) de la región del sistema y de
-  los campos de fecha.
+- **Temps meteorològic:** eM Client el mostra al calendari, però
+  exigeix un servei en línia (envia la ubicació a un tercer i pot
+  necessitar una clau d'API). No s'implementa: queda fora d'abast fins
+  que el propietari decideixi servei, privadesa (quina ubicació s'envia i
+  quan) i si la clau la posa la persona.
+- El primer dia «regional» al mòbil (necessita dades de setmana de la
+  plataforma: `java.time.temporal.WeekFields` a Android, `Calendar.firstWeekday`
+  a iOS).
+- Ombrejat i números de setmana al mòbil, que avui només té agenda.
+- Les agrupacions del correu per «aquesta setmana» (`lib/dateGroups.ts`) i les
+  dreceres «dilluns al matí» continuen en setmanes de dilluns.
+- Comprovació nativa a Windows (WebView2) de la regió del sistema i dels
+  camps de data.

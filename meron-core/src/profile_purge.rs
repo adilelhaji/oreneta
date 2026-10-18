@@ -58,6 +58,18 @@ pub fn secret_names(conn: &Connection) -> Result<Vec<String>> {
     Ok(names)
 }
 
+/// Every keychain name this profile's store refers to, Graph's records
+/// included and the store key aside: what the start-up sweep moves from the
+/// `meron` service to `oreneta` (ADR-0063). The store key is moved when the
+/// store opens, before this list can be read.
+pub fn keychain_names(conn: &Connection) -> Result<Vec<String>> {
+    let mut names = secret_names(conn)?;
+    names.extend(column(conn, "SELECT id FROM accounts")?.iter().map(|id| crate::graph::auth::vault_key(id)));
+    names.sort();
+    names.dedup();
+    Ok(names)
+}
+
 /// Deletes every keychain entry of the open profile. Run with the profile's
 /// own `MERON_PROFILE`, never from another profile's process.
 pub fn purge(conn: &Connection) -> Result<Purged> {
@@ -109,6 +121,26 @@ mod tests {
         assert!(names.contains(&crate::backup_schedule::SECRET_KEY.to_string()));
         assert!(names.contains(&crate::task_sync::secret_key("list:dav")));
         assert!(!names.contains(&crate::task_sync::secret_key("mail")), "a local list has no password");
+    }
+
+    /// The start-up sweep (ADR-0063) moves what a purge would delete, Graph's
+    /// records included, so no entry is left behind under `meron`.
+    #[test]
+    fn the_sweep_names_every_secret_and_each_accounts_graph_record() {
+        let conn = crate::store::open_in_memory_for_test().unwrap();
+        conn.execute_batch(
+            "INSERT INTO accounts(id, email, display_name, config) VALUES('a@x.cat', 'a@x.cat', 'A', '{}');
+             INSERT INTO chat_accounts(id, jid, host, port, created_at) VALUES('c1', 'a@chat', '', 5222, 0);",
+        )
+        .unwrap();
+        let names = keychain_names(&conn).unwrap();
+        for name in secret_names(&conn).unwrap() {
+            assert!(names.contains(&name), "{name} is swept");
+        }
+        assert!(names.contains(&crate::graph::auth::vault_key("a@x.cat")));
+        let mut sorted = names.clone();
+        sorted.dedup();
+        assert_eq!(sorted.len(), names.len(), "each name once");
     }
 
     #[test]

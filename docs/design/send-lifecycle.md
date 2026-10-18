@@ -1,18 +1,18 @@
-# Envío inmediato, retenido y programado; pospuestos (#89, ADR-0024)
+# Enviament immediat, retingut i programat; posposats (#89, ADR-0024)
 
-## Defectos encontrados y corregidos
+## Defectes trobats i corregits
 
-| Defecto | Prueba |
+| Defecte | Prova |
 |---|---|
-| Una respuesta en su periodo para deshacer se perdía al cerrar o fallar la app | `held replies are kept by the core` (4 casos) en `compose.test.ts` |
-| «Ya intentado» se tomaba por enviado: el segundo de dos envíos simultáneos borraba la fila aunque el primero pudiera fallar | `an_already_attempted_answer_is_not_taken_for_a_sent_message`, `a_scheduled_row_whose_attempt_already_went_is_not_sent_twice` |
-| La contraseña de la clave podía guardarse con un mensaje programado | `a_scheduled_message_is_stored_without_a_passphrase_and_late_is_said` |
-| No se avisaba de que la app debe estar abierta, ni de un envío tardío | Texto en el menú «Enviar más tarde» y aviso `late` del vigilante |
-| Un hilo pospuesto y movido desaparecía de todas las vistas | `a_snoozed_conversation_moved_meanwhile_is_still_listed_where_it_is` |
-| El aviso al despertar decía «de vuelta en tu bandeja» sin haberse movido | Texto corregido |
+| Una resposta dins del període per desfer-la es perdia en tancar l'aplicació o si aquesta fallava | `held replies are kept by the core` (4 casos) a `compose.test.ts` |
+| «Ja intentat» es prenia per enviat: el segon de dos enviaments simultanis esborrava la fila encara que el primer pogués fallar | `an_already_attempted_answer_is_not_taken_for_a_sent_message`, `a_scheduled_row_whose_attempt_already_went_is_not_sent_twice` |
+| La contrasenya de la clau es podia desar amb un missatge programat | `a_scheduled_message_is_stored_without_a_passphrase_and_late_is_said` |
+| No s'avisava que l'aplicació ha d'estar oberta, ni d'un enviament tardà | Text al menú «Envia més tard» i avís `late` del vigilant |
+| Un fil posposat i mogut desapareixia de totes les visualitzacions | `a_snoozed_conversation_moved_meanwhile_is_still_listed_where_it_is` |
+| L'avís en despertar deia «de tornada a la safata d'entrada» sense que s'hagués mogut | Text corregit |
 
-## Comportamiento
+## Comportament
 
-Ver ADR-0024 para las transiciones. Lo que no cambia:
-- un envío incierto nunca se repite solo;
-- reenviarlo es una decisión de la persona, con aviso.
+Vegeu l'ADR-0024 per a les transicions. El que no canvia:
+- un enviament incert no es repeteix mai sol;
+- reenviar-lo és una decisió de la persona, amb avís.

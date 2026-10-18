@@ -1,64 +1,64 @@
-# ADR-0019: Invitaciones que llegan por correo (iMIP)
+# ADR-0019: Invitacions que arriben per correu (iMIP)
 
-- Estado: aceptada; tomada por delegación y revisada por el propietario
+- Estat: acceptada; presa per delegació i revisada pel propietari
   el 2026-10-12.
-- Fecha: 2026-10-11.
-- Alcance: primera entrega de #102.
+- Data: 2026-10-11.
+- Abast: primer lliurament de #102.
 
-## Contexto
+## Context
 
-Las invitaciones de Exchange y Google ya se contestaban desde su calendario,
-por sus API. Una invitación recibida en una cuenta IMAP aparecía como un
-adjunto `.ics` sin más. #102 exige que el correo recibido no autorice nunca a
-contestar solo.
+Les invitacions d'Exchange i Google ja es contestaven des del seu calendari,
+per les seves API. Una invitació rebuda en un compte IMAP apareixia com un
+adjunt `.ics` i prou. #102 exigeix que el correu rebut no autoritzi mai a
+contestar sol.
 
-## Alternativas
+## Alternatives
 
-1. **Leer, describir y actuar solo con un botón (elegida).** Con «Aceptar»,
-   «Quizá» o «Rechazar» se guarda el evento en el calendario elegido (local o
-   CalDAV) o se quita, y se envía la respuesta iTIP al organizador por la ruta
-   normal de envío. Así queda registrada como intento de envío (#29), con
-   copia en Enviados.
-2. **Añadir automáticamente al calendario las invitaciones recibidas**, como
-   hace Gmail. Es cómodo, pero llena el calendario con lo que llega de
-   cualquiera y es un vector de spam conocido.
-3. **Contestar desde el servidor de calendario (CalDAV scheduling).** Pocos
-   servidores lo implementan, y no aplica a calendarios locales.
+1. **Llegir, descriure i actuar només amb un botó (escollida).** Amb «Acceptar»,
+   «Potser» o «Rebutjar» es desa l'esdeveniment al calendari triat (local o
+   CalDAV) o es treu, i s'envia la resposta iTIP a l'organitzador per la ruta
+   normal d'enviament. Així queda registrada com a intent d'enviament (#29), amb
+   còpia a Enviats.
+2. **Afegir automàticament al calendari les invitacions rebudes**, com
+   fa Gmail. És còmode, però omple el calendari amb el que arriba de
+   qualsevol i és un vector de correu brossa conegut.
+3. **Contestar des del servidor de calendari (CalDAV scheduling).** Pocs
+   servidors ho implementen, i no s'aplica a calendaris locals.
 
-## Decisión
+## Decisió
 
-- **Lectura:** el analizador reconoce una parte `text/calendar` (o
-  `application/ics`) con METHOD y guarda con el mensaje su descripción:
-  método, UID, SEQUENCE, ocurrencia, asunto, lugar, primera hora,
-  organizador y asistentes con su estado, y el objeto tal cual llegó.
-- **Respuesta:** se construye según RFC 5546 §3.2.3 (UID, SEQUENCE,
-  RECURRENCE-ID si la hay, ORGANIZER y solo el ATTENDEE propio con su
-  PARTSTAT). Se envía como adjunto `text/calendar; method=REPLY` (RFC 6047),
-  con el método como parámetro de verdad en el Content-Type.
-- **Calendario:**
-  - aceptar o «quizá» guarda el evento sin METHOD y con el PARTSTAT propio;
-    en CalDAV como objeto propio y en local como sus ocurrencias;
-  - rechazar lo quita;
-  - una copia con SEQUENCE mayor no se sobrescribe.
-- **Cancelación:** solo se quita al pulsar «Quitar de mi calendario».
-- **Versiones:**
-  - se guarda la última respuesta por cuenta y UID (`invitation_answers`,
-    que se borra con la cuenta según ADR-0011);
-  - una invitación con SEQUENCE menor que la ya contestada aparece como
-    antigua y no ofrece botones;
-  - la misma versión puede volver a contestarse, que es como se reintenta.
-- **Fallo de envío:** si el calendario se actualizó pero la respuesta no
-  salió, se dice exactamente eso, y volver a pulsar la envía.
-- **Exchange y Google:** la tarjeta lo describe e indica que se conteste en
-  el calendario de la cuenta, como antes.
+- **Lectura:** l'analitzador reconeix una part `text/calendar` (o
+  `application/ics`) amb METHOD i desa amb el missatge la seva descripció:
+  mètode, UID, SEQUENCE, ocurrència, assumpte, lloc, primera hora,
+  organitzador i assistents amb el seu estat, i l'objecte tal com va arribar.
+- **Resposta:** es construeix segons RFC 5546 §3.2.3 (UID, SEQUENCE,
+  RECURRENCE-ID si n'hi ha, ORGANIZER i només l'ATTENDEE propi amb el seu
+  PARTSTAT). S'envia com a adjunt `text/calendar; method=REPLY` (RFC 6047),
+  amb el mètode com a paràmetre real al Content-Type.
+- **Calendari:**
+  - acceptar o «potser» desa l'esdeveniment sense METHOD i amb el PARTSTAT propi;
+    a CalDAV com a objecte propi i en local com les seves ocurrències;
+  - rebutjar el treu;
+  - una còpia amb SEQUENCE més gran no se sobreescriu.
+- **Cancel·lació:** només es treu en prémer «Treure del meu calendari».
+- **Versions:**
+  - es desa la darrera resposta per compte i UID (`invitation_answers`,
+    que se suprimeix amb el compte segons l'ADR-0011);
+  - una invitació amb SEQUENCE més petit que la ja contestada apareix com a
+    antiga i no ofereix botons;
+  - la mateixa versió es pot tornar a contestar, que és com es reintenta.
+- **Fallada d'enviament:** si el calendari s'ha actualitzat però la resposta no
+  ha sortit, es diu exactament això, i tornar a prémer l'envia.
+- **Exchange i Google:** la targeta ho descriu i indica que es contesti al
+  calendari del compte, com abans.
 
-## Pendiente
+## Pendent
 
-- Contraproponer: resuelto en ADR-0043 (COUNTER y DECLINECOUNTER).
-- Reenviar una invitación.
-- Disponibilidad (free/busy): las coincidencias con la agenda propia se
-  resuelven en ADR-0043; la disponibilidad de otras personas desde los
-  servidores sigue bloqueada (ver ADR-0043).
-- Actualizar como organizador el estado de los asistentes al recibir
-  respuestas: ahora solo se muestran.
-- Verificación N5 con Outlook, Gmail y Apple Calendar.
+- Contraproposar: resolt a l'ADR-0043 (COUNTER i DECLINECOUNTER).
+- Reenviar una invitació.
+- Disponibilitat (free/busy): les coincidències amb l'agenda pròpia es
+  resolen a l'ADR-0043; la disponibilitat d'altres persones des dels
+  servidors continua bloquejada (vegeu l'ADR-0043).
+- Actualitzar com a organitzador l'estat dels assistents en rebre
+  respostes: ara només es mostren.
+- Verificació N5 amb Outlook, Gmail i Apple Calendar.

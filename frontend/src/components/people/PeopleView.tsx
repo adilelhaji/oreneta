@@ -119,7 +119,7 @@ export function PeopleView() {
     const owner = accounts.find((account) => account.id === person.account && isSendableAccount(account))
     const from = owner ?? accounts.find(isSendableAccount)
     if (!from) return
-    ui$.peopleOpen.set(false)
+    ui$.module.set('mail')
     openComposeTab({ accountId: from.id, to: person.name ? `${person.name} <${addr}>` : addr })
   }
 
@@ -129,7 +129,7 @@ export function PeopleView() {
     const from = accounts.find(isSendableAccount)
     const recipients = groupRecipients(group)
     if (!from || recipients.length === 0) return
-    ui$.peopleOpen.set(false)
+    ui$.module.set('mail')
     openComposeTab({
       accountId: from.id,
       to: recipients
@@ -142,7 +142,9 @@ export function PeopleView() {
     const confirmed = await confirmAction({
       title: t('people.deleteGroupTitle', { defaultValue: 'Delete group?' }),
       message:
-        group.source === 'carddav'
+        // A server book's group goes on the server: CardDAV, and an
+        // Exchange folder's distribution lists (ADR-0058, ADR-0066).
+        group.source === 'carddav' || group.source === 'exchange'
           ? t('people.deleteGroupTextServer', {
               name: group.name,
               defaultValue: 'The group {name} will be deleted from the address book on its server. The people in it stay.',
@@ -161,7 +163,7 @@ export function PeopleView() {
     const confirmed = await confirmAction({
       title: t('people.deleteTitle', { defaultValue: 'Delete contact?' }),
       message:
-        person.source === 'carddav'
+        person.source === 'carddav' || person.source === 'exchange'
           ? t('people.deleteTextServer', {
               name: person.name || person.emails[0]?.addr || '',
               defaultValue: '{name} will be deleted from the address book on its server, for every app that reads it.',
@@ -181,10 +183,11 @@ export function PeopleView() {
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 bg-app">
+    <div data-region="content" className="flex min-h-0 min-w-0 flex-1 bg-app">
       <section
+        data-region="folders"
         className={clsx(
-          'min-w-0 w-full shrink-0 flex-col border-r border-border bg-chats min-[769px]:flex min-[769px]:w-72',
+          'min-w-0 w-full shrink-0 flex-col border-e border-border bg-chats min-[769px]:flex min-[769px]:w-72',
           selected ? 'hidden' : 'flex',
         )}
       >
@@ -353,7 +356,7 @@ export function PeopleView() {
                         }
                       }}
                       className={clsx(
-                        'flex w-full items-center gap-3 border-b border-border/50 px-3 py-2 text-left transition-colors cursor-pointer',
+                        'flex w-full items-center gap-3 border-b border-border/50 px-3 py-2 text-start transition-colors cursor-pointer',
                         active ? 'bg-accent/20 dark:bg-accent/30' : 'hover:bg-hover',
                       )}
                     >
@@ -364,7 +367,7 @@ export function PeopleView() {
                         size={34}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-ui font-semibold text-primary">
+                        <span dir="auto" className="block truncate text-ui font-semibold text-primary">
                           {names.format(person)}
                         </span>
                         {/* On the selected row's tinted background the secondary
@@ -418,7 +421,8 @@ export function PeopleView() {
                 people$.editing.set({
                   id: selected.id,
                   version: selected.version,
-                  serverBook: selected.source === 'carddav' ? selected.book : undefined,
+                  serverBook:
+                    selected.source === 'carddav' || selected.source === 'exchange' ? selected.book : undefined,
                   draft: draftOf(selected),
                 })
               }
@@ -439,7 +443,7 @@ export function PeopleView() {
                         type="button"
                         aria-current={copy.id === selected.id}
                         onClick={() => people$.selectedId.set(copy.id)}
-                        className="min-w-0 flex-1 text-left text-ui text-primary cursor-pointer"
+                        className="min-w-0 flex-1 text-start text-ui text-primary cursor-pointer"
                       >
                         {names.format(copy)}{' '}
                         <span className="text-caption text-secondary">
@@ -501,7 +505,9 @@ function PersonCard({
           size={72}
         />
         <div className="min-w-0 flex-1 basis-40">
-          <h2 className="wrap-anywhere text-heading font-bold text-primary">{displayName}</h2>
+          <h2 dir="auto" className="wrap-anywhere text-heading font-bold text-primary">
+            {displayName}
+          </h2>
           {person.organisation && (
             <p className="mt-1 flex items-start gap-1.5 wrap-anywhere text-ui text-secondary">
               <Building2 size={14} strokeWidth={1.75} /> {person.organisation}
@@ -533,7 +539,7 @@ function PersonCard({
             {memberOf.map((group) => (
               <span
                 key={group.id}
-                className="inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-chats py-0.5 pl-2.5 pr-1 text-caption text-primary"
+                className="inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-chats py-0.5 ps-2.5 pe-1 text-caption text-primary"
               >
                 <span className="wrap-anywhere">{group.name}</span>
                 {group.editable && (
@@ -635,7 +641,9 @@ function PersonCard({
       {person.note && (
         <section className="mt-6">
           <h2 className="mb-2 text-caption font-bold uppercase tracking-wide text-secondary">{t('people.note')}</h2>
-          <p className="whitespace-pre-wrap wrap-anywhere text-ui leading-relaxed text-primary">{person.note}</p>
+          <p dir="auto" className="bidi-plaintext whitespace-pre-wrap wrap-anywhere text-ui leading-relaxed text-primary">
+            {person.note}
+          </p>
         </section>
       )}
     </div>

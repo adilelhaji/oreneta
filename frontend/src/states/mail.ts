@@ -35,6 +35,7 @@ import { CONVERSATION_PAGE_SIZE } from '../lib/pagination'
 import { bareAddr, splitAddressList } from '../lib/address'
 import { settings$, sortParam } from './settings'
 import { requestAccountSync, type SyncRequestOutcome } from './connectivity'
+import { revertSpamJudgment, type SpamJudgmentChange } from './spam'
 
 function readOnlyTarget(accounts: Account[], id: string): boolean {
   return matchesReadOnlyTarget(accounts, id) || matchesReadOnlyTarget(accounts, findLocalThread(id)?.account_id ?? '')
@@ -1782,18 +1783,25 @@ async function refreshThreadLocation(accountId?: string, refresh = false) {
   }
 }
 
-export async function moveThreadToFolder(threadId: string, targetFolderId: string, options: { undo?: boolean } = {}) {
-  if (changesBlocked(accounts$.peek(), threadId)) return
-  if (!threadId || !targetFolderId) return
+/** Moves a conversation; answers whether the server moved it. */
+export async function moveThreadToFolder(
+  threadId: string,
+  targetFolderId: string,
+  options: { undo?: boolean } = {},
+): Promise<boolean> {
+  if (changesBlocked(accounts$.peek(), threadId)) return false
+  if (!threadId || !targetFolderId) return false
   const sourceThread = findLocalThread(threadId)
   const sourceFolder = sourceThread?.folder_id ?? ''
-  if (sourceFolder === targetFolderId) return
+  if (sourceFolder === targetFolderId) return false
   const targetThreadId = threadIdInFolder(threadId, sourceThread?.account_id, targetFolderId)
 
   const { rollback } = removeThreadLocally(threadId)
+  let moved = false
   try {
     const res = await invoke('mail.move', { thread_id: threadId, target_folder_id: targetFolderId })
     assertMoveAffected(res)
+    moved = true
     applyMutationFolderUnreads(res as MutationResult)
     await refreshThreadLocation(sourceThread?.account_id, true)
     if (threadStillListed(threadId)) {
@@ -1810,6 +1818,7 @@ export async function moveThreadToFolder(threadId: string, targetFolderId: strin
     rollback()
     showToast(error instanceof Error ? error.message : t('mail.toast.moveFailed'), 'error')
   }
+  return moved
 }
 
 export async function copyThreadToFolder(threadId: string, targetAccountId: string, targetFolderId: string) {
@@ -2027,16 +2036,85 @@ export async function bulkDeleteSelected(items: BulkSelectionItem[]) {
 }
 
 /**
+ * What `mail.markJunk` answers: the core's own move result, which names the
+ * destination as `target_folder` (`folder` is kept for older answers), and
+ * what the move taught the learned filter as `spam_judgment` (#254), absent
+ * when it taught nothing.
+ */
+type JunkResult = {
+  folder?: string
+  target_folder?: string
+  thread_id?: string
+  spam_judgment?: SpamJudgmentChange
+} & MutationResult
+
+/** The conversation's id in the folder the junk change filed it into, for its undo. */
+function junkDestinationThreadId(threadId: string, accountId: string | undefined, res: JunkResult): string {
+  return res.thread_id ?? threadIdInFolder(threadId, accountId, res.target_folder ?? res.folder)
+}
+
+/**
+ * One junk change to undo: the conversation where the change filed it, the
+ * folder it came from, and what the change taught the filter.
+ */
+type JunkUndo = { threadId: string; folderId: string; accountId: string; judgment?: SpamJudgmentChange }
+
+/**
+ * The learning half of undoing a junk change (#254): what the mark (or "Not
+ * junk") taught the filter, taken back, so it ends as it was before. Done
+ * before the move back, while the conversation is still where the mark filed
+ * it: that copy is the one the judgment was recorded on. Answers what puts the
+ * learning back if the move then fails; `null` when there is nothing to put
+ * back, or when a later judgment had replaced this one and was kept.
+ */
+async function revertJunkLearning(change: JunkUndo): Promise<SpamJudgmentChange | null> {
+  return change.judgment ? revertSpamJudgment(change.judgment) : null
+}
+
+/**
+ * A move back that failed leaves the conversation where the mark filed it, so
+ * the learning goes back to what the mark left too: each conversation is
+ * either undone whole or not at all. If even that fails, the reader is told
+ * about the move and the rest goes to the log (ADR-0005, #254).
+ */
+async function restoreJunkLearning(restore: SpamJudgmentChange | null) {
+  if (!restore) return
+  try {
+    await revertSpamJudgment(restore)
+  } catch (error) {
+    // The move's own failure is what the reader is told; this one is logged.
+    console.error('Junk learning could not be restored after a failed undo:', error)
+  }
+}
+
+/** The undo of one conversation's junk change: its learning, then the move back. */
+async function undoThreadJunk(change: JunkUndo) {
+  // The move back would be refused: nothing is taken back either.
+  if (changesBlocked(accounts$.peek(), change.threadId)) return
+  let restore: SpamJudgmentChange | null = null
+  try {
+    restore = await revertJunkLearning(change)
+  } catch (error) {
+    // Nothing undone yet: said, and left as it is.
+    showToast(error instanceof Error ? error.message : t('spam.changeFailed'), 'error')
+    return
+  }
+  const moved = await moveThreadToFolder(change.threadId, change.folderId, { undo: false })
+  if (!moved) await restoreJunkLearning(restore)
+}
+
+/**
  * Files a conversation where the account keeps unwanted mail, or takes it back.
  *
  * A move, not a flag. On Gmail and Exchange the junk folder is what teaches
  * the server's own filter, so this does what a reader means by "this is spam";
  * on a plain IMAP server it files it and nothing more, which is all that
- * server offers.
+ * server offers. The core also teaches the local learned filter (ADR-0005).
  *
  * Offered with an undo, like archiving, because the one thing a reader needs
  * after mis-filing something is to put it back — and a message in the junk
- * folder is a message they will not go looking for.
+ * folder is a message they will not go looking for. The undo takes back what
+ * the change taught the learned filter as well (#254).
  */
 export async function markThreadJunk(threadId: string, junk = true) {
   if (readOnlyTarget(accounts$.peek(), threadId)) return
@@ -2045,19 +2123,22 @@ export async function markThreadJunk(threadId: string, junk = true) {
   const sourceFolder = sourceThread?.folder_id ?? ''
   const { rollback } = removeThreadLocally(threadId)
   try {
-    const res = await invoke<{ folder?: string; thread_id?: string } & MutationResult>('mail.markJunk', {
+    const res = await invoke<JunkResult>('mail.markJunk', {
       thread_id: threadId,
       junk,
     })
     assertMoveAffected(res, junk ? 'Junk' : 'Not junk')
     applyMutationFolderUnreads(res)
-    const movedThreadId = res.thread_id ?? threadIdInFolder(threadId, sourceThread?.account_id, res.folder)
+    const movedThreadId = junkDestinationThreadId(threadId, sourceThread?.account_id, res)
     await refreshThreadLocation(sourceThread?.account_id, true)
     if (sourceFolder) {
-      showUndoToast(
-        t(junk ? 'mail.toast.markedJunk' : 'mail.toast.markedNotJunk'),
-        () => void moveThreadToFolder(movedThreadId, sourceFolder, { undo: false }),
-      )
+      const change: JunkUndo = {
+        threadId: movedThreadId,
+        folderId: sourceFolder,
+        accountId: sourceThread?.account_id ?? '',
+        judgment: res.spam_judgment,
+      }
+      showUndoToast(t(junk ? 'mail.toast.markedJunk' : 'mail.toast.markedNotJunk'), () => void undoThreadJunk(change))
     } else {
       showToast(t(junk ? 'mail.toast.markedJunk' : 'mail.toast.markedNotJunk'))
     }
@@ -2067,6 +2148,94 @@ export async function markThreadJunk(threadId: string, junk = true) {
     rollback()
     showToast(error instanceof Error ? error.message : t('mail.toast.junkFailed'), 'error')
   }
+}
+
+/**
+ * `markThreadJunk` for a selection (#245): the same core command per
+ * conversation, so each one teaches the filter exactly as the context menu
+ * does, and the same toast with one undo that puts every conversation back
+ * where it came from and takes back what each one taught the filter (#254).
+ *
+ * Conversations already where the gesture would send them are left alone:
+ * the judgment would be a repeat (ADR-0005 makes it a no-op) and the move a
+ * move into the same folder, which reports nothing moved and would stop the
+ * run. Drafts are never filed as junk.
+ *
+ * A run that stops part way says how far it got, like the other bulk actions,
+ * and offers no undo: the error is what the reader needs to see, and the
+ * conversations already filed are listed in the junk folder for the reader
+ * to take back with "Not junk".
+ */
+export async function bulkMarkSelectedJunk(items: BulkSelectionItem[], junk = true) {
+  if (items.some((item) => readOnlyTarget(accounts$.peek(), item.accountId))) return
+  const targets = uniqueThreadItems(items).filter(
+    (item) => !item.draft && isJunkFolderId(item.accountId, item.folderId) !== junk,
+  )
+  if (targets.length === 0) return
+  const moved: JunkUndo[] = []
+  const { done, error } = await runBulk(
+    targets,
+    async (item) => {
+      const res = await invoke<JunkResult>('mail.markJunk', {
+        thread_id: item.threadId,
+        junk,
+      })
+      assertMoveAffected(res, junk ? 'Junk' : 'Not junk')
+      applyMutationFolderUnreads(res)
+      // A selection can span accounts: each one's folder list (the junk
+      // folder's count among them) follows, as for a bulk archive.
+      void refreshAccountFoldersCache(item.accountId, false)
+      if (item.folderId) {
+        moved.push({
+          threadId: junkDestinationThreadId(item.threadId, item.accountId, res),
+          folderId: item.folderId,
+          accountId: item.accountId,
+          judgment: res.spam_judgment,
+        })
+      }
+    },
+    { removesLocally: true },
+  )
+  if (!error) await refreshThreadLocation(undefined, true)
+  clearBulkSelection()
+  if (error) {
+    showToast(bulkFailure(done, targets.length, error, t('mail.toast.junkFailed')), 'error')
+    return
+  }
+  const message = t(junk ? 'mail.toast.markedJunk' : 'mail.toast.markedNotJunk')
+  if (moved.length === targets.length) showUndoToast(message, () => void returnThreadsToFolders(moved))
+  else showToast(message)
+}
+
+/**
+ * The undo of a bulk junk change: for each conversation in turn, what it
+ * taught the filter taken back and the conversation back to its own folder.
+ * An undo that stops part way has undone only the conversations before the
+ * one that failed, and that one is left whole as the mark left it.
+ */
+async function returnThreadsToFolders(moves: JunkUndo[]) {
+  let done = 0
+  let failure: unknown
+  for (const move of moves) {
+    let restore: SpamJudgmentChange | null = null
+    let landed = false
+    try {
+      restore = await revertJunkLearning(move)
+      const res = await invoke('mail.move', { thread_id: move.threadId, target_folder_id: move.folderId })
+      assertMoveAffected(res)
+      landed = true
+      applyMutationFolderUnreads(res as MutationResult)
+      void refreshAccountFoldersCache(move.accountId, false)
+      done++
+    } catch (error) {
+      if (!landed) await restoreJunkLearning(restore)
+      failure = error
+      break
+    }
+  }
+  await refreshThreadLocation(moves[0]?.accountId, true)
+  if (failure) showToast(bulkFailure(done, moves.length, failure, t('mail.toast.moveFailed')), 'error')
+  else showToast(t('mail.toast.movedCount', { count: done }))
 }
 
 export async function archiveThread(threadId: string) {

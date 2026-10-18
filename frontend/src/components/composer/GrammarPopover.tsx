@@ -3,6 +3,7 @@ import type { Editor } from '@tiptap/core'
 import { useTranslation } from '../../lib/i18n'
 import type { GrammarChecker, GrammarResult } from '../../lib/grammar'
 import { applySuggestion, grammarKey, type PlacedIssue } from './grammarExtension'
+import { menuLeft } from '../../lib/direction'
 
 /**
  * One grammar issue the writer clicked (#105): what Harper says, its
@@ -55,7 +56,8 @@ export function GrammarPopover({
       role="dialog"
       aria-label={t('grammar.label', { defaultValue: 'Grammar suggestion' })}
       className="fixed z-50 w-72 rounded-control border border-border bg-chats p-2.5 text-caption shadow-overlay"
-      style={{ left: Math.min(at.left, window.innerWidth - 300), top: at.top + 4 }}
+      // Opens from the caret towards the end of the line (ADR-0061).
+      style={{ left: menuLeft(at.left, 300, window.innerWidth, 0), top: at.top + 4 }}
     >
       <p className="text-primary">{placed.issue.message}</p>
       {placed.issue.suggestions.length > 0 && (

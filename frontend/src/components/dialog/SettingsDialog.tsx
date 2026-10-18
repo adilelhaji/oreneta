@@ -5,6 +5,7 @@ import {
   accountColor,
   accountSupportsCalendar,
   calendar$,
+  calendarSyncErrorText,
   createCalendar,
   importAccountCalendars,
   isGoogleAccount,
@@ -101,7 +102,13 @@ import type { Account } from '../../types'
 import { Avatar } from '../avatar/Avatar'
 import { IconButton } from '../button/IconButton'
 import { NumberRow, SegmentedRow, SettingRow, SettingsGroup, Switch, ToggleRow, SelectRow } from './AccountSettingsRows'
-import { supportedI18nLanguages, languageNativeNames, type SupportedI18nLanguage } from '../../lib/i18n'
+import {
+  DEFAULT_I18N_LANGUAGE,
+  SYSTEM_LANGUAGE_CHOICE,
+  languageNativeNames,
+  supportedI18nLanguages,
+  type LanguageChoice,
+} from '../../lib/i18n'
 import { ThemeSettingsSection } from './ThemeSettingsSection'
 import { FontSettingsSection } from './FontSettingsSection'
 import { RulesSettingsSection } from './RulesSettingsSection'
@@ -291,7 +298,7 @@ export function SettingsDialog() {
           {/* Nav rail */}
           <nav
             aria-label={t('settingsSearch.navigation')}
-            className="w-full max-h-28 min-[700px]:max-h-none min-[700px]:w-56 shrink-0 border-b min-[700px]:border-b-0 min-[700px]:border-r border-border/60 p-3.5 flex flex-col gap-1 bg-raised/70 overflow-y-auto"
+            className="w-full max-h-28 min-[700px]:max-h-none min-[700px]:w-56 shrink-0 border-b min-[700px]:border-b-0 min-[700px]:border-e border-border/60 p-3.5 flex flex-col gap-1 bg-raised/70 overflow-y-auto"
           >
             {SECTIONS.map(({ id, label, icon: Icon }) => (
               <NavItem key={id} active={activeKey === id} onClick={selectGeneral}>
@@ -360,7 +367,7 @@ function NavItem({
     <button
       onClick={onClick}
       title={title}
-      className={`flex min-h-9 items-center gap-2.5 rounded-control border px-3 py-2 text-xs font-semibold transition-colors cursor-pointer text-left ${
+      className={`flex min-h-9 items-center gap-2.5 rounded-control border px-3 py-2 text-xs font-semibold transition-colors cursor-pointer text-start ${
         active
           ? 'bg-accent/10 border-accent/20 text-accent shadow-sm'
           : 'border-transparent text-secondary hover:text-primary hover:bg-hover/80'
@@ -434,7 +441,7 @@ function AccountNavAvatar({ account, displayName }: { account: Account; displayN
         className={`!rounded-md transition-all ${isPaused ? 'grayscale opacity-40' : ''}`}
       />
       {(isPaused || isMuted) && (
-        <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/60 text-white/80 ring-2 ring-raised">
+        <span className="absolute -bottom-1 -end-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/60 text-white/80 ring-2 ring-raised">
           {isPaused ? (
             <Pause size={7} className="fill-current" strokeWidth={1.75} />
           ) : (
@@ -519,6 +526,9 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
   const calendars = useValue(calendar$.calendars).filter(
     (calendar) => calendar.accountId === account.id && calendar.kind === 'account',
   )
+  // Why this account's last refresh failed, if it did: without it, a
+  // refused calendar read as one still waiting for its first sync (#244).
+  const syncError = useValue(calendar$.syncErrors)[account.id]
   const supports = accountSupportsCalendar(account)
   const isGoogle = isGoogleAccount(account)
   // An account that cannot keep calendars gets no empty section — except a
@@ -562,7 +572,17 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
   return (
     <>
       <SettingsGroup title={t('calendar.title', { defaultValue: 'Calendar' })}>
-        {calendars.length === 0 && (
+        {syncError && (
+          <p
+            role="status"
+            data-sync-error={syncError.reason}
+            title={syncError.message}
+            className="px-4 py-3.5 wrap-anywhere text-caption text-warning"
+          >
+            {calendarSyncErrorText(syncError, account.email || account.id)}
+          </p>
+        )}
+        {calendars.length === 0 && !syncError && (
           <p className="px-4 py-3.5 text-caption text-secondary">
             {t('calendar.calendarsAppearOnSync', {
               defaultValue: "The account's calendars appear here once its first sync finishes.",
@@ -583,9 +603,9 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
                 type="button"
                 onClick={() => setPropertiesFor(calendar.id)}
                 title={t('calendar.properties', { defaultValue: 'Calendar properties' })}
-                className="min-w-0 flex-1 text-left transition-colors hover:text-accent cursor-pointer"
+                className="min-w-0 flex-1 text-start transition-colors hover:text-accent cursor-pointer"
               >
-                <span className="block truncate text-xs font-medium text-primary">{calendar.name}</span>
+                <span dir="auto" className="block truncate text-xs font-medium text-primary">{calendar.name}</span>
                 {/* When its contents last came from the server. A hidden
                   calendar is not fetched at all, so it says that instead of
                   showing a time that stopped advancing for reasons of its
@@ -693,7 +713,7 @@ function AddAccountCalendarDialog({ accountId, onClose }: { accountId: string; o
           {t('calendar.addCalendar', { defaultValue: 'Add calendar' })}
         </h2>
         <label className="flex w-full flex-col gap-1.5">
-          <span className="pl-0.5 text-caption font-semibold text-secondary">
+          <span className="ps-0.5 text-caption font-semibold text-secondary">
             {t('calendar.newCalendarName', { defaultValue: 'Calendar name' })}
           </span>
           <input
@@ -765,7 +785,7 @@ function CalendarGroup({ activeKey, onSelect }: { activeKey: string; onSelect: (
         // that decides how it syncs and whether it can be edited.
         groupsBySource(calendars, accounts, t).map((group) => (
           <div key={group.label}>
-            <p className="mt-2 mb-0.5 px-3 text-2xs font-semibold uppercase tracking-wide text-secondary/70">
+            <p className="mt-2 mb-0.5 px-3 text-2xs font-semibold uppercase tracking-wide text-secondary">
               {group.label}
             </p>
             {group.calendars.map((calendar) => {
@@ -784,9 +804,9 @@ function CalendarGroup({ activeKey, onSelect }: { activeKey: string; onSelect: (
                       strokeWidth={1.75}
                     />
                   </span>
-                  <span className="truncate">{calendar.name}</span>
+                  <span dir="auto" className="truncate">{calendar.name}</span>
                   {calendar.read_only && (
-                    <Lock size={14} className="ml-auto shrink-0 text-secondary/70" strokeWidth={1.75} />
+                    <Lock size={14} className="ms-auto shrink-0 text-secondary/70" strokeWidth={1.75} />
                   )}
                 </NavItem>
               )
@@ -832,7 +852,7 @@ function BoardGroup({
                 <Columns3 size={14} strokeWidth={1.75} />
               </span>
             )}
-            <span className="truncate">{board.name}</span>
+            <span dir="auto" className="truncate">{board.name}</span>
           </NavItem>
         ))
       )}
@@ -898,6 +918,7 @@ function GeneralSection() {
           hint={t('settings.reading.listViewHint')}
           value={listView}
           options={[
+            { value: 'auto' as const, label: t('settings.reading.listView.auto') },
             { value: 'cards' as const, label: t('settings.reading.listView.cards') },
             { value: 'table' as const, label: t('settings.reading.listView.table') },
           ]}
@@ -956,16 +977,17 @@ function GeneralSection() {
           icon={<Globe size={16} strokeWidth={1.75} />}
           title={t('settings.language.label')}
           hint={t('settings.language.hint')}
-          value={language || ''}
+          // Nobody has chosen yet: the default language is the one in use (ADR-0062).
+          value={language ?? DEFAULT_I18N_LANGUAGE}
           options={[
-            { value: '', label: t('settings.language.system') },
+            { value: SYSTEM_LANGUAGE_CHOICE, label: t('settings.language.system') },
             ...supportedI18nLanguages.map((lang) => ({
               value: lang,
               label: languageNativeNames[lang],
             })),
           ]}
           onChange={(value) => {
-            settings$.language.set(value === '' ? null : (value as SupportedI18nLanguage))
+            settings$.language.set(value as LanguageChoice)
           }}
         />
       </SettingsGroup>
@@ -1096,7 +1118,7 @@ function GeneralSection() {
         />
       </SettingsGroup>
 
-      <div data-settings-section="updates" tabIndex={-1} aria-label={t('settings.sections.updates')}>
+      <div data-settings-section="updates" tabIndex={-1} role="group" aria-label={t('settings.sections.updates')}>
         <UpdatesGroup />
       </div>
       <div data-settings-section="backup" tabIndex={-1} aria-label={t('settings.sections.backup')}>
@@ -1507,7 +1529,9 @@ function LogViewerDialog({ onClose }: { onClose: () => void }) {
           ) : log === '' ? (
             <p className="text-xs text-secondary">{t('settings.syncLogEmpty')}</p>
           ) : (
-            <pre className="whitespace-pre-wrap break-all font-mono text-caption leading-4 text-primary">{log}</pre>
+            <pre dir="ltr" className="whitespace-pre-wrap break-all font-mono text-caption leading-4 text-primary">
+              {log}
+            </pre>
           )}
         </div>
       </div>

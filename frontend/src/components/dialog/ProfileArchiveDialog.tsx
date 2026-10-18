@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Archive, RefreshCw } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import {
   activateRestore,
   checkProfile,
@@ -203,7 +203,7 @@ function ArchiveDetails({ summary }: { summary: ArchiveSummary }) {
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 px-1 text-caption">
         <dt className="text-secondary">{t('profileArchive.made', { defaultValue: 'Made' })}</dt>
         <dd className="text-primary">
-          {new Date(summary.created_at * 1000).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+          {new Date(summary.created_at * 1000).toLocaleString(intlLocale(), { dateStyle: 'medium', timeStyle: 'short' })}
           {summary.app_version && ` · Oreneta ${summary.app_version}`}
         </dd>
         <dt className="text-secondary">{t('profileArchive.contents', { defaultValue: 'Contents' })}</dt>
@@ -220,7 +220,7 @@ function ArchiveDetails({ summary }: { summary: ArchiveSummary }) {
         <p className="font-semibold text-secondary">
           {t('profileArchive.leftOut', { defaultValue: 'Not in the archive' })}
         </p>
-        <ul className="mt-1 list-disc pl-5 text-secondary">
+        <ul className="mt-1 list-disc ps-5 text-secondary">
           {summary.excluded.map((item) => (
             <li key={item.what}>
               <span className="text-primary">{item.what}</span>: {item.why}

@@ -5,7 +5,7 @@
 
 import { observable } from '@legendapp/state'
 import { invoke } from '../lib/bridge'
-import { t } from '../lib/i18n'
+import { intlLocale, t } from '../lib/i18n'
 import { showToast } from './ui'
 
 export type AwaitingEvidence = {
@@ -61,7 +61,7 @@ export async function waitForReply(threadId: string, remindAt: number | null) {
     showToast(
       remindAt
         ? t('awaiting.addedWithReminder', {
-            when: new Date(remindAt * 1000).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }),
+            when: new Date(remindAt * 1000).toLocaleString(intlLocale(), { dateStyle: 'medium', timeStyle: 'short' }),
             defaultValue: 'Waiting for a reply; a reminder here on {when} if none comes',
           })
         : t('awaiting.added', { defaultValue: 'Waiting for a reply' }),

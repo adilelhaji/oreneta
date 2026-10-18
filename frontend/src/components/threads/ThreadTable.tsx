@@ -138,7 +138,7 @@ export function ThreadTable({
                         : 'descending'
                       : 'none'
                 }
-                className={clsx('border-b border-border p-0 text-left font-normal', column.className)}
+                className={clsx('border-b border-border p-0 text-start font-normal', column.className)}
               >
                 {column.key === 'account' ? (
                   <span className="block px-2 py-1.5 text-caption font-semibold text-secondary">
@@ -205,13 +205,16 @@ export function ThreadTable({
                   <td
                     key="sender"
                     title={thread.from_name || thread.from_addr}
+                    // The cell takes the direction of the name in it, so a long
+                    // name truncates at its own end (ADR-0061).
+                    dir="auto"
                     className={clsx('max-w-0 truncate px-2 py-1.5')}
                   >
                     <span className={clsx('truncate', thread.unread ? 'font-bold text-primary' : 'text-primary/85')}>
                       <SenderName thread={thread} />
                     </span>
                     {showAccount && account && !columns.some((item) => item.key === 'account') && (
-                      <span className="ml-1 text-2xs text-secondary">{account.display_name || account.email}</span>
+                      <span className="ms-1 text-2xs text-secondary">{account.display_name || account.email}</span>
                     )}
                   </td>
                 ) : column.key === 'subject' ? (
@@ -224,7 +227,7 @@ export function ThreadTable({
                         event.stopPropagation()
                         onSelect(thread, event)
                       }}
-                      className="flex min-h-9 w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left cursor-pointer focus-visible:-outline-offset-2"
+                      className="flex min-h-9 w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-start cursor-pointer focus-visible:-outline-offset-2"
                     >
                       {thread.unread && <span className="sr-only">{t('common.unread')}: </span>}
                       <span
@@ -247,6 +250,7 @@ export function ThreadTable({
                         />
                       )}
                       <span
+                        dir="auto"
                         className={clsx(
                           'min-w-0 flex-1 truncate',
                           thread.unread ? 'font-semibold text-primary' : 'text-primary/85',
@@ -273,7 +277,7 @@ export function ThreadTable({
                   <td
                     key="date"
                     className={clsx(
-                      'px-2 py-1.5 text-right text-caption tabular-nums',
+                      'px-2 py-1.5 text-end text-caption tabular-nums',
                       thread.unread ? 'font-semibold text-primary' : 'text-secondary',
                     )}
                   >

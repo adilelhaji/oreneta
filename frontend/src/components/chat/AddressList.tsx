@@ -23,7 +23,7 @@ export function AddressPill({ name, original }: AddressItem) {
       aria-label={t('chat.copyFullAddress')}
       title={original}
     >
-      <span className="min-w-0 truncate font-semibold">{name}</span>
+      <span dir="auto" className="min-w-0 truncate font-semibold">{name}</span>
 
       <span className="opacity-0 group-hover:opacity-75 transition-opacity duration-120 shrink-0 text-accent">
         {copied ? (

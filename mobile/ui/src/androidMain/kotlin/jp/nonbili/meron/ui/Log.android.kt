@@ -17,7 +17,7 @@ internal actual fun writeLog(
     message: String,
     error: Throwable?,
 ) {
-    val androidTag = "Meron.$tag"
+    val androidTag = platformLogTag(tag)
     when (level) {
         LogLevel.DEBUG -> AndroidLog.d(androidTag, message, error)
         LogLevel.INFO -> AndroidLog.i(androidTag, message, error)

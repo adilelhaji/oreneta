@@ -14,6 +14,10 @@
 //! ADR-0055: the person's status is announced (so only contacts allowed to
 //! see it get it), contacts' and occupants' statuses are kept for the
 //! session, and a message new to the person may raise a system notification.
+//!
+//! Who may see the person's status follows ADR-0064: the roster is asked for
+//! on each new session and its pushes, from the person's own server only,
+//! are answered and followed. A muted conversation raises no notification.
 
 use super::files::{self, FileError};
 use super::presence::{self, Applied, Arrival, ContactPresence};
@@ -46,6 +50,7 @@ use tokio_xmpp::parsers::{
     muc::{Muc, MucUser, muc::History, user::Status},
     presence::{Presence, Type as PresenceType},
     receipts,
+    roster::Roster,
     rsm::SetQuery,
     stanza_error::{DefinedCondition, StanzaError},
     stanza_id::OriginId,
@@ -500,6 +505,8 @@ enum Asked {
     Mam(Option<String>),
     /// What the account's own server offers (invisibility).
     Features,
+    /// The roster: who may see the person's status (ADR-0064).
+    Roster,
     Items,
     Info(Jid),
     Slot(String),
@@ -598,6 +605,8 @@ pub async fn run(
         emit("chat.own", detail);
     };
     let occupants_changed = |room: &str| emit("chat.occupants", json!({ "account": account.id, "room": room }));
+    // Who may see the person's status changed, or became known.
+    let permissions_changed = || emit("chat.permissions", json!({ "account": account.id }));
     // Rooms the room itself said we are in, on this stream.
     let mut in_rooms: std::collections::HashSet<String> = Default::default();
     loop {
@@ -628,6 +637,13 @@ pub async fn run(
                         let domain = Jid::from(BareJid::from_parts(None, own.domain()));
                         let token = client.send_iq(Some(domain), tokio_xmpp::IqRequest::Get(DiscoInfoQuery { node: None }.into())).await;
                         ask(&pending, Asked::Features, token);
+                        // Who may see the status, asked before announcing it
+                        // (RFC 6121 §2.2), unless this session already knows.
+                        let known = live.lock().unwrap().allowed.is_some();
+                        if !known {
+                            let token = client.send_iq(None, tokio_xmpp::IqRequest::Get(presence::roster_query())).await;
+                            ask(&pending, Asked::Roster, token);
+                        }
                         announce(&mut client, &mut pending, &live, Applied::Offline).await;
                         own_changed();
                         let _ = client.send_iq(None, tokio_xmpp::IqRequest::Set(carbons::Enable.into())).await;
@@ -743,6 +759,18 @@ pub async fn run(
                             }
                         }
                     }
+                    // A roster push from the person's own server: answered, and
+                    // who may see the status follows it. Any other question is
+                    // left unanswered, as before.
+                    Event::Stanza(Stanza::Iq(iq)) => {
+                        if let Some((roster, id)) = presence::roster_push(&iq, &own) {
+                            let list_changed = live.lock().unwrap().apply_roster_push(&roster);
+                            let _ = client.send_stanza(presence::roster_push_answer(id).into()).await;
+                            if list_changed {
+                                permissions_changed();
+                            }
+                        }
+                    }
                     Event::Stanza(_) => {}
                 }
             }
@@ -779,6 +807,15 @@ pub async fn run(
                             announce(&mut client, &mut pending, &live, before).await;
                         }
                         own_changed();
+                    }
+                    Asked::Roster => {
+                        // No answer, or an error: it stays unknown, never "nobody".
+                        if let Ok(tokio_xmpp::IqResponse::Result(Some(element))) = answer {
+                            if let Ok(roster) = Roster::try_from(element) {
+                                live.lock().unwrap().set_roster(&roster);
+                                permissions_changed();
+                            }
+                        }
                     }
                     Asked::Items => {
                         discovery_answered(&mut uploads, &answer);
@@ -1262,7 +1299,16 @@ pub fn handle_message(
         let arrival = if delayed(message) { Arrival::Backfill } else { Arrival::Live };
         (message.clone(), None, now, arrival)
     });
-    let notify = |recorded: &ChatMessage| presence::should_notify(recorded, arrival, own_show).then(|| recorded.clone());
+    let notify = |recorded: &ChatMessage| {
+        // A conversation the person muted raises nothing (ADR-0064). Should
+        // the setting not be readable, the notification is not held back:
+        // a missed message is worse than an unwanted popup.
+        let muted = super::mute::is_muted(&conn, account, &recorded.conversation).unwrap_or_else(|error| {
+            eprintln!("meron-core: chat account {account}: could not read the muted conversations: {error:#}");
+            false
+        });
+        presence::should_notify(recorded, arrival, own_show, muted).then(|| recorded.clone())
+    };
 
     // A room's message, live or from its history or archive.
     if inner.type_ == MessageType::Groupchat {

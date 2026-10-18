@@ -1,67 +1,67 @@
-# Redacción sin errores silenciosos (#39)
+# Redacció sense errors silenciosos (#39)
 
-Parte de #39 entregada en la iteración 2. La recuperación completa de
-borradores (#170) tiene su propio contrato en
+Part de #39 lliurada a la iteració 2. La recuperació completa d'esborranys
+(#170) té el seu propi contracte a
 [editor-draft-recovery.md](editor-draft-recovery.md).
 
-## Fallos reproducidos
+## Errors reproduïts
 
-- **Nombres con coma.** El editor ya leía bien `"Doe, John" <j@x.com>`, pero
-  tres caminos no:
-  - la lista de direcciones de las respuestas (`splitAddressList`) se partía
-    por cada coma. Responder a todos con la propia dirección entrecomillada en
-    Cc dejaba un fragmento `"Me` como destinatario;
-  - responder a un remitente llamado `Doe, John` escribía
-    `Doe, John <j@x.com>` sin comillas, y el propio editor lo leía como dos
-    entradas, una de ellas inválida;
-  - aceptar del desplegable un contacto llamado `Doe, John` producía las
-    mismas dos entradas.
-- **Diálogo «sin asunto» fijo en inglés.**
+- **Noms amb coma.** L'editor ja llegia bé `"Doe, John" <j@x.com>`, però tres
+  camins no:
+  - la llista d'adreces de les respostes (`splitAddressList`) es partia per
+    cada coma. Respondre a tothom amb l'adreça pròpia entre cometes a Cc
+    deixava un fragment `"Me` com a destinatari;
+  - respondre a un remitent anomenat `Doe, John` escrivia
+    `Doe, John <j@x.com>` sense cometes, i el mateix editor ho llegia com a dues
+    entrades, una de les quals no vàlida;
+  - acceptar del desplegable un contacte anomenat `Doe, John` produïa les
+    mateixes dues entrades.
+- **Diàleg «sense assumpte» fix en anglès.**
 
-## Contrato
+## Contracte
 
-- **Lista de direcciones.** Se divide con el mismo analizador del editor: comas
-  y puntos y coma separan, salvo dentro de comillas o de `<…>`.
-- **Nombres al escribir una dirección.** Un nombre con `, ; < > "` se
-  entrecomilla y se escapa al construir la respuesta y al aceptar un contacto.
-- **Duplicados.** Un destinatario repetido no se añade dos veces en el campo. El
-  núcleo ya deduplica el sobre SMTP.
-- **Identidad.** El núcleo solo envía desde la dirección de la cuenta, su
-  usuario de inicio de sesión o un alias guardado
-  (`store::resolve_send_from`), y rechaza cualquier otra con un error que la
-  nombra. El selector «De» muestra la cuenta o el alias elegido. No cambia en
-  esta entrega.
-- **Aviso de adjunto olvidado.** El aviso salta si el asunto o el texto propio
-  del mensaje mencionan un adjunto y no hay ningún fichero adjunto. Las
-  imágenes insertadas en el cuerpo no cuentan como ese adjunto. Antes de
-  enviar se pregunta una vez; «Volver» deja el borrador intacto y «Enviar de
-  todos modos» envía. Nunca bloquea solo por una palabra.
-  - **Dónde.** Funciona en el editor completo y en la respuesta rápida.
-  - **Palabras.** Son raíces guardadas en cada catálogo de idioma
-    (`composer.attachmentReminder.keywords`), siempre junto con las inglesas.
-  - **Cómo se busca.** En alfabetos con espacios, la raíz debe empezar palabra:
-    «reattached» no cuenta. En chino, japonés, coreano y árabe se busca en
-    cualquier posición.
-  - **Citas.** No cuenta el texto citado: líneas `>` y `<blockquote>`.
+- **Llista d'adreces.** Es divideix amb el mateix analitzador de l'editor: les
+  comes i els punts i coma separen, excepte dins de cometes o de `<…>`.
+- **Noms en escriure una adreça.** Un nom amb `, ; < > "` es posa entre cometes
+  i s'escapa en construir la resposta i en acceptar un contacte.
+- **Duplicats.** Un destinatari repetit no s'afegeix dues vegades al camp. El
+  nucli ja elimina els duplicats del sobre SMTP.
+- **Identitat.** El nucli només envia des de l'adreça del compte, el seu usuari
+  d'inici de sessió o un àlies desat (`store::resolve_send_from`), i rebutja
+  qualsevol altra adreça amb un error que l'anomena. El selector «De» mostra el
+  compte o l'àlies triat. No canvia en aquest lliurament.
+- **Avís d'adjunt oblidat.** L'avís salta si l'assumpte o el text propi del
+  missatge mencionen un adjunt i no hi ha cap fitxer adjunt. Les imatges
+  inserides al cos no compten com a adjunt. Abans d'enviar es pregunta una
+  vegada; «Torna» deixa l'esborrany intacte i «Envia igualment» l'envia. No
+  bloqueja mai només per una paraula.
+  - **On.** Funciona a l'editor complet i a la resposta ràpida.
+  - **Paraules.** Són arrels desades a cada catàleg d'idioma
+    (`composer.attachmentReminder.keywords`), sempre juntament amb les
+    angleses.
+  - **Com es cerca.** En alfabets amb espais, l'arrel ha de començar una
+    paraula: «reattached» no compta. En xinès, japonès, coreà i àrab es cerca
+    en qualsevol posició.
+  - **Citacions.** No compta el text citat: línies `>` i `<blockquote>`.
 
-## Pruebas
+## Proves
 
-- `lib/address.test.ts` y `states/replyRecipients.test.ts` cubren la división
-  con comillas y punto y coma. También la respuesta, la respuesta a todos con
-  la propia dirección entrecomillada, `Reply-To` con nombre entrecomillado, el
-  alias detrás de un nombre entrecomillado y el contacto del desplegable. Los
-  casos de respuesta, respuesta a todos y contacto fallaban antes del cambio.
-- `lib/attachmentReminder.test.ts` cubre cuerpo y asunto, adjunto presente,
-  imagen insertada, citas en texto y HTML, límites de palabra, idioma más
-  inglés, alfabetos sin espacios, árabe con artículo y mayúsculas con acentos.
-- `Composer.test.tsx` comprueba aviso, «Volver» sin envío y «Enviar de todos
-  modos» con envío, y que no hay aviso con adjunto. `compose.test.ts` comprueba
-  lo mismo en la respuesta rápida.
+- `lib/address.test.ts` i `states/replyRecipients.test.ts` cobreixen la divisió
+  amb cometes i punts i coma. També la resposta, la resposta a tothom amb
+  l'adreça pròpia entre cometes, `Reply-To` amb un nom entre cometes, l'àlies
+  darrere d'un nom entre cometes i el contacte del desplegable. Els casos de
+  resposta, resposta a tothom i contacte fallaven abans del canvi.
+- `lib/attachmentReminder.test.ts` cobreix el cos i l'assumpte, adjunt present,
+  imatge inserida, citacions en text i HTML, límits de paraula, idioma més
+  anglès, alfabets sense espais, àrab amb article i majúscules amb accents.
+- `Composer.test.tsx` comprova l'avís, «Torna» sense enviament i «Envia
+  igualment» amb enviament, i que no hi ha avís amb adjunt. `compose.test.ts`
+  comprova el mateix a la resposta ràpida.
 
-## Límites
+## Límits
 
-- Las listas de palabras son raíces sencillas. Una mención con otra forma
-  («PJ», jerga) no avisa, y una palabra homónima, como «Anlage» en alemán,
-  puede avisar de más. Por eso es un aviso y no un bloqueo.
-- No hay ajuste para desactivar el aviso.
-- No se validó con cuentas reales ni en el binario nativo.
+- Les llistes de paraules són arrels senzilles. Una menció amb una altra forma
+  («PJ», argot) no avisa, i una paraula homònima, com «Anlage» en alemany, pot
+  avisar de més. Per això és un avís i no un bloqueig.
+- No hi ha cap opció de configuració per desactivar l'avís.
+- No s'ha validat amb comptes reals ni amb el binari natiu.

@@ -25,6 +25,7 @@ import {
 import { saveTask } from '../../states/tasks'
 import { accounts$ } from '../../states/accounts'
 import { isDraftFolder } from '../../states/mail'
+import { ModalCard } from '../dialog/ModalCard'
 
 export function AssistantReviewDialog({ messages, onClose }: { messages: Message[]; onClose: () => void }) {
   const { t } = useTranslation()
@@ -232,7 +233,8 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={close}>
-      <div
+      <ModalCard
+        label={t('assistant.reviewTitle', { defaultValue: 'Review assistant context' })}
         className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-app p-5 shadow-overlay"
         onClick={(event) => event.stopPropagation()}
       >
@@ -305,7 +307,10 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
                     defaultValue: 'Exact request sent to {destination}',
                   })}
                 </summary>
-                <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-control-sm bg-app p-2 font-mono text-2xs text-primary">
+                <pre
+                  dir="ltr"
+                  className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-control-sm bg-app p-2 font-mono text-2xs text-primary"
+                >
                   {preview.request_body}
                 </pre>
               </details>
@@ -335,7 +340,7 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
                     />
                     <span className="min-w-0 flex-1">
                       <div id={subjectId} className="truncate text-xs font-semibold text-primary">
-                        {candidate.subject || '(no subject)'}
+                        {candidate.subject || t('threads.noSubject')}
                       </div>
                       <div className="truncate text-caption text-secondary">
                         {candidate.sender || 'Unknown sender'} · {candidate.body.length} bytes
@@ -371,7 +376,10 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
                           <summary className="cursor-pointer text-caption font-semibold text-accent">
                             {t('assistant.viewExactContent', { defaultValue: 'View exact text sent' })}
                           </summary>
-                          <pre className="mt-1 max-h-36 overflow-auto whitespace-pre-wrap rounded-control bg-app px-2 py-1 text-caption text-primary">
+                          <pre
+                            dir="auto"
+                            className="bidi-plaintext mt-1 max-h-36 overflow-auto whitespace-pre-wrap rounded-control bg-app px-2 py-1 text-caption text-primary"
+                          >
                             {candidate.body}
                           </pre>
                         </details>
@@ -457,7 +465,7 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
                 onClick={openDraft}
                 className="rounded-control bg-accent px-2.5 py-1.5 text-xs font-semibold text-on-accent"
               >
-                <FileText size={14} className="mr-1 inline" strokeWidth={1.75} />
+                <FileText size={14} className="me-1 inline" strokeWidth={1.75} />
                 {t('assistant.openDraft', { defaultValue: 'Open editable draft' })}
               </button>
             )}
@@ -522,7 +530,7 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
             {t('assistant.activate', { defaultValue: 'Activate' })}
           </button>
         </div>
-      </div>
+      </ModalCard>
     </div>
   )
 }

@@ -66,7 +66,7 @@ export function AccountDialogEWS({
         labelClassName={fieldLabelClass}
       />
       <label className="flex flex-col gap-1.5 w-full">
-        <span className={`pl-0.5 ${fieldLabelClass ?? 'text-caption font-semibold text-secondary'}`}>
+        <span className={`ps-0.5 ${fieldLabelClass ?? 'text-caption font-semibold text-secondary'}`}>
           {editing ? t('accounts.fields.passwordUnchanged') : t('accounts.fields.password')}
         </span>
         <span className="relative flex items-center">
@@ -80,13 +80,13 @@ export function AccountDialogEWS({
                 void save()
               }
             }}
-            className={`${inputClass ?? 'w-full text-xs py-2 px-3.5 rounded-control border border-border bg-raised text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'} pr-11`}
+            className={`${inputClass ?? 'w-full text-xs py-2 px-3.5 rounded-control border border-border bg-raised text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'} pe-11`}
           />
           <button
             type="button"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => setShowPassword((value) => !value)}
-            className="absolute right-2.5 flex h-7 w-7 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+            className="absolute end-2.5 flex h-7 w-7 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
             aria-label={
               showPassword
                 ? t('accounts.actions.hidePassword', { defaultValue: 'Hide password' })

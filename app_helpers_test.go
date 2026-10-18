@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -40,7 +42,7 @@ func TestJSONHelpersCoerceExpectedTypes(t *testing.T) {
 	}
 }
 
-// The App Store build ships the sidecar at Meron.app/Contents/MacOS/meron-core
+// The App Store build ships the sidecar at Oreneta.app/Contents/MacOS/oreneta-core
 // and relies on this lookup to find it: the sandbox forbids exec'ing the copy
 // the other builds extract to the cache dir.
 func TestBundledSidecarPathIn(t *testing.T) {
@@ -66,6 +68,45 @@ func TestBundledSidecarPathIn(t *testing.T) {
 	}
 	if got := bundledSidecarPathIn(dir); got != path {
 		t.Fatalf("bundledSidecarPathIn = %q, want %q", got, path)
+	}
+
+	// Meron's name beside the executable is not this app's sidecar.
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "meron-core"+sidecarExeSuffix), nil, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := bundledSidecarPathIn(dir); got != "" {
+		t.Fatalf("meron-core beside the executable = %q, want no sidecar", got)
+	}
+}
+
+// The engine runs as oreneta-core wherever it comes from, so Task Manager and
+// Activity Monitor show the app's name (#247); only the crate directory keeps
+// Meron's.
+func TestSidecarBinaryIsNamedAfterOreneta(t *testing.T) {
+	want := "oreneta-core"
+	if runtime.GOOS == "windows" {
+		want += ".exe"
+	}
+	if sidecarBinaryName != want {
+		t.Fatalf("sidecarBinaryName = %q, want %q", sidecarBinaryName, want)
+	}
+	if got, wantPath := debugSidecarPath(), filepath.Join("meron-core", "target", "debug", want); got != wantPath {
+		t.Fatalf("debugSidecarPath = %q, want %q", got, wantPath)
+	}
+
+	name := extractedSidecarName([]byte("engine"))
+	hash := strings.TrimSuffix(strings.TrimPrefix(name, "oreneta-core-"), sidecarExeSuffix)
+	if !strings.HasPrefix(name, "oreneta-core-") || !strings.HasSuffix(name, sidecarExeSuffix) || len(hash) != 16 {
+		t.Fatalf("extractedSidecarName = %q, want oreneta-core-<16 hex>%s", name, sidecarExeSuffix)
+	}
+	if extractedSidecarName([]byte("engine")) != name {
+		t.Fatal("the same build must extract to the same file")
+	}
+	if extractedSidecarName([]byte("another build")) == name {
+		t.Fatal("a new build must extract to a new file")
 	}
 }
 
@@ -107,9 +148,13 @@ func TestSidecarCallTimeouts(t *testing.T) {
 		"tasks.resolveConflict": 60 * time.Second,
 		"tasks.sync":            5 * time.Minute,
 		// Exchange contacts and distribution lists (ADR-0058).
-		"exchange.contacts.sync": 2 * time.Minute,
+		"exchange.contacts.sync": 2 * time.Hour,
 		"people.groupSave":       60 * time.Second,
 		"people.groupDelete":     60 * time.Second,
+		// Exchange contact folders and people (ADR-0066).
+		"carddav.sync":  2 * time.Hour,
+		"people.save":   10 * time.Minute,
+		"people.delete": 10 * time.Minute,
 		// Automatic archiving (ADR-0054): a preview searches the chosen
 		// folders; a run copies or moves every old message.
 		"autoArchive.preview": 10 * time.Minute,

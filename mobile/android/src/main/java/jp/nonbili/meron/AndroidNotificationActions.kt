@@ -19,7 +19,7 @@ import jp.nonbili.meron.shared.notificationThreadKeyIsStableAcrossMove
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-private const val TAG = "MeronNotifAction"
+private const val TAG = "Oreneta.NotifAction"
 
 /** Raised in-process after a notification action changes a mailbox, so a
  *  running app reloads the folder it just changed behind the UI's back. Named

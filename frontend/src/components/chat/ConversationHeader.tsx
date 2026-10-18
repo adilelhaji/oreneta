@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent, RefObject } from 'react'
 import {
   Archive,
+  Ban,
   ChevronDown,
   ChevronLeft,
   ChevronUp,
@@ -25,7 +26,17 @@ import { assistantEnabled$ } from '../../states/assistant'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { showToast, ui$ } from '../../states/ui'
-import { archiveThread, deleteThread, mail$, markThreadRead, markThreadUnread, starThread } from '../../states/mail'
+import {
+  archiveThread,
+  deleteThread,
+  isDraftFolder,
+  isJunkFolderId,
+  mail$,
+  markThreadJunk,
+  markThreadRead,
+  markThreadUnread,
+  starThread,
+} from '../../states/mail'
 import { printFromReader } from '../../states/printing'
 import { LabelPicker } from './LabelPicker'
 import { thread$, type ConversationMode } from '../../states/thread'
@@ -83,6 +94,15 @@ export function ConversationHeader({
   // the change permission (#141). Writing to the sender is sending.
   const changesBlocked = messageChangesBlocked(accounts, activeThread.account_id)
   const sendingBlocked = sendBlocked(accounts, activeThread.account_id)
+  // Read so the junk button below follows the folder lists as they load: in
+  // the junk folder the useful gesture is the opposite one (#245). A draft is
+  // never junk, as in the selection bar.
+  useValue(mail$.foldersByAccount)
+  useValue(mail$.folders)
+  const inJunk = isJunkFolderId(activeThread.account_id, activeThread.folder_id)
+  const offersJunk = !isRSS && !isDraftFolder(activeThread.folder_id, activeThread.account_id)
+  const junkLabel = inJunk ? t('threads.actions.markNotJunk') : t('threads.actions.markJunk')
+  const toggleJunk = () => void markThreadJunk(activeThread.thread_id, !inJunk)
   const ownAddresses = accounts
     .filter((account) => account.id === activeThread.account_id)
     .flatMap((account) => accountIdentities(account).map((identity) => identity.email))
@@ -151,7 +171,7 @@ export function ConversationHeader({
 
         {inKanban && (
           <button
-            className="-mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full hover:bg-hover text-secondary cursor-pointer max-[600px]:hidden"
+            className="-me-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full hover:bg-hover text-secondary cursor-pointer max-[600px]:hidden"
             onClick={closeKanbanPane}
             title={t('chat.closeConversationEsc')}
           >
@@ -189,13 +209,13 @@ export function ConversationHeader({
               type="button"
               onClick={openSenderMenu}
               onContextMenu={openSenderMenu}
-              className="mt-0.5 block max-w-full truncate rounded-sm text-left text-xs font-medium text-secondary outline-none transition-colors cursor-context-menu hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/40"
+              className="mt-0.5 block max-w-full truncate rounded-sm text-start text-xs font-medium text-secondary outline-none transition-colors cursor-context-menu hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/40"
               title={`${activeThread.from_name} (${activeThread.from_addr})`}
               aria-label={t('chat.copyFullAddress')}
             >
               {senderName ? (
                 <>
-                  {senderName} <span className="opacity-70">({senderEmail})</span>
+                  {senderName} <span className="font-normal">({senderEmail})</span>
                 </>
               ) : (
                 senderEmail
@@ -310,6 +330,21 @@ export function ConversationHeader({
                     className="hidden @min-[20rem]:flex"
                     onClick={() => void archiveThread(activeThread.thread_id)}
                   />
+                  {/* Junk is filed less often than it is archived, so it gives
+                      way before the others (#245); the menu below keeps it.
+                      30rem is where the whole row still fits beside the back
+                      button of the narrow layout. Junk is mailbox management,
+                      which Graph does not offer at all (#141), hence the
+                      stricter test than the neighbours'. */}
+                  {offersJunk && (
+                    <IconButton
+                      icon={Ban}
+                      disabled={readOnly}
+                      label={junkLabel}
+                      className="hidden @min-[30rem]:flex"
+                      onClick={toggleJunk}
+                    />
+                  )}
                   <IconButton
                     icon={Trash2}
                     disabled={changesBlocked}
@@ -335,7 +370,7 @@ export function ConversationHeader({
               onClick={() => setActionsMenuOpen((open) => !open)}
             />
             {actionsMenuOpen && (
-              <div className="absolute right-0 top-full z-50 mt-2 w-52 rounded-control border border-border bg-chats p-1 shadow-overlay">
+              <div className="absolute end-0 top-full z-50 mt-2 w-52 rounded-control border border-border bg-chats p-1 shadow-overlay">
                 <button
                   onClick={() => {
                     setQuickConversationMode('html')
@@ -398,6 +433,19 @@ export function ConversationHeader({
                     >
                       <Archive size={16} className="shrink-0" strokeWidth={1.75} /> {t('threads.actions.archiveThread')}
                     </button>
+                    {offersJunk && (
+                      <button
+                        type="button"
+                        disabled={readOnly}
+                        onClick={() => {
+                          toggleJunk()
+                          setActionsMenuOpen(false)
+                        }}
+                        className="flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs font-medium text-primary cursor-pointer enabled:hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Ban size={16} className="shrink-0" strokeWidth={1.75} /> {junkLabel}
+                      </button>
+                    )}
                     <button
                       disabled={changesBlocked}
                       onClick={() => {

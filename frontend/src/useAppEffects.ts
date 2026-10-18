@@ -5,12 +5,13 @@ import { useThreadListLoader } from './useThreadListLoader'
 import { invoke } from './lib/bridge'
 import { onTranslationEvent } from './states/translation'
 import { onCloudEvent } from './states/cloud'
-import { onChatEvent, openChatFromNotification } from './states/messaging'
+import { onChatEvent } from './states/messaging'
+import { onNotificationClicked } from './states/notificationClick'
 import { onBackupScheduled } from './states/backupSchedule'
 import { onAutoArchiveRan } from './states/autoArchive'
 import { accountGroups$ } from './states/accountGroups'
 import { ui$, showToast } from './states/ui'
-import { calendar$, loadCalendars, loadWindow } from './states/calendar'
+import { calendar$, clearCalendarSyncError, loadCalendars, loadWindow, noteCalendarSyncError } from './states/calendar'
 import { flushQueuedSends } from './states/sendQueue'
 import {
   mail$,
@@ -21,11 +22,12 @@ import {
   refreshAccountFoldersCache,
   inboxUnread,
 } from './states/mail'
-import { flushComposeDrafts, openMailtoCompose, openThreadTabById, restoreLocalDrafts } from './states/compose'
+import { flushComposeDrafts, openMailtoCompose, restoreLocalDrafts } from './states/compose'
 import { accounts$, refreshAccountPictures } from './states/accounts'
 import { kanban$ } from './states/kanban'
 import { setSyncError, recordMailActivity, retainSyncAccounts } from './states/connectivity'
-import { settings$, applyDocumentLanguage } from './states/settings'
+import { settings$, languageLoaded$ } from './states/settings'
+import { applyInterfaceLanguage, targetInterfaceLanguage } from './states/interfaceLanguage'
 import { applyUpdateStatus, loadUpdateStatus, runUpdateCheck } from './states/update'
 import type { UpdateStatus } from './lib/update'
 import { useFoldersByAccount } from './lib/kanbanData'
@@ -35,7 +37,7 @@ import { loadCategories } from './states/categories'
 import { forgetScheduledSend, markScheduledSendFailed, refreshScheduledSends } from './states/scheduledSends'
 import { refreshOutgoingAttempts } from './states/outgoingAttempts'
 import { mayShowMailToast, startNotifications } from './states/notifications'
-import i18n, { resolveI18nLanguageFromWebLocale, t, translationTemplate } from './lib/i18n'
+import { t } from './lib/i18n'
 
 const DEFAULT_RSS_SYNC_INTERVAL_MINUTES = 60
 const MIN_RSS_SYNC_INTERVAL_MINUTES = 5
@@ -58,6 +60,7 @@ export function useAppEffects() {
   const query = useValue(ui$.query)
   const startupSyncDone = useRef(false)
   const language = useValue(settings$.language)
+  const languageLoaded = useValue(languageLoaded$)
   const showUnreadBadge = useValue(settings$.showUnreadAccountBadge)
   const autoUpdateCheck = useValue(settings$.autoUpdateCheck)
 
@@ -82,29 +85,11 @@ export function useAppEffects() {
     }
   }, [])
 
+  // Catalan on a fresh profile whatever the system speaks; a saved choice,
+  // "System" included, wins once it is read (ADR-0062).
   useEffect(() => {
-    const systemLanguage = resolveI18nLanguageFromWebLocale(navigator.language) || 'en'
-    const targetLanguage = language || systemLanguage
-    if (i18n.language !== targetLanguage) {
-      void i18n.changeLanguage(targetLanguage)
-    }
-    void invoke('i18n.setNativeLabels', {
-      trayShow: t('tray.showOreneta'),
-      trayHide: t('tray.hideToTray'),
-      trayHideTooltip: t('tray.hideOrenetaTooltip'),
-      trayQuit: t('tray.quitOreneta'),
-      trayDoNotDisturb: t('tray.doNotDisturb', { defaultValue: 'Do not disturb' }),
-      newMessage: t('notify.newMessage'),
-      newMessageCount: translationTemplate('notify.newMessageCount'),
-      noSubject: t('notify.noSubject'),
-      unknownSender: t('notify.unknownSender'),
-      // Go puts the time (and the date, when not today) in place of {time}.
-      reminderStarted: translationTemplate('notify.reminderStarted'),
-    }).catch(() => {})
-    // Reflect the resolved locale to <html lang>/dir, driving :lang() CJK glyph
-    // selection (see index.css) and RTL. Synced to a paint-time cache in settings.
-    applyDocumentLanguage(targetLanguage)
-  }, [language])
+    applyInterfaceLanguage(targetInterfaceLanguage(language, languageLoaded), languageLoaded)
+  }, [language, languageLoaded])
 
   // Notification sounds, do not disturb and quiet hours (ADR-0049).
   useEffect(() => startNotifications(), [])
@@ -304,20 +289,8 @@ export function useAppEffects() {
   useEffect(() => {
     const eventsOn = (window as any).runtime?.EventsOn
     if (!eventsOn) return
-    const offNotification = eventsOn(
-      'notification-clicked',
-      (detail: { account?: string; threadId?: string; threadKey?: string }) => {
-        const threadId = detail?.threadId || detail?.threadKey
-        // A chat message (ADR-0055): its conversation, in the Chat view.
-        if (threadId?.startsWith('chat:')) {
-          void openChatFromNotification(detail.account ?? '', threadId.slice('chat:'.length))
-          return
-        }
-        if (threadId) {
-          void openThreadTabById(threadId)
-        }
-      },
-    )
+    // A mail thread, a chat (ADR-0055) or missed reminders (#225).
+    const offNotification = eventsOn('notification-clicked', onNotificationClicked)
     return () => {
       if (typeof offNotification === 'function') offNotification()
     }
@@ -473,6 +446,8 @@ export function useAppEffects() {
       'chat.presence',
       'chat.subscription',
       'chat.occupants',
+      // Who may see the person's status (ADR-0064).
+      'chat.permissions',
     ].map((name) =>
       eventsOn(name, (detail: { account?: string }) => onChatEvent(name, detail)),
     )
@@ -526,15 +501,21 @@ export function useAppEffects() {
     // A calendar refresh that failed. Nothing consumed this before, so the
     // agenda simply went stale in silence — the worst way for it to be wrong,
     // since it still looks current.
-    const offCalendarError = eventsOn('calendar.syncError', (detail: { message?: string }) => {
-      calendar$.syncError.set(detail?.message || 'calendar sync failed')
-    })
+    // Kept per account (#244): one account's good refresh must not hide
+    // another's failure, and the reason decides what the reader is told.
+    const offCalendarError = eventsOn(
+      'calendar.syncError',
+      (detail: { account?: string; message?: string; reason?: string }) => noteCalendarSyncError(detail),
+    )
 
     // A calendar window is fetched from the cache and refreshed behind the
     // request, so the agenda renders whatever was already stored and needs
     // telling when the server's answer lands — on a first open the cache is
     // empty, and without this the view would simply stay that way.
-    const offCalendarSynced = eventsOn('calendar.synced', (detail: { from?: number; to?: number }) => {
+    const offCalendarSynced = eventsOn('calendar.synced', (detail: { account?: string; from?: number; to?: number }) => {
+      // A sync that landed clears what that account's last failure said,
+      // and only that account's: the server answered it.
+      clearCalendarSyncError(detail?.account)
       // The list of calendars refreshes too: a sync is how a freshly added
       // account's calendars are first discovered, and the settings rail
       // would otherwise not show them until the dialog was reopened.
@@ -547,8 +528,6 @@ export function useAppEffects() {
       if (detail?.from !== undefined && detail?.to !== undefined) {
         if (detail.to <= from || detail.from >= to) return
       }
-      // A sync that landed clears whatever the last failure said.
-      calendar$.syncError.set('')
       void loadWindow(from, to, false)
     })
 

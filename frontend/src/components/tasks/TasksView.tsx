@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import {
   Bell,
   CalendarClock,
@@ -14,7 +14,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { dueStatus, formatDueDate } from '../../lib/date'
 import {
@@ -46,6 +46,7 @@ import { LoadingState } from '../empty-state/StateViews'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
 import { CalDavTaskListDialog } from './CalDavTaskListDialog'
 import { describeRecurrence } from '../calendar/RepeatFields'
+import { handleGroupArrowKeys } from '../../lib/direction'
 
 const DUE_TONE: Record<ReturnType<typeof dueStatus>, string> = {
   overdue: 'text-danger ',
@@ -188,7 +189,7 @@ export function TasksView() {
       )
       return
     }
-    ui$.tasksOpen.set(false)
+    ui$.module.set('mail')
     openMailAccount(task.account_id, task.folder_id, false)
     ui$.selectedThread.set(task.thread_id)
     ui$.mobilePane.set('conversation')
@@ -200,7 +201,7 @@ export function TasksView() {
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
+    <div data-region="content" className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
       <header className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-header px-4 py-3">
         <CompactNavigation />
         <h1 className="flex items-center gap-2 text-heading-sm font-bold text-primary">
@@ -223,7 +224,13 @@ export function TasksView() {
         </div>
       </header>
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-header px-4 py-2">
-        <div role="tablist" aria-label={t('tasks.lists', { defaultValue: 'Lists' })} className="flex flex-wrap gap-1.5">
+        <div
+          role="tablist"
+          aria-label={t('tasks.lists', { defaultValue: 'Lists' })}
+          className="flex flex-wrap gap-1.5"
+          // Arrows move between the lists in reading order (ADR-0061).
+          onKeyDown={(event) => handleGroupArrowKeys(event, '[role="tab"]', 'horizontal')}
+        >
           {[
             { id: 'all', label: t('tasks.allLists', { defaultValue: 'All' }), open: -1 },
             ...lists.map((list) => ({ id: list.id, label: listName(list), open: list.open })),
@@ -240,7 +247,7 @@ export function TasksView() {
               )}
             >
               {entry.label}
-              {entry.open > 0 && <span className="ml-1 tabular-nums">{entry.open}</span>}
+              {entry.open > 0 && <span className="ms-1 tabular-nums">{entry.open}</span>}
             </button>
           ))}
         </div>
@@ -291,7 +298,7 @@ export function TasksView() {
           </button>
         ))}
         {current && current.id !== MAIL_LIST && (
-          <span className="ml-auto flex gap-1">
+          <span className="ms-auto flex gap-1">
             <button
               type="button"
               onClick={() => void renameList()}
@@ -359,7 +366,7 @@ export function TasksView() {
                   <button
                     type="button"
                     onClick={() => open(task)}
-                    className="min-w-0 flex-1 basis-40 rounded-control-sm text-left cursor-pointer"
+                    className="min-w-0 flex-1 basis-40 rounded-control-sm text-start cursor-pointer"
                   >
                     <span
                       className={clsx(
@@ -371,16 +378,22 @@ export function TasksView() {
                         <Flag
                           size={12}
                           strokeWidth={2}
-                          className="mr-1 inline text-danger"
+                          className="me-1 inline text-danger"
                           aria-label={t('tasks.priorityHigh', { defaultValue: 'High' })}
                         />
                       )}
-                      {taskTitle(task)}
+                      <bdi>{taskTitle(task)}</bdi>
                     </span>
                     <span className="block wrap-anywhere text-caption text-secondary">
-                      {task.linked === false
-                        ? task.note
-                        : [task.from_name || task.from_addr, task.note].filter(Boolean).join(' · ')}
+                      {/* Each piece isolated: a Latin name beside an Arabic note keeps its place. */}
+                      {(task.linked === false ? [task.note] : [task.from_name || task.from_addr, task.note])
+                        .filter(Boolean)
+                        .map((piece, index) => (
+                          <Fragment key={index}>
+                            {index > 0 && ' · '}
+                            <bdi>{piece}</bdi>
+                          </Fragment>
+                        ))}
                     </span>
                     <span className="flex flex-wrap items-center gap-3">
                       {!done && task.due_at && <DueChip dueAt={task.due_at} />}
@@ -405,7 +418,7 @@ export function TasksView() {
                       {!done && task.reminder_at && (
                         <span className="flex items-center gap-1 text-2xs text-secondary">
                           <Bell size={12} strokeWidth={1.75} aria-hidden="true" />
-                          {new Date(task.reminder_at * 1000).toLocaleString(undefined, {
+                          {new Date(task.reminder_at * 1000).toLocaleString(intlLocale(), {
                             dateStyle: 'short',
                             timeStyle: 'short',
                           })}
@@ -503,7 +516,7 @@ function SyncStatus({ list, syncing, onSync }: { list: TaskList; syncing: boolea
         {t('tasks.keptOn', { host, defaultValue: 'Kept on {host}.' })}{' '}
         {list.synced_at
           ? t('tasks.lastSynced', {
-              time: new Date(list.synced_at * 1000).toLocaleString(undefined, {
+              time: new Date(list.synced_at * 1000).toLocaleString(intlLocale(), {
                 dateStyle: 'short',
                 timeStyle: 'short',
               }),

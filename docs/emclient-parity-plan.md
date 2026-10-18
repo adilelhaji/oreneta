@@ -1,248 +1,248 @@
-# eM Client parity delivery plan
+# Pla de lliurament de paritat amb eM Client
 
-**Execution review: 2026-10-05.** The [competitive delivery plan](competitive-delivery-plan.md)
-and [65-issue audit](competitive-backlog-audit.md) supersede the initial scheduling/status
-snapshot below. They retain this full capability scope and all architecture gates.
-Themes/defaults/narrow layout are integrated, Graph remains read-only, and ten bounded
-child issues now cover delivery gaps. Planning is not parity evidence.
+**Revisió d'execució: 2026-10-05.** El [pla de lliurament competitiu](competitive-delivery-plan.md)
+i l'[auditoria de 65 incidències](competitive-backlog-audit.md) substitueixen la instantània inicial
+de planificació/estat que hi ha a continuació. Conserven tot aquest abast de capacitats i totes les portes d'arquitectura.
+Els temes, els valors per defecte i la disposició estreta estan integrats, Graph continua sent de només lectura i deu
+incidències filles delimitades cobreixen ara les mancances de lliurament. La planificació no és evidència de paritat.
 
-Date: 2026-09-09. Created: 13 milestones, 35 new issues; 34 existing issues
-reused including the program; 2 closed without deleting history.
+Data: 2026-09-09. Creades: 13 fites, 35 incidències noves; 34 incidències existents
+reutilitzades, inclòs el programa; 2 tancades sense esborrar l'historial.
 
-Program: [#21](https://github.com/adilelhaji/oreneta/issues/21).
-Execution inventory: [backlog manifest](emclient-parity-backlog.json).
-Acceptance cases and current evidence: [versioned ledger](emclient-parity-acceptance.md).
-This replaces the **scheduling and scope** of the old internal-pilot plan, not its
-unresolved safety requirements. Planning does not approve new architecture.
+Programa: [#21](https://github.com/adilelhaji/oreneta/issues/21).
+Inventari d'execució: [manifest del backlog](emclient-parity-backlog.json).
+Casos d'acceptació i evidència actual: [registre d'acceptació versionat](emclient-parity-acceptance.md).
+Això substitueix la **planificació i l'abast** de l'antic pla de pilot intern, no els seus
+requisits de seguretat no resolts. La planificació no aprova arquitectura nova.
 
-## Target and honest completion language
+## Objectiu i formulació honesta de la finalització
 
-The frozen first reference is **eM Client 10.4.5674.0 for Windows**, released
-2026-08-14. The newer **11.0.282.0 (2026-09-03) is beta**, tracked separately.
-Source: [official Windows release history](https://www.emclient.com/release-history?os=win).
-At each sprint boundary compare changes with the reference; version the matrix
-and file deltas, rather than silently moving the current sprint's finish line.
+La primera referència congelada és **eM Client 10.4.5674.0 per a Windows**, publicada
+el 2026-08-14. La més recent, **11.0.282.0 (2026-09-03), és beta** i se'n fa el seguiment per separat.
+Font: [historial oficial de versions per a Windows](https://www.emclient.com/release-history?os=win).
+En cada límit d'esprint, comparar els canvis amb la referència; versionar la matriu
+i registrar les diferències en incidències, en lloc de moure en silenci la meta de l'esprint en curs.
 
-Deliver comparable **user outcomes and interaction quality**, not proprietary
-source, branding, assets, infrastructure or the same rendering engine.
-Keep Oreneta's accepted cobalt/navy identity and native Wails/Go/Rust/React stack.
-A different internal implementation is acceptable only if externally observable
-behavior and limitations are explicitly tested and documented.
+Lliurar **resultats per a l'usuari i qualitat d'interacció** comparables, no codi
+font propietari, marca, recursos gràfics, infraestructura ni el mateix motor de renderització.
+Mantenir la identitat cobalt/navy acceptada d'Oreneta i la pila nativa Wails/Go/Rust/React.
+Una implementació interna diferent només és acceptable si el comportament observable
+externament i les limitacions es proven i es documenten explícitament.
 
-First acceptance claim: "Windows desktop parity against the frozen matrix".
-macOS desktop needs its own native evidence. Linux remains supported by Oreneta's
-existing regression obligations. Mobile is a distinct product/platform matrix;
-this plan does not authorize a new mobile architecture or claim universal parity.
-Paid eM features remain in the comparison, even if Oreneta exposes them differently.
-Vendor-specific hosted services need a documented equivalent/decision; omitting
-one does not become "full parity". Architecture refusal or an approved deferral
-means **partial parity**, with the remaining gap visible.
+Primera declaració d'acceptació: «paritat d'escriptori a Windows respecte a la matriu congelada».
+L'escriptori macOS necessita la seva pròpia evidència nativa. Linux continua cobert per les
+obligacions de regressió existents d'Oreneta. El mòbil és una matriu de producte/plataforma diferent;
+aquest pla no autoritza una arquitectura mòbil nova ni afirma una paritat universal.
+Les funcions de pagament d'eM continuen en la comparació, encara que Oreneta les ofereixi de manera diferent.
+Els serveis allotjats específics d'un fabricant necessiten un equivalent o una decisió documentats; ometre'n
+un no esdevé «paritat completa». Un rebuig d'arquitectura o un ajornament aprovat
+implica **paritat parcial**, amb la mancança restant visible.
 
-## Historical starting evidence (2026-09-09), not current completion
+## Evidència inicial històrica (2026-09-09), no finalització actual
 
-Baseline for this plan: remote main
+Línia de base d'aquest pla: la branca main remota
 `100976d423258eb302bcc903c9c059838666e40c` (PR #82).
-[Historical baseline](baseline.md) records older evidence and must not be read as
-the current completion ledger.
+La [línia de base històrica](baseline.md) recull evidència més antiga i no s'ha de llegir com
+el registre d'acceptació actual de finalització.
 
-- PR #81 delivered a navigable synthetic reference, not a real mail client.
-- PR #82 integrated real account/folder navigation above 1024px, not the full redesign.
-- Production defaults still use Indigo, cards and chat-style conversations.
-- The 600px offscreen-reader defect remains characterized, not fixed.
-- IMAP/SMTP/MIME, EWS, contacts, local linked tasks and crypto have implementations;
-  independent provider/native-platform assurance remains incomplete.
-- Local attachment/template commits `7427383`, `142a007`, `f4d19e9` remain on
-  the user's local main. #40 must reconcile them without discarding changes or
-  counting them as delivered before a reviewed PR and green CI.
-- The existing Windows executable predates #81/#82; no new executable is produced
-  by this planning change.
+- El PR #81 va lliurar una referència sintètica navegable, no un client de correu real.
+- El PR #82 va integrar la navegació real per comptes/carpetes per sobre de 1024 px, no el redisseny complet.
+- Els valors per defecte de producció encara fan servir Indigo, targetes i converses d'estil xat.
+- El defecte del lector fora de pantalla a 600 px continua caracteritzat, no corregit.
+- IMAP/SMTP/MIME, EWS, contactes, tasques locals enllaçades i criptografia tenen implementació;
+  la garantia independent per proveïdor/plataforma nativa continua incompleta.
+- Els commits locals d'adjunts/plantilles `7427383`, `142a007`, `f4d19e9` continuen a
+  la branca main local de l'usuari. #40 els ha de reconciliar sense descartar canvis ni
+  comptar-los com a lliurats abans d'un PR revisat i una CI en verd.
+- L'executable de Windows existent és anterior a #81/#82; aquest canvi de planificació
+  no produeix cap executable nou.
 
-Status vocabulary per capability/platform/provider: **unassessed**, **absent**,
-**partial**, **implemented-unverified**, **verified**, **blocked**. Only verified
-counts toward parity. A mock, screenshot, merged PR or compiled binary alone
-cannot establish an entire capability. Do not infer absence just from a search.
+Vocabulari d'estat per capacitat/plataforma/proveïdor: **unassessed**, **absent**,
+**partial**, **implemented-unverified**, **verified**, **blocked**. Només l'estat verified
+compta per a la paritat. Una simulació, una captura de pantalla, un PR fusionat o un binari compilat,
+per si sols, no poden acreditar una capacitat sencera. No s'ha d'inferir absència només a partir d'una cerca.
 
-## Traceable capability matrix
+## Matriu de capacitats traçable
 
-The owning issue must refine each row into versioned acceptance cases, citing
-the reference behavior, code entry points, provider limits and evidence SHA.
-This is the complete workstream inventory, not a claim that every micro-feature
-has already been reverse-engineered. #22 owns the settings/menu/provider audit;
-newly discovered requirements must get an issue before the ledger is accepted.
+La incidència responsable ha de concretar cada fila en casos d'acceptació versionats, citant
+el comportament de referència, els punts d'entrada del codi, els límits del proveïdor i el SHA de l'evidència.
+Aquest és l'inventari complet de línies de treball, no una afirmació que cada microfunció
+ja s'hagi analitzat per enginyeria inversa. #22 és responsable de l'auditoria de configuració/menús/proveïdors;
+els requisits descoberts de nou han de tenir una incidència abans que s'accepti el registre d'acceptació.
 
-| Capability | Required outcomes | Owning issues | Current status |
+| Capacitat | Resultats requerits | Incidències responsables | Estat actual |
 |---|---|---|---|
-| C01: Identity and shared design | Cobalt themes, semantic tokens, typography, icons, menus, forms, contrast, no decorative drift | [#8](https://github.com/adilelhaji/oreneta/issues/8) → [#33](https://github.com/adilelhaji/oreneta/issues/33); [#83](https://github.com/adilelhaji/oreneta/issues/83) | partial |
-| C02: Mail workspace | Conventional initial list/reader, persistent panels, density, keyboard, narrow/zoom behavior | [#32](https://github.com/adilelhaji/oreneta/issues/32), [#33](https://github.com/adilelhaji/oreneta/issues/33), [#34](https://github.com/adilelhaji/oreneta/issues/34), [#35](https://github.com/adilelhaji/oreneta/issues/35), [#36](https://github.com/adilelhaji/oreneta/issues/36); [#84](https://github.com/adilelhaji/oreneta/issues/84); [#85](https://github.com/adilelhaji/oreneta/issues/85) | partial |
-| C03: Folder operations | Real hierarchy, favorites, colors, management, safe moves and selections | [#27](https://github.com/adilelhaji/oreneta/issues/27), [#34](https://github.com/adilelhaji/oreneta/issues/34); [#87](https://github.com/adilelhaji/oreneta/issues/87) | partial |
-| C04: Reader | HTML/plaintext, quotations, images, per-message actions, body zoom and scoped printing | [#35](https://github.com/adilelhaji/oreneta/issues/35) | partial |
-| C05: Context | Agenda, invitations, contact communication/file history with origin and coverage | [#86](https://github.com/adilelhaji/oreneta/issues/86) | unassessed |
-| C06: Lists | Global order, stable pagination, configurable columns, saved layout and selection semantics | [#30](https://github.com/adilelhaji/oreneta/issues/30), [#36](https://github.com/adilelhaji/oreneta/issues/36) | partial |
-| C07: Compose | Account/alias, recipients, rich text/tables/images, spellcheck, drafts, attachments and recovery | [#39](https://github.com/adilelhaji/oreneta/issues/39), [#40](https://github.com/adilelhaji/oreneta/issues/40); [#88](https://github.com/adilelhaji/oreneta/issues/88) | partial |
-| C08: Sending | Accepted versus unknown outcomes, Sent archival, scheduling, undo delay and follow-up | [#29](https://github.com/adilelhaji/oreneta/issues/29), [#45](https://github.com/adilelhaji/oreneta/issues/45); [#89](https://github.com/adilelhaji/oreneta/issues/89) | partial |
-| C09: Personalized mail | Reviewed recipient-specific messages and accurate partial outcomes | [#90](https://github.com/adilelhaji/oreneta/issues/90) | unassessed |
-| C10: Search | Operators, visual filters, account/folder scopes, saved live views and partial coverage | [#31](https://github.com/adilelhaji/oreneta/issues/31), [#43](https://github.com/adilelhaji/oreneta/issues/43) | partial |
-| C11: Filing | Categories, local/remote labels, flags, message annotations, reversible actions | [#91](https://github.com/adilelhaji/oreneta/issues/91); [#95](https://github.com/adilelhaji/oreneta/issues/95) | unassessed |
-| C12: Automation | Local/server rules, spam correction, macros, vacation/forwarding where supported | [#48](https://github.com/adilelhaji/oreneta/issues/48), [#50](https://github.com/adilelhaji/oreneta/issues/50); [#92](https://github.com/adilelhaji/oreneta/issues/92); [#94](https://github.com/adilelhaji/oreneta/issues/94) | partial |
-| C13: Files | All-attachments search, previews, save/source links, bounded indexing | [#40](https://github.com/adilelhaji/oreneta/issues/40); [#93](https://github.com/adilelhaji/oreneta/issues/93) | partial |
-| C14: Accounts | Email-first discovery, OAuth/manual recovery, service capability display, groups/profiles | [#96](https://github.com/adilelhaji/oreneta/issues/96); [#99](https://github.com/adilelhaji/oreneta/issues/99) | partial |
-| C15: Protocols/providers | IMAP/SMTP, POP3, Gmail/Workspace, Outlook/M365, EWS on-prem, iCloud and listed service variants | [#46](https://github.com/adilelhaji/oreneta/issues/46), [#47](https://github.com/adilelhaji/oreneta/issues/47), [#48](https://github.com/adilelhaji/oreneta/issues/48); [#97](https://github.com/adilelhaji/oreneta/issues/97); [#98](https://github.com/adilelhaji/oreneta/issues/98) | partial |
-| C16: Calendar | Views/editing, recurrence, timezones, sync, subscriptions, reminders and search | [#100](https://github.com/adilelhaji/oreneta/issues/100); [#101](https://github.com/adilelhaji/oreneta/issues/101) | partial |
-| C17: Scheduling | Invitations/updates/cancellations, free/busy, delegated and read-only behavior | [#102](https://github.com/adilelhaji/oreneta/issues/102) | unassessed |
-| C18: People | Detailed fields, groups, safe deduplication, editing, import/export, provenance/history | [#28](https://github.com/adilelhaji/oreneta/issues/28), [#41](https://github.com/adilelhaji/oreneta/issues/41); [#86](https://github.com/adilelhaji/oreneta/issues/86) | partial |
-| C19: Tasks | Existing linked-task recovery plus standalone lists, recurrence, reminders, delegation and sync | [#42](https://github.com/adilelhaji/oreneta/issues/42); [#103](https://github.com/adilelhaji/oreneta/issues/103) | partial |
-| C20: Notes | Standalone rich notes, tags/files/search, local and supported server sync | [#104](https://github.com/adilelhaji/oreneta/issues/104) | unassessed |
-| C21: Crypto | Signing/encryption/decryption, key import/export/discovery policy and truthful trust states | [#9](https://github.com/adilelhaji/oreneta/issues/9), [#12](https://github.com/adilelhaji/oreneta/issues/12), [#49](https://github.com/adilelhaji/oreneta/issues/49) | partial |
-| C22: Privacy | Unsafe content isolation, tracker blocking, secrets, consent and diagnostic redaction | [#54](https://github.com/adilelhaji/oreneta/issues/54); [#107](https://github.com/adilelhaji/oreneta/issues/107) | partial |
-| C23: Language | Offline grammar and translation, honest language coverage and packaged models | [#105](https://github.com/adilelhaji/oreneta/issues/105); [#106](https://github.com/adilelhaji/oreneta/issues/106) | unassessed |
-| C24: Assistant | Explicit-context generation, revision/tone, summary and reviewed extraction, no autonomous mail actions | [#51](https://github.com/adilelhaji/oreneta/issues/51), [#52](https://github.com/adilelhaji/oreneta/issues/52) | partial |
-| C25: Integrations | Cloud sharing and meeting lifecycle across the published provider inventory | [#108](https://github.com/adilelhaji/oreneta/issues/108); [#109](https://github.com/adilelhaji/oreneta/issues/109) | unassessed |
-| C26: Chat | Direct/group/channel chat, supported presence/history/files and account isolation | [#110](https://github.com/adilelhaji/oreneta/issues/110); [#111](https://github.com/adilelhaji/oreneta/issues/111) | unassessed |
-| C27: Portability | Legacy imports, standard exports, local archives/data files, profiles and scheduled complete backups | [#25](https://github.com/adilelhaji/oreneta/issues/25); [#112](https://github.com/adilelhaji/oreneta/issues/112); [#113](https://github.com/adilelhaji/oreneta/issues/113) | unassessed |
-| C28: Desktop operations | Notifications, shortcuts, touch, mailto/default app, proxy/TLS, printing, DPI/IME, install/update/recovery | [#37](https://github.com/adilelhaji/oreneta/issues/37); [#114](https://github.com/adilelhaji/oreneta/issues/114); [#115](https://github.com/adilelhaji/oreneta/issues/115) | partial |
-| C29: Completion | Performance, accessibility, native E2E, current artifacts, remaining limitations and support | [#37](https://github.com/adilelhaji/oreneta/issues/37), [#53](https://github.com/adilelhaji/oreneta/issues/53), [#54](https://github.com/adilelhaji/oreneta/issues/54), [#55](https://github.com/adilelhaji/oreneta/issues/55); [#114](https://github.com/adilelhaji/oreneta/issues/114); [#115](https://github.com/adilelhaji/oreneta/issues/115) | partial |
-| C30: Later-version/platform deltas | v11 beta and mobile separately scoped and tested | [#117](https://github.com/adilelhaji/oreneta/issues/117); [#116](https://github.com/adilelhaji/oreneta/issues/116) | unassessed |
+| C01: Identitat i disseny compartit | Temes cobalt, tokens semàntics, tipografia, icones, menús, formularis, contrast, sense deriva decorativa | [#8](https://github.com/adilelhaji/oreneta/issues/8) → [#33](https://github.com/adilelhaji/oreneta/issues/33); [#83](https://github.com/adilelhaji/oreneta/issues/83) | partial |
+| C02: Espai de treball de correu | Llista/lector inicials convencionals, panells persistents, densitat, teclat, comportament en amplada estreta/zoom | [#32](https://github.com/adilelhaji/oreneta/issues/32), [#33](https://github.com/adilelhaji/oreneta/issues/33), [#34](https://github.com/adilelhaji/oreneta/issues/34), [#35](https://github.com/adilelhaji/oreneta/issues/35), [#36](https://github.com/adilelhaji/oreneta/issues/36); [#84](https://github.com/adilelhaji/oreneta/issues/84); [#85](https://github.com/adilelhaji/oreneta/issues/85) | partial |
+| C03: Operacions amb carpetes | Jerarquia real, preferits, colors, gestió, moviments i seleccions segurs | [#27](https://github.com/adilelhaji/oreneta/issues/27), [#34](https://github.com/adilelhaji/oreneta/issues/34); [#87](https://github.com/adilelhaji/oreneta/issues/87) | partial |
+| C04: Lector | HTML/text pla, citacions, imatges, accions per missatge, zoom del cos i impressió delimitada | [#35](https://github.com/adilelhaji/oreneta/issues/35) | partial |
+| C05: Context | Agenda, invitacions, historial de comunicacions/fitxers del contacte amb origen i cobertura | [#86](https://github.com/adilelhaji/oreneta/issues/86) | unassessed |
+| C06: Llistes | Ordenació global, paginació estable, columnes configurables, disposició desada i semàntica de selecció | [#30](https://github.com/adilelhaji/oreneta/issues/30), [#36](https://github.com/adilelhaji/oreneta/issues/36) | partial |
+| C07: Redacció | Compte/àlies, destinataris, text enriquit/taules/imatges, correcció ortogràfica, esborranys, adjunts i recuperació | [#39](https://github.com/adilelhaji/oreneta/issues/39), [#40](https://github.com/adilelhaji/oreneta/issues/40); [#88](https://github.com/adilelhaji/oreneta/issues/88) | partial |
+| C08: Enviament | Resultats acceptats versus desconeguts, arxivament a Enviats, planificació, retard per desfer i seguiment | [#29](https://github.com/adilelhaji/oreneta/issues/29), [#45](https://github.com/adilelhaji/oreneta/issues/45); [#89](https://github.com/adilelhaji/oreneta/issues/89) | partial |
+| C09: Correu personalitzat | Missatges específics per destinatari revisats i resultats parcials exactes | [#90](https://github.com/adilelhaji/oreneta/issues/90) | unassessed |
+| C10: Cerca | Operadors, filtres visuals, àmbits de compte/carpeta, vistes dinàmiques desades i cobertura parcial | [#31](https://github.com/adilelhaji/oreneta/issues/31), [#43](https://github.com/adilelhaji/oreneta/issues/43) | partial |
+| C11: Classificació | Categories, etiquetes locals/remotes, marques, anotacions de missatges, accions reversibles | [#91](https://github.com/adilelhaji/oreneta/issues/91); [#95](https://github.com/adilelhaji/oreneta/issues/95) | unassessed |
+| C12: Automatització | Regles locals/de servidor, correcció de correu brossa, macros, respostes d'absència/reenviament on s'admetin | [#48](https://github.com/adilelhaji/oreneta/issues/48), [#50](https://github.com/adilelhaji/oreneta/issues/50); [#92](https://github.com/adilelhaji/oreneta/issues/92); [#94](https://github.com/adilelhaji/oreneta/issues/94) | partial |
+| C13: Fitxers | Cerca de tots els adjunts, previsualitzacions, enllaços per desar/a l'origen, indexació limitada | [#40](https://github.com/adilelhaji/oreneta/issues/40); [#93](https://github.com/adilelhaji/oreneta/issues/93) | partial |
+| C14: Comptes | Descobriment a partir de l'adreça de correu, recuperació OAuth/manual, visualització de les capacitats del servei, grups/perfils | [#96](https://github.com/adilelhaji/oreneta/issues/96); [#99](https://github.com/adilelhaji/oreneta/issues/99) | partial |
+| C15: Protocols/proveïdors | IMAP/SMTP, POP3, Gmail/Workspace, Outlook/M365, EWS local (on-prem), iCloud i variants de servei llistades | [#46](https://github.com/adilelhaji/oreneta/issues/46), [#47](https://github.com/adilelhaji/oreneta/issues/47), [#48](https://github.com/adilelhaji/oreneta/issues/48); [#97](https://github.com/adilelhaji/oreneta/issues/97); [#98](https://github.com/adilelhaji/oreneta/issues/98) | partial |
+| C16: Calendari | Vistes/edició, recurrència, zones horàries, sincronització, subscripcions, recordatoris i cerca | [#100](https://github.com/adilelhaji/oreneta/issues/100); [#101](https://github.com/adilelhaji/oreneta/issues/101) | partial |
+| C17: Planificació de reunions | Invitacions/actualitzacions/cancel·lacions, disponibilitat lliure/ocupat, comportament delegat i de només lectura | [#102](https://github.com/adilelhaji/oreneta/issues/102) | unassessed |
+| C18: Persones | Camps detallats, grups, desduplicació segura, edició, importació/exportació, procedència/historial | [#28](https://github.com/adilelhaji/oreneta/issues/28), [#41](https://github.com/adilelhaji/oreneta/issues/41); [#86](https://github.com/adilelhaji/oreneta/issues/86) | partial |
+| C19: Tasques | Recuperació de les tasques enllaçades existents més llistes independents, recurrència, recordatoris, delegació i sincronització | [#42](https://github.com/adilelhaji/oreneta/issues/42); [#103](https://github.com/adilelhaji/oreneta/issues/103) | partial |
+| C20: Notes | Notes enriquides independents, etiquetes/fitxers/cerca, sincronització local i amb servidors compatibles | [#104](https://github.com/adilelhaji/oreneta/issues/104) | unassessed |
+| C21: Criptografia | Signatura/xifratge/desxifratge, política d'importació/exportació/descobriment de claus i estats de confiança veraços | [#9](https://github.com/adilelhaji/oreneta/issues/9), [#12](https://github.com/adilelhaji/oreneta/issues/12), [#49](https://github.com/adilelhaji/oreneta/issues/49) | partial |
+| C22: Privadesa | Aïllament del contingut no segur, bloqueig de rastrejadors, secrets, consentiment i emmascarament de dades als diagnòstics | [#54](https://github.com/adilelhaji/oreneta/issues/54); [#107](https://github.com/adilelhaji/oreneta/issues/107) | partial |
+| C23: Idioma | Gramàtica i traducció fora de línia, cobertura lingüística honesta i models empaquetats | [#105](https://github.com/adilelhaji/oreneta/issues/105); [#106](https://github.com/adilelhaji/oreneta/issues/106) | unassessed |
+| C24: Assistent | Generació amb context explícit, revisió/to, resum i extracció revisada, sense accions autònomes sobre el correu | [#51](https://github.com/adilelhaji/oreneta/issues/51), [#52](https://github.com/adilelhaji/oreneta/issues/52) | partial |
+| C25: Integracions | Compartició al núvol i cicle de vida de reunions en tot l'inventari de proveïdors publicat | [#108](https://github.com/adilelhaji/oreneta/issues/108); [#109](https://github.com/adilelhaji/oreneta/issues/109) | unassessed |
+| C26: Xat | Xat directe/de grup/de canal, presència/historial/fitxers admesos i aïllament entre comptes | [#110](https://github.com/adilelhaji/oreneta/issues/110); [#111](https://github.com/adilelhaji/oreneta/issues/111) | unassessed |
+| C27: Portabilitat | Importacions de clients antics, exportacions estàndard, arxius/fitxers de dades locals, perfils i còpies de seguretat completes programades | [#25](https://github.com/adilelhaji/oreneta/issues/25); [#112](https://github.com/adilelhaji/oreneta/issues/112); [#113](https://github.com/adilelhaji/oreneta/issues/113) | unassessed |
+| C28: Operacions d'escriptori | Notificacions, dreceres, tàctil, mailto/aplicació predeterminada, servidor intermediari (proxy)/TLS, impressió, DPI/IME, instal·lació/actualització/recuperació | [#37](https://github.com/adilelhaji/oreneta/issues/37); [#114](https://github.com/adilelhaji/oreneta/issues/114); [#115](https://github.com/adilelhaji/oreneta/issues/115) | partial |
+| C29: Finalització | Rendiment, accessibilitat, proves extrem a extrem (E2E) natives, artefactes actuals, limitacions restants i suport | [#37](https://github.com/adilelhaji/oreneta/issues/37), [#53](https://github.com/adilelhaji/oreneta/issues/53), [#54](https://github.com/adilelhaji/oreneta/issues/54), [#55](https://github.com/adilelhaji/oreneta/issues/55); [#114](https://github.com/adilelhaji/oreneta/issues/114); [#115](https://github.com/adilelhaji/oreneta/issues/115) | partial |
+| C30: Diferències de versions posteriors/plataformes | Beta v11 i mòbil amb abast i proves separats | [#117](https://github.com/adilelhaji/oreneta/issues/117); [#116](https://github.com/adilelhaji/oreneta/issues/116) | unassessed |
 
-Reference sources (retrieved 2026-09-09): [overview](https://www.emclient.com/features-overview),
-[email](https://www.emclient.com/features-email),
-[calendar/tasks](https://www.emclient.com/features-calendar),
-[contacts](https://www.emclient.com/features-contacts),
+Fonts de referència (consultades el 2026-09-09): [visió general](https://www.emclient.com/features-overview),
+[correu](https://www.emclient.com/features-email),
+[calendari/tasques](https://www.emclient.com/features-calendar),
+[contactes](https://www.emclient.com/features-contacts),
 [notes](https://www.emclient.com/features-notes),
-[chat](https://www.emclient.com/features-chat),
-[email services](https://www.emclient.com/email-services),
-[cloud storage](https://www.emclient.com/cloud-storages),
-[meeting providers](https://www.emclient.com/online-meetings-tools).
-Marketing pages can mix versions; reconcile uncertain items against stable
-release notes/settings before labelling a capability mandatory for 10.4.
-Provider-specific/less prominent settings (weather, shortcuts, sounds, signatures,
-archive/import variants, key discovery, task capabilities) remain explicit audit
-rows under #22; they cannot disappear behind a broad "other" completion checkbox.
+[xat](https://www.emclient.com/features-chat),
+[serveis de correu](https://www.emclient.com/email-services),
+[emmagatzematge al núvol](https://www.emclient.com/cloud-storages),
+[proveïdors de reunions](https://www.emclient.com/online-meetings-tools).
+Les pàgines comercials poden barrejar versions; cal contrastar els elements incerts amb les notes
+de versió estables i la configuració abans de marcar una capacitat com a obligatòria per a 10.4.
+Les opcions de configuració específiques de proveïdor o menys destacades (temps meteorològic, dreceres, sons, signatures,
+variants d'arxivament/importació, descobriment de claus, capacitats de tasques) continuen com a files
+d'auditoria explícites a #22; no poden desaparèixer darrere d'una casella genèrica de finalització «altres».
 
-## Sprint roadmap and dependency order
+## Full de ruta per esprints i ordre de dependències
 
-GitHub milestones are functional workstream containers. The 2026-10-05 review
-uses R0–R4 delivery gates; S01 implementation slices have landed but full acceptance
-remains open. S02–S12 are ordered backlogs, **not promises of one sprint each**.
-S13 is a separate discovery queue. Use two-week execution timeboxes when capacity
-is known; split a large milestone into bounded iterations rather than rushing
-a multi-provider epic into one PR. No invented assignees, velocity or due dates.
+Les fites de GitHub són contenidors funcionals de línies de treball. La revisió del 2026-10-05
+fa servir les portes de lliurament R0–R4; les slices d'implementació de S01 ja s'han integrat, però l'acceptació completa
+continua oberta. S02–S12 són backlogs ordenats, **no promeses d'un esprint cadascun**.
+S13 és una cua de descobriment separada. Fer servir períodes d'execució de dues setmanes quan es conegui
+la capacitat; dividir una fita gran en iteracions delimitades en lloc de precipitar
+una èpica multiproveïdor en un sol PR. Sense responsables, velocitat ni dates límit inventats.
 
-| Sprint | Outcome | Entry / exit |
+| Esprint | Resultat | Entrada / sortida |
 |---|---|---|
-| [S01](https://github.com/adilelhaji/oreneta/milestone/1) | First real visual change | #22 + theme, mail-default, narrow; actual light/dark app, old preferences intact |
-| [S02](https://github.com/adilelhaji/oreneta/milestone/2) | Integrity and recovery contracts | Reproduce #27–#29; approve only needed #24/#25 decisions; failure cases pass |
-| [S03](https://github.com/adilelhaji/oreneta/milestone/3) | Complete mail shell and reader | #30, #32–#36, folders/sidebar; real complete workflow, not prototype alone |
-| [S04](https://github.com/adilelhaji/oreneta/milestone/4) | Compose and reliable delivery | #39/#40/#45, libraries, scheduling and mail merge; restored drafts and exact outcomes |
-| [S05](https://github.com/adilelhaji/oreneta/milestone/5) | Organization and search | #31/#43/#50, categories/local rules/macros/labels/files; full query scope and safe mutations |
-| [S06](https://github.com/adilelhaji/oreneta/milestone/6) | Accounts/provider continuity | #46–#48, onboarding/profiles/POP3/provider certification; approved adapters and evidence |
-| [S07](https://github.com/adilelhaji/oreneta/milestone/7) | Calendar | Views, recurrence, provider sync and invitations verified end to end |
-| [S08](https://github.com/adilelhaji/oreneta/milestone/8) | Personal information | #28/#38/#41/#42, full tasks and notes; approve model changes first |
-| [S09](https://github.com/adilelhaji/oreneta/milestone/9) | Security/languages | #9/#12/#49 plus ADR-0001 tools; independent crypto and privacy tests |
-| [S10](https://github.com/adilelhaji/oreneta/milestone/10) | Integrations/assistant/chat | #51/#52, cloud/meetings/chat; consent, isolation and provider-specific acceptance |
-| [S11](https://github.com/adilelhaji/oreneta/milestone/11) | Windows complete acceptance | #25/#53/#54, migration/backup/native Windows artifacts; all stable Windows rows verified |
-| [S12](https://github.com/adilelhaji/oreneta/milestone/12) | Desktop cross-platform | #37/#55 and macOS; native evidence and controlled acceptance; no automatic public rollout |
-| [S13](https://github.com/adilelhaji/oreneta/milestone/13) | Beta/mobile discovery | Record deltas and decisions independently of the stable desktop gate |
+| [S01](https://github.com/adilelhaji/oreneta/milestone/1) | Primer canvi visual real | #22 + theme, mail-default, narrow; aplicació real en clar/fosc, preferències antigues intactes |
+| [S02](https://github.com/adilelhaji/oreneta/milestone/2) | Contractes d'integritat i recuperació | Reproduir #27–#29; aprovar només les decisions necessàries de #24/#25; els casos de fallada passen |
+| [S03](https://github.com/adilelhaji/oreneta/milestone/3) | Entorn de correu i lector complets | #30, #32–#36, carpetes/barra lateral; flux de treball complet i real, no només el prototip |
+| [S04](https://github.com/adilelhaji/oreneta/milestone/4) | Redacció i enviament fiable | #39/#40/#45, biblioteques, planificació i combinació de correspondència; esborranys restaurats i resultats exactes |
+| [S05](https://github.com/adilelhaji/oreneta/milestone/5) | Organització i cerca | #31/#43/#50, categories/regles locals/macros/etiquetes/fitxers; abast complet de les consultes i modificacions segures |
+| [S06](https://github.com/adilelhaji/oreneta/milestone/6) | Continuïtat de comptes/proveïdors | #46–#48, incorporació/perfils/POP3/certificació de proveïdors; adaptadors aprovats i evidència |
+| [S07](https://github.com/adilelhaji/oreneta/milestone/7) | Calendari | Vistes, recurrència, sincronització amb proveïdors i invitacions verificades d'extrem a extrem |
+| [S08](https://github.com/adilelhaji/oreneta/milestone/8) | Informació personal | #28/#38/#41/#42, tasques i notes completes; aprovar primer els canvis de model |
+| [S09](https://github.com/adilelhaji/oreneta/milestone/9) | Seguretat/idiomes | #9/#12/#49 més les eines d'ADR-0001; proves independents de criptografia i privadesa |
+| [S10](https://github.com/adilelhaji/oreneta/milestone/10) | Integracions/assistent/xat | #51/#52, núvol/reunions/xat; consentiment, aïllament i acceptació específica per proveïdor |
+| [S11](https://github.com/adilelhaji/oreneta/milestone/11) | Acceptació completa a Windows | #25/#53/#54, migració/còpia de seguretat/artefactes natius de Windows; totes les files estables de Windows verificades |
+| [S12](https://github.com/adilelhaji/oreneta/milestone/12) | Escriptori multiplataforma | #37/#55 i macOS; evidència nativa i acceptació controlada; cap desplegament públic automàtic |
+| [S13](https://github.com/adilelhaji/oreneta/milestone/13) | Descobriment de beta/mòbil | Registrar diferències i decisions independentment de la porta estable d'escriptori |
 
-Dependencies are per capability, not rigid waterfall prerequisites:
-#46 Exchange continuity discovery starts immediately; #9/#12 and any reproduced
-P0 integrity/security issue may preempt S01. #37/#53/#54 checks apply to every
-delivery even though their closing milestones are later. Calendar/task/notes/chat
-architecture discovery should happen early enough to avoid idle implementation.
-The manifest separates nonblocking `relatedIssues` from hard `blockedBy`
-dependencies. Architecture approval is a separate gate; an approved design does
-not require its entire umbrella issue to close. Missing-provider server rules
-are scheduled in S06 after delegated/server capability validation, not in S05.
-Every item has an issue URL, sprint, initial status and evidence statement;
-`unassessed` is intentionally not a claim of absence or implementation.
+Les dependències són per capacitat, no requisits previs rígids en cascada:
+el descobriment de continuïtat d'Exchange de #46 comença immediatament; #9/#12 i qualsevol
+problema P0 reproduït d'integritat/seguretat poden passar per davant de S01. Les comprovacions de #37/#53/#54 s'apliquen a cada
+lliurament encara que les seves fites de tancament siguin posteriors. El descobriment d'arquitectura de calendari/tasques/notes/xat
+s'ha de fer prou aviat per evitar que la implementació quedi aturada.
+El manifest separa les `relatedIssues` no bloquejants de les dependències estrictes `blockedBy`.
+L'aprovació d'arquitectura és una porta separada; un disseny aprovat no
+requereix que es tanqui tota la seva incidència paraigua. Les regles de servidor dels proveïdors que falten
+es planifiquen a S06, després de validar les capacitats delegades/de servidor, no a S05.
+Cada element té URL d'incidència, esprint, estat inicial i declaració d'evidència;
+`unassessed` intencionadament no és una afirmació d'absència ni d'implementació.
 
-### Historical S01 execution slices (implementation delivered; full acceptance open)
+### Slices d'execució històriques de S01 (implementació lliurada; acceptació completa oberta)
 
-1. **[#22](https://github.com/adilelhaji/oreneta/issues/22), acceptance ledger** (S): audit current defaults/reference, identify exact
-   baseline SHA, screenshots and pending gaps; do not require recruiting a pilot.
-2. **[#83: theme](https://github.com/adilelhaji/oreneta/issues/83)** (M): implement documented new-profile default, preserve persisted
-   choices/custom themes, test light/dark/system and refresh/restart.
-3. **[#84: mail-default](https://github.com/adilelhaji/oreneta/issues/84)** (M): reuse supported conventional modes, preserve explicit old
-   selections, offer a deliberate switch; test reading/replying and bulk selection.
-4. **[#85: narrow](https://github.com/adilelhaji/oreneta/issues/85)** (S/M): reproduce 600px cutoff, correct shared layout condition and
-   test adjacent widths/zoom without masking other reader failures.
+1. **[#22](https://github.com/adilelhaji/oreneta/issues/22), registre d'acceptació** (S): auditar els valors per defecte actuals i la referència, identificar el SHA exacte
+   de la línia de base, les captures de pantalla i les mancances pendents; no exigir el reclutament d'un pilot.
+2. **[#83: theme](https://github.com/adilelhaji/oreneta/issues/83)** (M): implementar el valor per defecte documentat per a perfils nous, preservar les eleccions
+   desades i els temes personalitzats, provar clar/fosc/sistema i actualització/reinici.
+3. **[#84: mail-default](https://github.com/adilelhaji/oreneta/issues/84)** (M): reutilitzar els modes convencionals admesos, preservar les seleccions
+   antigues explícites, oferir un canvi deliberat; provar lectura/resposta i selecció massiva.
+4. **[#85: narrow](https://github.com/adilelhaji/oreneta/issues/85)** (S/M): reproduir el tall a 600 px, corregir la condició de disposició compartida i
+   provar amplades adjacents/zoom sense emmascarar altres fallades del lector.
 
-Sizes are relative only: S = one bounded concern, M = several existing-component
-interactions, L = split before implementation; architecture/provider epics remain
-unestimated until discovery. For the first timebox commit only ready slices that
-fit measured capacity; carryovers remain open. No claim of a 26-week finish.
+Les mides només són relatives: S = un sol aspecte delimitat, M = diverses interaccions entre components
+existents, L = dividir abans d'implementar; les èpiques d'arquitectura/proveïdor queden
+sense estimar fins al descobriment. Per al primer període, comprometre només les slices preparades que
+càpiguen en la capacitat mesurada; les que es traslladin continuen obertes. No s'afirma cap finalització en 26 setmanes.
 
-S01 acceptance package: PRs + actual tested SHA + automated result links +
-production-entry screenshots at 1440/1024/600 and boundary widths, light/dark +
-preference migration/restart checks. Native Windows verification is separately
-required before presenting a newly built executable as the validated update.
-S01 does not close the entire design epic or claim functional parity.
+Paquet d'acceptació de S01: PR + SHA realment provat + enllaços als resultats automatitzats +
+captures de pantalla des de l'entrada de producció a 1440/1024/600 i a les amplades límit, clar/fosc +
+comprovacions de migració de preferències/reinici. Cal una verificació nativa a Windows per separat
+abans de presentar un executable acabat de compilar com l'actualització validada.
+S01 no tanca tota l'èpica de disseny ni afirma paritat funcional.
 
-## Architecture decision queue
+## Cua de decisions d'arquitectura
 
-| Gate | Required decision before affected implementation |
+| Porta | Decisió requerida abans de la implementació afectada |
 |---|---|
-| #24 / #25 | Changed identity, wire compatibility, durable ownership, migrations and recovery contracts |
-| #46 → #125 → #127/#128; #47 delegation | Graph direction approved in [ADR-0004](adr/0004-microsoft-graph.md) on 2026-09-09; incremental native adapter, explicit per-account adoption, preserved IMAP/SMTP/EWS local. Exact slice contracts documented before code; exposure/provider acceptance still open. |
-| pop3 / profiles | POP3 retention/identity and profile isolation if missing from current contracts |
-| tasks-full | Standalone/synced tasks conflict with current local, one-open-task-per-thread contract |
-| notes | Standalone note storage, identity and note-capable provider semantics |
-| chat-design → chat | Native adapter boundary, history/presence/files, scopes and maintenance |
-| #51, #52, cloud, meetings | External destinations, consent, credentials, retention/cost and supported APIs; #51 provider/context boundary and #52 result-review contract accepted in [ADR-0006](adr/0006-assistant-provider-context-privacy.md) and [ADR-0007](adr/0007-assistant-results-review-and-cancellation.md) on 2026-09-10 |
-| migration / backup | Full local encrypted profile recovery approved on 2026-10-05 in [ADR-0010](adr/0010-full-profile-local-recovery.md), extending only ADR-0008's configuration-only limit. Draft storage #169 is delivered; editor integration #170, capture #171, isolated restore #172 and scheduling #173 remain. #113 stays open; approval is not full-backup or native recovery acceptance. |
-| beta-delta / mobile-scope | New sync service, MCP/Matrix or new platform architecture |
+| #24 / #25 | Canvis d'identitat, compatibilitat del format de transmissió, propietat durable, migracions i contractes de recuperació |
+| #46 → #125 → #127/#128; #47 delegació | Direcció de Graph aprovada a [ADR-0004](adr/0004-microsoft-graph.md) el 2026-09-09; adaptador natiu incremental, adopció explícita per compte, es conserven IMAP/SMTP/EWS locals. Contractes exactes de cada slice documentats abans del codi; l'exposició i l'acceptació per proveïdor continuen obertes. |
+| pop3 / profiles | Retenció/identitat de POP3 i aïllament de perfils si falten als contractes actuals |
+| tasks-full | Les tasques independents/sincronitzades entren en conflicte amb el contracte actual, local i d'una tasca oberta per fil |
+| notes | Emmagatzematge, identitat i semàntica de proveïdors amb notes per a notes independents |
+| chat-design → chat | Límit de l'adaptador natiu, historial/presència/fitxers, àmbits i manteniment |
+| #51, #52, cloud, meetings | Destinacions externes, consentiment, credencials, retenció/cost i API admeses; el límit de proveïdor/context de #51 i el contracte de revisió de resultats de #52 es van acceptar a [ADR-0006](adr/0006-assistant-provider-context-privacy.md) i [ADR-0007](adr/0007-assistant-results-review-and-cancellation.md) el 2026-09-10 |
+| migration / backup | Recuperació completa local xifrada del perfil aprovada el 2026-10-05 a [ADR-0010](adr/0010-full-profile-local-recovery.md), que amplia només el límit d'ADR-0008 de còpia exclusiva de la configuració. El magatzem d'esborranys #169 està lliurat; queden pendents la integració de l'editor #170, la captura #171, la restauració aïllada #172 i la programació #173. #113 continua oberta; l'aprovació no és acceptació de la còpia completa ni de la recuperació nativa. |
+| beta-delta / mobile-scope | Servei de sincronització nou, MCP/Matrix o arquitectura de plataforma nova |
 
-Discovery can produce options and tests, not silently choose an architecture.
-On encountering a required decision: stop the affected implementation, ask the
-human a concrete question, document approval in an ADR **before** writing code.
-Existing ADR-0001/0002/0003 stay binding. Grammar/translation/tracker functionality
-already has an accepted direction; do not reopen it or introduce a cloud shortcut.
-No service subscriptions, credentials borrowing, production rollout or public
-release are authorized by creating these issues.
+El descobriment pot produir opcions i proves, no triar una arquitectura en silenci.
+Quan es trobi una decisió necessària: aturar la implementació afectada, fer a la
+persona una pregunta concreta i documentar l'aprovació en un ADR **abans** d'escriure codi.
+Els ADR-0001/0002/0003 existents continuen sent vinculants. La funcionalitat de gramàtica/traducció/rastrejadors
+ja té una direcció acceptada; no s'ha de reobrir ni introduir una drecera al núvol.
+La creació d'aquestes incidències no autoritza subscripcions a serveis, préstec de credencials, desplegament a producció
+ni publicació pública.
 
-## Issue workflow and definition of done
+## Flux de treball de les incidències i definició d'acabat
 
-- Refresh main; reconcile issue, current code, docs and local work before coding.
-- Scope a reviewable slice; parent epics close only when all child requirements pass.
-- Update concise documentation with code; architecture documentation comes first.
-- Tests cover success, boundary, error, interruption/recovery, isolation and
-  regressions. Add provider integration and native E2E where relevant.
-- Lightweight logic and business reviewers independently review every implementation;
-  resolve findings, open PR, require green checks for the delivered SHA, merge with
-  a **merge commit** and take the next ready issue without another permission prompt.
-- Changes to infrastructure/build are declarative CI/CD work. Validation is not
-  permission to publish or to send real mail.
-- Attach screenshot evidence for visual changes from production UI; mock bridge
-  evidence is marked synthetic and cannot replace native/provider tests.
-- A release gate includes source SHA, checksums, signing/provenance policy, install,
-  update, rollback/recovery and known limitations. Retire old local binaries only
-  after the canonical replacement passes validation, following AGENTS.md.
+- Actualitzar main; reconciliar la incidència, el codi actual, la documentació i el treball local abans de programar.
+- Delimitar una slice revisable; les èpiques mare només es tanquen quan passen tots els requisits fills.
+- Actualitzar la documentació concisa amb el codi; la documentació d'arquitectura va primer.
+- Les proves cobreixen èxit, límits, errors, interrupció/recuperació, aïllament i
+  regressions. Afegir proves d'integració amb proveïdors i E2E natives quan escaigui.
+- Revisors lleugers de lògica i de negoci revisen de manera independent cada implementació;
+  resoldre les observacions, obrir el PR, exigir comprovacions en verd per al SHA lliurat, fusionar amb
+  un **merge commit** i agafar la següent incidència preparada sense una altra sol·licitud de permís.
+- Els canvis d'infraestructura/compilació són treball declaratiu de CI/CD. La validació no és
+  permís per publicar ni per enviar correu real.
+- Adjuntar evidència en captures de pantalla de la UI de producció per als canvis visuals; l'evidència del pont simulat
+  es marca com a sintètica i no pot substituir les proves natives/de proveïdor.
+- Una porta de publicació inclou SHA del codi font, sumes de verificació, política de signatura/procedència, instal·lació,
+  actualització, reversió/recuperació i limitacions conegudes. Retirar els binaris locals antics només
+  després que el substitut canònic superi la validació, segons AGENTS.md.
 
-An item is verified only when its acceptance cases, tests, docs, reviews, merge
-and applicable native/provider evidence are linked. "Deferred", inaccessible
-test accounts, missing devices, unresolved defects and unavailable services
-remain gaps, not passed tests. Never promise zero production errors.
+Un element només és verificat quan hi ha enllaçats els casos d'acceptació, les proves, la documentació, les revisions, la fusió
+i l'evidència nativa/de proveïdor aplicable. «Ajornat», els comptes de prova inaccessibles,
+els dispositius que falten, els defectes no resolts i els serveis no disponibles
+continuen sent mancances, no proves superades. No prometre mai zero errors en producció.
 
-## Backlog cleanup policy and disposition
+## Política de neteja del backlog i disposició
 
-Inventory: 36 open issues, no open PRs or milestones at planning intake.
-Reuse #21 as the parity umbrella and #22 as the acceptance ledger.
-Retain the other 32 relevant execution issues: safety, performance, migration,
-accessibility and release evidence are prerequisites, not unrelated work.
+Inventari: 36 incidències obertes, cap PR ni fita oberts en iniciar la planificació.
+Reutilitzar #21 com a paraigua de paritat i #22 com a registre d'acceptació.
+Conservar les altres 32 incidències d'execució rellevants: seguretat, rendiment, migració,
+accessibilitat i evidència de publicació són requisits previs, no treball no relacionat.
 
-- **#8**: consolidate its outstanding design-catalogue documentation link into
-  #33, then close as not planned/duplicate, explicitly **not implemented**.
-- **#44**: close as not planned for this scope: optional people/service grouping
-  is not the same as eM inbox categories. Preserve the issue/history and existing
-  code; the categories issue owns the actual parity requirement.
-- **#38**: retain parity screens; exclude new Kanban-specific enhancements.
-  Existing Kanban/RSS/mobile behavior remains regression-protected, not deleted.
-- **#55**: retain support and acceptance evidence; real participant enrollment and
-  public rollout remain separately authorized.
-- **#9**: repair the empty body with the title's security requirement, reproduction
-  work and independent tests; do not close a crypto bug as unrelated.
+- **#8**: consolidar el seu enllaç pendent a la documentació del catàleg de disseny a
+  #33 i després tancar-la com a no planificada/duplicada, explícitament **no implementada**.
+- **#44**: tancar-la com a no planificada per a aquest abast: l'agrupació opcional per persones/serveis
+  no és el mateix que les categories de safata d'entrada d'eM. Preservar la incidència/l'historial i el codi
+  existent; la incidència de categories és responsable del requisit real de paritat.
+- **#38**: conservar les pantalles de paritat; excloure noves millores específiques de Kanban.
+  El comportament existent de Kanban/RSS/mòbil continua protegit contra regressions, no s'elimina.
+- **#55**: conservar el suport i l'evidència d'acceptació; la inscripció real de participants i
+  el desplegament públic continuen requerint autorització separada.
+- **#9**: reparar el cos buit amb el requisit de seguretat del títol, el treball de reproducció
+  i proves independents; no tancar un error de criptografia com a no relacionat.
 
-No permanent issue deletion, deletion of code/data or closure of unresolved
-security findings. Every closure records its reason/replacement before closing.
-The old E0–E8 schedule and repeated permission requests in legacy issue text are
-superseded by this plan and the current user-authorized workflow; acceptance and
-architecture constraints remain unless explicitly reconciled in the issue.
+Cap eliminació permanent d'incidències, cap eliminació de codi/dades ni cap tancament de troballes
+de seguretat no resoltes. Cada tancament registra el motiu/substitut abans de tancar.
+L'antic calendari E0–E8 i les sol·licituds de permís repetides del text de les incidències antigues
+queden substituïts per aquest pla i pel flux de treball actual autoritzat per l'usuari; les restriccions
+d'acceptació i d'arquitectura es mantenen tret que es reconciliïn explícitament a la incidència.

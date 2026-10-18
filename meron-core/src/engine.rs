@@ -1443,9 +1443,12 @@ where
 
     match tokio::time::timeout_at(deadline, operation()).await {
         Ok(Ok(value)) => Ok(value),
-        Ok(Err(retry_error)) => Err(anyhow::anyhow!(
-            "retry failed: {retry_error:#}; first attempt: {first_error:#}"
-        )),
+        // The retry's own error stays the source, typed, so whoever reports
+        // it can still tell what it was (#244); the first attempt failed in
+        // a transient way, so its words are only network trouble.
+        Ok(Err(retry_error)) => Err(retry_error.context(format!(
+            "retry failed; first attempt: {first_error:#}"
+        ))),
         Err(_) => Err(first_error.context(format!(
             "retry timed out within the {}s sync budget",
             sync_timeout.as_secs()

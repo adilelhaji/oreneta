@@ -15,7 +15,7 @@ cargo build --release --manifest-path meron-core/Cargo.toml
 
 echo "==> Staging sidecar for embedding"
 mkdir -p build/sidecar
-cp meron-core/target/release/meron-core build/sidecar/meron-core
+cp meron-core/target/release/oreneta-core build/sidecar/oreneta-core
 
 echo "==> Building Wails app with embedded sidecar"
 wails build -tags embed_sidecar "$@"

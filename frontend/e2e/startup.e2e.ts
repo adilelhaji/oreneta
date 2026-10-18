@@ -16,7 +16,18 @@ type SetupOptions = {
   oauth?: 'waiting' | 'late' | 'success' | 'error'
   discovery?: 'guess' | 'failure'
   saveError?: boolean
-  language?: string
+  /**
+   * The stored interface language. English unless given, so the checks that
+   * read English text keep reading it; null leaves the row out, as on a fresh
+   * profile, which starts in Catalan (#231, ADR-0062).
+   */
+  language?: string | null
+  /**
+   * The stored list view. The table unless given, so the checks written
+   * against the table keep reading it; null leaves the row out, as on a
+   * profile that never chose, which gets the automatic view (#283).
+   */
+  listView?: 'auto' | 'cards' | 'table' | null
   existingEmail?: string
   navigation?: boolean
   theme?: string
@@ -32,6 +43,8 @@ type SetupOptions = {
   manualRefresh?: boolean
   /** Translation models the synthetic core says are installed (#106). */
   installedModels?: string[]
+  /** One conversation with an Arabic subject and sender (#226, ADR-0061). */
+  arabicSubject?: boolean
 }
 
 // The registry the core ships, so the models the app is told about are real.
@@ -1182,6 +1195,10 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
       '<p>Wide synthetic invoice</p><table width="1800"><tr><td style="min-width:900px">Original first column</td><td style="min-width:900px">Original second column</td></tr></table>'
   }
   if (options.readReceipt) fixture.messages[0].receipt_requested = true
+  if (options.arabicSubject) {
+    fixture.threads[2].subject = RTL_SUBJECT
+    fixture.threads[2].from_name = RTL_SENDER
+  }
   if (options.readerQuote) {
     fixture.account.conversation_html = true
     fixture.messages[0].body_html =
@@ -1241,7 +1258,8 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'app.prefsGet': {
           prefs: {
             auto_update_check: false,
-            language: options.language,
+            ...(options.language === null ? {} : { language: options.language ?? 'en' }),
+            ...(options.listView === null ? {} : { list_view: options.listView ?? 'table' }),
             ...(options.navigation
               ? {
                   session_account: template.id,
@@ -1314,6 +1332,8 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         // Group chats and their invitations (ADR-0044).
         'chat.rooms': [],
         'chat.invitations': [],
+        // Muted conversations (ADR-0064).
+        'chat.muted': { muted: [] },
         'cloud.providers': [
           { id: 'nextcloud', name: 'Nextcloud', usable: true },
           { id: 'owncloud', name: 'ownCloud', usable: true },
@@ -1444,6 +1464,23 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
                   const prefs = (replies['app.prefsGet'] as { prefs: Record<string, unknown> }).prefs
                   prefs[String(payload.key)] = structuredClone(payload.value)
                   sessionStorage.setItem('synthetic-prefs', JSON.stringify(prefs))
+                }
+                // The manual setup tests both servers before saving (#269);
+                // the synthetic core passes every step.
+                if (command === 'account.testConnection') {
+                  const server = (protocol: string, host: unknown, port: unknown) => ({
+                    protocol,
+                    host,
+                    port,
+                    security: 'tls',
+                    ok: true,
+                    steps: ['dns', 'tcp', 'tls', 'auth'].map((step) => ({ step, status: 'ok' })),
+                  })
+                  return {
+                    ok: true,
+                    incoming: server(payload.incoming === 'pop3' ? 'pop3' : 'imap', payload.imap_host, payload.imap_port),
+                    outgoing: server('smtp', payload.smtp_host, payload.smtp_port),
+                  }
                 }
                 if (command === 'account.autodiscover') {
                   if (options.discovery === 'failure') throw new Error('Synthetic discovery outage')
@@ -1610,6 +1647,169 @@ for (const width of [769, 1024, 1025, 1440]) {
   })
 }
 
+// #283: the message list at the sizes a window is kept maximised at. A
+// profile that never resized the list gets 360 px of it and the automatic
+// view, which draws two-line rows (sender and date over subject and preview)
+// under date groups while the list is narrow. The sender and the subject of an
+// ordinary conversation read whole, in Catalan, English and Arabic, light and
+// dark, without touching the separator.
+const READABLE_SUBJECTS = [
+  'Budget review: Q4 planning',
+  'Meeting notes and next steps',
+  'Invoice with an attachment',
+  'Welcome to the internal demo',
+]
+
+/** Whether a two-line row shows its sender and subject whole, and how tall it is. */
+async function rowReading(list: ReturnType<Page['locator']>, subject: string) {
+  const row = list.getByTitle(subject, { exact: true })
+  await expect(row).toBeVisible()
+  return row.evaluate((button) => {
+    const sender = button.querySelector('[data-thread-sender]') as HTMLElement
+    const title = button.querySelector('[data-thread-subject]') as HTMLElement
+    const line = title.closest('p') as HTMLElement
+    const senderBox = sender.getBoundingClientRect()
+    const titleBox = title.getBoundingClientRect()
+    const lineBox = line.getBoundingClientRect()
+    return {
+      senderWhole: sender.scrollWidth <= sender.clientWidth + 1,
+      // The subject's own box inside its line: a cut subject runs past the
+      // end of the line, on the right or (Arabic) on the left.
+      subjectWhole: titleBox.left >= lineBox.left - 1 && titleBox.right <= lineBox.right + 1,
+      subjectBelowSender: titleBox.top >= senderBox.bottom - 1,
+      height: Math.round(button.getBoundingClientRect().height),
+    }
+  })
+}
+
+for (const language of ['ca', 'en', 'ar'] as const) {
+  for (const theme of ['oreneta-light', 'oreneta-dark']) {
+    for (const width of [1280, 1456, 1920]) {
+      test(`the message list reads sender and subject without resizing: ${language}, ${theme}, ${width}px (#283)`, async ({
+        page,
+      }, info) => {
+        await page.setViewportSize({ width, height: 900 })
+        const errors = await prepareStartup(page, true, { navigation: true, language, theme, listView: null })
+        await page.goto('/')
+        const html = page.locator('html')
+        await expect(html).toHaveAttribute('lang', language)
+        await expect(html).toHaveAttribute('dir', language === 'ar' ? 'rtl' : 'ltr')
+        const list = page.locator('[data-thread-list]')
+        const reader = page.locator('[data-message-pane]')
+        await expect(list).toHaveAttribute('data-list-view', 'cards')
+        await expect(list.getByRole('table')).toHaveCount(0)
+        await expect(list.locator('[data-date-group]').first()).toBeVisible()
+
+        const listBox = (await list.boundingBox())!
+        const readerBox = (await reader.boundingBox())!
+        expect(Math.round(listBox.width)).toBe(360)
+        expect(readerBox.width).toBeGreaterThanOrEqual(360 - 1)
+        expect(readerBox.x + readerBox.width).toBeLessThanOrEqual(width + 1)
+        // Arabic mirrors the shell: the list sits to the right of the reader.
+        if (language === 'ar') expect(listBox.x).toBeGreaterThan(readerBox.x)
+        else expect(listBox.x).toBeLessThan(readerBox.x)
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+
+        for (const subject of READABLE_SUBJECTS) {
+          const { height, ...whole } = await rowReading(list, subject)
+          expect(whole, subject).toEqual({ senderWhole: true, subjectWhole: true, subjectBelowSender: true })
+          // Compact two-line rows: about 56 px.
+          expect(height, subject).toBeGreaterThanOrEqual(50)
+          expect(height, subject).toBeLessThanOrEqual(64)
+        }
+
+        await settled(page)
+        const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+        const body = JSON.stringify({ language, theme, width, violations: results.violations }, null, 2)
+        await info.attach(`axe-message-list-${language}-${theme}-${width}`, { body, contentType: 'application/json' })
+        const blocking = results.violations
+          .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+          .map(
+            (violation) =>
+              `${violation.id} (${violation.impact}) on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`,
+          )
+        await info.attach(`message-list-${language}-${theme}-${width}`, {
+          body: await page.screenshot({ path: info.outputPath('message-list.png'), animations: 'disabled' }),
+          contentType: 'image/png',
+        })
+        expect(blocking).toEqual([])
+        expect(errors).toEqual([])
+      })
+    }
+  }
+}
+
+test('the resized message list is kept across restarts and the automatic view follows it (#283)', async ({ page }) => {
+  await page.setViewportSize({ width: 1456, height: 900 })
+  const errors = await prepareStartup(page, true, { navigation: true, theme: 'oreneta-light', listView: null })
+  await page.goto('/')
+  const list = page.locator('[data-thread-list]')
+  const handle = page.getByRole('separator', { name: 'Resize thread list' })
+  const stored = () => page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}'))
+  await expect(handle).toHaveAttribute('aria-valuenow', '360')
+  await expect(list).toHaveAttribute('data-list-view', 'cards')
+
+  // Wide enough for columns: the automatic view turns into the table.
+  await handle.focus()
+  await page.keyboard.press('End')
+  await expect(handle).toHaveAttribute('aria-valuenow', '560')
+  await expect(list).toHaveAttribute('data-list-view', 'table')
+  await expect(list.getByRole('table')).toBeVisible()
+  await expect.poll(async () => (await stored()).thread_list_width).toBe(560)
+  await page.reload()
+  await expect(handle).toHaveAttribute('aria-valuenow', '560')
+  expect(Math.round((await list.boundingBox())!.width)).toBe(560)
+  await expect(list.getByRole('table')).toBeVisible()
+
+  // Narrower than the default: two-line rows that still read whole.
+  await handle.focus()
+  await page.keyboard.press('Home')
+  await page.keyboard.press('ArrowRight')
+  await expect(handle).toHaveAttribute('aria-valuenow', '296')
+  await expect.poll(async () => (await stored()).thread_list_width).toBe(296)
+  await page.reload()
+  await expect(handle).toHaveAttribute('aria-valuenow', '296')
+  expect(Math.round((await list.boundingBox())!.width)).toBe(296)
+  await expect(list).toHaveAttribute('data-list-view', 'cards')
+  expect(await rowReading(list, 'Budget review: Q4 planning')).toMatchObject({
+    senderWhole: true,
+    subjectWhole: true,
+    subjectBelowSender: true,
+  })
+  // Resizing is not choosing a view: the profile still has none stored.
+  expect((await stored()).list_view).toBeUndefined()
+  // The rows open a conversation like the table does.
+  await list.getByTitle('Pilot checklist — synthetic conversation', { exact: true }).click()
+  await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+test('a remembered wide list squeezed by the window draws two-line rows (#283)', async ({ page }) => {
+  // A remembered 560 px list and the reader's 360 px do not fit in 880 px
+  // (the folder pane is hidden at this width): the list gives way, too narrow
+  // for columns, and the automatic view follows the drawn width.
+  await page.setViewportSize({ width: 880, height: 900 })
+  const errors = await prepareStartup(page, true, {
+    navigation: true,
+    theme: 'oreneta-dark',
+    listView: null,
+    preferences: { thread_list_width: 560 },
+  })
+  await page.goto('/')
+  const list = page.locator('[data-thread-list]')
+  await expect(list).toHaveAttribute('data-list-view', 'cards')
+  const drawn = Math.round((await list.boundingBox())!.width)
+  expect(drawn).toBeGreaterThanOrEqual(280)
+  expect(drawn).toBeLessThan(520)
+  expect((await page.locator('[data-message-pane]').boundingBox())!.width).toBeGreaterThanOrEqual(360 - 1)
+  expect(await rowReading(list, 'Budget review: Q4 planning')).toMatchObject({
+    senderWhole: true,
+    subjectWhole: true,
+    subjectBelowSender: true,
+  })
+  expect(errors).toEqual([])
+})
+
 test('mail layout at 200-percent desktop zoom equivalent (1440 physical / 720 CSS pixels)', async ({ browser }) => {
   const context = await browser.newContext({
     viewport: { width: 720, height: 900 },
@@ -1626,6 +1826,352 @@ test('mail layout at 200-percent desktop zoom equivalent (1440 physical / 720 CS
   } finally {
     await context.close()
   }
+})
+
+// Right-to-left layout for Arabic (#226, ADR-0061), on the production entry.
+// The shell mirrors (side rail on the right, the list to the right of the
+// reader, the way back on the right with its chevron turned), nothing spills
+// past either edge at 100% or 200%, axe finds nothing critical or serious,
+// and a Latin subject keeps reading left to right inside the Arabic list.
+const RTL_SUBJECT = 'مراجعة الميزانية: تخطيط الربع الرابع'
+const RTL_SENDER = 'ليلى حداد'
+
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  for (const width of [600, 1024, 1440]) {
+    test(`Arabic interface mirrors the shell without overflow and passes axe: ${theme}, ${width}px (#226)`, async ({
+      page,
+    }, info) => {
+      await page.setViewportSize({ width, height: 1000 })
+      const errors = await prepareStartup(page, true, { navigation: true, language: 'ar', theme })
+      await page.goto('/')
+      const html = page.locator('html')
+      await expect(html).toHaveAttribute('dir', 'rtl')
+      await expect(html).toHaveAttribute('lang', 'ar')
+      const list = page.locator('[data-thread-list]')
+      await expect(list).toBeVisible()
+      const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+      await expect(row).toBeVisible()
+
+      // A Latin subject in the Arabic list reads left to right, isolated from
+      // the interface around it.
+      const subject = row.locator('[dir="auto"]').first()
+      expect(await subject.evaluate((element) => getComputedStyle(element).direction)).toBe('ltr')
+      expect(await row.evaluate((element) => getComputedStyle(element).direction)).toBe('rtl')
+
+      const inView = async (where: string) => {
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), where).toBe(true)
+        const outside = await page.evaluate(() =>
+          [...document.querySelectorAll('button, [role=button], input')]
+            .filter((element) => {
+              const box = element.getBoundingClientRect()
+              return box.width > 0 && (box.left < -1 || box.right > innerWidth + 1)
+            })
+            .map(
+              (element) =>
+                // An unnamed field is reported by its tag and placeholder rather than as "".
+                (element.getAttribute('aria-label') ?? element.getAttribute('title') ?? element.textContent?.trim()) ||
+                `${element.tagName.toLowerCase()} "${element.getAttribute('placeholder') ?? ''}"`,
+            ),
+        )
+        expect(outside, where).toEqual([])
+      }
+
+      if (width >= 769) {
+        // The rail hugs the right edge and the list sits to the right of the reader.
+        const rail = page.locator('main > aside').first()
+        const railBox = (await rail.boundingBox())!
+        expect(Math.round(railBox.x + railBox.width)).toBeGreaterThanOrEqual(width - 1)
+        const listBox = (await list.boundingBox())!
+        const readerBox = (await page.locator('[data-message-pane]').boundingBox())!
+        expect(listBox.x).toBeGreaterThan(readerBox.x)
+      }
+      await inView('mailbox')
+
+      const blocking: string[] = []
+      const audit = async (screen: string) => {
+        const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+        const body = JSON.stringify({ screen, theme, width, violations: results.violations }, null, 2)
+        await info.attach(`axe-rtl-${screen}-${theme}-${width}`, { body, contentType: 'application/json' })
+        writeFileSync(info.outputPath(`axe-rtl-${screen}.json`), body)
+        for (const violation of results.violations) {
+          if (violation.impact === 'critical' || violation.impact === 'serious') {
+            const targets = violation.nodes.map((node) => node.target.join(' ')).join(', ')
+            blocking.push(`${screen}: ${violation.id} (${violation.impact}) on ${targets}`)
+          }
+        }
+      }
+      await audit('mailbox')
+
+      await row.click()
+      await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+      if (width < 769) {
+        // One pane at a time: the way back sits at the start (right) edge and
+        // its chevron is mirrored to point right, towards where the list was.
+        const back = page.getByTitle('الرجوع إلى الدردشات', { exact: true })
+        const backBox = (await back.boundingBox())!
+        expect(backBox.x + backBox.width / 2).toBeGreaterThan(width / 2)
+        expect(await back.locator('svg').evaluate((element) => getComputedStyle(element).transform)).toBe(
+          'matrix(-1, 0, 0, 1, 0, 0)',
+        )
+      }
+      await inView('reader')
+      await audit('conversation')
+      await info.attach('rtl-reader', {
+        body: await page.screenshot({ path: info.outputPath('rtl-reader.png'), animations: 'disabled' }),
+        contentType: 'image/png',
+      })
+
+      // 200%: the app's own zoom (#181), the reader and then the composer.
+      const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+      for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
+      expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
+      await inView('reader at 200%')
+      await page.keyboard.press(`${mod}+KeyN`)
+      await expect(page.locator('.tiptap[contenteditable="true"]')).toBeVisible()
+      await inView('composer at 200%')
+      await info.attach('rtl-composer-200', {
+        body: await page.screenshot({ path: info.outputPath('rtl-composer-200.png'), animations: 'disabled' }),
+        contentType: 'image/png',
+      })
+      await page.keyboard.press(`${mod}+Digit0`)
+
+      expect(blocking).toEqual([])
+      expect(errors).toEqual([])
+    })
+  }
+}
+
+// What a check of "nothing leaves the window" has to read in right to left:
+// `scrollWidth` only grows with overflow on the scrollable side (the left), so
+// controls and headings pushed past the right edge are looked for directly.
+async function rtlInView(page: Page, where: string) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), where).toBe(true)
+  const outside = await page.evaluate(() =>
+    [
+      ...document.querySelectorAll(
+        'button, [role=button], [role=tab], [role=option], a[href], input, select, textarea, h1, h2, h3',
+      ),
+    ]
+      .filter((element) => {
+        const box = element.getBoundingClientRect()
+        const style = getComputedStyle(element)
+        if (box.width === 0 || box.height === 0 || style.visibility === 'hidden') return false
+        return box.left < -1 || box.right > innerWidth + 1
+      })
+      .map(
+        (element) =>
+          // An unnamed field is reported by its tag and placeholder rather than as "".
+          (element.getAttribute('aria-label') ?? element.getAttribute('title') ?? element.textContent?.trim().slice(0, 40)) ||
+          `${element.tagName.toLowerCase()} "${element.getAttribute('placeholder') ?? ''}"`,
+      ),
+  )
+  expect(outside, where).toEqual([])
+}
+
+// The other screens in Arabic (#226): people, tasks, notes, calendar, chat and
+// settings, each without overflow on either side and with axe clean.
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  for (const width of [600, 1024]) {
+    test(`Arabic secondary screens stay inside the window and pass axe: ${theme}, ${width}px (#226)`, async ({
+      page,
+    }, info) => {
+      await page.setViewportSize({ width, height: 1000 })
+      const errors = await prepareStartup(page, true, { navigation: true, language: 'ar', theme })
+      await page.goto('/')
+      await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+      await expect(page.locator('[data-thread-list]')).toBeVisible()
+      await page.evaluate(() => {
+        const replies = (window as any).startupProbe.replies
+        replies['people.list'] = {
+          people: [
+            {
+              id: 'local::layla', source: 'local', account: '', book: 'local', name: 'ليلى حداد',
+              organisation: 'قسم البحث', note: 'ملاحظة قصيرة\nSecond line in English', photo: '',
+              emails: [{ addr: 'layla@example.test', label: '' }], phones: [], version: '1', editable: true,
+            },
+            {
+              id: 'local::morgan', source: 'local', account: '', book: 'local', name: 'Morgan Rivera',
+              organisation: 'Example Org', note: '', photo: '',
+              emails: [{ addr: 'morgan@example.test', label: '' }], phones: [], version: '1', editable: true,
+            },
+          ],
+        }
+        replies['tasks.lists'] = { lists: [{ id: 'mail', name: '', position: 0, open: 1 }] }
+        replies['tasks.list'] = {
+          tasks: [
+            {
+              id: 1, thread_id: '', account_id: '', folder_id: '', note: 'Review the figures', due_at: null,
+              completed_at: null, created_at: 0, subject: '', from_name: '', from_addr: '', linked: false,
+              list_id: 'mail', title: 'مراجعة الميزانية قبل الاجتماع', priority: 2, reminder_at: null, revision: 1,
+            },
+          ],
+        }
+        const note = {
+          id: 'note:ar', title: 'ملاحظة الاجتماع', html: '<p>نص الملاحظة</p><p>English line</p>',
+          text: 'نص الملاحظة\nEnglish line', tags: [], pinned: false, revision: 1, created_at: 0,
+          updated_at: 1760000000, deleted_at: null,
+        }
+        replies['notes.list'] = { notes: [{ ...note, preview: note.text }], tags: [] }
+        replies['notes.get'] = { note }
+        replies['calendar.list'] = {
+          calendars: [{ id: 'local-ar', name: 'تقويم الفريق', is_default: true, enabled: true, kind: 'local', read_only: false, synced_at: 0 }],
+        }
+        replies['calendar.events'] = { events: [] }
+        replies['chat.accounts'] = [{ id: 'c1', jid: 'ana@chat.test', host: '', port: 5222 }]
+        replies['chat.status'] = { c1: { account: 'c1', state: 'online' } }
+        replies['chat.conversations'] = [
+          { conversation: 'pau@chat.test', last_body: 'مرحبا', last_stamp: 1760000120, last_direction: 'in', unread: 1 },
+        ]
+        replies['chat.history'] = [
+          { account: 'c1', conversation: 'pau@chat.test', id: 'm1', stanza_id: 'a1', direction: 'in', sender: 'pau@chat.test', body: 'مرحبا يا آنا', stamp: 1760000000, state: 'received' },
+          { account: 'c1', conversation: 'pau@chat.test', id: 's1', stanza_id: null, direction: 'out', sender: 'ana@chat.test', body: 'Hello Pau', stamp: 1760000060, state: 'delivered' },
+        ]
+      })
+
+      const blocking: string[] = []
+      const check = async (screen: string) => {
+        await rtlInView(page, screen)
+        const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+        const body = JSON.stringify({ screen, theme, width, violations: results.violations }, null, 2)
+        await info.attach(`axe-rtl-${screen}-${theme}-${width}`, { body, contentType: 'application/json' })
+        writeFileSync(info.outputPath(`axe-rtl-${screen}.json`), body)
+        for (const violation of results.violations) {
+          if (violation.impact === 'critical' || violation.impact === 'serious') {
+            const targets = violation.nodes.map((node) => node.target.join(' ')).join(', ')
+            blocking.push(`${screen}: ${violation.id} (${violation.impact}) on ${targets}`)
+          }
+        }
+        await info.attach(`rtl-${screen}`, {
+          body: await page.screenshot({ path: info.outputPath(`rtl-${screen}.png`), animations: 'disabled' }),
+          contentType: 'image/png',
+        })
+      }
+      // The rail on a wide window; the "More" menu on a narrow one.
+      const openArea = async (name: string) => {
+        if (width < 769) {
+          await page.getByRole('button', { name: 'المزيد', exact: true }).first().click()
+          await page.getByRole('button', { name, exact: true }).last().click()
+        } else {
+          await page.getByTitle(name, { exact: true }).click()
+        }
+      }
+
+      await openArea('الأشخاص')
+      await page.getByRole('option', { name: /ليلى حداد/ }).click()
+      await expect(page.getByRole('heading', { name: 'ليلى حداد' })).toBeVisible()
+      await check('people')
+      if (width < 769) await page.getByRole('button', { name: 'رجوع', exact: true }).click()
+
+      await openArea('المهام')
+      await expect(page.getByText('مراجعة الميزانية قبل الاجتماع')).toBeVisible()
+      await check('tasks')
+
+      await openArea('الملاحظات')
+      await page.getByRole('button', { name: /ملاحظة الاجتماع/ }).click()
+      await expect(page.getByLabel('العنوان')).toHaveValue('ملاحظة الاجتماع')
+      await check('notes')
+
+      await openArea('التقويم')
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+      await check('calendar')
+
+      await openArea('الدردشة')
+      await page.getByRole('button', { name: /pau@chat.test/ }).click()
+      await expect(page.getByText('مرحبا يا آنا')).toBeVisible()
+      await check('chat')
+
+      await page.keyboard.press('Control+Comma')
+      await expect(page.getByRole('dialog').first()).toBeVisible()
+      await check('settings')
+      await page.keyboard.press('Escape')
+
+      expect(blocking).toEqual([])
+      expect(errors).toEqual([])
+    })
+  }
+}
+
+// A context menu opened near the right edge, where a right-to-left menu
+// normally opens: it extends leftwards, stays whole and its labels do not wrap.
+test('Arabic context menu near the right edge is fully visible with unwrapped labels (#226)', async ({ page }) => {
+  await page.setViewportSize({ width: 600, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, language: 'ar' })
+  await page.goto('/')
+  await page.evaluate(() => {
+    ;(window as any).startupProbe.replies['mail.priorityReason'] = {
+      priority: false,
+      reasons: [],
+      sender: 'morgan@example.test',
+      override: null,
+    }
+  })
+  const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+  await expect(row).toBeVisible()
+  const box = (await row.boundingBox())!
+  await page.mouse.click(600 - 20, box.y + box.height / 2, { button: 'right' })
+  const menu = page.locator('[data-thread-context-menu]')
+  await expect(menu).toBeVisible()
+  const menuBox = (await menu.boundingBox())!
+  expect(menuBox.x).toBeGreaterThanOrEqual(0)
+  expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(600)
+  // Opened towards the end of the line: its right edge at the pointer.
+  expect(Math.abs(menuBox.x + menuBox.width - (600 - 20))).toBeLessThanOrEqual(1)
+  const wrapped = await menu.evaluate((element) =>
+    [...element.querySelectorAll('button span')]
+      .filter((span) => span.getBoundingClientRect().height > 0)
+      .filter((span) => {
+        const lineHeight = parseFloat(getComputedStyle(span).lineHeight) || 20
+        return span.getBoundingClientRect().height > lineHeight * 1.5
+      })
+      .map((span) => span.textContent),
+  )
+  expect(wrapped).toEqual([])
+  expect(errors).toEqual([])
+})
+
+test('switching from Arabic back to English restores left to right without a reload (#226)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, language: 'ar' })
+  await page.goto('/')
+  const html = page.locator('html')
+  await expect(html).toHaveAttribute('dir', 'rtl')
+  const rail = page.locator('main > aside').first()
+  expect(Math.round((await rail.boundingBox())!.x)).toBeGreaterThan(1300)
+  const navigations: string[] = []
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) navigations.push(frame.url())
+  })
+  await page.getByRole('textbox').first().focus()
+  await page.keyboard.press('Control+Comma')
+  const language = page.locator('select').filter({ has: page.locator('option[value="ar"]') })
+  await expect(language).toHaveValue('ar')
+  await language.selectOption('en')
+  await expect(html).toHaveAttribute('dir', 'ltr')
+  await expect(html).toHaveAttribute('lang', 'en')
+  await page.keyboard.press('Escape')
+  expect(Math.round((await rail.boundingBox())!.x)).toBe(0)
+  expect(navigations).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// The other way round: an Arabic subject and sender in the English interface
+// read right to left, and the row around them does not turn.
+test('an Arabic subject in the English interface reads right to left inside a left-to-right row (#226)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, arabicSubject: true })
+  await page.goto('/')
+  await expect(page.locator('html')).toHaveAttribute('dir', 'ltr')
+  const row = page.getByRole('table').getByRole('button', { name: RTL_SUBJECT })
+  await expect(row).toBeVisible()
+  expect(await row.locator('[dir="auto"]').first().evaluate((element) => getComputedStyle(element).direction)).toBe(
+    'rtl',
+  )
+  expect(await row.evaluate((element) => getComputedStyle(element).direction)).toBe('ltr')
+  const sender = page.getByRole('table').locator('[dir="auto"]', { hasText: RTL_SENDER })
+  expect(await sender.evaluate((element) => getComputedStyle(element).direction)).toBe('rtl')
+  expect(errors).toEqual([])
 })
 
 test('Graph setup is explicit and finishes only after initial mailbox readiness', async ({ page }) => {
@@ -1749,7 +2295,7 @@ async function verifyMailBoundary(page: Page, width: number) {
 }
 
 for (const theme of ['oreneta-light', 'oreneta-dark']) {
-  test(`conventional mail defaults support open, reply draft, selection and navigation (${theme})`, async ({
+  test(`a stored table supports open, reply draft, selection and navigation (${theme})`, async ({
     page,
   }, info) => {
     const errors = await prepareStartup(page, true, { navigation: true, theme })
@@ -1791,6 +2337,58 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
     await expect(table).toHaveCount(0)
     await nav.getByRole('button', { name: 'Inbox 3', exact: true }).click()
     await expect(table).toBeVisible()
+    expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('mail.send'))).toBe(false)
+    expect(errors).toEqual([])
+  })
+}
+
+// The same workflow on what a profile that never chose a view gets (#283):
+// the automatic view's two-line rows at the default 360 px.
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  test(`the default rows support open, reply draft, selection and navigation (${theme}, #283)`, async ({ page }) => {
+    await page.setViewportSize({ width: 1456, height: 900 })
+    const errors = await prepareStartup(page, true, { navigation: true, theme, listView: null })
+    await page.goto('/')
+    const list = page.locator('[data-thread-list]')
+    await expect(list).toHaveAttribute('data-list-view', 'cards')
+    const first = list.getByTitle('Pilot checklist — synthetic conversation', { exact: true })
+    await first.focus()
+    await page.keyboard.press('Enter')
+    await expect(first).toHaveAttribute('aria-current', 'true')
+    await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+    const reply = page.getByPlaceholder('Write a message...')
+    await reply.fill('Synthetic reply draft — do not send')
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as any).startupProbe.requests.filter((r: any) => r.command === 'mail.saveDraft').at(-1)?.payload,
+        ),
+      )
+      .toMatchObject({
+        account_id: 'synthetic-account',
+        to: 'morgan@example.test',
+        body: 'Synthetic reply draft — do not send',
+      })
+    const budget = list.getByTitle('Budget review: Q4 planning', { exact: true })
+    await budget.click()
+    await expect(budget).toHaveAttribute('aria-current', 'true')
+    await expect(first).not.toHaveAttribute('aria-current', 'true')
+    await expect(reply).toHaveValue('')
+
+    // Selecting without opening: Ctrl+click starts a selection, Close ends it.
+    await list.getByTitle('Meeting notes and next steps', { exact: true }).click({ modifiers: ['Control'] })
+    await expect(list.getByText('1 selected', { exact: true })).toBeVisible()
+    await expect(budget).toHaveAttribute('aria-current', 'true')
+    await list.getByRole('button', { name: 'Close', exact: true }).click()
+    await expect(list.getByText('1 selected', { exact: true })).toHaveCount(0)
+
+    const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
+    await nav.getByRole('button', { name: 'Sent', exact: true }).click()
+    await expect(budget).toHaveCount(0)
+    await nav.getByRole('button', { name: 'Inbox 3', exact: true }).click()
+    await expect(budget).toBeVisible()
+    await expect(list).toHaveAttribute('data-list-view', 'cards')
     expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('mail.send'))).toBe(false)
     expect(errors).toEqual([])
   })
@@ -1872,6 +2470,15 @@ test('legacy cards/chat stay selected until explicit layout controls change them
     .getByRole('button', { name: /Pilot checklist/ })
     .click()
   await expect(page.getByTitle('Collapse message', { exact: true })).toHaveCount(2)
+  // Back to the automatic view (#283): stored as a choice, drawn as rows at 360 px.
+  await page.keyboard.press('Control+,')
+  await page.getByRole('button', { name: 'Automatic', exact: true }).click()
+  await expect
+    .poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}').list_view))
+    .toBe('auto')
+  await page.keyboard.press('Escape')
+  await expect(page.locator('[data-thread-list]')).toHaveAttribute('data-list-view', 'cards')
+  await expect(page.getByRole('table')).toHaveCount(0)
   expect(errors).toEqual([])
 })
 
@@ -2499,6 +3106,230 @@ test.describe('calendar week start', () => {
   })
 })
 
+// #266 and #267: events moved and resized by dragging them on the week grid,
+// dropped on the mini calendar, refused on a read-only calendar, asked about
+// when they repeat, and given up with Escape; a conflict with a newer server
+// change is said. Events are created by dragging a range, from the menu of an
+// empty slot and from the keyboard slot. Real pointer drags, so they run here
+// where there is a layout; the unit suite drives the same moves by keyboard.
+test.describe('calendar drag, drop and create', () => {
+  const KEY = 'synthetic-account'
+  const centre = async (locator: ReturnType<Page['locator']>) => {
+    const box = (await locator.boundingBox())!
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  }
+  const drag = async (page: Page, from: { x: number; y: number }, to: { x: number; y: number }) => {
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down()
+    await page.mouse.move(from.x, from.y + 6, { steps: 2 })
+    await page.mouse.move(to.x, to.y, { steps: 12 })
+    await page.mouse.up()
+  }
+  /** Local wall-clock instant, `days` from today. */
+  const at = (page: Page, days: number, hour: number, minute = 0) =>
+    page.evaluate(
+      ([d, h, m]) => {
+        const now = new Date()
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate() + d, h, m).getTime() / 1000
+      },
+      [days, hour, minute],
+    )
+  const updates = (page: Page) =>
+    page.evaluate(() =>
+      (window as any).startupProbe.requests
+        .filter((request: any) => request.command === 'calendar.update')
+        .map((request: any) => request.payload),
+    )
+
+  const open = async (page: Page) => {
+    const errors = await prepareStartup(page, true, { navigation: true })
+    await page.addInitScript(() => {
+      const probe = (window as any).startupProbe
+      const now = new Date()
+      const at = (h: number) => new Date(now.getFullYear(), now.getMonth(), now.getDate(), h).getTime() / 1000
+      const base = { all_day: false, is_cancelled: false, free_busy: 'busy', my_response: '', organizer: null, attendees: [] }
+      probe.replies['calendar.list'] = {
+        calendars: [
+          { id: 'local-team', name: 'Team', is_default: true, enabled: true, kind: 'local', read_only: false, synced_at: 0 },
+          { id: 'holidays', name: 'Holidays', is_default: false, enabled: true, kind: 'subscribed', read_only: true, synced_at: 0 },
+        ],
+      }
+      probe.replies['calendar.events'] = {
+        events: [
+          { ...base, id: 'ev-1', calendar_id: 'local-team', change_key: 'v1', subject: 'Planning', start: at(10), end: at(11), is_recurring: false },
+          { ...base, id: 'ev-rec', calendar_id: 'local-team', change_key: 'v2', subject: 'Stand-up', start: at(12), end: at(13), is_recurring: true, series_id: 'series-1' },
+          { ...base, id: 'ev-ro', calendar_id: 'holidays', change_key: 'v3', subject: 'Published', start: at(8), end: at(9), is_recurring: false },
+        ],
+      }
+      probe.replies['calendar.update'] = { ok: true }
+      // A conflict, when a test asks for one: the core refuses the write.
+      const answer = (window as any).go.main.App.Invoke
+      ;(window as any).go.main.App.Invoke = async (command: string, payload: Record<string, unknown>) => {
+        if (command === 'calendar.update' && probe.updateError) {
+          probe.requests.push({ command, payload: structuredClone(payload) })
+          throw new Error(probe.updateError)
+        }
+        return answer(command, payload)
+      }
+    })
+    await page.goto('/')
+    await expect(page.getByRole('textbox').first()).toBeVisible()
+    await page.getByRole('button', { name: 'Calendar', exact: true }).click()
+    await page.getByRole('button', { name: 'Week', exact: true }).click()
+    await expect(page.locator(`[data-calendar-event="${KEY}:ev-1"]`)).toBeVisible()
+    // 06:00 at the top, so every event held here sits well inside the grid,
+    // away from the bands where a held event scrolls it.
+    await page.locator('[data-hour-grid]').evaluate((grid) => {
+      grid.scrollTop = 6 * 52
+    })
+    return errors
+  }
+
+  test('moves, resizes, cancels, refuses, asks and says a conflict', async ({ page }) => {
+    const errors = await open(page)
+    const planning = page.locator(`[data-calendar-event="${KEY}:ev-1"]`)
+
+    // Move an hour and a little down: it lands on the nearest quarter, keeps
+    // its hour of length, and is written with the version it was read at.
+    let from = await centre(planning)
+    await drag(page, from, { x: from.x, y: from.y + 60 })
+    await expect.poll(async () => (await updates(page)).length).toBe(1)
+    let sent = (await updates(page))[0]
+    expect(sent.event.start).toBe(await at(page, 0, 11, 15))
+    expect(sent.event.end - sent.event.start).toBe(3600)
+    expect(sent.event.change_key).toBe('v1')
+    expect(sent.scope).toBe('occurrence')
+
+    // Resize by the bottom edge, half an hour.
+    await expect(planning).toBeVisible()
+    from = await centre(planning.locator('[data-resize-edge="end"]'))
+    await drag(page, from, { x: from.x, y: from.y + 26 })
+    await expect.poll(async () => (await updates(page)).length).toBe(2)
+    sent = (await updates(page))[1]
+    expect(sent.event.start).toBe(await at(page, 0, 10))
+    expect(sent.event.end).toBe(await at(page, 0, 11, 30))
+
+    // And by the top edge, a quarter earlier.
+    from = await centre(planning.locator('[data-resize-edge="start"]'))
+    await drag(page, from, { x: from.x, y: from.y - 13 })
+    await expect.poll(async () => (await updates(page)).length).toBe(3)
+    sent = (await updates(page))[2]
+    expect(sent.event.start).toBe(await at(page, 0, 9, 45))
+    expect(sent.event.end).toBe(await at(page, 0, 11))
+
+    // Escape while held: nothing is written and nothing stays drawn.
+    from = await centre(planning)
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down()
+    await page.mouse.move(from.x, from.y + 52, { steps: 8 })
+    await expect(page.locator('[data-move-ghost]')).toHaveCount(1)
+    await page.keyboard.press('Escape')
+    await page.mouse.move(from.x, from.y + 70, { steps: 2 })
+    await page.mouse.up()
+    await expect(page.locator('[data-move-ghost]')).toHaveCount(0)
+
+    // Dropped on a day of the mini calendar: that day, at its own time.
+    const target = await page.evaluate(() => {
+      const now = new Date()
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2).getTime()
+    })
+    await drag(page, await centre(planning), await centre(page.locator(`[data-mini-day="${target}"]`)))
+    await expect.poll(async () => (await updates(page)).length).toBe(4)
+    sent = (await updates(page))[3]
+    expect(sent.event.start).toBe(await at(page, 2, 10))
+    expect(sent.event.end).toBe(await at(page, 2, 11))
+
+    // A read-only calendar refuses, and says why.
+    from = await centre(page.locator(`[data-calendar-event="${KEY}:ev-ro"]`))
+    await drag(page, from, { x: from.x, y: from.y + 52 })
+    await expect(page.getByText('The calendar Holidays is read-only: its events cannot be moved or changed here.')).toBeVisible()
+    expect(await updates(page)).toHaveLength(4)
+
+    // A repeating event asks which occurrences, and writes the answer.
+    from = await centre(page.locator(`[data-calendar-event="${KEY}:ev-rec"]`))
+    await drag(page, from, { x: from.x, y: from.y + 52 })
+    await page.getByRole('button', { name: 'This event only', exact: true }).click()
+    await expect.poll(async () => (await updates(page)).length).toBe(5)
+    sent = (await updates(page))[4]
+    expect(sent.scope).toBe('occurrence')
+    expect(sent.event.start).toBe(await at(page, 0, 13))
+
+    // A newer change on the server: refused, said, and the window read again.
+    await page.evaluate(() => {
+      ;(window as any).startupProbe.updateError = 'this event was changed or removed on the server; refresh it and try again'
+    })
+    const rereads = () =>
+      page.evaluate(
+        () =>
+          (window as any).startupProbe.requests.filter(
+            (request: any) => request.command === 'calendar.events' && request.payload.refresh === true,
+          ).length,
+      )
+    const before = await rereads()
+    from = await centre(planning)
+    await drag(page, from, { x: from.x, y: from.y + 52 })
+    await expect(page.getByText(/^The event was not moved: this event was changed or removed on the server/)).toBeVisible()
+    await expect.poll(rereads).toBeGreaterThan(before)
+    expect(await updates(page)).toHaveLength(6)
+    expect(errors).toEqual([])
+  })
+
+  test('creates events from a dragged range, the slot menu and the keyboard', async ({ page }) => {
+    const errors = await open(page)
+    const today = await page.evaluate(() => {
+      const now = new Date()
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    })
+    const column = page.locator(`[data-day-column="${today}"]`)
+    const box = (await column.boundingBox())!
+    const y = (hour: number, minute = 0) => box.y + (hour + minute / 60) * 52
+    const x = box.x + box.width / 2
+    const clockIs = async (hh: string[], mm: string[]) => {
+      await expect(page.getByLabel('hh')).toHaveCount(hh.length)
+      for (const [i, hour] of hh.entries()) await expect(page.getByLabel('hh').nth(i)).toHaveValue(hour)
+      for (const [i, minute] of mm.entries()) await expect(page.getByLabel('mm').nth(i)).toHaveValue(minute)
+    }
+    const cancel = () => page.getByRole('button', { name: 'Cancel', exact: true }).click()
+
+    // A range dragged across the column, from line to line.
+    await drag(page, { x, y: y(14, 5) }, { x, y: y(15, 20) })
+    await expect(page.getByRole('heading', { name: 'New event' })).toBeVisible()
+    await clockIs(['14', '15'], ['0', '30'])
+    await cancel()
+
+    // The menu of an empty slot: a timed event at its quarter, or an all-day one.
+    await page.mouse.click(x, y(14, 20), { button: 'right' })
+    await page.getByRole('button', { name: 'New event', exact: true }).last().click()
+    await clockIs(['14', '15'], ['15', '15'])
+    await cancel()
+    await page.mouse.click(x, y(14, 20), { button: 'right' })
+    await page.getByRole('button', { name: 'New all-day event', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'New event' })).toBeVisible()
+    await clockIs([], [])
+    await cancel()
+
+    // The keyboard slot: a quarter later, a quarter longer, then Enter.
+    const slot = page.locator('[data-time-slot]')
+    await slot.focus()
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('Shift+ArrowDown')
+    await page.keyboard.press('Enter')
+    await clockIs(['9', '10'], ['15', '30'])
+    await cancel()
+
+    // And the keyboard alternative to dragging: Alt+Down twice, then Enter.
+    const planning = page.locator(`[data-calendar-event="${KEY}:ev-1"]`)
+    await planning.focus()
+    await page.keyboard.press('Alt+ArrowDown')
+    await page.keyboard.press('Alt+ArrowDown')
+    await expect(page.locator('[data-move-status]')).toContainText('Press Enter to save the change')
+    await page.keyboard.press('Enter')
+    await expect.poll(async () => (await updates(page)).length).toBe(1)
+    expect((await updates(page))[0].event.start).toBe(await at(page, 0, 10, 30))
+    expect(errors).toEqual([])
+  })
+})
+
 // Folder favorites, colors and moves (ADR-0050, SET-07): a folder made a
 // favorite and colored from its menu, then moved with the keyboard path, all
 // under the production CSP; the favorite and its color survive a reload.
@@ -2877,3 +3708,795 @@ test('details sidebar agenda at 200-percent desktop zoom equivalent (1440 physic
     }
   }
 })
+
+// Catalan, the language a fresh profile starts in (#231, ADR-0062). The
+// labels come from the shipped catalog, so the checks follow its wording.
+const caCatalog = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../locales/ca.json', import.meta.url)), 'utf8'),
+) as Record<string, string>
+const enCatalog = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../locales/en.json', import.meta.url)), 'utf8'),
+) as Record<string, string>
+const esCatalog = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../locales/es.json', import.meta.url)), 'utf8'),
+) as Record<string, string>
+
+for (const systemLocale of ['en-US', 'es-ES', 'ja-JP']) {
+  test(`a fresh profile starts in Catalan on a ${systemLocale} system; a saved choice wins (#231)`, async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: systemLocale })
+    try {
+      const fresh = await context.newPage()
+      const errors = await prepareStartup(fresh, true, { navigation: true, language: null })
+      await fresh.goto('http://127.0.0.1:4182/')
+      await expect(fresh.locator('html')).toHaveAttribute('lang', 'ca')
+      await expect(fresh.getByTitle(caCatalog['people.title'], { exact: true })).toBeVisible()
+      // Nothing was chosen, so nothing is written as a choice.
+      const writes = await fresh.evaluate(() =>
+        (window as any).startupProbe.requests.filter(
+          (request: any) => request.command === 'app.prefsSet' && request.payload.key === 'language',
+        ),
+      )
+      expect(writes).toEqual([])
+      expect(errors).toEqual([])
+
+      const saved = await context.newPage()
+      const savedErrors = await prepareStartup(saved, true, { navigation: true, language: 'en' })
+      await saved.goto('http://127.0.0.1:4182/')
+      await expect(saved.locator('html')).toHaveAttribute('lang', 'en')
+      await expect(saved.getByTitle('People', { exact: true })).toBeVisible()
+      expect(savedErrors).toEqual([])
+    } finally {
+      await context.close()
+    }
+  })
+}
+
+// Until the stored choice is read, the interface is in the language the last
+// run showed, Catalan on a fresh profile: from the first paint, not English
+// until an effect runs (#231, ADR-0062).
+for (const [cache, language] of [
+  [null, 'ca'],
+  ['es', 'es'],
+] as const) {
+  test(`before the stored choice is read the interface is already in ${language} (#231)`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    const errors = await prepareStartup(page, true, { navigation: true, language: cache })
+    await page.addInitScript(
+      ({ cache }) => {
+        if (cache) localStorage.setItem('meron-language-cache', cache)
+        const probe = (window as any).startupProbe
+        const app = (window as any).go.main.App
+        const invoke = app.Invoke
+        let release = () => {}
+        const held = new Promise<void>((resolve) => (release = resolve))
+        probe.releasePrefs = () => release()
+        app.Invoke = async (command: string, payload: Record<string, unknown>) => {
+          if (command === 'app.prefsGet') await held
+          return invoke(command, payload)
+        }
+      },
+      { cache },
+    )
+    const catalog = language === 'ca' ? caCatalog : esCatalog
+    const unread = page.getByRole('button', { name: catalog['filters.unread'], exact: true })
+    await page.goto('/')
+    await expect(page.locator('html')).toHaveAttribute('lang', language)
+    await expect(unread).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Unread', exact: true })).toHaveCount(0)
+    await page.evaluate(() => (window as any).startupProbe.releasePrefs())
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    await expect(page.locator('html')).toHaveAttribute('lang', language)
+    await expect(unread).toBeVisible()
+    expect(errors).toEqual([])
+  })
+}
+
+test('a failed read of the stored choice keeps the language the profile last showed (#231)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, language: 'es' })
+  await page.addInitScript(() => {
+    localStorage.setItem('meron-language-cache', 'es')
+    const app = (window as any).go.main.App
+    const invoke = app.Invoke
+    app.Invoke = async (command: string, payload: Record<string, unknown>) => {
+      if (command === 'app.prefsGet') throw new Error('Synthetic core outage')
+      return invoke(command, payload)
+    }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'es')
+  await expect(page.getByRole('button', { name: esCatalog['filters.unread'], exact: true })).toBeVisible()
+  expect(await page.evaluate(() => localStorage.getItem('meron-language-cache'))).toBe('es')
+  expect(errors).toEqual([])
+})
+
+test('switching from Catalan to English and back is saved and shown without a reload (#231)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, language: null })
+  await page.goto('/')
+  const html = page.locator('html')
+  await expect(html).toHaveAttribute('lang', 'ca')
+  const navigations: string[] = []
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) navigations.push(frame.url())
+  })
+  await page.getByRole('textbox').first().focus()
+  await page.keyboard.press('Control+Comma')
+  const language = page.locator('select').filter({ has: page.locator('option[value="ca"]') })
+  // Nobody chose yet: the picker shows the language in use.
+  await expect(language).toHaveValue('ca')
+  await expect(language.locator('option[value="ca"]')).toHaveText('Català')
+  await language.selectOption('en')
+  await expect(html).toHaveAttribute('lang', 'en')
+  await language.selectOption('system')
+  await expect(html).toHaveAttribute('lang', 'en')
+  await language.selectOption('ca')
+  await expect(html).toHaveAttribute('lang', 'ca')
+  const writes = await page.evaluate(() =>
+    (window as any).startupProbe.requests
+      .filter((request: any) => request.command === 'app.prefsSet' && request.payload.key === 'language')
+      .map((request: any) => request.payload.value),
+  )
+  expect(writes).toEqual(['en', 'system', 'ca'])
+  // Go's tray and notification labels follow the switch.
+  const labels = await page.evaluate(() =>
+    (window as any).startupProbe.requests
+      .filter((request: any) => request.command === 'i18n.setNativeLabels')
+      .map((request: any) => request.payload.trayQuit),
+  )
+  expect(labels.at(-1)).toBe(caCatalog['tray.quitOreneta'])
+  expect(labels).toContain('Quit Oreneta')
+  await page.keyboard.press('Escape')
+  expect(navigations).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// What a check of "nothing leaves the window" reads in left to right: no
+// horizontal scroll, and no control or heading past either edge.
+async function ltrInView(page: Page, where: string) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), where).toBe(true)
+  const outside = await page.evaluate(() =>
+    [
+      ...document.querySelectorAll(
+        'button, [role=button], [role=tab], [role=option], a[href], input, select, textarea, h1, h2, h3',
+      ),
+    ]
+      .filter((element) => {
+        const box = element.getBoundingClientRect()
+        const style = getComputedStyle(element)
+        if (box.width === 0 || box.height === 0 || style.visibility === 'hidden') return false
+        return box.left < -1 || box.right > innerWidth + 1
+      })
+      .map(
+        (element) =>
+          // An unnamed field is reported by its tag and placeholder rather than as "".
+          (element.getAttribute('aria-label') ?? element.getAttribute('title') ?? element.textContent?.trim().slice(0, 40)) ||
+          `${element.tagName.toLowerCase()} "${element.getAttribute('placeholder') ?? ''}"`,
+      ),
+  )
+  expect(outside, where).toEqual([])
+}
+
+// Waits until no CSS transition or finite animation is still running, so an
+// audit reads the screen at rest and not one frame of a transition (#243).
+// Infinite animations (spinners) never end and are left out.
+async function settled(page: Page) {
+  await page.waitForFunction(
+    () =>
+      document
+        .getAnimations()
+        .every(
+          (animation) =>
+            animation.playState !== 'running' || animation.effect?.getComputedTiming().endTime === Infinity,
+        ),
+    undefined,
+    { timeout: 5_000 },
+  )
+}
+
+// Where the keyboard focus is: inside a hidden region (aria-hidden, inert or
+// not visible) or not, and a short name for the report.
+async function focusStop(page: Page) {
+  return page.evaluate(() => {
+    const element = document.activeElement as HTMLElement | null
+    const start = (window as any).__focusWalkStart as Element | undefined
+    if (!element || element === document.body) return { name: 'body', hidden: false, atStart: false }
+    const hidden =
+      element.closest('[aria-hidden="true"], [inert]') !== null || getComputedStyle(element).visibility !== 'visible'
+    const name =
+      element.getAttribute('aria-label') ??
+      element.getAttribute('title') ??
+      element.getAttribute('placeholder') ??
+      element.textContent?.trim().slice(0, 40) ??
+      ''
+    return { name: `${element.tagName.toLowerCase()} ${name}`, hidden, atStart: element === start }
+  })
+}
+
+// The conversation under an open compose tab stays mounted, hidden (#243).
+// axe once caught it at 1024 px holding focusable controls: a child with
+// `transition-all` (the quick-reply box) stays visible, and focusable, until
+// its transition ends. The app's own transitions are stretched to 30 s here so
+// that moment holds still, and the hidden region must still be out of reach:
+// inert, nothing in it takes focus, and Tab and Shift+Tab never stop in it.
+// Only elements that declare a transition are stretched: an element without
+// one has `transition-property: all` by default and would start new ones.
+const SLOW_TRANSITIONS =
+  "[class*='transition'] { transition-duration: 30s !important; transition-delay: 0s !important; }"
+
+for (const language of ['en', 'ca']) {
+  for (const theme of ['oreneta-light', 'oreneta-dark']) {
+    test(`the conversation hidden under the composer has no keyboard stop: ${language}, ${theme}, 1024px (#243)`, async ({
+      page,
+    }, info) => {
+      // Two walks of up to 150 key presses each, on top of two audits.
+      test.setTimeout(60_000)
+      await page.setViewportSize({ width: 1024, height: 1000 })
+      const errors = await prepareStartup(page, true, { navigation: true, language, theme })
+      const catalog = language === 'ca' ? caCatalog : enCatalog
+      await page.goto('/')
+      await expect(page.locator('html')).toHaveAttribute('lang', language)
+      await page.getByRole('table').getByRole('button', { name: /Pilot checklist/ }).click()
+      await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+      const quickReply = page.getByPlaceholder(catalog['composer.placeholders.quickMessage'], { exact: true })
+      await expect(quickReply).toBeVisible()
+      await expect(page.locator('[inert]', { has: quickReply })).toHaveCount(0)
+
+      const slow = await page.addStyleTag({ content: SLOW_TRANSITIONS })
+      const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+      await page.keyboard.press(`${mod}+KeyN`)
+      const editor = page.locator('.tiptap[contenteditable="true"]')
+      await expect(editor).toBeVisible()
+      const region = page.locator('[aria-hidden="true"]', { has: quickReply })
+      await expect(region).toHaveCount(1)
+      await expect(region).toHaveAttribute('inert', '')
+
+      // The transition is still running: controls in the hidden region are
+      // visible to the layout, which is the state axe caught. None of them
+      // may take the focus.
+      const insideRegion = await region.evaluate((element) => {
+        const selector = 'button, a[href], input, select, textarea, [tabindex]'
+        const controls = [...element.querySelectorAll<HTMLElement>(selector)]
+        const visible = controls.filter((control) => getComputedStyle(control).visibility === 'visible')
+        const focused = visible.filter((control) => {
+          control.focus()
+          return document.activeElement === control
+        })
+        return { visible: visible.length, focused: focused.map((control) => control.outerHTML.slice(0, 80)) }
+      })
+      expect(insideRegion.visible, 'the hidden region is still mid-transition').toBeGreaterThan(0)
+      expect(insideRegion.focused).toEqual([])
+      const frozen = await new AxeBuilder({ page }).withRules(['aria-hidden-focus']).analyze()
+      expect(frozen.violations.map((violation) => violation.nodes.map((node) => node.target.join(' ')))).toEqual([])
+
+      // Tab and Shift+Tab from the message body, round the page each way.
+      // Shift+Tab meets the hidden region first (it sits just before the
+      // composer in the document), and must pass it on to the tab strip.
+      const current = `button ${catalog['chat.currentConversation']}`
+      const walks: Record<string, string[]> = {}
+      const hiddenStops: string[] = []
+      for (const key of ['Tab', 'Shift+Tab']) {
+        await editor.focus()
+        await page.evaluate(() => {
+          ;(window as any).__focusWalkStart = document.activeElement
+        })
+        const stops: string[] = []
+        for (let step = 0; step < 150; step++) {
+          await page.keyboard.press(key)
+          const stop = await focusStop(page)
+          if (stop.atStart) break
+          stops.push(stop.name)
+          if (stop.hidden) hiddenStops.push(`${key}: ${stop.name}`)
+        }
+        walks[key] = stops
+        expect(new Set(stops).size, `${key} moves the focus`).toBeGreaterThan(3)
+      }
+      expect(walks['Shift+Tab'], 'Shift+Tab passes the hidden region').toContain(current)
+      await info.attach(`focus-walk-${language}-${theme}`, {
+        body: JSON.stringify({ insideRegion, walks }, null, 2),
+        contentType: 'application/json',
+      })
+      expect(hiddenStops).toEqual([])
+      // The walks ran with the composer open and the conversation hidden.
+      await expect(region).toHaveAttribute('inert', '')
+
+      // At rest, the composer passes axe as a whole.
+      await slow.evaluate((element) => (element as Element).remove())
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) {
+          const finite = animation.effect?.getComputedTiming().endTime !== Infinity
+          if (finite && animation.playbackRate !== 0) animation.finish()
+        }
+      })
+      await settled(page)
+      const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+      const body = JSON.stringify({ screen: 'composer', language, theme, violations: results.violations }, null, 2)
+      await info.attach(`axe-composer-${language}-${theme}-1024`, { body, contentType: 'application/json' })
+      const blocking = results.violations
+        .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+        .map((violation) => {
+          const targets = violation.nodes.map((node) => node.target.join(' ')).join(', ')
+          return `${violation.id} (${violation.impact}) on ${targets}`
+        })
+      expect(blocking).toEqual([])
+
+      // Back on the conversation, its quick reply is reachable again.
+      await page.getByTitle(catalog['chat.currentConversation'], { exact: true }).click()
+      await expect(page.locator('[inert]', { has: quickReply })).toHaveCount(0)
+      await expect(page.locator('[aria-hidden="true"]', { has: quickReply })).toHaveCount(0)
+      await quickReply.focus()
+      await expect(quickReply).toBeFocused()
+      expect(errors).toEqual([])
+    })
+  }
+}
+
+// The production entry in Catalan, whose strings run longer than English:
+// every main screen stays inside the window at 100% and 200%, and axe finds
+// nothing critical or serious (#231).
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  for (const width of [600, 1024, 1440]) {
+    test(`Catalan interface stays inside the window and passes axe: ${theme}, ${width}px (#231)`, async ({
+      page,
+    }, info) => {
+      await page.setViewportSize({ width, height: 1000 })
+      const errors = await prepareStartup(page, true, { navigation: true, language: 'ca', theme })
+      await page.goto('/')
+      await expect(page.locator('html')).toHaveAttribute('lang', 'ca')
+      await expect(page.locator('[data-thread-list]')).toBeVisible()
+      await page.evaluate(() => {
+        const replies = (window as any).startupProbe.replies
+        replies['people.list'] = {
+          people: [
+            {
+              id: 'local::montserrat', source: 'local', account: '', book: 'local',
+              name: 'Montserrat Puigdomènech i Vilaseca — Coordinació internacional de projectes',
+              organisation: 'Departament de recerca i atenció a la ciutadania', note: 'Contacte sintètic', photo: '',
+              emails: [{ addr: 'coordinacio.internacional.projectes@example.test', label: '' }], phones: [],
+              version: '1', editable: true,
+            },
+          ],
+        }
+        replies['tasks.lists'] = { lists: [{ id: 'mail', name: '', position: 0, open: 1 }] }
+        replies['tasks.list'] = {
+          tasks: [
+            {
+              id: 1, thread_id: '', account_id: '', folder_id: '', note: 'Revisió pendent', due_at: null,
+              completed_at: null, created_at: 0, subject: '', from_name: '', from_addr: '', linked: false,
+              list_id: 'mail', title: 'Revisar la proposta de coordinació internacional abans de la reunió',
+              priority: 2, reminder_at: null, revision: 1,
+            },
+          ],
+        }
+        const note = {
+          id: 'note:ca', title: 'Notes de la reunió', html: '<p>Text de la nota</p>', text: 'Text de la nota',
+          tags: [], pinned: false, revision: 1, created_at: 0, updated_at: 1760000000, deleted_at: null,
+        }
+        replies['notes.list'] = { notes: [{ ...note, preview: note.text }], tags: [] }
+        replies['notes.get'] = { note }
+        replies['calendar.list'] = {
+          calendars: [
+            {
+              id: 'local-ca', name: 'Planificació de l’equip internacional', is_default: true, enabled: true,
+              kind: 'local', read_only: false, synced_at: 0,
+            },
+          ],
+        }
+        replies['calendar.events'] = { events: [] }
+        replies['chat.accounts'] = [{ id: 'c1', jid: 'anna@chat.test', host: '', port: 5222 }]
+        replies['chat.status'] = { c1: { account: 'c1', state: 'online' } }
+        replies['chat.conversations'] = [
+          { conversation: 'pau@chat.test', last_body: 'Bon dia', last_stamp: 1760000120, last_direction: 'in', unread: 1 },
+        ]
+        replies['chat.history'] = [
+          {
+            account: 'c1', conversation: 'pau@chat.test', id: 'm1', stanza_id: 'a1', direction: 'in',
+            sender: 'pau@chat.test', body: 'Bon dia, Anna', stamp: 1760000000, state: 'received',
+          },
+        ]
+      })
+
+      const blocking: string[] = []
+      const check = async (screen: string) => {
+        await settled(page)
+        await ltrInView(page, screen)
+        const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+        const body = JSON.stringify({ screen, theme, width, violations: results.violations }, null, 2)
+        await info.attach(`axe-ca-${screen}-${theme}-${width}`, { body, contentType: 'application/json' })
+        writeFileSync(info.outputPath(`axe-ca-${screen}.json`), body)
+        for (const violation of results.violations) {
+          if (violation.impact === 'critical' || violation.impact === 'serious') {
+            const targets = violation.nodes.map((node) => node.target.join(' ')).join(', ')
+            blocking.push(`${screen}: ${violation.id} (${violation.impact}) on ${targets}`)
+          }
+        }
+        await info.attach(`ca-${screen}`, {
+          body: await page.screenshot({ path: info.outputPath(`ca-${screen}.png`), animations: 'disabled' }),
+          contentType: 'image/png',
+        })
+      }
+      // The rail on a wide window; the "More" menu on a narrow one.
+      const openArea = async (key: string) => {
+        if (width < 769) {
+          await page.getByRole('button', { name: caCatalog['common.more'], exact: true }).first().click()
+          await page.getByRole('button', { name: caCatalog[key], exact: true }).last().click()
+        } else {
+          await page.getByTitle(caCatalog[key], { exact: true }).click()
+        }
+      }
+      const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+      // 200%: the app's own zoom (#181), six steps up.
+      const at200 = async (screen: string) => {
+        for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
+        expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
+        await ltrInView(page, `${screen} at 200%`)
+        await page.keyboard.press(`${mod}+Digit0`)
+      }
+
+      await check('mailbox')
+      await at200('mailbox')
+
+      await openArea('people.title')
+      await page.getByRole('option', { name: /Montserrat Puigdomènech/ }).click()
+      await expect(page.getByRole('heading', { name: /Montserrat Puigdomènech/ })).toBeVisible()
+      await check('people')
+      await at200('people')
+      if (width < 769) await page.getByRole('button', { name: caCatalog['buttons.back'], exact: true }).click()
+
+      await openArea('tasks.title')
+      await expect(page.getByText('Revisar la proposta de coordinació internacional abans de la reunió')).toBeVisible()
+      await check('tasks')
+      await at200('tasks')
+
+      await openArea('notes.title')
+      await page.getByRole('button', { name: /Notes de la reunió/ }).click()
+      await expect(page.getByLabel(caCatalog['notes.titleLabel'])).toHaveValue('Notes de la reunió')
+      await check('notes')
+
+      await openArea('calendar.title')
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+      await check('calendar')
+      await at200('calendar')
+      // Dates in Catalan: the month view names the month as Catalan does.
+      // (Its days of the adjacent months fail axe's contrast rule in every
+      // language, so the audit above runs on the default view.)
+      const month = page.getByRole('button', { name: caCatalog['calendar.viewMonth'], exact: true })
+      await month.click()
+      await expect(month).toHaveAttribute('aria-pressed', 'true')
+      const monthName = await page.evaluate(() => new Date().toLocaleDateString('ca', { month: 'long' }))
+      await expect(page.getByRole('heading', { level: 1 })).toContainText(new RegExp(monthName, 'i'))
+      await ltrInView(page, 'calendar month')
+
+      await openArea('messaging.title')
+      await page.getByRole('button', { name: /pau@chat.test/ }).click()
+      await expect(page.getByText('Bon dia, Anna')).toBeVisible()
+      await check('chat')
+
+      // Settings at 100%: at 200% some of its selects run past a 1024 px
+      // window in every language, English included (not a translation issue).
+      await page.keyboard.press('Control+Comma')
+      await expect(page.getByRole('dialog').first()).toBeVisible()
+      await check('settings')
+      await page.keyboard.press('Escape')
+
+      // The mail workspace again, fresh: a conversation and the composer.
+      await page.goto('/')
+      await expect(page.locator('[data-thread-list]')).toBeVisible()
+      await page.getByRole('table').getByRole('button', { name: /Pilot checklist/ }).click()
+      await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+      await check('conversation')
+      await at200('conversation')
+      await page.keyboard.press(`${mod}+KeyN`)
+      await expect(page.locator('.tiptap[contenteditable="true"]')).toBeVisible()
+      await check('composer')
+      await at200('composer')
+
+      expect(blocking).toEqual([])
+      expect(errors).toEqual([])
+    })
+  }
+}
+
+// Application regions and F6 (#306, ADR-0068 step 1). The regions of today's
+// shell carry `data-region`; F6 and Shift+F6 go round the ones on screen in
+// the frame's order (folders, modules, list, reader, sidebar), which is the
+// same in right to left. Within a region the focus goes back to where it was.
+const arCatalog = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../locales/ar.json', import.meta.url)), 'utf8'),
+) as Record<string, string>
+const regionCatalogs: Record<string, Record<string, string>> = { en: enCatalog, ca: caCatalog, ar: arCatalog }
+
+// The kind of region the keyboard focus is in, or "none" outside every region.
+async function regionAtFocus(page: Page): Promise<string> {
+  return page.evaluate(
+    () => (document.activeElement?.closest('[data-region]') as HTMLElement | null)?.dataset.region ?? 'none',
+  )
+}
+
+// Presses a key a number of times and reads the region after each press.
+async function regionWalk(page: Page, key: string, presses: number): Promise<string[]> {
+  const kinds: string[] = []
+  for (let i = 0; i < presses; i++) {
+    await page.keyboard.press(key)
+    kinds.push(await regionAtFocus(page))
+  }
+  return kinds
+}
+
+// Marks the focused element, then says whether the focus is back on it.
+async function markFocus(page: Page, mark: string) {
+  await page.evaluate((name) => document.activeElement?.setAttribute(name, ''), mark)
+}
+async function focusIsMarked(page: Page, mark: string): Promise<boolean> {
+  return page.evaluate((name) => !!document.activeElement?.hasAttribute(name), mark)
+}
+
+// The axe rules about regions, which the WCAG tags the other audits use leave out.
+const REGION_RULES = ['region', 'landmark-unique', 'landmark-one-main']
+
+for (const language of ['en', 'ca', 'ar']) {
+  test(`F6 and Shift+F6 go round the regions in one order in every direction of writing: ${language}, 1440px (#306)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    const errors = await prepareStartup(page, true, { navigation: true, language })
+    const catalog = regionCatalogs[language]
+    await page.goto('/')
+    await expect(page.locator('html')).toHaveAttribute('lang', language)
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    // One <main>, named after the module, and the rail named as what it is.
+    await expect(page.getByRole('main')).toHaveCount(1)
+    await expect(page.getByRole('main', { name: catalog['shell.region.mail'], exact: true })).toBeVisible()
+    await expect(
+      page.getByRole('complementary', { name: catalog['shell.region.modules'], exact: true }),
+    ).toBeVisible()
+
+    // A conversation open, with the details sidebar beside it, so every kind
+    // of region the shell has today is on screen.
+    const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+    await row.click()
+    await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+    await row.focus()
+    await page.keyboard.press('i')
+    await expect(page.locator('[data-details-panel]')).toBeVisible()
+    await row.focus()
+    await markFocus(page, 'data-test-f6-start')
+    expect(await regionAtFocus(page)).toBe('content')
+
+    expect(await regionWalk(page, 'F6', 5)).toEqual(['reader', 'sidebar', 'folders', 'modules', 'content'])
+    // Round once and back in the list, on the row it left.
+    expect(await focusIsMarked(page, 'data-test-f6-start')).toBe(true)
+    expect(await regionWalk(page, 'Shift+F6', 5)).toEqual(['modules', 'folders', 'sidebar', 'reader', 'content'])
+    expect(await focusIsMarked(page, 'data-test-f6-start')).toBe(true)
+    expect(errors).toEqual([])
+  })
+}
+
+test('F6 leaves a text field and the HTML message, and a modal dialog keeps the focus (#306)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, readerStress: true })
+  await page.goto('/')
+  await page.getByRole('table').getByRole('button', { name: /Pilot checklist/ }).click()
+  const frame = page.frameLocator('iframe[title="Message HTML"]').first()
+  await expect(frame.getByText('Wide synthetic invoice')).toBeVisible()
+
+  // While typing in the list's search field: F6 types nothing and moves on.
+  const search = page.locator('[data-thread-list]').getByRole('textbox').first()
+  await search.click()
+  await search.fill('Pilot')
+  // The conversation is still open, so the reader has somewhere to land.
+  await expect(frame.getByText('Wide synthetic invoice')).toBeVisible()
+  expect(await regionAtFocus(page)).toBe('content')
+  await page.keyboard.press('F6')
+  await expect(search).not.toBeFocused()
+  await expect(search).toHaveValue('Pilot')
+  expect(await regionAtFocus(page)).toBe('reader')
+
+  // From inside the message's own frame, which forwards F1–F12.
+  await frame.getByText('Wide synthetic invoice').click()
+  expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('IFRAME')
+  await page.keyboard.press('F6')
+  expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('IFRAME')
+  // No sidebar is open, so after the reader comes the first region again.
+  expect(await regionAtFocus(page)).toBe('folders')
+  await frame.getByText('Wide synthetic invoice').click()
+  await page.keyboard.press('Shift+F6')
+  expect(await regionAtFocus(page)).toBe('content')
+
+  // A toast is not part of the module in <main>.
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  await page.keyboard.press(`${mod}+Equal`)
+  await expect(page.getByRole('status').filter({ hasText: 'Size 110%' })).toBeVisible()
+  await expect(page.locator('main').getByRole('status').filter({ hasText: 'Size 110%' })).toHaveCount(0)
+  await page.keyboard.press(`${mod}+Digit0`)
+
+  // A modal dialog keeps the focus, and is not inside <main> either.
+  await page.keyboard.press('Control+Comma')
+  await expect(page.getByRole('dialog').first()).toBeVisible()
+  await expect(page.locator('main [aria-modal="true"]')).toHaveCount(0)
+  await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[aria-modal="true"]'))).toBe(true)
+  await markFocus(page, 'data-test-modal-focus')
+  await page.keyboard.press('F6')
+  await page.keyboard.press('Shift+F6')
+  expect(await focusIsMarked(page, 'data-test-modal-focus')).toBe(true)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  expect(errors).toEqual([])
+})
+
+test('rebound to a letter, the next-region shortcut stands down while typing (#306)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, {
+    navigation: true,
+    preferences: { shortcut_overrides: { 'pane.next': { key: 'g' } } },
+  })
+  await page.goto('/')
+  const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+  await row.click()
+  await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+  // Outside a text field the letter moves on, and Shift+F6 keeps its default.
+  await row.focus()
+  await page.keyboard.press('g')
+  expect(await regionAtFocus(page)).toBe('reader')
+  await page.keyboard.press('Shift+F6')
+  expect(await regionAtFocus(page)).toBe('content')
+  // F6 itself no longer moves.
+  await page.keyboard.press('F6')
+  expect(await regionAtFocus(page)).toBe('content')
+  // In a text field the letter is typed, and the focus stays.
+  const search = page.locator('[data-thread-list]').getByRole('textbox').first()
+  await search.click()
+  await page.keyboard.type('g')
+  await expect(search).toBeFocused()
+  await expect(search).toHaveValue('g')
+  expect(errors).toEqual([])
+})
+
+test('F6 skips the regions a narrow window hides, and keeps working at 200 percent (#306)', async ({ page }) => {
+  await page.setViewportSize({ width: 600, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+  // One pane at a time: the rail, the mail navigation and the reader are not shown.
+  await row.focus()
+  expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'content', 'content'])
+  expect(await regionWalk(page, 'Shift+F6', 2)).toEqual(['content', 'content'])
+  await row.click()
+  await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+  expect(await regionWalk(page, 'F6', 2)).toEqual(['reader', 'reader'])
+
+  // 1440 px at the app's own 200 %: the same frame, everything twice the size.
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
+  await row.focus()
+  const zoomed: string[] = []
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.press('F6')
+    zoomed.push(await regionAtFocus(page))
+    await expect(page.locator(':focus')).toBeInViewport()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  }
+  expect(zoomed).toEqual(['reader', 'folders', 'modules', 'content'])
+  await page.keyboard.press(`${mod}+Digit0`)
+  expect(errors).toEqual([])
+})
+
+// The region rules of axe on the mailbox and every module, in English,
+// Catalan and Arabic: one <main>, named after the module; no two regions of
+// one role with one name; nothing outside a region.
+for (const language of ['en', 'ca', 'ar']) {
+  test(`every screen keeps its content in named, unique regions: ${language}, 1440px (#306)`, async ({ page }, info) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    const errors = await prepareStartup(page, true, { navigation: true, language })
+    const catalog = regionCatalogs[language]
+    await page.goto('/')
+    await expect(page.locator('html')).toHaveAttribute('lang', language)
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    await page.evaluate(() => {
+      const replies = (window as any).startupProbe.replies
+      replies['people.list'] = {
+        people: [
+          {
+            id: 'local::morgan', source: 'local', account: '', book: 'local', name: 'Morgan Rivera',
+            organisation: 'Example Org', note: '', photo: '',
+            emails: [{ addr: 'morgan@example.test', label: '' }], phones: [], version: '1', editable: true,
+          },
+        ],
+      }
+      replies['tasks.lists'] = { lists: [{ id: 'mail', name: '', position: 0, open: 1 }] }
+      replies['tasks.list'] = {
+        tasks: [
+          {
+            id: 1, thread_id: '', account_id: '', folder_id: '', note: '', due_at: null, completed_at: null,
+            created_at: 0, subject: '', from_name: '', from_addr: '', linked: false, list_id: 'mail',
+            title: 'Review the figures', priority: 2, reminder_at: null, revision: 1,
+          },
+        ],
+      }
+      const note = {
+        id: 'note:regions', title: 'Meeting notes', html: '<p>Kept here.</p>', text: 'Kept here.', tags: [],
+        pinned: false, revision: 1, created_at: 0, updated_at: 1760000000, deleted_at: null,
+      }
+      replies['notes.list'] = { notes: [{ ...note, preview: note.text }], tags: [] }
+      replies['notes.get'] = { note }
+      replies['calendar.list'] = {
+        calendars: [{ id: 'local-team', name: 'Team', is_default: true, enabled: true, kind: 'local', read_only: false, synced_at: 0 }],
+      }
+      replies['calendar.events'] = { events: [] }
+      replies['chat.accounts'] = [{ id: 'c1', jid: 'ana@chat.test', host: '', port: 5222 }]
+      replies['chat.status'] = { c1: { account: 'c1', state: 'online' } }
+      replies['chat.conversations'] = [
+        { conversation: 'pau@chat.test', last_body: 'Hello', last_stamp: 1760000120, last_direction: 'in', unread: 1 },
+      ]
+      replies['chat.history'] = [
+        { account: 'c1', conversation: 'pau@chat.test', id: 'm1', stanza_id: 'a1', direction: 'in', sender: 'pau@chat.test', body: 'Hello Ana', stamp: 1760000000, state: 'received' },
+      ]
+    })
+
+    const found: string[] = []
+    const audit = async (screen: string, moduleName: string) => {
+      await expect(page.getByRole('main')).toHaveCount(1)
+      await expect(page.getByRole('main', { name: moduleName, exact: true })).toBeVisible()
+      await settled(page)
+      const results = await new AxeBuilder({ page }).withRules(REGION_RULES).analyze()
+      const body = JSON.stringify({ screen, language, violations: results.violations }, null, 2)
+      await info.attach(`axe-regions-${screen}-${language}`, { body, contentType: 'application/json' })
+      for (const violation of results.violations) {
+        const targets = violation.nodes.map((node) => node.target.join(' ')).join(', ')
+        found.push(`${screen}: ${violation.id} (${violation.impact}) on ${targets}`)
+      }
+      // F6 lands inside a region of the screen.
+      await page.keyboard.press('F6')
+      expect(await regionAtFocus(page), `${screen}: F6`).not.toBe('none')
+    }
+
+    await audit('mailbox', catalog['shell.region.mail'])
+    const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+    await row.click()
+    await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+    await row.focus()
+    await page.keyboard.press('i')
+    await expect(page.locator('[data-details-panel]')).toBeVisible()
+    await audit('conversation', catalog['shell.region.mail'])
+
+    await page.getByTitle(catalog['people.title'], { exact: true }).click()
+    await page.getByRole('option', { name: /Morgan Rivera/ }).click()
+    await expect(page.getByRole('heading', { name: 'Morgan Rivera' })).toBeVisible()
+    await audit('people', catalog['people.title'])
+
+    await page.getByTitle(catalog['tasks.title'], { exact: true }).click()
+    await expect(page.getByText('Review the figures')).toBeVisible()
+    await audit('tasks', catalog['tasks.title'])
+
+    await page.getByTitle(catalog['notes.title'], { exact: true }).click()
+    await page.getByRole('button', { name: /Meeting notes/ }).click()
+    await audit('notes', catalog['notes.title'])
+
+    const calendarButton = page.getByTitle(catalog['calendar.title'], { exact: true })
+    await calendarButton.click()
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    // A module's own left column is a region inside the module: from the
+    // rail, F6 goes to the module, then its column, then back to the rail.
+    await calendarButton.focus()
+    expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'folders', 'modules'])
+    await audit('calendar', catalog['calendar.title'])
+
+    await page.getByTitle(catalog['messaging.title'], { exact: true }).click()
+    await page.getByRole('button', { name: /pau@chat.test/ }).click()
+    await expect(page.getByText('Hello Ana')).toBeVisible()
+    await audit('chat', catalog['messaging.title'])
+
+    await page.getByTitle(catalog['attachmentsView.title'], { exact: true }).click()
+    await audit('attachments', catalog['attachmentsView.title'])
+
+    expect(found).toEqual([])
+    expect(errors).toEqual([])
+  })
+}

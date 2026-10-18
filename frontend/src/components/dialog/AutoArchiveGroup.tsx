@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { showToast } from '../../states/ui'
 import {
   autoArchiveRan$,
@@ -17,8 +17,8 @@ import {
 import { SettingsGroup } from './AccountSettingsRows'
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error))
-const when = (seconds: number | null | undefined) => (seconds ? new Date(seconds * 1000).toLocaleString() : '')
-const day = (seconds: number | null | undefined) => (seconds ? new Date(seconds * 1000).toLocaleDateString() : '')
+const when = (seconds: number | null | undefined) => (seconds ? new Date(seconds * 1000).toLocaleString(intlLocale()) : '')
+const day = (seconds: number | null | undefined) => (seconds ? new Date(seconds * 1000).toLocaleDateString(intlLocale()) : '')
 const same = (a: AutoArchivePolicy, b: AutoArchivePolicy) => JSON.stringify(a) === JSON.stringify(b)
 
 /**
@@ -254,7 +254,7 @@ export function AutoArchiveGroup({ accountId }: { accountId: string }) {
               </span>
             )}
             {draft.destination === 'local' && (
-              <label className="ml-5 flex items-center gap-2">
+              <label className="ms-5 flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={draft.keep_server_copy}
@@ -411,7 +411,7 @@ function RunLog({ runs }: { runs: AutoArchiveRun[] }) {
                     defaultValue: '{count, plural, one {# message not archived} other {# messages not archived}}',
                   })}
                 </summary>
-                <ul className="ml-4 flex flex-col gap-0.5">
+                <ul className="ms-4 flex flex-col gap-0.5">
                   {run.failures.map((failure) => (
                     <li key={`${failure.folder}-${failure.uid}`}>
                       {t('autoArchive.failure', {

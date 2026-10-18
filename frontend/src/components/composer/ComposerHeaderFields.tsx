@@ -5,7 +5,8 @@ import { settings$ } from '../../states/settings'
 import type { ComposeDraft } from '../../types'
 import { RecipientInput } from './RecipientInput'
 
-const fieldClass = 'flex-1 bg-transparent text-ui text-primary placeholder-secondary outline-none'
+// min-w-0: a field gives way in a narrow reader instead of running past its edge.
+const fieldClass = 'min-w-0 flex-1 bg-transparent text-ui text-primary placeholder-secondary outline-none'
 
 const labelClass = 'w-12 shrink-0 text-caption font-bold text-secondary'
 
@@ -34,6 +35,7 @@ export function ComposerHeaderFields({
         <div className="flex items-center gap-2 border-b border-border/60 py-1.5">
           <span className={labelClass}>{t('composer.fields.from')}</span>
           <select
+            aria-label={t('composer.fields.from')}
             value={`${draft.accountId}|${draft.fromEmail || fromAccount?.email || ''}`}
             onChange={(e) => {
               const sep = e.target.value.indexOf('|')
@@ -41,7 +43,7 @@ export function ComposerHeaderFields({
               const email = e.target.value.slice(sep + 1)
               update({ accountId: accId, fromEmail: email })
             }}
-            className="flex-1 bg-transparent text-ui text-primary outline-none cursor-pointer"
+            className="min-w-0 flex-1 bg-transparent text-ui text-primary outline-none cursor-pointer"
           >
             {sendable.flatMap((acc) =>
               accountIdentities(acc).map((identity) => (
@@ -98,6 +100,8 @@ export function ComposerHeaderFields({
         <span className={labelClass}>{t('composer.fields.subject')}</span>
         <input
           value={draft.subject}
+          // Empty, the field follows the interface; typed, its own text (ADR-0061).
+          dir={draft.subject ? 'auto' : undefined}
           onChange={(e) => update({ subject: e.target.value })}
           placeholder={t('composer.fields.subject')}
           spellCheck={spellCheck}

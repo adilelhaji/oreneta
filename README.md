@@ -15,7 +15,10 @@ Meron does, plus:
 - **Native Exchange (EWS)**: mail against on-premise Exchange servers with no
   IMAP bridge in between — folders, incremental sync, send, flags, move.
 - **A full calendar**: agenda, day, week and month views; events created,
-  edited and deleted on the server; recurring series expanded server-side.
+  edited and deleted on the server; recurring series expanded server-side;
+  in the day and week views, events dragged to move or resize them, dropped
+  on the mini calendar, or created by dragging a range, from a slot's menu or
+  from the keyboard (Exchange events not yet).
 - **Calendars from anywhere**: an account's calendars arrive with the account
   (Exchange, Google Calendar), alongside local calendars and read-only
   subscriptions to published `.ics` addresses.
@@ -34,8 +37,8 @@ delivery target, not a claim that Oreneta has already reached parity.
 ## Building
 
 ```sh
-cargo build --release --bin meron-core   # the Rust engine
-wails build -tags webkit2_41             # the desktop app
+cargo build --manifest-path meron-core/Cargo.toml --bin oreneta-core  # the Rust engine
+wails build -tags webkit2_41                                         # the desktop app
 ```
 
 ## Google sign-in: use your own credentials
@@ -87,4 +90,5 @@ Oreneta is licensed under the
 is built on. Copyright (C) 2026 Nonbili Inc. for the original work;
 Copyright (C) 2026 Adil El Haji for the fork's changes. Internal module and
 crate names keep Meron's naming on purpose, so upstream fixes keep merging
-cleanly.
+cleanly; what users see, such as the engine process `oreneta-core`, is named
+after Oreneta.

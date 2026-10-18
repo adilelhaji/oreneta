@@ -31,6 +31,7 @@ type PluralCategory = (typeof pluralCategories)[number]
 
 const supportedLocales = [
   'ar',
+  'ca',
   'de',
   'el',
   'en',
@@ -54,6 +55,7 @@ type SupportedLocale = (typeof supportedLocales)[number]
 
 const languageNativeNames: Record<SupportedLocale, string> = {
   ar: 'العربية',
+  ca: 'Català',
   de: 'Deutsch',
   el: 'Ελληνικά',
   en: 'English',
@@ -129,6 +131,7 @@ function validateCatalogs(catalogs: Record<string, Catalog>) {
         throw new Error(`${locale}.${key} must be a non-empty string`)
       }
       validateBalancedBraces(locale, key, value)
+      validateNoQuotingApostrophe(locale, key, value)
       validateIcuSyntax(locale, key, value)
       const expected = enPlaceholders[key] ?? []
       const actual = placeholders(value)
@@ -161,23 +164,33 @@ export const messages: Record<SupportedI18nLanguage, Record<string, string>> = $
   fs.writeFileSync(desktopOutput, body)
 }
 
+// The launcher label (`@string/app_name` in the manifest). The same in every
+// locale: it is the product's name.
+const androidAppName = 'Oreneta'
+
+// One locale's strings.xml: the app name, then every message without an ICU
+// placeholder (those go to the generated Kotlin helper instead).
+function androidStringsXml(catalog: Catalog): string {
+  const simple = Object.entries(catalog).filter(([, value]) => !hasIcuPlaceholder(value))
+  const lines = [
+    '<?xml version="1.0" encoding="utf-8"?>',
+    '<resources>',
+    `    <string name="app_name">${androidEscape(androidAppName)}</string>`,
+  ]
+  for (const [key, value] of simple) {
+    lines.push(`    <string name="${androidName(key)}">${androidEscape(value)}</string>`)
+  }
+  lines.push('</resources>', '')
+  return lines.join('\n')
+}
+
 function generateAndroid(catalogs: Catalogs) {
   const helperMessages = {} as Catalogs
   for (const [locale, catalog] of Object.entries(catalogs)) {
     const supportedLocale = locale as SupportedLocale
     const valuesDir = path.join(androidResDir, androidLocaleDir(supportedLocale))
     ensureDir(valuesDir)
-    const simple = Object.entries(catalog).filter(([, value]) => !hasIcuPlaceholder(value))
-    const lines = [
-      '<?xml version="1.0" encoding="utf-8"?>',
-      '<resources>',
-      '    <string name="app_name">Meron</string>',
-    ]
-    for (const [key, value] of simple) {
-      lines.push(`    <string name="${androidName(key)}">${androidEscape(value)}</string>`)
-    }
-    lines.push('</resources>', '')
-    fs.writeFileSync(path.join(valuesDir, 'strings.xml'), lines.join('\n'))
+    fs.writeFileSync(path.join(valuesDir, 'strings.xml'), androidStringsXml(catalog))
 
     helperMessages[supportedLocale] = Object.fromEntries(
       Object.entries(catalog).filter(([, value]) => hasIcuPlaceholder(value)),
@@ -394,6 +407,21 @@ function validateIcuSyntax(locale: string, key: string, value: string) {
   }
 }
 
+/// Rejects an ASCII apostrophe written right before ICU syntax.
+///
+/// In ICU an apostrophe before `{`, `}`, `#`, `|`, `<` or `>` opens a quoted
+/// literal: `d'{name}` can parse and still show the text "{name}" instead
+/// of the name, which neither the syntax nor the placeholder check sees.
+/// Languages that elide before a vowel (Catalan, French, Italian) meet this
+/// as soon as a placeholder follows an article or preposition (#231).
+function validateNoQuotingApostrophe(locale: string, key: string, value: string) {
+  if (/(?<!')'[{}#|<>]/.test(value)) {
+    throw new Error(
+      `${locale}.${key} has an apostrophe right before ICU syntax, which quotes it. Do not elide before a placeholder, or use ’.`,
+    )
+  }
+}
+
 function validateBalancedBraces(locale: string, key: string, value: string) {
   let depth = 0
   for (const char of value) {
@@ -450,9 +478,13 @@ export {
   androidEscape,
   androidLocaleDir,
   androidName,
+  androidStringsXml,
   flattenObject,
   foldPlurals,
   iosLocale,
+  languageNativeNames,
   placeholders,
+  readCanonicalCatalogs,
+  supportedLocales,
   validateCatalogs,
 }

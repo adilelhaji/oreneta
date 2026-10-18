@@ -3,6 +3,7 @@ import { AlignLeft, Bell, CalendarDays, Clock, MapPin, Repeat, SquarePen, Trash2
 import { openExternal } from '../../lib/native'
 import i18n, { useTranslation } from '../../lib/i18n'
 import { useEscapeKey } from '../../lib/useEscapeKey'
+import { ModalCard } from '../dialog/ModalCard'
 import { useEffect, useState } from 'react'
 import {
   allDayLocalDays,
@@ -21,6 +22,7 @@ import {
 import { ScopeAsk } from './ScopeAsk'
 import { isAnswerableInvitation } from '../../lib/calendarInvitation'
 import { accounts$ } from '../../states/accounts'
+import { forwardArrow } from '../../lib/direction'
 
 /// An event at full size, to read rather than to edit.
 ///
@@ -86,7 +88,10 @@ export function EventDetails() {
         if (mouse.target === mouse.currentTarget) closeDetails()
       }}
     >
-      <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col rounded-panel border border-border bg-app shadow-overlay">
+      <ModalCard
+        label={event.subject || t('calendar.noSubject', { defaultValue: '(no subject)' })}
+        className="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col rounded-panel border border-border bg-app shadow-overlay"
+      >
         {/* A band in the calendar's colour, so which calendar this belongs to
             is answered before the text is read. */}
         <div className="h-1.5 rounded-t-2xl" style={{ backgroundColor: color }} />
@@ -194,7 +199,9 @@ export function EventDetails() {
             <Row icon={<AlignLeft size={14} strokeWidth={1.75} />}>
               {/* Kept as the plain text it arrived as, with the author's own
                   line breaks: notes are read, not rendered. */}
-              <p className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-primary">{description}</p>
+              <p dir="auto" className="bidi-plaintext max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-primary">
+                {description}
+              </p>
             </Row>
           )}
 
@@ -205,7 +212,7 @@ export function EventDetails() {
                   <li key={`${person.addr}:${index}`} className="flex items-baseline gap-2">
                     {/* The name is what identifies someone here: an internal
                         directory often gives no address the server will share. */}
-                    <span className="min-w-0 truncate text-primary">{person.name || person.addr}</span>
+                    <span dir="auto" className="min-w-0 truncate text-primary">{person.name || person.addr}</span>
                     {person.response && (
                       <span className="shrink-0 text-2xs text-secondary">{responseLabel(person.response, t)}</span>
                     )}
@@ -269,7 +276,7 @@ export function EventDetails() {
 
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-3">
           {readOnly ? (
-            <p className="mr-auto text-caption text-secondary">
+            <p className="me-auto text-caption text-secondary">
               {t('calendar.readOnlyEvent', {
                 defaultValue: 'This calendar is read-only — it belongs to whoever publishes it.',
               })}
@@ -278,7 +285,7 @@ export function EventDetails() {
             <button
               type="button"
               onClick={() => (event.is_recurring && event.series_id ? setAsking(true) : void deleteEvent(event))}
-              className="mr-auto inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-xs font-medium text-danger transition-colors hover:bg-danger-soft cursor-pointer"
+              className="me-auto inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-xs font-medium text-danger transition-colors hover:bg-danger-soft cursor-pointer"
             >
               <Trash2 size={14} strokeWidth={1.75} />
               {t('calendar.delete', { defaultValue: 'Delete' })}
@@ -302,7 +309,7 @@ export function EventDetails() {
             </button>
           )}
         </div>
-      </div>
+      </ModalCard>
     </div>
   )
 }
@@ -337,12 +344,12 @@ function formatRange(event: CalendarEvent): string {
     const days = allDayLocalDays(event)
     const firstDay = new Date(days[0])
     const lastDay = new Date(days[days.length - 1])
-    return days.length === 1 ? day(firstDay) : `${day(firstDay)} → ${day(lastDay)}`
+    return days.length === 1 ? day(firstDay) : `${day(firstDay)} ${forwardArrow()} ${day(lastDay)}`
   }
   const sameDay = start.toDateString() === end.toDateString()
   return sameDay
     ? `${day(start)} · ${time(start)}–${time(end)}`
-    : `${day(start)} ${time(start)} → ${day(end)} ${time(end)}`
+    : `${day(start)} ${time(start)} ${forwardArrow()} ${day(end)} ${time(end)}`
 }
 
 /// One occurrence's date, short enough to sit on a line with other facts.
