@@ -250,10 +250,11 @@ describe('kanban column loading filters', () => {
     }
 
     const sync = syncKanbanColumn({ accountId: 'acc1', folderId: 'Clients' })
-    let settled: 'done' | 'failed' | null = null
+    // An object, so the callbacks' writes are not narrowed away by the compiler.
+    const state: { settled: 'done' | 'failed' | null } = { settled: null }
     sync.then(
-      () => (settled = 'done'),
-      () => (settled = 'failed'),
+      () => (state.settled = 'done'),
+      () => (state.settled = 'failed'),
     )
     await Promise.resolve()
 
@@ -261,12 +262,12 @@ describe('kanban column loading filters', () => {
     handlers.get('mail.syncError')?.({ account: 'acc1', message: 'periodic check: 1 of 3 folders failed', periodic: true })
     handlers.get('mail.synced')?.({ account: 'acc1', periodic: true, synced_folders: ['Sent'] })
     await Promise.resolve()
-    expect(settled).toBe(null)
+    expect(state.settled).toBe(null)
 
     // The check synced this folder, which the core left to it.
     handlers.get('mail.synced')?.({ account: 'acc1', periodic: true, synced_folders: ['Sent', 'Clients'] })
     await sync
-    expect(settled).toBe('done')
+    expect(state.settled).toBe('done')
   })
 
   it('sends the active global filter when loading a single-account column', async () => {
