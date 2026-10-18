@@ -129,7 +129,9 @@ export function useComposer(tabId: string) {
   // A seeded signature sits at the top of the body, above any quote, so landing
   // at the end would drop the cursor below it — and below the quote. Start puts
   // it on the blank line the signature was inserted under.
-  const focusAt = useRef(draft?.signature?.html ? ('start' as const) : ('end' as const)).current
+  // A signature moved away from the person's text (#277) leaves them writing on
+  // the side of the quote the draft names instead.
+  const focusAt = useRef(draft?.caret ?? (draft?.signature?.html ? ('start' as const) : ('end' as const))).current
 
   // Grammar suggestions (#105): one checker per composer; what it found, a
   // failure to start, and the issue the writer clicked, for the composer to show.
@@ -215,6 +217,14 @@ export function useComposer(tabId: string) {
   useEffect(() => {
     const el = textRef.current
     if (!el || !focusBody) return
+    if (draft?.caret) {
+      // At the start, after whatever text was carried over (it ends at the
+      // first blank line); at the end, after the quote.
+      const gap = el.value.indexOf('\n\n')
+      const caret = draft.caret === 'end' ? el.value.length : gap < 0 ? el.value.length : gap
+      el.setSelectionRange(caret, caret)
+      return
+    }
     const signature = draft?.signature?.text
     if (!signature) return
     const at = el.value.indexOf(signature)

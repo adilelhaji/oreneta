@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { accounts$ } from '../../states/accounts'
-import { settings$ } from '../../states/settings'
+import { setSignaturePlacement, settings$ } from '../../states/settings'
 import { closeMessageTab, compose$, openComposeTab, updateComposeDraft } from '../../states/compose'
 import { ui$ } from '../../states/ui'
 import { templates$ } from '../../states/templates'
@@ -652,5 +652,44 @@ describe('Composer', () => {
     expect(bodyHtml()).not.toContain('{{cursor}}')
     expect(ui$.toast.get()).toContain('{{to.nick}}')
     expect(ui$.toastTone.get()).toBe('error')
+  })
+
+  it('opens on the writing side of the quote when the signature is moved away from it (#277)', async () => {
+    const caret = () => (document.querySelector('textarea') as HTMLTextAreaElement).selectionStart
+    try {
+      // Written above the quote, signed below it: the caret starts at the top.
+      setSignaturePlacement('a', 'below')
+      const below = openComposeTab({
+        accountId: 'a',
+        to: 'x@example.com',
+        rich: false,
+        text: '\n\n> quoted',
+        signaturePlacement: 'aboveQuote',
+      })!
+      expect(draftOf(below)?.text).toBe('\n\n> quoted\n\nFrom A')
+      expect(draftOf(below)?.caret).toBe('start')
+      const first = render(<Composer tabId={below} />)
+      await act(async () => {})
+      expect(caret()).toBe(0)
+      first.unmount()
+
+      // Written below the quote, signed above it: the caret starts at the end.
+      setSignaturePlacement('a', 'above')
+      const above = openComposeTab({
+        accountId: 'a',
+        to: 'x@example.com',
+        rich: false,
+        text: 'Sounds good',
+        quote: { html: '', text: '> quoted', position: 'below' },
+      })!
+      const text = '\n\nFrom A\n\n> quoted\n\nSounds good'
+      expect(draftOf(above)?.text).toBe(text)
+      expect(draftOf(above)?.caret).toBe('end')
+      render(<Composer tabId={above} />)
+      await act(async () => {})
+      expect(caret()).toBe(text.length)
+    } finally {
+      setSignaturePlacement('a', 'withText')
+    }
   })
 })

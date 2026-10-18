@@ -72,7 +72,7 @@ beforeEach(() => {
     syncing: false,
   })
   ui$.taskEditor.set(null)
-  ui$.tasksOpen.set(true)
+  ui$.module.set('tasks')
 })
 afterEach(() => {
   cleanup()
@@ -104,7 +104,7 @@ describe('task lists (ADR-0013)', () => {
     const view = render(<TasksView />)
     await waitFor(() => expect(view.container.textContent).toContain('Fix the tap'))
     fireEvent.click(view.getByText('Fix the tap'))
-    expect(ui$.tasksOpen.get()).toBe(true)
+    expect(ui$.module.get()).toBe('tasks')
     expect(ui$.taskEditor.get()).toMatchObject({ id: 2, threadId: '' })
   })
 

@@ -3,6 +3,8 @@
 - Estat: acceptada per delegació («Tomo yo la recomendada»); pendent de
   revisió del propietari al final del pla.
 - Data: 2026-10-13.
+- Esmena del 2026-10-18 (#277): la posició de la signatura per compte,
+  acceptada pel propietari el 2026-10-18 («Hazlo así»).
 - Abast: la fila SET-09 de la paritat amb eM Client 10.4 (#39), «Correu →
   Respostes i reenviaments». Els destinataris de respondre i respondre a
   tots i la identitat (àlies) ja estaven resolts i provats; faltaven el
@@ -44,7 +46,9 @@
   resposta sense res escrit segueix el format del compte, com un missatge
   nou, i el text portat de la resposta ràpida conserva la seva forma plana.
   Amb la citació en text pla la resposta és sempre de text pla.
-- **La signatura va amb el que escriu la persona, no després de la citació:**
+- **Per defecte, la signatura va amb el que escriu la persona:**
+  - cada compte pot triar posar-la damunt o sota de la citació (esmena del
+    2026-10-18, #277; vegeu `docs/design/quicktext-placeholders.md`);
   - resposta damunt de la citació i sense res escrit: se sembra com un
     reenviament (citació al cos, signatura amb la marca `aboveQuote`), perquè
     canviar de compte canviï la signatura al seu lloc i no n'afegeixi una altra sota la

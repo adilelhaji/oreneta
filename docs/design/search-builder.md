@@ -16,9 +16,14 @@ cerca** amb el que ja s'ha escrit repartit en camps:
 Una cerca desada recorda on es va desar i, en obrir-la, es torna a
 aquell compte i aquella carpeta.
 
+A dalt de tot, una línia diu on busca la cerca i si hi entren les carpetes
+amagades (#273): amb una carpeta oberta, només aquella; a una carpeta
+unificada, la d'aquell tipus de cada compte inclòs a les carpetes unificades,
+encara que sigui amagada; a Destacats, totes les carpetes, les amagades incloses.
+
 ## Proves
 
 | Nivell | Què cobreix |
 |---|---|
 | N1 `search/tests.rs` | Anada i tornada d'un corpus (operadors, cometes, diversos valors, dates vàlides i no vàlides, URL amb dos punts, espais); escriptura estable; valors buits ignorats |
-| N2 `SearchBuilder.test.tsx` | El constructor s'obre amb la lectura del nucli i escriu a través del nucli; dies tal com els compta el nucli; cerca desada amb àmbit que torna a la seva carpeta; compatibilitat amb les desades anteriorment |
+| N2 `SearchBuilder.test.tsx` | El constructor s'obre amb la lectura del nucli i escriu a través del nucli; dies tal com els compta el nucli; cerca desada amb àmbit que torna a la seva carpeta; compatibilitat amb les desades anteriorment; la línia d'àmbit i les carpetes amagades (#273) |

@@ -189,7 +189,7 @@ export function TasksView() {
       )
       return
     }
-    ui$.tasksOpen.set(false)
+    ui$.module.set('mail')
     openMailAccount(task.account_id, task.folder_id, false)
     ui$.selectedThread.set(task.thread_id)
     ui$.mobilePane.set('conversation')
@@ -201,7 +201,7 @@ export function TasksView() {
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
+    <div data-region="content" className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
       <header className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-header px-4 py-3">
         <CompactNavigation />
         <h1 className="flex items-center gap-2 text-heading-sm font-bold text-primary">

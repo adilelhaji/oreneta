@@ -185,9 +185,10 @@ export function MessagingView() {
   }
 
   return (
-    <div className="flex min-w-0 flex-1 bg-chats">
+    <div data-region="content" className="flex min-w-0 flex-1 bg-chats">
       <section
         aria-label={t('messaging.conversations', { defaultValue: 'Conversations' })}
+        data-region="folders"
         className={`flex w-72 shrink-0 flex-col border-e border-border max-[769px]:w-full ${conversation ? 'max-[769px]:hidden' : ''}`}
       >
         <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
