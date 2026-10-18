@@ -449,7 +449,9 @@ export function useAccountDialog() {
       : {
           host: form.imap_host.trim(),
           port: Number(form.imap_port) || 993,
-          starttls: form.imap_security === 'starttls',
+          // POP3 without TLS chosen still upgrades with STLS (#269).
+          starttls:
+            form.imap_security === 'starttls' || (form.incoming === 'pop3' && form.imap_security === 'none'),
         }
   }
 
@@ -458,11 +460,14 @@ export function useAccountDialog() {
   // the probe cannot reach the server — then the original error stands.
   async function probeCertificate(protocol: CertificateProtocol): Promise<CertificatePrompt | null> {
     const target = serverTarget(protocol)
+    // The incoming server's pin slot is "imap" whatever it speaks, but the
+    // probe has to speak its protocol: STLS for POP3, not IMAP's STARTTLS.
+    const wire = protocol === 'imap' && form.incoming === 'pop3' ? 'pop3' : protocol
     try {
-      const res = await invoke<{ certificate: CertificateInfo }>(
-        'account.probeCert',
-        certificateProbePayload({ ...target, protocol }, reconnectAccount?.proxy),
-      )
+      const res = await invoke<{ certificate: CertificateInfo }>('account.probeCert', {
+        ...certificateProbePayload({ ...target, protocol }, reconnectAccount?.proxy),
+        protocol: wire,
+      })
       if (!res?.certificate?.fingerprint) return null
       return { host: target.host, port: target.port, protocol, certificate: res.certificate }
     } catch {

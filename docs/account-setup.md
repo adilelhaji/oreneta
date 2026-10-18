@@ -84,7 +84,8 @@ no deia quin pas havia fallat. Ara la configuració manual IMAP/POP3/SMTP té l'
 - La prova no deixa cap compte desat ni cap secret al clauer. Un certificat acceptat
   durant la prova es guarda només al diàleg, lligat al servidor i al port per als quals
   es va mostrar, i es desa amb el compte quan aquest es desa; canviar el servidor o el
-  port l'oblida.
+  port l'oblida. Per veure el certificat d'un servidor POP3, la consulta parla POP3 (STLS)
+  i no IMAP.
 - La contrasenya només va al servidor que es prova, amb la seguretat que tindria el
   compte. No apareix mai al registre ni a l'informe. El registre de l'aplicació només
   anota el compte, els servidors i els ports, el veredicte de cada servidor i el pas que ha fallat i la

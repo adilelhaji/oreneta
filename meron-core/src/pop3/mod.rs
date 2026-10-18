@@ -275,6 +275,18 @@ pub async fn connect(creds: &crate::imap::Creds) -> Result<Client<crate::tls::St
     Ok(client)
 }
 
+/// Speaks POP3 up to the STLS upgrade and hands back the raw socket, for the
+/// certificate probe (see [`crate::tls::probe`]); nothing of the sign-in is
+/// ever sent over it.
+pub(crate) async fn starttls_socket(tcp: tokio::net::TcpStream) -> Result<tokio::net::TcpStream> {
+    let mut plain = Client::open(crate::tls::Stream::Plain(tcp)).await?;
+    plain.stls().await.context("STLS")?;
+    match plain.into_inner() {
+        crate::tls::Stream::Plain(tcp) => Ok(tcp),
+        crate::tls::Stream::Tls(_) => bail!("STLS requested on an already-TLS stream"),
+    }
+}
+
 impl<S: AsyncRead + AsyncWrite + Unpin> Client<S> {
     /// After STLS there is no new greeting.
     pub(crate) fn open_after_tls(stream: S) -> Self {

@@ -305,6 +305,20 @@ it('an untrusted certificate is shown before it is pinned, then tested with the 
   expect(of('account.addPassword')).toEqual([])
 })
 
+it('the certificate of a POP3 server is probed in POP3', async () => {
+  nextReport = report(side('pop3', 995, 'tls', { step: 'tls', kind: 'certificate' }), side('smtp', 465, 'tls'))
+  const screen = render(<Harness />)
+  await fillForm(screen)
+  await act(async () => {
+    fireEvent.change(screen.getByDisplayValue('IMAP'), { target: { value: 'pop3' } })
+  })
+  await click(screen, 'Test connection')
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Inspect the certificate' })).toBeTruthy())
+  await click(screen, 'Inspect the certificate')
+  await waitFor(() => expect(screen.getByTestId('cert-prompt').textContent).toBe('imap'))
+  expect(of('account.probeCert')[0].payload).toMatchObject({ port: 995, protocol: 'pop3', starttls: false })
+})
+
 it('a test that cannot run says so and saves nothing', async () => {
   ;(window as any).go.main.App.Invoke = async (command: string, payload: any) => {
     calls.push({ command, payload })
