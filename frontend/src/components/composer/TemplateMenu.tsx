@@ -7,7 +7,7 @@ import { ui$ } from '../../states/ui'
 import { IconButton } from '../button/IconButton'
 import { MenuItem } from '../menu/MenuItem'
 import { MenuGroup, MenuList, MenuSeparator, menuSurfaceProps } from '../menu/Menu'
-import { useDismissOnOutside } from '../menu/useDismissOnOutside'
+import { useEscapeKey } from '../../lib/useEscapeKey'
 import { focusMenuEdge } from '../../lib/menuKeyboard'
 
 /**
@@ -34,11 +34,16 @@ export function TemplateMenu({ onPick }: { onPick: (template: Template) => void 
     if (!loaded) void loadTemplates()
   }, [loaded])
 
-  useDismissOnOutside(
-    open,
-    (target) => Boolean(wrapRef.current?.contains(target as Node | null)),
-    () => setOpen(false),
-  )
+  useEffect(() => {
+    if (!open) return
+    const onDown = (event: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [open])
+  // Escape closes the menu (#289); a click outside still does, as before.
+  useEscapeKey(() => setOpen(false), open)
 
   const found = searchTemplates(stored, query)
   const snippets = found.filter((template) => template.kind === 'snippet')

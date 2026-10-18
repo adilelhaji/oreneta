@@ -1,6 +1,9 @@
 # Menús accessibles (#289)
 
-Peça 7 del redisseny aprovat pel propietari (decisió D9: files de 28 px). Tots els
+Peça 7 del redisseny que el propietari va aprovar el 2026-10-17 (decisió D9: files de
+28 px; les decisions D1–D9 consten a
+[#288](https://github.com/adilelhaji/oreneta/issues/288#issuecomment-6240630278), perquè
+la proposta no és al repositori). Tots els
 menús emergents i contextuals de l'aplicació fan servir una sola primitiva pròpia,
 a `frontend/src/components/menu/`. No s'hi afegeix cap dependència: el repositori
 no té cap biblioteca de primitives accessibles.
@@ -27,9 +30,10 @@ desactivats, perquè les fletxes també hi arribin.
 - Amunt i Avall recorren els elements i tornen a començar pels extrems; Inici i Fi
   hi van directament. Els elements desactivats s'hi inclouen i s'anuncien
   (`aria-disabled`), però no fan res.
-- Una lletra va al següent element que hi comença; la mateixa lletra repetida en
-  recorre tots els que hi comencen, i unes quantes lletres seguides (en mig segon)
-  busquen el text sencer.
+- Una lletra va al següent element que hi comença; la mateixa lletra repetida
+  recorre tots els que hi comencen, i unes quantes lletres escrites amb menys de mig
+  segon entre l'una i l'altra porten a l'element que comença amb tot el que s'ha
+  escrit. Qualsevol altra tecla acaba la cerca.
 - La fletxa cap al final de la línia (Dreta; Esquerra en àrab, ADR-0061), Retorn o
   Espai obren el submenú i hi posen el focus; la fletxa cap a l'inici el tanca i
   torna el focus a la fila que l'havia obert.
@@ -42,19 +46,22 @@ desactivats, perquè les fletxes també hi arribin.
 
 ## Focus
 
-En obrir-se, el focus va al primer element, tret que un camp del menú ja l'hagi
-agafat. En tancar-se, torna a l'element que el tenia abans, si el menú encara el
+En obrir-se, el focus va al primer element, tret que el camp de filtre de la seva
+finestra ja l'hagi agafat. Si l'element que té el focus desapareix mentre el menú
+continua obert (la fila «S'estan carregant les carpetes…» quan arriben les carpetes, una cerca desada
+que s'oblida), el focus torna al primer element. En tancar-se, torna a l'element que el tenia abans, si el menú encara el
 tenia, i mai el pren a una superfície que l'hagi agafat mentrestant ni el posa en
-un element que ja no hi és, desactivat o ocult (les mateixes regles que
-`useDialogFocus`). Un submenú obert passant-hi per sobre amb el punter no mou el
-focus.
+un element que ja no hi és o que està desactivat o ocult (les mateixes regles que
+`useDialogFocus`). Un submenú que s'obre en passar el punter per sobre de la seva fila
+no mou el focus.
 
 ## Disseny
 
 Files de 28 px (`min-h-7`) amb icona de 14 px al començament, xebró al final dels
-submenús i drecera alineada al final; continuen per sobre dels 24 px de WCAG 2.5.8.
-En passar-hi per sobre i amb el focus del teclat, fons de selecció; l'anell de focus
-es dibuixa a dins de la fila. Una fila amb aspecte propi (la carpeta actual, el filtre
+submenús i drecera alineada al final; continuen per sobre dels 24 px del criteri 2.5.8 de les WCAG.
+En passar-hi per sobre i amb el focus del teclat, el fons de la fila canvia a `bg-hover`; l'anell
+de focus es dibuixa a dins de la fila (`index.css`). Les icones no tenen un espai de
+mida fixa: cada fila porta la seva. Una fila amb aspecte propi (la carpeta actual, el filtre
 actiu) passa `appearance` en lloc de sumar classes que es contradiuen.
 
 ## Menús migrats
@@ -76,12 +83,19 @@ mostra del catàleg de disseny.
 desactivats, submenús en els dos sentits, Escapada, Tab i retorn del focus). A
 l'entrada de producció, `e2e/startup.e2e.ts` («#289») obre el menú contextual d'una
 conversa i el seu submenú en anglès i en àrab, hi passa axe sense acceptar cap
-infracció i els recorre amb el teclat; una altra prova obre un menú des del seu botó
-amb el teclat.
+infracció i els recorre amb el teclat (la cerca per lletra, en anglès); una altra
+prova, també en tots dos idiomes, obre un menú des del seu botó amb el teclat, hi
+passa axe i comprova que una lletra escrita al menú no arriba a les dreceres.
 
-Fora d'abast: les accions noves del menú del missatge (etiqueta, crear reunió, crear
-regla, veure l'origen), que són una peça posterior; el menú principal de la banda
+Fora d'abast: les accions noves del menú del missatge (posar una etiqueta, crear una
+reunió, crear una regla, veure l'origen), que són una peça posterior; el menú principal de la banda
 superior (peça 13); les barres d'eines i els botons dividits (peça 8); i les finestres
-que no són menús (autocompletar destinataris, paleta d'ordres, suggeriments de
-gramàtica). L'evidència amb lectors de pantalla natius i la nativa de Windows
+que no són menús (compleció automàtica de destinataris, paleta d'ordres, suggeriments
+de gramàtica).
+
+Límits coneguts: al selector de carpetes, una branca que el punter plega només es
+torna a desplegar amb el punter fins que el selector es torna a obrir (totes les
+branques comencen obertes, de manera que el teclat arriba a totes les carpetes en
+obrir-lo). Tancar «Més accions» del lector i el text desat continua fent-se amb un
+clic fora, com abans, i ara també amb Escapada. L'evidència amb lectors de pantalla natius i la nativa de Windows
 continuen pendents (#37).

@@ -49,7 +49,7 @@ import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { MenuItem } from '../menu/MenuItem'
 import { MenuList, MenuSeparator } from '../menu/Menu'
 import { menuItemCurrentClass } from '../menu/menuStyles'
-import { useDismissOnOutside } from '../menu/useDismissOnOutside'
+import { useEscapeKey } from '../../lib/useEscapeKey'
 import { ConversationSubject } from './ConversationSubject'
 import { ReadingHeaderSummary } from './ReadingHeaderSummary'
 import { isConversation, summariseThread } from './readingHeader'
@@ -124,11 +124,18 @@ export function ConversationHeader({
   const [senderMenu, setSenderMenu] = useState<{ x: number; y: number } | null>(null)
   const actionsMenuRef = useRef<HTMLDivElement | null>(null)
 
-  useDismissOnOutside(
-    actionsMenuOpen,
-    (target) => Boolean(actionsMenuRef.current?.contains(target as Node | null)),
-    () => setActionsMenuOpen(false),
-  )
+  useEffect(() => {
+    if (!actionsMenuOpen) return
+    const onDown = (event: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target as Node)) {
+        setActionsMenuOpen(false)
+      }
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [actionsMenuOpen])
+  // Escape closes the menu (#289); a click outside still does, as before.
+  useEscapeKey(() => setActionsMenuOpen(false), actionsMenuOpen)
 
   useEffect(() => {
     setSenderMenu(null)

@@ -2,7 +2,6 @@ import { useId, useRef, useState } from 'react'
 import { Bookmark, BookmarkPlus, X } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
-import { focusMenuEdge } from '../../lib/menuKeyboard'
 import { settings$, type SavedSearch } from '../../states/settings'
 import { ui$ } from '../../states/ui'
 import { openMailAccount } from '../../states/kanban'
@@ -148,14 +147,8 @@ function SavedSearchRow({
         title={t('search.forget')}
         aria-label={t('search.forget')}
         aria-describedby={nameId}
-        onClick={(event) => {
-          // The row goes; focus stays in the menu instead of falling out of it.
-          const menu = event.currentTarget.closest<HTMLElement>('[role="menu"]')
-          onForget()
-          setTimeout(() => {
-            if (menu?.isConnected) focusMenuEdge(menu, 'first')
-          }, 0)
-        }}
+        // The row goes; the menu puts focus back on its first item.
+        onClick={onForget}
         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary focus-visible:bg-hover cursor-pointer"
       >
         <X size={14} strokeWidth={1.75} />

@@ -1,4 +1,4 @@
-import { createContext, useContext, useLayoutEffect, useRef, type KeyboardEvent, type RefObject } from 'react'
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, type KeyboardEvent, type RefObject } from 'react'
 import { elementDirection } from '../../lib/direction'
 import {
   MENU_ITEM_SELECTOR,
@@ -57,6 +57,31 @@ export function useMenuFocus(
         if (opener.closest('[hidden], [inert], [aria-hidden="true"]')) return
         opener.focus({ preventScroll: true })
       })
+    }
+  }, [surfaceRef])
+
+  // The focused row can go while the menu stays open: a "Loading…" row
+  // replaced by the folders it waited for, a forgotten saved search. Focus
+  // that fell with it comes back to the first item instead of to nowhere.
+  useEffect(() => {
+    const surface = surfaceRef.current
+    if (!surface || typeof MutationObserver === 'undefined') return
+    let last: Element | null = surface.contains(document.activeElement) ? document.activeElement : null
+    const onFocusIn = (event: FocusEvent) => {
+      last = event.target instanceof Element ? event.target : null
+    }
+    const observer = new MutationObserver(() => {
+      if (!last || last.isConnected) return
+      last = null
+      const now = document.activeElement
+      if (now && now !== document.body && now.isConnected) return
+      focusMenuEdge(surface, 'first')
+    })
+    surface.addEventListener('focusin', onFocusIn)
+    observer.observe(surface, { childList: true, subtree: true })
+    return () => {
+      surface.removeEventListener('focusin', onFocusIn)
+      observer.disconnect()
     }
   }, [surfaceRef])
 }

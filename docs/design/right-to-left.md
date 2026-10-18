@@ -64,6 +64,8 @@ es reflecteix; un xebró de desplegar amb `transition-transform` es gira 180°.
 - `components/readingDirection.test.tsx`, i les proves de pestanyes i grups
   a `TaskLists`, `CalDavCalendars` i `Categories`: teclat i col·locació d'un
   menú.
+- `lib/menuKeyboard.test.ts`, `components/menu/Menu.test.tsx`: les fletxes dels
+  submenús i dels menús en fila en els dos sentits (#289).
 - `components/mixedDirection.test.tsx`: assumpte en alfabet llatí a la interfície
   àrab i assumpte en àrab a l'anglesa, amb la direcció resultant; canvi d'idioma
   sense recarregar.
@@ -75,6 +77,6 @@ es reflecteix; un xebró de desplegar amb `transition-transform` es gira 180°.
   - un menú contextual obert al costat de la vora dreta: sencer i sense
     etiquetes partides;
   - («#289») un submenú que s'obre amb la fletxa esquerra, a l'esquerra de la
-    seva fila, i es tanca amb la dreta;
+    seva fila, i es tanca amb la dreta, amb axe;
   - la tornada a l'anglès sense recarregar, i un assumpte en àrab a la interfície
     anglesa.

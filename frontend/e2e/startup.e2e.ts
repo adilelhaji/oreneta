@@ -2026,38 +2026,50 @@ for (const language of ['en', 'ar'] as const) {
   })
 }
 
-test('a menu button opens its menu from the keyboard and gives focus back (#289)', async ({ page }) => {
-  const errors = await prepareStartup(page, true, { navigation: true })
-  await page.goto('/')
-  const trigger = page.getByRole('button', { name: 'Thread actions', exact: true })
-  await expect(trigger).toHaveAttribute('aria-haspopup', 'menu')
-  await expect(trigger).toHaveAttribute('aria-expanded', 'false')
-  await trigger.focus()
-  await page.keyboard.press('Enter')
-  const menu = page.getByRole('menu', { name: 'Thread actions' })
-  await expect(menu).toBeVisible()
-  await expect(trigger).toHaveAttribute('aria-expanded', 'true')
-  const items = menu.getByRole('menuitem')
-  await expect(items.first()).toBeFocused()
-  await page.keyboard.press('End')
-  await expect(items.last()).toBeFocused()
-  // Keys typed in a menu stay there: no single-key shortcut fires behind it.
-  await page.keyboard.press('e')
-  await expect(menu).toBeVisible()
-  const results = await new AxeBuilder({ page }).include('[role="menu"]').withTags(AXE_TAGS).analyze()
-  expect(results.violations.map((violation) => `${violation.id}: ${violation.help}`)).toEqual([])
-  await page.keyboard.press('Escape')
-  await expect(menu).toHaveCount(0)
-  await expect(trigger).toBeFocused()
-  await expect(trigger).toHaveAttribute('aria-expanded', 'false')
-  // Tab closes it as well, and moves on from the trigger.
-  await page.keyboard.press('Enter')
-  await expect(items.first()).toBeFocused()
-  await page.keyboard.press('Tab')
-  await expect(menu).toHaveCount(0)
-  await expect(trigger).not.toBeFocused()
-  expect(errors).toEqual([])
-})
+for (const language of ['en', 'ar'] as const) {
+  test(`a menu button opens its menu from the keyboard and gives focus back, ${language} (#289)`, async ({
+    page,
+  }) => {
+    const errors = await prepareStartup(page, true, { navigation: true, language })
+    await page.goto('/')
+    const catalog = JSON.parse(
+      readFileSync(fileURLToPath(new URL(`../../locales/${language}.json`, import.meta.url)), 'utf8'),
+    ) as Record<string, string>
+    const name = catalog['threads.actions.title']
+    const trigger = page.getByRole('button', { name, exact: true })
+    await expect(trigger).toHaveAttribute('aria-haspopup', 'menu')
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    await trigger.focus()
+    await page.keyboard.press('Enter')
+    const menu = page.getByRole('menu', { name, exact: true })
+    await expect(menu).toBeVisible()
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    const items = menu.getByRole('menuitem')
+    await expect(items.first()).toBeFocused()
+    await page.keyboard.press('End')
+    await expect(items.last()).toBeFocused()
+    // Keys typed in a menu stay there: "e" (archive) does not reach the app.
+    await page.keyboard.press('e')
+    await expect(menu).toBeVisible()
+    const commands = await page.evaluate(() =>
+      ((window as any).startupProbe.requests as { command: string }[]).map((request) => request.command),
+    )
+    expect(commands).not.toContain('mail.archive')
+    const results = await new AxeBuilder({ page }).include('[role="menu"]').withTags(AXE_TAGS).analyze()
+    expect(results.violations.map((violation) => `${violation.id}: ${violation.help}`)).toEqual([])
+    await page.keyboard.press('Escape')
+    await expect(menu).toHaveCount(0)
+    await expect(trigger).toBeFocused()
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    // Tab closes it as well, and moves on from the trigger.
+    await page.keyboard.press('Enter')
+    await expect(items.first()).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(menu).toHaveCount(0)
+    await expect(trigger).not.toBeFocused()
+    expect(errors).toEqual([])
+  })
+}
 
 test('switching from Arabic back to English restores left to right without a reload (#226)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
