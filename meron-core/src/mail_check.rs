@@ -127,7 +127,12 @@ impl Schedule {
     /// Notes an account the scheduler has not seen yet in this run, so its
     /// interval counts from `now`. An account already known keeps its time.
     pub fn see(&mut self, account: &str, now: i64) {
-        self.last.entry(account.to_string()).or_insert(now);
+        let last = self.last.entry(account.to_string()).or_insert(now);
+        // A clock set back must not hold the account off until it catches up:
+        // the interval counts from now instead.
+        if *last > now {
+            *last = now;
+        }
     }
 
     /// Whether `account` is due at `now` (seconds) with `interval` minutes:

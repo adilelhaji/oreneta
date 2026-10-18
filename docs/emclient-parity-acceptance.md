@@ -94,8 +94,9 @@ nous comencen amb 15 minuts i els que ja existien es comproven només manualment
 nucli l'aplica a les carpetes seleccionables que la notificació del servidor (IDLE) no
 cobreix, sense Paperera, Correu brossa ni «Tots» de Gmail; als comptes Exchange i Graph,
 que no en tenen, també la safata d'entrada, i als POP3, només la safata d'entrada. IDLE
-continua igual sigui quin sigui l'interval. El correu nou que arriba així passa per les regles i per la resposta automàtica
-d'absència, i el de POP3 també es notifica. Vegeu
+continua igual sigui quin sigui l'interval. El correu nou de la safata d'entrada que arriba
+així passa per les regles i per la resposta automàtica d'absència; el de POP3 només es
+notifica com a correu nou. La comprovació amb un servidor no té cap prova automàtica. Vegeu
 [mail-check-interval.md](design/mail-check-interval.md). Cap fila no canvia d'estat: no hi ha
 cap fila de sincronització, S15-01 (POP3) es manté `implemented-unverified` i GRAPH-01
 `partial`, i l'evidència nativa de Windows (N4) i amb servidors reals (N5) continua pendent.

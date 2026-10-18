@@ -2329,6 +2329,45 @@ mod tests {
         }
     }
 
+    /// #270: the periodic mail check never SELECTs a hierarchy container or a
+    /// mailbox the server says no longer exists.
+    #[tokio::test]
+    async fn selectable_folders_leave_out_noselect_and_nonexistent() {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let Ok((sock, _)) = listener.accept().await else { return };
+            let (reader, mut writer) = sock.into_split();
+            let _ = writer.write_all(b"* OK IMAP4rev1 ready\r\n").await;
+            let mut lines = tokio::io::BufReader::new(reader).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                let tag = line.split(' ').next().unwrap_or_default().to_string();
+                let reply = if line.to_uppercase().contains(" LIST ") {
+                    format!(
+                        "* LIST (\\HasNoChildren) \"/\" \"INBOX\"\r\n\
+                         * LIST (\\Noselect \\HasChildren) \"/\" \"[Gmail]\"\r\n\
+                         * LIST (\\HasNoChildren \\Sent) \"/\" \"[Gmail]/Sent Mail\"\r\n\
+                         * LIST (\\NonExistent) \"/\" \"Gone\"\r\n\
+                         * LIST () \"/\" \"Clients\"\r\n\
+                         {tag} OK LIST completed\r\n"
+                    )
+                } else {
+                    format!("{tag} OK completed\r\n")
+                };
+                if writer.write_all(reply.as_bytes()).await.is_err() {
+                    return;
+                }
+            }
+        });
+        let tcp = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let mut client = async_imap::Client::new(super::Stream::Plain(tcp));
+        client.read_response().await.unwrap().unwrap();
+        let mut session = client.login("u", "p").await.map_err(|(e, _)| e).unwrap();
+        let names = super::selectable_folder_names(&mut session).await.unwrap();
+        assert_eq!(names, vec!["INBOX", "[Gmail]/Sent Mail", "Clients"]);
+    }
+
     /// Records every command line a client sends, answering OK to all of them
     /// except a RENAME whose source is `refuse`, which gets NO.
     async fn serve_recording(

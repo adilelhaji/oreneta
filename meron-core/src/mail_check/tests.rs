@@ -112,6 +112,18 @@ fn an_account_counts_its_interval_from_when_it_is_first_seen() {
 }
 
 #[test]
+fn a_clock_set_back_does_not_hold_an_account_off() {
+    let mut schedule = Schedule::default();
+    let on = vec![candidate("a", Delivery::Imap, false, Ok(5))];
+    plan_tick(&mut schedule, &on, 100_000);
+    // The clock goes back a day: the interval counts from the new time.
+    let (due, _) = plan_tick(&mut schedule, &on, 100_000 - 86_400);
+    assert!(due.is_empty());
+    let (due, _) = plan_tick(&mut schedule, &on, 100_000 - 86_400 + 5 * 60);
+    assert_eq!(due.len(), 1);
+}
+
+#[test]
 fn removed_accounts_are_forgotten() {
     let mut schedule = Schedule::default();
     schedule.start("gone", 100);

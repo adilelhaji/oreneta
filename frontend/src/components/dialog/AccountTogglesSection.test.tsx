@@ -46,6 +46,17 @@ afterEach(() => {
   delete (window as any).go
 })
 
+// The setting's hint lives in its row's info tooltip, shown on focus.
+async function hintOf(screen: ReturnType<typeof render>): Promise<string> {
+  let row: HTMLElement | null = screen.getByLabelText('Check for new mail').parentElement
+  while (row && !row.querySelector('[tabindex="0"]')) row = row.parentElement
+  const tip = row?.querySelector('[tabindex="0"]') as HTMLElement
+  await act(async () => {
+    fireEvent.focus(tip)
+  })
+  return screen.getByRole('tooltip').textContent ?? ''
+}
+
 function Harness({ id, isRSS = false }: { id: string; isRSS?: boolean }) {
   const list = accounts$.get()
   const current = list.find((a) => a.id === id)!
@@ -66,7 +77,7 @@ it('an account with no choice of its own is manual, and "manual only" is stored 
     'Every 60 min',
     'Every 120 min',
   ])
-  expect(screen.getByText(/get new mail by push as it arrives/)).toBeTruthy()
+  expect(await hintOf(screen)).toContain('get new mail by push as it arrives')
   await act(async () => {
     fireEvent.change(select, { target: { value: '30' } })
   })
@@ -108,16 +119,16 @@ it('goes back to what was stored when the change fails', async () => {
   await waitFor(() => expect(accounts$.get()[0].mail_check_interval_minutes).toBe(30))
 })
 
-it('says what the check covers for POP3 and for accounts without push', () => {
+it('says what the check covers for POP3 and for accounts without push', async () => {
   accounts$.set([
     account({ id: 'pop', auth_type: 'pop3' }),
     account({ id: 'ews', ews_url: 'https://mail.example.org/EWS/Exchange.asmx' }),
   ])
   const pop = render(<Harness id="pop" />)
-  expect(pop.getByText(/downloaded only when the account is checked/)).toBeTruthy()
+  expect(await hintOf(pop)).toContain('downloaded only when the account is checked')
   cleanup()
   const ews = render(<Harness id="ews" />)
-  expect(ews.getByText(/its folders, except Trash and Junk, are checked/)).toBeTruthy()
+  expect(await hintOf(ews)).toContain('its folders, except Trash and Junk, are checked')
 })
 
 it('is not offered for feeds or the local archive', () => {

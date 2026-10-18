@@ -735,6 +735,20 @@ describe('subscribeKanbanMailReloads', () => {
     }
   })
 
+  it('reloads every column a periodic check synced, from its single event (#270)', async () => {
+    const { calls, cleanup, handlers } = setup()
+    try {
+      kanban$.activeBoardId.set('board-b')
+      handlers.get('mail.synced')?.({ account: 'acc2', synced_folders: ['Sent', 'Archive'] } as any)
+      await Bun.sleep(275)
+      expect(calls.filter((call) => call.command === 'mail.threadList').map((call) => call.payload.folder_id)).toEqual([
+        'Archive',
+      ])
+    } finally {
+      cleanup()
+    }
+  })
+
   it('resolves the active board and folder roles when each event arrives', async () => {
     const { calls, cleanup, handlers } = setup()
     try {

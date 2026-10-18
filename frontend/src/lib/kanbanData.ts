@@ -25,6 +25,10 @@ type MailSyncEvent = {
   account?: string
   folder?: string
   message?: string
+  /** From the core's periodic mail check (#270, ADR-0071): one event for a
+   * whole account's check, naming the folders it synced. */
+  periodic?: boolean
+  synced_folders?: string[]
 }
 
 function waitForKanbanSync(
@@ -69,15 +73,20 @@ function waitForKanbanSync(
   }
   const folderAccepted = (synced: string) =>
     folderIds ? [...folderIds].some((wanted) => folderMatches(wanted, synced)) : folderMatches(folderId, synced)
+  // A periodic check's events are about the whole account, not the sync this
+  // waits for: they neither complete nor fail it.
   const matches = (detail: MailSyncEvent) =>
-    !!detail?.account && pending.has(detail.account) && (!detail.folder || folderAccepted(detail.folder))
+    !!detail?.account &&
+    !detail.periodic &&
+    pending.has(detail.account) &&
+    (!detail.folder || folderAccepted(detail.folder))
   const completeAccount = (detail: MailSyncEvent) => {
     if (!matches(detail)) return
     pending.delete(detail.account!)
     if (pending.size === 0) finish()
   }
   const failAccount = (detail: MailSyncEvent) => {
-    if (!detail?.account || !pending.has(detail.account)) return
+    if (!detail?.account || detail.periodic || !pending.has(detail.account)) return
     finish(new Error(detail.message || 'Sync failed'))
   }
 
@@ -199,7 +208,10 @@ export function kanbanColumnMatchesMailEvent(
   return !!accountFolder && folderMatches(accountFolder, folderId)
 }
 
-type EventsOn = (name: string, callback: (detail: { account?: string; folder?: string }) => void) => unknown
+type EventsOn = (
+  name: string,
+  callback: (detail: { account?: string; folder?: string; synced_folders?: string[] }) => void,
+) => unknown
 
 export function subscribeKanbanMailReloads(eventsOn: EventsOn): () => void {
   // Coalesce reloads. At startup each account is synced separately, so a board
@@ -217,12 +229,14 @@ export function subscribeKanbanMailReloads(eventsOn: EventsOn): () => void {
       void loadKanbanColumn(job.column, false, job.query)
     }
   }
-  const reload = (detail: { account?: string; folder?: string }) => {
+  const reload = (detail: { account?: string; folder?: string; synced_folders?: string[] }) => {
     const account = detail?.account
     if (!account) return
     const query = kanban$.searchQuery.peek().trim()
     const scope = kanban$.searchScope.peek()
     const folders = mail$.foldersByAccount.peek()
+    // A periodic check (#270) reports every folder it synced in one event.
+    const syncedFolders = detail?.synced_folders?.length ? detail.synced_folders : [detail?.folder]
     // Only the open board renders, and its columns are the only ones whose
     // cache anything reads; a board opened later reloads its columns on mount
     // (with a real refresh). Read the active board here rather than closing
@@ -230,7 +244,7 @@ export function subscribeKanbanMailReloads(eventsOn: EventsOn): () => void {
     for (const column of getKanbanColumns(kanban$.activeBoardId.peek())) {
       const key = kanbanColumnKey(column)
       const columnQuery = query && (scope === 'all' || scope === key) ? query : ''
-      if (kanbanColumnMatchesMailEvent(column, account, detail?.folder, folders)) {
+      if (syncedFolders.some((folder) => kanbanColumnMatchesMailEvent(column, account, folder, folders))) {
         pending.set(key, { column, query: columnQuery })
       }
     }

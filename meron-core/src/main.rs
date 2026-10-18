@@ -1084,7 +1084,8 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         };
         // A row from before #270 has no choice of its own: manual (ADR-0071, 1B).
         assert_eq!(listed(&engine),json!(meron_core::mail_check::MANUAL));
-        for (asked,stored) in [(0,0),(1,5),(30,30),(100_000,1440)] {
+        // Past u32 is bounded too, never wrapped round to "manual".
+        for (asked,stored) in [(0u64,0u64),(1,5),(30,30),(100_000,1440),(4_294_967_296,1440)] {
             let answer=dispatch(&engine,&request("account.setMailCheckInterval",json!({"account":account,"minutes":asked})),&writer).await.unwrap();
             assert_eq!(answer["minutes"],stored);
             assert_eq!(listed(&engine),json!(stored));
@@ -1550,9 +1551,7 @@ fn claim_message_sync(engine: &Arc<Engine>, account: &str, folder: &str) -> Opti
     engine.syncing.lock().unwrap().insert(key.clone()).then_some(key)
 }
 
-/// The sync [`spawn_message_sync`] runs once `key` is claimed. The periodic
-/// check (#270) awaits it folder by folder, so one account's folders do not
-/// all open a connection at once.
+/// The sync [`spawn_message_sync`] runs once `key` is claimed.
 async fn run_message_sync(engine: Arc<Engine>, out: Writer, account: String, folder: String, limit: u32, key: String) {
     {
         let uid_next_before = if folder.eq_ignore_ascii_case("INBOX") {
@@ -8996,7 +8995,9 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // minutes. The scheduler reads it on its next tick; push is untouched.
         "account.setMailCheckInterval" => {
             let id = req_str(p, "account").or_else(|_| req_str(p, "id"))?;
-            let minutes = meron_core::mail_check::normalize(u64::from(req_u32(p, "minutes")?));
+            // Read whole: a value past u32 must be bounded, not wrapped to "manual".
+            let minutes = p.get("minutes").and_then(Value::as_u64).ok_or_else(|| anyhow::anyhow!("minutes required"))?;
+            let minutes = meron_core::mail_check::normalize(minutes);
             let db = engine.db.lock().unwrap();
             anyhow::ensure!(
                 store::account_engine(&db, &id)?.as_deref() == Some("mail"),
@@ -9716,7 +9717,7 @@ fn spawn_mail_check(engine: Arc<Engine>, out: Writer) {
                         emit(
                             &out,
                             "mail.syncError",
-                            json!({ "account": account, "message": "periodic check: timed out" }),
+                            json!({ "account": account, "message": "periodic check: timed out", "periodic": true }),
                         )
                         .await;
                     }
@@ -9799,6 +9800,11 @@ async fn pop3_check(engine: &Arc<Engine>, account: &str) -> anyhow::Result<(usiz
         .map(|header| header.uid)
         .collect();
     let synced = sync_messages(engine, account, inbox, SYNC_LIMIT).await?;
+    // An Inbox with nothing in it yet is a first download: the backlog it
+    // brings is not new mail to announce.
+    if before.is_empty() {
+        return Ok((synced.count, Vec::new()));
+    }
     let arrived = synced
         .messages
         .into_iter()
@@ -9821,7 +9827,7 @@ async fn check_account_mail(engine: &Arc<Engine>, out: &Writer, account: &str, d
             emit(
                 out,
                 "mail.syncError",
-                json!({ "account": account, "message": format!("periodic check: folder list: {err:#}") }),
+                json!({ "account": account, "message": format!("periodic check: folder list: {err:#}"), "periodic": true }),
             )
             .await;
             return;
@@ -9830,6 +9836,7 @@ async fn check_account_mail(engine: &Arc<Engine>, out: &Writer, account: &str, d
     let mut outcome = Outcome::default();
     let mut arrived: Vec<imap::MessageHeader> = Vec::new();
     let mut checked = 0;
+    let mut synced_folders: Vec<String> = Vec::new();
     for folder in &folders {
         if engine.is_paused(account) || !engine.accounts.lock().await.contains_key(account) {
             break;
@@ -9851,19 +9858,33 @@ async fn check_account_mail(engine: &Arc<Engine>, out: &Writer, account: &str, d
         } else {
             sync_messages(engine, account, folder, SYNC_LIMIT).await.map(|synced| synced.count)
         };
+        if result.is_ok() {
+            synced_folders.push(folder.clone());
+        }
         outcome.record(folder, result.map_err(|err| format!("{err:#}")));
     }
+    // Every event of a check says it is periodic: a sync the board waits for
+    // is not completed, or failed, by it.
     if let Some(message) = outcome.error_message(checked) {
-        emit(out, "mail.syncError", json!({ "account": account, "message": message })).await;
+        emit(out, "mail.syncError", json!({ "account": account, "message": message, "periodic": true })).await;
     }
     if !arrived.is_empty()
-        && let Some(detail) = new_messages_detail(engine, account, &arrived).await
+        && let Some(mut detail) = new_messages_detail(engine, account, &arrived).await
     {
+        if let Some(fields) = detail.as_object_mut() {
+            fields.insert("periodic".to_string(), json!(true));
+            fields.insert("synced_folders".to_string(), json!(synced_folders));
+        }
         emit(out, "mail.newMessages", detail).await;
         return;
     }
-    if checked > outcome.failed {
-        emit(out, "mail.synced", json!({ "account": account, "synced": outcome.synced })).await;
+    if !synced_folders.is_empty() {
+        emit(
+            out,
+            "mail.synced",
+            json!({ "account": account, "synced": outcome.synced, "periodic": true, "synced_folders": synced_folders }),
+        )
+        .await;
     }
 }
 
