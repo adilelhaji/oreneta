@@ -74,6 +74,8 @@ import { ThreadTable, appliedListSort } from './ThreadTable'
 import { MailboxColumns } from './MailboxColumns'
 import { BulkActionBar } from './BulkActionBar'
 import { ThreadListResizer } from '../resizer/PaneResizers'
+import { useElementAtLeast } from '../resizer/useElementWidth'
+import { AUTO_TABLE_MIN_WIDTH, resolveListView } from './listView'
 import { accountGroups$ } from '../../states/accountGroups'
 import { endAlignedX } from '../../lib/direction'
 
@@ -99,6 +101,13 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
   const filteredThreads = useValue(getFilteredThreads)
   const filters = useValue(ui$.filters)
   const listView = useValue(settings$.listView)
+  const storedWidth = useValue(settings$.threadListWidth)
+  // The automatic view follows the width the list is drawn at, not the one
+  // remembered: a narrow window squeezes a wide list below it (#283). Only
+  // measured for that view, and only crossing the threshold re-renders.
+  const drawnWide = useElementAtLeast(listRef, AUTO_TABLE_MIN_WIDTH, listView === 'auto')
+  const drawnView = resolveListView(listView, drawnWide, width ?? storedWidth)
+  const narrowAuto = listView === 'auto' && drawnView === 'cards'
   const listSort = useValue(settings$.listSort)
   const threadsPagination = useValue(mail$.threadsPagination)
   const threadsCursor = useValue(mail$.threadsCursor)
@@ -348,6 +357,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
     <section
       ref={listRef}
       data-thread-list
+      data-list-view={drawnView}
       data-region="content"
       // The remembered width is a preference, not a claim on the window: on a
       // narrow one the list gives way (down to 280px) before the reader does.
@@ -549,7 +559,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
       <SearchUnderstoodBar />
 
       <ScheduledSendsBar />
-      {listView === 'table' && <MailboxColumns accountId={selectedAccount} folderId={selectedFolder} />}
+      {drawnView === 'table' && <MailboxColumns accountId={selectedAccount} folderId={selectedFolder} />}
 
       {/* Thread List Items */}
       <div
@@ -576,7 +586,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
           ) : (
             <EmptyState title={emptyStateTitle} text={emptyStateText} />
           )
-        ) : listView === 'table' ? (
+        ) : drawnView === 'table' ? (
           // The table is its own row renderer, so it takes the selection and
           // the context menu the cards already answer to rather than growing
           // its own copies of them.
@@ -615,7 +625,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
                     other ordering these headings would repeat down the page
                     and mean nothing. */}
                 {groupByDates && (
-                  <div className="sticky top-0 z-10 border-b border-border bg-chats/95 px-3 py-1 text-2xs font-bold uppercase tracking-wide text-secondary">
+                  <div data-date-group className="sticky top-0 z-10 border-b border-border bg-chats/95 px-3 py-1 text-2xs font-bold uppercase tracking-wide text-secondary">
                     {t(`dateGroup.${group.group}`)}
                   </div>
                 )}
@@ -636,6 +646,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
                       bulkSelected={!!bulkSelection[bulkItem.key]}
                       onQuickAction={(action) => runQuickAction(action, thread)}
                       onToggleSelect={desktopBulk ? () => toggleBulkSelection(bulkItem) : undefined}
+                      narrowAuto={narrowAuto}
                       onSelect={(event) => {
                         if (desktopBulk && (event.metaKey || event.ctrlKey)) {
                           toggleBulkSelection(bulkItem)

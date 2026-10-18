@@ -304,7 +304,7 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
             label={current.filename || current.caption || t('chat.actions.saveImage')}
             autoFocus
             onClose={() => setMenu(null)}
-            className="fixed z-[61] min-w-[160px] rounded-control border border-border bg-header p-1 shadow-overlay"
+            className="fixed z-[61] min-w-[160px] rounded-control border border-border bg-chats p-1 shadow-overlay"
             // Opens from the pointer towards the end of the line.
             style={
               documentDirection() === 'rtl'

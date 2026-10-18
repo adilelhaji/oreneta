@@ -26,10 +26,13 @@ export const FOLDER_COLORS: readonly FolderColor[] = [
   { id: 'gray', labelKey: 'folderColors.gray', label: 'Gray', light: '#5f6b7a', dark: '#b0bccb' },
 ]
 
-/** The navigation surfaces a dot is drawn on, per theme (index.css tokens). */
+/**
+ * The navigation surfaces a dot is drawn on, per theme (index.css tokens): the
+ * folder pane's frame tone, hover and selection (#287).
+ */
 export const FOLDER_COLOR_SURFACES = {
-  light: ['#fbfcfe', '#edf2fa', '#e7eefb'],
-  dark: ['#152137', '#22314c', '#253a5c'],
+  light: ['#e3eaf4', '#ebf0f8', '#d6e3fb'],
+  dark: ['#0c1526', '#22314c', '#243a5e'],
 } as const
 
 export function isFolderColorId(value: unknown): value is FolderColorId {

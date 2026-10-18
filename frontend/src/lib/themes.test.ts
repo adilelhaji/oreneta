@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { contrastRatio, isValidColor, luminance } from './color'
+import { composite, contrastRatio, isValidColor, luminance } from './color'
 import {
   BUILTIN_THEMES,
   DEFAULT_DARK_ID,
   DEFAULT_LIGHT_ID,
   THEME_TOKEN_KEYS,
   TOKEN_CSS_VAR,
+  UI_CONTRAST,
   cssVarStyle,
   builtinTheme,
   contrastShortfalls,
@@ -15,7 +16,9 @@ import {
   isCustomThemeId,
   newCustomThemeId,
   sanitizeCustomThemes,
+  themeSurfaces,
   type CustomThemeInput,
+  type ThemeTokens,
 } from './themes'
 
 const SAMPLE_INPUT: CustomThemeInput = {
@@ -25,6 +28,43 @@ const SAMPLE_INPUT: CustomThemeInput = {
   sideNav: '#0f172a',
   accent: '#4f46e5',
   text: '#0f172a',
+}
+
+const worst = (fg: string, backgrounds: string[]) => Math.min(...backgrounds.map((bg) => contrastRatio(fg, bg) ?? 0))
+
+/**
+ * Accent drawn as text (the selected folder, links) and as the focus ring is
+ * below its floor in these palettes. The fix changes the accent colour of a
+ * palette people already chose, so it waits for the owner's decision (#287);
+ * the test below fails as soon as a listed theme passes or an unlisted one fails.
+ */
+const ACCENT_BELOW_AA: Record<string, { text: boolean; ring: boolean }> = {
+  'indigo-dark': { text: true, ring: false },
+  light: { text: true, ring: false },
+  mist: { text: true, ring: true },
+  paper: { text: true, ring: false },
+  dawn: { text: true, ring: true },
+  honey: { text: true, ring: true },
+  lilac: { text: true, ring: false },
+  graphite: { text: true, ring: false },
+}
+
+/** WCAG AA for everything a palette paints, accent excepted (asserted apart). */
+function expectReadable(t: ThemeTokens) {
+  const surfaces = themeSurfaces(t)
+  expect(surfaces.length).toBeGreaterThan(0)
+  expect(worst(t.textPrimary, surfaces)).toBeGreaterThanOrEqual(4.5)
+  expect(worst(t.textSecondary, surfaces)).toBeGreaterThanOrEqual(4.5)
+  expect(worst(t.borderInput, surfaces)).toBeGreaterThanOrEqual(UI_CONTRAST)
+  expect(contrastRatio(t.accentText, t.accent)!).toBeGreaterThanOrEqual(4.5)
+  expect(contrastRatio(t.accentText, composite(t.accentHover, t.bgChats)!)!).toBeGreaterThanOrEqual(4.5)
+  for (const [fg, soft] of [
+    [t.success, t.successSoft],
+    [t.warning, t.warningSoft],
+    [t.danger, t.dangerSoft],
+    [t.info, t.infoSoft],
+  ])
+    expect(worst(fg, [soft, t.bgApp, t.bgChats, t.bgChat])).toBeGreaterThanOrEqual(4.5)
 }
 
 describe('BUILTIN_THEMES', () => {
@@ -54,8 +94,67 @@ describe('BUILTIN_THEMES', () => {
   })
 })
 
+describe('frame and content tones (#287)', () => {
+  it('meets WCAG AA in every built-in theme on every surface it paints', () => {
+    for (const theme of BUILTIN_THEMES) expectReadable(theme.tokens)
+  })
+
+  it('keeps accent text and the focus ring at their floors, except where the owner must decide', () => {
+    for (const theme of BUILTIN_THEMES) {
+      const accent = worst(theme.tokens.accent, themeSurfaces(theme.tokens))
+      const below = ACCENT_BELOW_AA[theme.id] ?? { text: false, ring: false }
+      expect({ id: theme.id, text: accent < 4.5, ring: accent < UI_CONTRAST }).toEqual({ id: theme.id, ...below })
+    }
+    for (const id of [DEFAULT_LIGHT_ID, DEFAULT_DARK_ID]) expect(ACCENT_BELOW_AA[id]).toBeUndefined()
+  })
+
+  it('paints headers in the frame tone and the lists in a different content tone', () => {
+    for (const theme of BUILTIN_THEMES) {
+      expect({ id: theme.id, header: theme.tokens.bgHeader }).toEqual({ id: theme.id, header: theme.tokens.bgApp })
+      expect(theme.tokens.bgApp).not.toBe(theme.tokens.bgChats)
+    }
+  })
+
+  it('takes the approved Oreneta Light and Dark surfaces, field outline and rail', () => {
+    const light = builtinTheme(DEFAULT_LIGHT_ID)!.tokens
+    const dark = builtinTheme(DEFAULT_DARK_ID)!.tokens
+    expect([light.bgApp, light.bgHeader, light.bgChats, light.bgChat, light.bgRaised, light.bgActive]).toEqual([
+      '#e3eaf4',
+      '#e3eaf4',
+      '#fbfcfe',
+      '#fdfdff',
+      '#ffffff',
+      '#d6e3fb',
+    ])
+    expect([light.border, light.borderInput, light.bgSideNav]).toEqual(['#d3dbe8', '#6b7a93', '#15316e'])
+    expect([dark.bgApp, dark.bgHeader, dark.bgChats, dark.bgChat, dark.bgRaised, dark.bgActive]).toEqual([
+      '#0c1526',
+      '#0c1526',
+      '#142036',
+      '#111c30',
+      '#1b2a42',
+      '#243a5e',
+    ])
+    expect([dark.border, dark.borderInput, dark.bgSideNav]).toEqual(['#30415b', '#7d91b4', '#08111f'])
+  })
+
+  it('derives the frame tone and a readable field outline for custom themes', () => {
+    const palettes: CustomThemeInput[] = [defaultCustomInput('light'), defaultCustomInput('dark'), SAMPLE_INPUT]
+    for (const input of palettes) {
+      const t = deriveThemeTokens(input)
+      expect(t.bgHeader).toBe(input.bgApp)
+      expect(t.bgChats).toBe(input.surface)
+      // The reader is content too: never the frame tone.
+      expect(t.bgChat).not.toBe(input.bgApp)
+      expectReadable(t)
+      // Quieter than the text: an outline, not a second text colour.
+      expect(t.borderInput).not.toBe(t.textPrimary)
+    }
+  })
+})
+
 describe('cobalt defaults', () => {
-  it('retains existing palette IDs and colors alongside distinct new defaults', () => {
+  it('retains existing palette IDs and accents alongside distinct new defaults', () => {
     expect(DEFAULT_LIGHT_ID).toBe('oreneta-light')
     expect(DEFAULT_DARK_ID).toBe('oreneta-dark')
     expect(builtinTheme('indigo')?.tokens.accent).toBe('#4f46e5')
@@ -123,6 +222,7 @@ describe('cobalt defaults', () => {
       'info',
       'infoSoft',
       'accentText',
+      'borderInput',
     ])
       delete tokens[key]
     const saved = { id: 'custom-legacy', name: 'Old choice', appearance: 'light', source: SAMPLE_INPUT, tokens }
@@ -131,7 +231,44 @@ describe('cobalt defaults', () => {
       expect(restored.tokens[key as keyof typeof restored.tokens]).toBe(value)
     expect(restored.tokens.warning).toBeTruthy()
     expect(restored.tokens.accentText).toBe('#ffffff')
+    // The outline is derived for the saved surfaces, the saved #123456 frame included.
+    expect(worst(restored.tokens.borderInput, themeSurfaces(restored.tokens))).toBeGreaterThanOrEqual(UI_CONTRAST)
     expect(sanitizeCustomThemes([restored])![0]).toEqual(restored)
+  })
+
+  it('keeps a saved field outline and falls back to the text where no surface resolves', () => {
+    const restore = (tokens: Record<string, string>) =>
+      sanitizeCustomThemes([{ id: 'custom-saved', name: 'Saved', source: SAMPLE_INPUT, tokens }])![0].tokens
+    expect(restore({ ...deriveThemeTokens(SAMPLE_INPUT), borderInput: '#abcdef' }).borderInput).toBe('#abcdef')
+    // Derived from the saved divider and text, not from the editor source.
+    const tinted: Record<string, string> = {
+      ...deriveThemeTokens(SAMPLE_INPUT),
+      border: '#f0d0d0',
+      textPrimary: '#3a0000',
+    }
+    delete tinted.borderInput
+    const fromTint = restore(tinted)
+    expect(fromTint.borderInput).not.toBe(deriveThemeTokens(SAMPLE_INPUT).borderInput)
+    expect(fromTint.borderInput).not.toBe('#3a0000')
+    expect(worst(fromTint.borderInput, themeSurfaces(fromTint))).toBeGreaterThanOrEqual(UI_CONTRAST)
+    const glass: Record<string, string> = { ...deriveThemeTokens(SAMPLE_INPUT) }
+    for (const key of ['bgApp', 'bgHeader', 'bgChats', 'bgChat', 'bgRaised', 'bgHover', 'bgActive'])
+      glass[key] = 'rgba(255, 255, 255, 0.5)'
+    delete glass.borderInput
+    const fromGlass = restore(glass)
+    expect(fromGlass.bgApp).toBe('rgba(255, 255, 255, 0.5)')
+    expect(fromGlass.borderInput).toBe(fromGlass.textPrimary)
+    // Nothing up to the text reaches 3:1: the outline is the text, and the
+    // editor names the text itself as unreadable.
+    const faint: Record<string, string> = {
+      ...deriveThemeTokens(SAMPLE_INPUT),
+      border: '#f4f4f4',
+      textPrimary: '#dddddd',
+    }
+    delete faint.borderInput
+    const fromFaint = restore(faint)
+    expect(fromFaint.borderInput).toBe('#dddddd')
+    expect(contrastShortfalls(fromFaint).map((s) => s.pair)).toContain('text')
   })
 
   it('restores light legacy custom accents with readable text without changing saved colors', () => {
@@ -194,6 +331,14 @@ describe('deriveThemeTokens', () => {
       // Still secondary: never the primary colour unless nothing else reads.
       expect(t.textSecondary).not.toBe(t.textPrimary)
     }
+  })
+
+  it('names an accent that reads on the lists but not on the frame tone', () => {
+    // The cobalt dark accent reads on the dark list but not on a lighter frame.
+    const t = { ...deriveThemeTokens(defaultCustomInput('dark')), bgApp: '#3a4a6a', bgHeader: '#3a4a6a' }
+    expect(contrastRatio(t.accent, t.bgChats)!).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(t.accent, t.bgApp)!).toBeLessThan(4.5)
+    expect(contrastShortfalls(t).map((s) => s.pair)).toContain('accent')
   })
 
   it('names what the chosen colours themselves leave unreadable', () => {

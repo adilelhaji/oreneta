@@ -15,7 +15,10 @@ Meron does, plus:
 - **Native Exchange (EWS)**: mail against on-premise Exchange servers with no
   IMAP bridge in between — folders, incremental sync, send, flags, move.
 - **A full calendar**: agenda, day, week and month views; events created,
-  edited and deleted on the server; recurring series expanded server-side.
+  edited and deleted on the server; recurring series expanded server-side;
+  in the day and week views, events dragged to move or resize them, dropped
+  on the mini calendar, or created by dragging a range, from a slot's menu or
+  from the keyboard (Exchange events not yet).
 - **Calendars from anywhere**: an account's calendars arrive with the account
   (Exchange, Google Calendar), alongside local calendars and read-only
   subscriptions to published `.ics` addresses.

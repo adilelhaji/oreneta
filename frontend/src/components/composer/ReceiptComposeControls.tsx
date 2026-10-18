@@ -26,7 +26,7 @@ export function ReceiptComposeControls({
   const deliveryLabel = t('receipts.requestDelivery', { defaultValue: 'Request delivery receipt' })
   const toggle = (on: boolean) =>
     `flex h-8 w-8 items-center justify-center rounded-control transition-colors cursor-pointer ${
-      on ? 'bg-accent/15 text-accent' : 'text-secondary hover:bg-hover'
+      on ? 'bg-active text-accent' : 'text-secondary hover:bg-hover'
     }`
 
   return (

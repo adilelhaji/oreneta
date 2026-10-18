@@ -43,7 +43,7 @@ fosc (`#7ea6ff`) sobre el fons actiu (`#293f63`) donava 4,42:1 a la carpeta
 i al compte seleccionats. El fons actiu fosc passa a `#253a5c` (4,78:1 amb
 l'accent, 9,7:1 amb el text, continua distingible de la superfície) i
 `themes.test.ts` exigeix des d'ara accent sobre fons actiu ≥ 4,5:1 en tots dos
-temes per defecte.
+temes per defecte. Des de #287 el fons actiu fosc és `#243a5e` (4,77:1 amb l'accent).
 
 El que aquesta auditoria no cobreix continua a #37: ordre de focus real, anuncis de
 lector de pantalla, comprovació nativa a Windows, pantalles secundàries i els

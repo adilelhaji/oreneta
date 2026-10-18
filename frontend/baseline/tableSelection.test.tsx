@@ -4,12 +4,12 @@ import { createFixture } from './fixtures'
 import { accounts$ } from '../src/states/accounts'
 import { compose$ } from '../src/states/compose'
 import { mail$, threadListViewKey } from '../src/states/mail'
-import { settings$ } from '../src/states/settings'
+import { settings$, type ListView } from '../src/states/settings'
 import { clearBulkSelection, selectedBulkItems, ui$ } from '../src/states/ui'
 import { ThreadList } from '../src/components/threads/ThreadList'
 
 let previousGo: unknown
-let previousView: 'cards' | 'table'
+let previousView: ListView
 const fixture = createFixture()
 
 beforeEach(() => {

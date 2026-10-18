@@ -44,7 +44,7 @@ surt), `index.css`.
 | Fletxes dels menús: obrir i tancar submenús, menús en fila | `menuKeyAction` (`lib/menuKeyboard.ts`, [menús](menus.md)) |
 | Menú ràpid, finestra de gramàtica | `menuLeft` |
 | Missatges HTML al seu marc | `applyContentDirection` (`dir="auto"` a cada bloc de text si el missatge no en declara cap) |
-| Correu que surt | `markRightToLeftBlocks` des d'`inlineRichStyles` (`dir="rtl"` i citació amb la barra a la dreta) |
+| Correu que surt | `markRightToLeftBlocks` des d'`inlineRichStyles` (`dir="rtl"`, citació amb la barra a la dreta i sagnat amb `margin-right`, ADR-0067) |
 
 F6 i Maj+F6 entre les regions de la finestra no depenen de la direcció: segueixen
 l'ordre del marc, que és el mateix en dreta a esquerra (ADR-0068 §6,

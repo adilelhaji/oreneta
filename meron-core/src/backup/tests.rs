@@ -692,6 +692,33 @@ fn unknown_fields_from_a_newer_build_survive_a_round_trip() {
     );
 }
 
+/// #270: a mail account's periodic check interval, "manual only" included,
+/// comes back from a backup as it was.
+#[test]
+fn the_mail_check_interval_survives_a_round_trip() {
+    for minutes in [0u64, 30] {
+        let source = test_conn();
+        insert_mail_account(
+            &source,
+            "ada@example.com",
+            json!({ "host": "imap.example.com" }),
+            json!({ "mail_check_interval_minutes": minutes }),
+        );
+        let data = parse(
+            &export(&source, false, None, Host::default(), &no_secrets).unwrap(),
+            None,
+        )
+        .unwrap();
+        let target = test_conn();
+        let sink = SecretSink::default();
+        apply(&target, &data, &sink.saver()).unwrap();
+        assert_eq!(
+            crate::store::mail_check_interval(&target, "ada@example.com").unwrap(),
+            minutes
+        );
+    }
+}
+
 // ---- Pre-release `platform` map ---------------------------------------------
 
 /// A development build carried mobile preferences in their own `platform` map
