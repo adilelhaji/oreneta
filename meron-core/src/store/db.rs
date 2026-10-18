@@ -331,10 +331,52 @@ fn open_inner(path: &Path, key: Option<&str>) -> Result<Connection> {
         )
     })
     .context("set connection pragmas")?;
+    // Nothing to do on most opens: no write lock is taken.
+    if first_open_done(&conn) {
+        return Ok(conn);
+    }
+    // Opens of this file in this process take turns, however long the step
+    // takes, instead of giving up at the busy timeout while another one
+    // migrates (#227): the thread blocks until its turn. The first does the
+    // work; the others find it done. Another process still waits up to the
+    // busy timeout.
+    let turn = first_open_turn(path);
+    let _turn = turn.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if first_open_done(&conn) {
+        return Ok(conn);
+    }
     with_anyhow_busy_retry(|| run_migrations(&conn)).context("run migrations")?;
     with_anyhow_busy_retry(|| invalidate_body_cache_if_needed(&conn))
         .context("invalidate body cache if needed")?;
     Ok(conn)
+}
+
+/// Whether the schema and the body cache are already current: a read, so it
+/// takes no write lock. Anything that cannot be read (a new file, a busy or
+/// damaged store) means not done, and the full path then reports it.
+fn first_open_done(conn: &Connection) -> bool {
+    let version = conn.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0));
+    matches!(version, Ok(SCHEMA_VERSION))
+        && matches!(meta_get(conn, "body_cache_version"), Ok(Some(v)) if v == BODY_CACHE_VERSION)
+}
+
+/// The turn the first-open work of one database file takes in this process.
+/// An in-memory database is its own and needs none.
+fn first_open_turn(path: &Path) -> std::sync::Arc<std::sync::Mutex<()>> {
+    static TURNS: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<PathBuf, std::sync::Arc<std::sync::Mutex<()>>>>,
+    > = std::sync::OnceLock::new();
+    if path == Path::new(":memory:") {
+        return std::sync::Arc::default();
+    }
+    let key = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    TURNS
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .entry(key)
+        .or_default()
+        .clone()
 }
 
 /// Opens `path` and applies the SQLCipher `key` (if any). When the key is set
@@ -532,13 +574,17 @@ pub const SCHEMA_VERSION: i64 = 65;
 ///
 /// Pending steps run inside one IMMEDIATE transaction that also bumps
 /// `user_version`, so concurrent first-open callers serialize before reading
-/// the version. A crash mid-migration rolls back cleanly and the step re-runs
+/// the version. In one process they also take turns before it and skip it once
+/// done (`open_inner`), so a long migration is waited for; another process
+/// waits up to the busy timeout. A crash mid-migration rolls back cleanly and the step re-runs
 /// next launch. Append-only: to evolve the schema, add a new `if version < N`
 /// block; never edit or reorder a shipped one. (Cache-only invalidation lives in
 /// `invalidate_body_cache_if_needed`, kept off this counter so a render change
 /// doesn't look like a schema change.)
 pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     let tx = Transaction::new_unchecked(conn, TransactionBehavior::Immediate)?;
+    #[cfg(test)]
+    slow_migration::pause(&tx);
     let version: i64 = tx.query_row("PRAGMA user_version", [], |r| r.get(0))?;
 
     if version < 1 {
@@ -818,6 +864,41 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
 
     tx.commit()?;
     Ok(())
+}
+
+/// Test-only: makes the next migration of one database file hold its write
+/// lock for a while, as a long migration on a large store does (#227).
+#[cfg(test)]
+pub(super) mod slow_migration {
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+    use std::time::Duration;
+
+    static NEXT: Mutex<Option<(PathBuf, Duration)>> = Mutex::new(None);
+
+    /// `path`'s folder must exist; the file may not yet.
+    pub fn next_for(path: &Path, pause: Duration) {
+        let folder = std::fs::canonicalize(path.parent().unwrap()).unwrap();
+        *NEXT.lock().unwrap() = Some((folder.join(path.file_name().unwrap()), pause));
+    }
+
+    pub(super) fn pause(conn: &rusqlite::Connection) {
+        let mut next = NEXT.lock().unwrap();
+        let Some((path, pause)) = next.as_ref() else { return };
+        let this = conn.path().and_then(|p| std::fs::canonicalize(p).ok());
+        if this.as_deref() != Some(path.as_path()) {
+            return;
+        }
+        let pause = *pause;
+        *next = None;
+        drop(next);
+        std::thread::sleep(pause);
+    }
+
+    /// Whether the pause asked for has happened.
+    pub fn spent() -> bool {
+        NEXT.lock().unwrap().is_none()
+    }
 }
 
 /// A database as v5 left it, for tests that need to migrate an *existing*
