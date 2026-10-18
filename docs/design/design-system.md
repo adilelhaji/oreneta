@@ -40,6 +40,12 @@ queda per a les línies entre zones. Les primitives `TextInput`, `SelectInput` i
 panell de carpetes ja la fan servir. La resta de camps que encara porten
 `border-border` es migren a mesura que es toquen les pantalles.
 
+Els estats actius que pintaven un tint translúcid de l'accent sobre el marc (la nota
+seleccionada, els botons actius del redactor i de la vista del calendari) i els exemples
+de Markdown de la barra del redactor passen a la selecció (`bg-active`) i a la
+superfície elevada: sobre el marc més profund, el tint baixava el text per sota de
+4,5:1, i la selecció ja té el contrast comprovat.
+
 Els menús flotants que es pintaven amb `bg-header` passen a `bg-chats`, com la majoria de
 capes flotants, perquè no prenguin el to del marc. No fan servir `bg-raised` perquè en
 alguns temes foscos aquest token és translúcid.

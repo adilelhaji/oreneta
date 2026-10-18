@@ -106,7 +106,7 @@ export function CalendarView() {
               title={t('calendar.workWeekHint', { defaultValue: 'Show only the working days of the week' })}
               className={`inline-flex min-h-8 items-center gap-1.5 rounded-control-sm px-2.5 py-1 text-caption font-medium transition-colors cursor-pointer ${
                 calendarPrefs.workWeekOnly
-                  ? 'bg-accent/10 text-accent ring-1 ring-accent/30'
+                  ? 'bg-active text-accent ring-1 ring-accent/30'
                   : 'text-secondary hover:bg-hover hover:text-primary'
               }`}
             >
