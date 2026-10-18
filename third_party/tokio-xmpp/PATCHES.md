@@ -7,8 +7,10 @@ This is tokio-xmpp 6.0.0 as published on crates.io, with the changes below.
   checksum `meron-core/Cargo.lock` held before the patch). Upstream VCS:
   xmpp-rs `1710a6f99edd18cd926a2dc5d14ec532a2a6ad72`, path `tokio-xmpp`
   (`.cargo_vcs_info.json`).
-- **Licence:** MPL-2.0 (<https://mozilla.org/MPL/2.0/>). The source stays in
-  this folder; each modified place is marked "Patched for Oreneta".
+- **Licence:** MPL-2.0 (<https://mozilla.org/MPL/2.0/>). All files in this
+  folder, Oreneta's changes included, are under MPL-2.0, not the
+  repository's AGPL-3.0. The source stays in this folder; each modified
+  place is marked "Patched for Oreneta".
 - **Used by:** `meron-core`, through `[patch.crates-io]` in
   `meron-core/Cargo.toml`.
 
@@ -30,6 +32,11 @@ received nothing more while staying connected.
 - `receiver_polled_during_a_send_is_woken_again` fails with the upstream code
   ("the receiver was never woken") and passes with the patch.
 - `a_receiver_waiting_for_the_lock_can_be_dropped_or_reunited`.
+
+Still true after the patch, as upstream: while a sender waits for room in a
+full outgoing queue it holds the stream lock, so the receiver waits too (it
+is woken once the send ends, no longer lost). `meron-core` bounds that wait
+for upload questions (#220, `ask_by` in `meron-core/src/chat/xmpp.rs`).
 
 CI runs these tests (`.github/workflows/test.yml`, job `rust`).
 

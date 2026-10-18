@@ -124,10 +124,14 @@ no està implementada (#265).
     rebutjats), sense escriure res;
   - una pregunta sense resposta acaba en el seu termini i compta com a error,
     no com un «no» del servidor; el termini compta des d'abans de posar-la a
-    la cua de sortida, i una que no hi cap a temps no s'envia; una cerca
-    sense servei acaba les pujades que esperen amb `noService` o, si una
-    pregunta s'ha quedat sense resposta, amb `disconnected`; un lloc sense
-    resposta, amb `disconnected` (#220).
+    la cua de sortida, les d'una mateixa tanda el comparteixen, i una que no
+    hi cap a temps no s'envia; una cerca sense servei acaba amb `noService`
+    les pujades que esperen o, si una pregunta s'ha quedat sense resposta,
+    amb `disconnected`; un lloc sense resposta, amb `disconnected` (#220);
+  - limitació acceptada (#220): les altres preguntes i els enviaments
+    (arxiu, llista de contactes, disco#info del servidor, presència,
+    missatges) no tenen termini; amb la cua de sortida plena, la sessió
+    espera que s'hi alliberi espai.
 - **tokio-xmpp amb pedaç (#220):** un receptor consultat mentre s'envia alguna
   cosa es torna a despertar (`third_party/tokio-xmpp`, a la CI); sense el
   pedaç, la prova falla.
@@ -238,7 +242,7 @@ no està implementada (#265).
   dins de la llista de missatges; corregit. Amb l'ADR-0044, el nucli acceptava
   còpies de carbons i resultats d'arxiu de qualsevol remitent; ara només del
   servidor propi (o d'una sala on s'és, per al seu arxiu). Amb #220, les proves
-  contra Prosody fallaven de tant en tant (13 de 300 rondes): tokio-xmpp 6.0.0
+  contra Prosody fallaven de tant en tant (13 de 300 execucions): tokio-xmpp 6.0.0
   perdia l'avís del seu receptor si se'l consultava mentre s'enviava alguna
   cosa, i la sessió deixava de rebre sense desconnectar-se. Es fa servir una
   còpia amb pedaç (`third_party/tokio-xmpp`) i les preguntes d'una pujada tenen

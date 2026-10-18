@@ -501,7 +501,7 @@ impl Default for Options {
 }
 
 /// What an answer to one of our questions (iq) is about.
-enum Asked {
+pub(super) enum Asked {
     Mam(Option<String>),
     /// What the account's own server offers (invisibility).
     Features,
@@ -513,35 +513,66 @@ enum Asked {
     Ignored,
 }
 
-type Answer = (Asked, Result<tokio_xmpp::IqResponse, tokio_xmpp::IqFailure>);
-type Pending = FuturesUnordered<Pin<Box<dyn Future<Output = Answer> + Send>>>;
+pub(super) type Answer = (Asked, Result<tokio_xmpp::IqResponse, tokio_xmpp::IqFailure>);
+pub(super) type Pending = FuturesUnordered<Pin<Box<dyn Future<Output = Answer> + Send>>>;
 
 fn ask(pending: &Pending, what: Asked, token: tokio_xmpp::IqResponseToken) {
     pending.push(Box::pin(async move { (what, token.await) }));
 }
 
-/// How long a question about a file (the service, its place) waits for an
-/// answer (#220). `tokio-xmpp` never gives up on one by itself.
+/// How long a question about a file (the service, its place) has to get
+/// into the outgoing queue and be answered (#220). `tokio-xmpp` never gives
+/// up on one by itself, and while its queue is full a send waits for room.
 const UPLOAD_ANSWER_DEADLINE: std::time::Duration = std::time::Duration::from_secs(30);
 
-/// Like `ask`, but a question still unanswered at the deadline ends as a
-/// failure, so the upload waiting on it is told and ends.
-fn ask_within(pending: &Pending, what: Asked, token: tokio_xmpp::IqResponseToken) {
-    pending.push(Box::pin(async move { (what, within(UPLOAD_ANSWER_DEADLINE, token).await) }));
+/// Like `ask`, but the question has until `deadline` both to get into the
+/// outgoing queue and to be answered (#220). The deadline starts before the
+/// question is queued: with the queue full (a stalled connection) the wait
+/// for room ends at the deadline and the question is not sent, so neither
+/// the upload nor the session waits past it. Unsent or unanswered, it ends
+/// as a failure and the upload waiting on it is told. Questions asked
+/// together share one deadline, so a batch waits for room once at most.
+/// `pending` is borrowed mutably so this future stays `Send` (a shared
+/// borrow of the non-`Sync` set across the await would not be).
+pub(super) async fn ask_by(
+    client: &mut Client,
+    pending: &mut Pending,
+    deadline: tokio::time::Instant,
+    what: Asked,
+    to: Option<Jid>,
+    request: tokio_xmpp::IqRequest,
+) {
+    let token = sent_by(deadline, client.send_iq(to, request)).await;
+    pending.push(Box::pin(async move { (what, answered_by(deadline, token).await) }));
 }
 
-/// The deadline passing is reported as a failure to send (timed out), the
-/// same as a question the stream lost: either way no answer will come.
-pub(super) async fn within(
-    deadline: std::time::Duration,
-    answer: impl Future<Output = Result<tokio_xmpp::IqResponse, tokio_xmpp::IqFailure>>,
+/// What `send` gives if it finishes by `deadline`; `None` if it does not,
+/// or if the deadline has already passed, and then `send` is never started.
+pub(super) async fn sent_by<T>(deadline: tokio::time::Instant, send: impl Future<Output = T>) -> Option<T> {
+    if tokio::time::Instant::now() >= deadline {
+        return None;
+    }
+    tokio::time::timeout_at(deadline, send).await.ok()
+}
+
+/// The answer to a question, if it was sent and the answer comes by
+/// `deadline`. Otherwise it is reported as a failure to send (timed out),
+/// the same as a question the stream lost: either way no answer will come.
+pub(super) async fn answered_by(
+    deadline: tokio::time::Instant,
+    token: Option<impl Future<Output = Result<tokio_xmpp::IqResponse, tokio_xmpp::IqFailure>>>,
 ) -> Result<tokio_xmpp::IqResponse, tokio_xmpp::IqFailure> {
-    tokio::time::timeout(deadline, answer).await.unwrap_or_else(|_| {
+    let answer = match token {
+        Some(token) => tokio::time::timeout_at(deadline, token).await.ok(),
+        None => None,
+    };
+    answer.unwrap_or_else(|| {
         Err(tokio_xmpp::IqFailure::SendError(std::io::Error::new(std::io::ErrorKind::TimedOut, "no answer in time")))
     })
 }
 
-/// The upload service, found once per session.
+/// The upload service: searched for until found, then used for the rest
+/// of the session.
 #[derive(Default)]
 pub(super) struct Uploads {
     pub(super) service: Option<(Jid, Option<u64>)>,
@@ -821,10 +852,11 @@ pub async fn run(
                         discovery_answered(&mut uploads, &answer);
                         if let Ok(tokio_xmpp::IqResponse::Result(Some(element))) = answer {
                             if let Ok(items) = DiscoItemsResult::try_from(element) {
+                                let deadline = tokio::time::Instant::now() + UPLOAD_ANSWER_DEADLINE;
                                 for item in items.items.into_iter().take(20) {
-                                    let token = client.send_iq(Some(item.jid.clone()), tokio_xmpp::IqRequest::Get(DiscoInfoQuery { node: None }.into())).await;
                                     uploads.searching += 1;
-                                    ask_within(&pending, Asked::Info(item.jid), token);
+                                    let request = tokio_xmpp::IqRequest::Get(DiscoInfoQuery { node: None }.into());
+                                    ask_by(&mut client, &mut pending, deadline, Asked::Info(item.jid.clone()), Some(item.jid), request).await;
                                 }
                             }
                         }
@@ -961,10 +993,11 @@ pub async fn run(
                         if uploads.service.is_none() && uploads.searching == 0 {
                             // Find the upload service: the server itself, or one of its components.
                             let domain = Jid::from(BareJid::from_parts(None, own.domain()));
-                            let token = client.send_iq(Some(domain.clone()), tokio_xmpp::IqRequest::Get(DiscoItemsQuery { node: None, rsm: None }.into())).await;
-                            ask_within(&pending, Asked::Items, token);
-                            let token = client.send_iq(Some(domain.clone()), tokio_xmpp::IqRequest::Get(DiscoInfoQuery { node: None }.into())).await;
-                            ask_within(&pending, Asked::Info(domain), token);
+                            let deadline = tokio::time::Instant::now() + UPLOAD_ANSWER_DEADLINE;
+                            let request = tokio_xmpp::IqRequest::Get(DiscoItemsQuery { node: None, rsm: None }.into());
+                            ask_by(&mut client, &mut pending, deadline, Asked::Items, Some(domain.clone()), request).await;
+                            let request = tokio_xmpp::IqRequest::Get(DiscoInfoQuery { node: None }.into());
+                            ask_by(&mut client, &mut pending, deadline, Asked::Info(domain.clone()), Some(domain), request).await;
                             uploads.searching = 2;
                         } else {
                             next_uploads(&mut client, &mut pending, &mut uploads, &uploaded).await;
@@ -1109,14 +1142,14 @@ async fn next_uploads(
         end_search(uploads, uploaded);
         return;
     };
+    let deadline = tokio::time::Instant::now() + UPLOAD_ANSWER_DEADLINE;
     for upload in std::mem::take(&mut uploads.waiting) {
         if let Err(error) = files::check_size(upload.size, max) {
             uploaded(&upload, Err(error));
             continue;
         }
-        let request = files::slot_request(&upload.name, upload.size);
-        let token = client.send_iq(Some(service.clone()), tokio_xmpp::IqRequest::Get(request.into())).await;
-        ask_within(pending, Asked::Slot(upload.id.clone()), token);
+        let request = tokio_xmpp::IqRequest::Get(files::slot_request(&upload.name, upload.size).into());
+        ask_by(client, pending, deadline, Asked::Slot(upload.id.clone()), Some(service.clone()), request).await;
         uploads.asked.insert(upload.id.clone(), upload);
     }
 }
@@ -1135,6 +1168,8 @@ pub(super) fn info_answered(uploads: &mut Uploads, jid: Jid, answer: Result<toki
         if let Ok(info) = DiscoInfoResult::try_from(element) {
             if let (None, Some(max)) = (&uploads.service, files::upload_service(&info)) {
                 uploads.service = Some((jid, max));
+                // Found: an earlier unanswered question no longer matters.
+                uploads.unanswered = false;
             }
         }
     }

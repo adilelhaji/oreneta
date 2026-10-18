@@ -19,6 +19,8 @@
 //! The main API entrypoint for the stanza stream is, unsurprisingly,
 //! [`StanzaStream`].
 
+// Patched for Oreneta (#220): `fmt`, `Future`, `ready` and `OwnedMutexGuard`
+// are for the receiver waiting for the lock.
 use core::fmt;
 use core::future::Future;
 use core::pin::Pin;
