@@ -22,6 +22,12 @@ type SetupOptions = {
    * profile, which starts in Catalan (#231, ADR-0062).
    */
   language?: string | null
+  /**
+   * The stored list view. The table unless given, so the checks written
+   * against the table keep reading it; null leaves the row out, as on a
+   * profile that never chose, which gets the automatic view (#283).
+   */
+  listView?: 'auto' | 'cards' | 'table' | null
   existingEmail?: string
   navigation?: boolean
   theme?: string
@@ -1259,6 +1265,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
           prefs: {
             auto_update_check: false,
             ...(options.language === null ? {} : { language: options.language ?? 'en' }),
+            ...(options.listView === null ? {} : { list_view: options.listView ?? 'table' }),
             ...(options.navigation
               ? {
                   session_account: template.id,
@@ -1646,6 +1653,169 @@ for (const width of [769, 1024, 1025, 1440]) {
   })
 }
 
+// #283: the message list at the sizes a window is kept maximised at. A
+// profile that never resized the list gets 360 px of it and the automatic
+// view, which draws two-line rows (sender and date over subject and preview)
+// under date groups while the list is narrow. The sender and the subject of an
+// ordinary conversation read whole, in Catalan, English and Arabic, light and
+// dark, without touching the separator.
+const READABLE_SUBJECTS = [
+  'Budget review: Q4 planning',
+  'Meeting notes and next steps',
+  'Invoice with an attachment',
+  'Welcome to the internal demo',
+]
+
+/** Whether a two-line row shows its sender and subject whole, and how tall it is. */
+async function rowReading(list: ReturnType<Page['locator']>, subject: string) {
+  const row = list.getByTitle(subject, { exact: true })
+  await expect(row).toBeVisible()
+  return row.evaluate((button) => {
+    const sender = button.querySelector('[data-thread-sender]') as HTMLElement
+    const title = button.querySelector('[data-thread-subject]') as HTMLElement
+    const line = title.closest('p') as HTMLElement
+    const senderBox = sender.getBoundingClientRect()
+    const titleBox = title.getBoundingClientRect()
+    const lineBox = line.getBoundingClientRect()
+    return {
+      senderWhole: sender.scrollWidth <= sender.clientWidth + 1,
+      // The subject's own box inside its line: a cut subject runs past the
+      // end of the line, on the right or (Arabic) on the left.
+      subjectWhole: titleBox.left >= lineBox.left - 1 && titleBox.right <= lineBox.right + 1,
+      subjectBelowSender: titleBox.top >= senderBox.bottom - 1,
+      height: Math.round(button.getBoundingClientRect().height),
+    }
+  })
+}
+
+for (const language of ['ca', 'en', 'ar'] as const) {
+  for (const theme of ['oreneta-light', 'oreneta-dark']) {
+    for (const width of [1280, 1456, 1920]) {
+      test(`the message list reads sender and subject without resizing: ${language}, ${theme}, ${width}px (#283)`, async ({
+        page,
+      }, info) => {
+        await page.setViewportSize({ width, height: 900 })
+        const errors = await prepareStartup(page, true, { navigation: true, language, theme, listView: null })
+        await page.goto('/')
+        const html = page.locator('html')
+        await expect(html).toHaveAttribute('lang', language)
+        await expect(html).toHaveAttribute('dir', language === 'ar' ? 'rtl' : 'ltr')
+        const list = page.locator('[data-thread-list]')
+        const reader = page.locator('[data-message-pane]')
+        await expect(list).toHaveAttribute('data-list-view', 'cards')
+        await expect(list.getByRole('table')).toHaveCount(0)
+        await expect(list.locator('[data-date-group]').first()).toBeVisible()
+
+        const listBox = (await list.boundingBox())!
+        const readerBox = (await reader.boundingBox())!
+        expect(Math.round(listBox.width)).toBe(360)
+        expect(readerBox.width).toBeGreaterThanOrEqual(360 - 1)
+        expect(readerBox.x + readerBox.width).toBeLessThanOrEqual(width + 1)
+        // Arabic mirrors the shell: the list sits to the right of the reader.
+        if (language === 'ar') expect(listBox.x).toBeGreaterThan(readerBox.x)
+        else expect(listBox.x).toBeLessThan(readerBox.x)
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+
+        for (const subject of READABLE_SUBJECTS) {
+          const { height, ...whole } = await rowReading(list, subject)
+          expect(whole, subject).toEqual({ senderWhole: true, subjectWhole: true, subjectBelowSender: true })
+          // Compact two-line rows: about 56 px.
+          expect(height, subject).toBeGreaterThanOrEqual(50)
+          expect(height, subject).toBeLessThanOrEqual(64)
+        }
+
+        await settled(page)
+        const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+        const body = JSON.stringify({ language, theme, width, violations: results.violations }, null, 2)
+        await info.attach(`axe-message-list-${language}-${theme}-${width}`, { body, contentType: 'application/json' })
+        const blocking = results.violations
+          .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+          .map(
+            (violation) =>
+              `${violation.id} (${violation.impact}) on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`,
+          )
+        await info.attach(`message-list-${language}-${theme}-${width}`, {
+          body: await page.screenshot({ path: info.outputPath('message-list.png'), animations: 'disabled' }),
+          contentType: 'image/png',
+        })
+        expect(blocking).toEqual([])
+        expect(errors).toEqual([])
+      })
+    }
+  }
+}
+
+test('the resized message list is kept across restarts and the automatic view follows it (#283)', async ({ page }) => {
+  await page.setViewportSize({ width: 1456, height: 900 })
+  const errors = await prepareStartup(page, true, { navigation: true, theme: 'oreneta-light', listView: null })
+  await page.goto('/')
+  const list = page.locator('[data-thread-list]')
+  const handle = page.getByRole('separator', { name: 'Resize thread list' })
+  const stored = () => page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}'))
+  await expect(handle).toHaveAttribute('aria-valuenow', '360')
+  await expect(list).toHaveAttribute('data-list-view', 'cards')
+
+  // Wide enough for columns: the automatic view turns into the table.
+  await handle.focus()
+  await page.keyboard.press('End')
+  await expect(handle).toHaveAttribute('aria-valuenow', '560')
+  await expect(list).toHaveAttribute('data-list-view', 'table')
+  await expect(list.getByRole('table')).toBeVisible()
+  await expect.poll(async () => (await stored()).thread_list_width).toBe(560)
+  await page.reload()
+  await expect(handle).toHaveAttribute('aria-valuenow', '560')
+  expect(Math.round((await list.boundingBox())!.width)).toBe(560)
+  await expect(list.getByRole('table')).toBeVisible()
+
+  // Narrower than the default: two-line rows that still read whole.
+  await handle.focus()
+  await page.keyboard.press('Home')
+  await page.keyboard.press('ArrowRight')
+  await expect(handle).toHaveAttribute('aria-valuenow', '296')
+  await expect.poll(async () => (await stored()).thread_list_width).toBe(296)
+  await page.reload()
+  await expect(handle).toHaveAttribute('aria-valuenow', '296')
+  expect(Math.round((await list.boundingBox())!.width)).toBe(296)
+  await expect(list).toHaveAttribute('data-list-view', 'cards')
+  expect(await rowReading(list, 'Budget review: Q4 planning')).toMatchObject({
+    senderWhole: true,
+    subjectWhole: true,
+    subjectBelowSender: true,
+  })
+  // Resizing is not choosing a view: the profile still has none stored.
+  expect((await stored()).list_view).toBeUndefined()
+  // The rows open a conversation like the table does.
+  await list.getByTitle('Pilot checklist — synthetic conversation', { exact: true }).click()
+  await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+test('a remembered wide list squeezed by the window draws two-line rows (#283)', async ({ page }) => {
+  // A remembered 560 px list and the reader's 360 px do not fit in 880 px
+  // (the folder pane is hidden at this width): the list gives way, too narrow
+  // for columns, and the automatic view follows the drawn width.
+  await page.setViewportSize({ width: 880, height: 900 })
+  const errors = await prepareStartup(page, true, {
+    navigation: true,
+    theme: 'oreneta-dark',
+    listView: null,
+    preferences: { thread_list_width: 560 },
+  })
+  await page.goto('/')
+  const list = page.locator('[data-thread-list]')
+  await expect(list).toHaveAttribute('data-list-view', 'cards')
+  const drawn = Math.round((await list.boundingBox())!.width)
+  expect(drawn).toBeGreaterThanOrEqual(280)
+  expect(drawn).toBeLessThan(520)
+  expect((await page.locator('[data-message-pane]').boundingBox())!.width).toBeGreaterThanOrEqual(360 - 1)
+  expect(await rowReading(list, 'Budget review: Q4 planning')).toMatchObject({
+    senderWhole: true,
+    subjectWhole: true,
+    subjectBelowSender: true,
+  })
+  expect(errors).toEqual([])
+})
+
 test('mail layout at 200-percent desktop zoom equivalent (1440 physical / 720 CSS pixels)', async ({ browser }) => {
   const context = await browser.newContext({
     viewport: { width: 720, height: 900 },
@@ -1704,7 +1874,9 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
             })
             .map(
               (element) =>
-                element.getAttribute('aria-label') ?? element.getAttribute('title') ?? element.textContent?.trim(),
+                // An unnamed field is reported by its tag and placeholder rather than as "".
+                (element.getAttribute('aria-label') ?? element.getAttribute('title') ?? element.textContent?.trim()) ||
+                `${element.tagName.toLowerCase()} "${element.getAttribute('placeholder') ?? ''}"`,
             ),
         )
         expect(outside, where).toEqual([])
@@ -1794,7 +1966,9 @@ async function rtlInView(page: Page, where: string) {
       })
       .map(
         (element) =>
-          element.getAttribute('aria-label') ?? element.getAttribute('title') ?? element.textContent?.trim().slice(0, 40),
+          // An unnamed field is reported by its tag and placeholder rather than as "".
+          (element.getAttribute('aria-label') ?? element.getAttribute('title') ?? element.textContent?.trim().slice(0, 40)) ||
+          `${element.tagName.toLowerCase()} "${element.getAttribute('placeholder') ?? ''}"`,
       ),
   )
   expect(outside, where).toEqual([])
@@ -2127,7 +2301,7 @@ async function verifyMailBoundary(page: Page, width: number) {
 }
 
 for (const theme of ['oreneta-light', 'oreneta-dark']) {
-  test(`conventional mail defaults support open, reply draft, selection and navigation (${theme})`, async ({
+  test(`a stored table supports open, reply draft, selection and navigation (${theme})`, async ({
     page,
   }, info) => {
     const errors = await prepareStartup(page, true, { navigation: true, theme })
@@ -2169,6 +2343,58 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
     await expect(table).toHaveCount(0)
     await nav.getByRole('button', { name: 'Inbox 3', exact: true }).click()
     await expect(table).toBeVisible()
+    expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('mail.send'))).toBe(false)
+    expect(errors).toEqual([])
+  })
+}
+
+// The same workflow on what a profile that never chose a view gets (#283):
+// the automatic view's two-line rows at the default 360 px.
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  test(`the default rows support open, reply draft, selection and navigation (${theme}, #283)`, async ({ page }) => {
+    await page.setViewportSize({ width: 1456, height: 900 })
+    const errors = await prepareStartup(page, true, { navigation: true, theme, listView: null })
+    await page.goto('/')
+    const list = page.locator('[data-thread-list]')
+    await expect(list).toHaveAttribute('data-list-view', 'cards')
+    const first = list.getByTitle('Pilot checklist — synthetic conversation', { exact: true })
+    await first.focus()
+    await page.keyboard.press('Enter')
+    await expect(first).toHaveAttribute('aria-current', 'true')
+    await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+    const reply = page.getByPlaceholder('Write a message...')
+    await reply.fill('Synthetic reply draft — do not send')
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as any).startupProbe.requests.filter((r: any) => r.command === 'mail.saveDraft').at(-1)?.payload,
+        ),
+      )
+      .toMatchObject({
+        account_id: 'synthetic-account',
+        to: 'morgan@example.test',
+        body: 'Synthetic reply draft — do not send',
+      })
+    const budget = list.getByTitle('Budget review: Q4 planning', { exact: true })
+    await budget.click()
+    await expect(budget).toHaveAttribute('aria-current', 'true')
+    await expect(first).not.toHaveAttribute('aria-current', 'true')
+    await expect(reply).toHaveValue('')
+
+    // Selecting without opening: Ctrl+click starts a selection, Close ends it.
+    await list.getByTitle('Meeting notes and next steps', { exact: true }).click({ modifiers: ['Control'] })
+    await expect(list.getByText('1 selected', { exact: true })).toBeVisible()
+    await expect(budget).toHaveAttribute('aria-current', 'true')
+    await list.getByRole('button', { name: 'Close', exact: true }).click()
+    await expect(list.getByText('1 selected', { exact: true })).toHaveCount(0)
+
+    const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
+    await nav.getByRole('button', { name: 'Sent', exact: true }).click()
+    await expect(budget).toHaveCount(0)
+    await nav.getByRole('button', { name: 'Inbox 3', exact: true }).click()
+    await expect(budget).toBeVisible()
+    await expect(list).toHaveAttribute('data-list-view', 'cards')
     expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('mail.send'))).toBe(false)
     expect(errors).toEqual([])
   })
@@ -2250,6 +2476,15 @@ test('legacy cards/chat stay selected until explicit layout controls change them
     .getByRole('button', { name: /Pilot checklist/ })
     .click()
   await expect(page.getByTitle('Collapse message', { exact: true })).toHaveCount(2)
+  // Back to the automatic view (#283): stored as a choice, drawn as rows at 360 px.
+  await page.keyboard.press('Control+,')
+  await page.getByRole('button', { name: 'Automatic', exact: true }).click()
+  await expect
+    .poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}').list_view))
+    .toBe('auto')
+  await page.keyboard.press('Escape')
+  await expect(page.locator('[data-thread-list]')).toHaveAttribute('data-list-view', 'cards')
+  await expect(page.getByRole('table')).toHaveCount(0)
   expect(errors).toEqual([])
 })
 
@@ -2877,6 +3112,230 @@ test.describe('calendar week start', () => {
   })
 })
 
+// #266 and #267: events moved and resized by dragging them on the week grid,
+// dropped on the mini calendar, refused on a read-only calendar, asked about
+// when they repeat, and given up with Escape; a conflict with a newer server
+// change is said. Events are created by dragging a range, from the menu of an
+// empty slot and from the keyboard slot. Real pointer drags, so they run here
+// where there is a layout; the unit suite drives the same moves by keyboard.
+test.describe('calendar drag, drop and create', () => {
+  const KEY = 'synthetic-account'
+  const centre = async (locator: ReturnType<Page['locator']>) => {
+    const box = (await locator.boundingBox())!
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  }
+  const drag = async (page: Page, from: { x: number; y: number }, to: { x: number; y: number }) => {
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down()
+    await page.mouse.move(from.x, from.y + 6, { steps: 2 })
+    await page.mouse.move(to.x, to.y, { steps: 12 })
+    await page.mouse.up()
+  }
+  /** Local wall-clock instant, `days` from today. */
+  const at = (page: Page, days: number, hour: number, minute = 0) =>
+    page.evaluate(
+      ([d, h, m]) => {
+        const now = new Date()
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate() + d, h, m).getTime() / 1000
+      },
+      [days, hour, minute],
+    )
+  const updates = (page: Page) =>
+    page.evaluate(() =>
+      (window as any).startupProbe.requests
+        .filter((request: any) => request.command === 'calendar.update')
+        .map((request: any) => request.payload),
+    )
+
+  const open = async (page: Page) => {
+    const errors = await prepareStartup(page, true, { navigation: true })
+    await page.addInitScript(() => {
+      const probe = (window as any).startupProbe
+      const now = new Date()
+      const at = (h: number) => new Date(now.getFullYear(), now.getMonth(), now.getDate(), h).getTime() / 1000
+      const base = { all_day: false, is_cancelled: false, free_busy: 'busy', my_response: '', organizer: null, attendees: [] }
+      probe.replies['calendar.list'] = {
+        calendars: [
+          { id: 'local-team', name: 'Team', is_default: true, enabled: true, kind: 'local', read_only: false, synced_at: 0 },
+          { id: 'holidays', name: 'Holidays', is_default: false, enabled: true, kind: 'subscribed', read_only: true, synced_at: 0 },
+        ],
+      }
+      probe.replies['calendar.events'] = {
+        events: [
+          { ...base, id: 'ev-1', calendar_id: 'local-team', change_key: 'v1', subject: 'Planning', start: at(10), end: at(11), is_recurring: false },
+          { ...base, id: 'ev-rec', calendar_id: 'local-team', change_key: 'v2', subject: 'Stand-up', start: at(12), end: at(13), is_recurring: true, series_id: 'series-1' },
+          { ...base, id: 'ev-ro', calendar_id: 'holidays', change_key: 'v3', subject: 'Published', start: at(8), end: at(9), is_recurring: false },
+        ],
+      }
+      probe.replies['calendar.update'] = { ok: true }
+      // A conflict, when a test asks for one: the core refuses the write.
+      const answer = (window as any).go.main.App.Invoke
+      ;(window as any).go.main.App.Invoke = async (command: string, payload: Record<string, unknown>) => {
+        if (command === 'calendar.update' && probe.updateError) {
+          probe.requests.push({ command, payload: structuredClone(payload) })
+          throw new Error(probe.updateError)
+        }
+        return answer(command, payload)
+      }
+    })
+    await page.goto('/')
+    await expect(page.getByRole('textbox').first()).toBeVisible()
+    await page.getByRole('button', { name: 'Calendar', exact: true }).click()
+    await page.getByRole('button', { name: 'Week', exact: true }).click()
+    await expect(page.locator(`[data-calendar-event="${KEY}:ev-1"]`)).toBeVisible()
+    // 06:00 at the top, so every event held here sits well inside the grid,
+    // away from the bands where a held event scrolls it.
+    await page.locator('[data-hour-grid]').evaluate((grid) => {
+      grid.scrollTop = 6 * 52
+    })
+    return errors
+  }
+
+  test('moves, resizes, cancels, refuses, asks and says a conflict', async ({ page }) => {
+    const errors = await open(page)
+    const planning = page.locator(`[data-calendar-event="${KEY}:ev-1"]`)
+
+    // Move an hour and a little down: it lands on the nearest quarter, keeps
+    // its hour of length, and is written with the version it was read at.
+    let from = await centre(planning)
+    await drag(page, from, { x: from.x, y: from.y + 60 })
+    await expect.poll(async () => (await updates(page)).length).toBe(1)
+    let sent = (await updates(page))[0]
+    expect(sent.event.start).toBe(await at(page, 0, 11, 15))
+    expect(sent.event.end - sent.event.start).toBe(3600)
+    expect(sent.event.change_key).toBe('v1')
+    expect(sent.scope).toBe('occurrence')
+
+    // Resize by the bottom edge, half an hour.
+    await expect(planning).toBeVisible()
+    from = await centre(planning.locator('[data-resize-edge="end"]'))
+    await drag(page, from, { x: from.x, y: from.y + 26 })
+    await expect.poll(async () => (await updates(page)).length).toBe(2)
+    sent = (await updates(page))[1]
+    expect(sent.event.start).toBe(await at(page, 0, 10))
+    expect(sent.event.end).toBe(await at(page, 0, 11, 30))
+
+    // And by the top edge, a quarter earlier.
+    from = await centre(planning.locator('[data-resize-edge="start"]'))
+    await drag(page, from, { x: from.x, y: from.y - 13 })
+    await expect.poll(async () => (await updates(page)).length).toBe(3)
+    sent = (await updates(page))[2]
+    expect(sent.event.start).toBe(await at(page, 0, 9, 45))
+    expect(sent.event.end).toBe(await at(page, 0, 11))
+
+    // Escape while held: nothing is written and nothing stays drawn.
+    from = await centre(planning)
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down()
+    await page.mouse.move(from.x, from.y + 52, { steps: 8 })
+    await expect(page.locator('[data-move-ghost]')).toHaveCount(1)
+    await page.keyboard.press('Escape')
+    await page.mouse.move(from.x, from.y + 70, { steps: 2 })
+    await page.mouse.up()
+    await expect(page.locator('[data-move-ghost]')).toHaveCount(0)
+
+    // Dropped on a day of the mini calendar: that day, at its own time.
+    const target = await page.evaluate(() => {
+      const now = new Date()
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2).getTime()
+    })
+    await drag(page, await centre(planning), await centre(page.locator(`[data-mini-day="${target}"]`)))
+    await expect.poll(async () => (await updates(page)).length).toBe(4)
+    sent = (await updates(page))[3]
+    expect(sent.event.start).toBe(await at(page, 2, 10))
+    expect(sent.event.end).toBe(await at(page, 2, 11))
+
+    // A read-only calendar refuses, and says why.
+    from = await centre(page.locator(`[data-calendar-event="${KEY}:ev-ro"]`))
+    await drag(page, from, { x: from.x, y: from.y + 52 })
+    await expect(page.getByText('The calendar Holidays is read-only: its events cannot be moved or changed here.')).toBeVisible()
+    expect(await updates(page)).toHaveLength(4)
+
+    // A repeating event asks which occurrences, and writes the answer.
+    from = await centre(page.locator(`[data-calendar-event="${KEY}:ev-rec"]`))
+    await drag(page, from, { x: from.x, y: from.y + 52 })
+    await page.getByRole('button', { name: 'This event only', exact: true }).click()
+    await expect.poll(async () => (await updates(page)).length).toBe(5)
+    sent = (await updates(page))[4]
+    expect(sent.scope).toBe('occurrence')
+    expect(sent.event.start).toBe(await at(page, 0, 13))
+
+    // A newer change on the server: refused, said, and the window read again.
+    await page.evaluate(() => {
+      ;(window as any).startupProbe.updateError = 'this event was changed or removed on the server; refresh it and try again'
+    })
+    const rereads = () =>
+      page.evaluate(
+        () =>
+          (window as any).startupProbe.requests.filter(
+            (request: any) => request.command === 'calendar.events' && request.payload.refresh === true,
+          ).length,
+      )
+    const before = await rereads()
+    from = await centre(planning)
+    await drag(page, from, { x: from.x, y: from.y + 52 })
+    await expect(page.getByText(/^The event was not moved: this event was changed or removed on the server/)).toBeVisible()
+    await expect.poll(rereads).toBeGreaterThan(before)
+    expect(await updates(page)).toHaveLength(6)
+    expect(errors).toEqual([])
+  })
+
+  test('creates events from a dragged range, the slot menu and the keyboard', async ({ page }) => {
+    const errors = await open(page)
+    const today = await page.evaluate(() => {
+      const now = new Date()
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    })
+    const column = page.locator(`[data-day-column="${today}"]`)
+    const box = (await column.boundingBox())!
+    const y = (hour: number, minute = 0) => box.y + (hour + minute / 60) * 52
+    const x = box.x + box.width / 2
+    const clockIs = async (hh: string[], mm: string[]) => {
+      await expect(page.getByLabel('hh')).toHaveCount(hh.length)
+      for (const [i, hour] of hh.entries()) await expect(page.getByLabel('hh').nth(i)).toHaveValue(hour)
+      for (const [i, minute] of mm.entries()) await expect(page.getByLabel('mm').nth(i)).toHaveValue(minute)
+    }
+    const cancel = () => page.getByRole('button', { name: 'Cancel', exact: true }).click()
+
+    // A range dragged across the column, from line to line.
+    await drag(page, { x, y: y(14, 5) }, { x, y: y(15, 20) })
+    await expect(page.getByRole('heading', { name: 'New event' })).toBeVisible()
+    await clockIs(['14', '15'], ['0', '30'])
+    await cancel()
+
+    // The menu of an empty slot: a timed event at its quarter, or an all-day one.
+    await page.mouse.click(x, y(14, 20), { button: 'right' })
+    await page.getByRole('button', { name: 'New event', exact: true }).last().click()
+    await clockIs(['14', '15'], ['15', '15'])
+    await cancel()
+    await page.mouse.click(x, y(14, 20), { button: 'right' })
+    await page.getByRole('button', { name: 'New all-day event', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'New event' })).toBeVisible()
+    await clockIs([], [])
+    await cancel()
+
+    // The keyboard slot: a quarter later, a quarter longer, then Enter.
+    const slot = page.locator('[data-time-slot]')
+    await slot.focus()
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('Shift+ArrowDown')
+    await page.keyboard.press('Enter')
+    await clockIs(['9', '10'], ['15', '30'])
+    await cancel()
+
+    // And the keyboard alternative to dragging: Alt+Down twice, then Enter.
+    const planning = page.locator(`[data-calendar-event="${KEY}:ev-1"]`)
+    await planning.focus()
+    await page.keyboard.press('Alt+ArrowDown')
+    await page.keyboard.press('Alt+ArrowDown')
+    await expect(page.locator('[data-move-status]')).toContainText('Press Enter to save the change')
+    await page.keyboard.press('Enter')
+    await expect.poll(async () => (await updates(page)).length).toBe(1)
+    expect((await updates(page))[0].event.start).toBe(await at(page, 0, 10, 30))
+    expect(errors).toEqual([])
+  })
+})
+
 // Folder favorites, colors and moves (ADR-0050, SET-07): a folder made a
 // favorite and colored from its menu, then moved with the keyboard path, all
 // under the production CSP; the favorite and its color survive a reload.
@@ -3419,7 +3878,9 @@ async function ltrInView(page: Page, where: string) {
       })
       .map(
         (element) =>
-          element.getAttribute('aria-label') ?? element.getAttribute('title') ?? element.textContent?.trim().slice(0, 40),
+          // An unnamed field is reported by its tag and placeholder rather than as "".
+          (element.getAttribute('aria-label') ?? element.getAttribute('title') ?? element.textContent?.trim().slice(0, 40)) ||
+          `${element.tagName.toLowerCase()} "${element.getAttribute('placeholder') ?? ''}"`,
       ),
   )
   expect(outside, where).toEqual([])

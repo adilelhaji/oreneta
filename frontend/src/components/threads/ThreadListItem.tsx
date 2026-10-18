@@ -34,6 +34,7 @@ export function ThreadListItem({
   bulkSelected = false,
   onQuickAction,
   onToggleSelect,
+  narrowAuto = false,
 }: {
   thread: Message
   accounts: Account[]
@@ -54,9 +55,11 @@ export function ThreadListItem({
   onQuickAction?: (action: QuickRowAction) => void
   /** Starts selecting from this row. Omitted where selecting is not offered. */
   onToggleSelect?: () => void
+  /** A row of the automatic view in a narrow list, where compact keeps two lines (#283). */
+  narrowAuto?: boolean
 }) {
   const { t } = useTranslation()
-  const density = densityStyle(useValue(settings$.listDensity))
+  const density = densityStyle(useValue(settings$.listDensity), narrowAuto)
   const isActive = active ?? thread.thread_id === selectedThread
   const threadAccount = accounts.find((acc) => acc.id === thread.account_id)
   const badgeLabel = threadAccount ? threadAccount.display_name || threadAccount.email : ''
@@ -102,13 +105,13 @@ export function ThreadListItem({
         </span>
       )}
       {hasDraft && <span className="me-1 font-normal text-danger">{t('chat.draft')}</span>}
-      <span dir="auto" className={clsx(unread ? 'text-primary' : 'text-primary/85')}>
+      <span dir="auto" data-thread-subject className={clsx(unread ? 'text-primary' : 'text-primary/85')}>
         {threadTitle}
       </span>
       {/* The preview trails the subject unless it has been given its own line,
           where repeating it here would show it twice. */}
       {!!thread.preview && !density.previewOnOwnLine && (
-        <span className={clsx(unread ? 'text-secondary/90 font-medium' : 'text-secondary/75 font-normal')}>
+        <span className={clsx('text-secondary', unread ? 'font-medium' : 'font-normal')}>
           {' - '}
           <bdi>{thread.preview}</bdi>
         </span>
@@ -146,7 +149,7 @@ export function ThreadListItem({
               ? 'bg-accent/[0.13] text-primary'
               : 'bg-chats hover:bg-hover text-primary'
             : isActive
-              ? 'bg-accent/20 dark:bg-accent/30 text-primary'
+              ? 'bg-active text-primary'
               : unread
                 ? 'bg-accent/[0.07] hover:bg-accent/[0.12] text-primary'
                 : 'bg-chats hover:bg-hover text-primary',
@@ -154,6 +157,8 @@ export function ThreadListItem({
         onClick={onSelect}
         onContextMenu={onContextMenu}
         title={threadTitle}
+        // The open conversation, as the table's subject button says it (#283).
+        aria-current={isActive ? 'true' : undefined}
       >
         {!bulkSelectable && isActive && (
           <span aria-hidden="true" className="absolute inset-y-0 start-0 w-[3px] bg-accent" />
@@ -224,11 +229,12 @@ export function ThreadListItem({
             <div className={clsx('flex min-w-0 items-center gap-1', density.singleLine && 'max-w-[40%] shrink-0')}>
               <span
                 dir="auto"
+                data-thread-sender
                 className={clsx('text-ui font-semibold truncate', unread ? 'text-primary' : 'text-primary/85')}
               >
                 {senderName || thread.from_addr.split('@')[0]}
                 {!!thread.recipient_overflow && (
-                  <span className="ms-1 font-normal text-secondary/80">+{thread.recipient_overflow}</span>
+                  <span className="ms-1 font-normal text-secondary">+{thread.recipient_overflow}</span>
                 )}
               </span>
               {/* Gmail-style thread size, muted and only once a thread has a
@@ -237,7 +243,7 @@ export function ThreadListItem({
                   count, and outside the truncating span so a long sender
                   ellipsises itself instead of clipping the count. */}
               {(thread.message_count ?? 0) > 1 && (
-                <span className="shrink-0 text-xs font-normal text-secondary/70">{thread.message_count}</span>
+                <span className="shrink-0 text-xs font-normal text-secondary">{thread.message_count}</span>
               )}
             </div>
             {/* Compact folds the subject onto the sender's line: one row per
@@ -257,7 +263,7 @@ export function ThreadListItem({
               className={clsx(
                 'shrink-0 text-caption font-normal',
                 thread.has_attachments ? 'ms-1' : 'ms-auto',
-                unread ? 'text-accent' : 'text-secondary/65',
+                unread ? 'text-accent' : 'text-secondary',
               )}
             >
               {formatThreadDate(thread.date)}
@@ -278,7 +284,7 @@ export function ThreadListItem({
           {/* Relaxed gives the preview a line of its own — two of them — so a
               subject and the message under it stop competing for one line. */}
           {density.previewOnOwnLine && !!thread.preview && (
-            <p dir="auto" className="line-clamp-2 text-xs leading-snug text-secondary/75">
+            <p dir="auto" className="line-clamp-2 text-xs leading-snug text-secondary">
               {thread.preview}
             </p>
           )}
