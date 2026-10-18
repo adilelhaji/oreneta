@@ -2828,5 +2828,10 @@
   "search.scope.unified": "يبحث في «{folder}»: هذا المجلد في كل حساب مضمَّن في المجلدات الموحدة، حتى إن كان مخفيًا.",
   "search.scope.folder": "يبحث في «{folder}» فقط. لا تُضمَّن المجلدات المخفية.",
   "search.scope.hiddenFolder": "يبحث في «{folder}» فقط، وهو مجلد مخفي.",
-  "search.scope.unifiedInbox": "يبحث في «{folder}»: البريد الوارد لكل حساب مضمَّن في المجلدات الموحدة."
+  "search.scope.unifiedInbox": "يبحث في «{folder}»: البريد الوارد لكل حساب مضمَّن في المجلدات الموحدة.",
+  "settings.signature.placement": "في الردود وإعادة التوجيه",
+  "settings.signature.placementHint": "موضع التوقيع بالنسبة إلى الرسالة الأصلية المقتبسة",
+  "settings.signature.placementWithText": "مع ما أكتبه",
+  "settings.signature.placementAbove": "فوق الاقتباس",
+  "settings.signature.placementBelow": "تحت الاقتباس"
 }

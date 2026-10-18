@@ -2828,5 +2828,10 @@
   "search.scope.unified": "Tìm trong “{folder}”: thư mục đó ở mỗi tài khoản thuộc các thư mục hợp nhất, kể cả khi nó đã bị ẩn.",
   "search.scope.folder": "Chỉ tìm trong “{folder}”. Không bao gồm các thư mục đã ẩn.",
   "search.scope.hiddenFolder": "Chỉ tìm trong “{folder}”, một thư mục đã ẩn.",
-  "search.scope.unifiedInbox": "Tìm trong “{folder}”: hộp thư đến của mỗi tài khoản thuộc các thư mục hợp nhất."
+  "search.scope.unifiedInbox": "Tìm trong “{folder}”: hộp thư đến của mỗi tài khoản thuộc các thư mục hợp nhất.",
+  "settings.signature.placement": "Trong thư trả lời và chuyển tiếp",
+  "settings.signature.placementHint": "Vị trí chữ ký so với thư gốc được trích dẫn",
+  "settings.signature.placementWithText": "Cùng với nội dung tôi viết",
+  "settings.signature.placementAbove": "Phía trên phần trích dẫn",
+  "settings.signature.placementBelow": "Phía dưới phần trích dẫn"
 }

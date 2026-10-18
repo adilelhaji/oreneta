@@ -2828,5 +2828,10 @@
   "search.scope.unified": "Cerca a «{folder}»: aquesta carpeta de cada compte inclòs a les carpetes unificades, encara que sigui amagada.",
   "search.scope.folder": "Cerca només a «{folder}». Les carpetes amagades no s'hi inclouen.",
   "search.scope.hiddenFolder": "Cerca només a «{folder}», que és una carpeta amagada.",
-  "search.scope.unifiedInbox": "Cerca a «{folder}»: la safata d'entrada de cada compte inclòs a les carpetes unificades."
+  "search.scope.unifiedInbox": "Cerca a «{folder}»: la safata d'entrada de cada compte inclòs a les carpetes unificades.",
+  "settings.signature.placement": "A les respostes i els reenviaments",
+  "settings.signature.placementHint": "On va la signatura respecte de la citació",
+  "settings.signature.placementWithText": "Amb el que escric",
+  "settings.signature.placementAbove": "Damunt de la citació",
+  "settings.signature.placementBelow": "Sota la citació"
 }

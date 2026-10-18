@@ -2828,5 +2828,10 @@
   "search.scope.unified": "Söker i ”{folder}”: den mappen i varje konto som ingår i de samlade mapparna, även där den är dold.",
   "search.scope.folder": "Söker bara i ”{folder}”. Dolda mappar ingår inte.",
   "search.scope.hiddenFolder": "Söker bara i ”{folder}”, en dold mapp.",
-  "search.scope.unifiedInbox": "Söker i ”{folder}”: inkorgen i varje konto som ingår i de samlade mapparna."
+  "search.scope.unifiedInbox": "Söker i ”{folder}”: inkorgen i varje konto som ingår i de samlade mapparna.",
+  "settings.signature.placement": "I svar och vidarebefordringar",
+  "settings.signature.placementHint": "Var signaturen hamnar i förhållande till det citerade originalet",
+  "settings.signature.placementWithText": "Med det jag skriver",
+  "settings.signature.placementAbove": "Ovanför citatet",
+  "settings.signature.placementBelow": "Under citatet"
 }
