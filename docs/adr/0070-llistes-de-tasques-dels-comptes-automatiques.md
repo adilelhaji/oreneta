@@ -1,12 +1,20 @@
 # ADR-0070: Llistes de tasques dels comptes activades automàticament (esmena d'ADR-0058 i ADR-0039)
 
-- Estat: proposada. Cal que el propietari l'accepti abans d'escriure'n el codi.
-  La decisió D8 de la proposta de redisseny demanava escriure aquesta esmena; el
-  propietari va aprovar la proposta el 2026-10-17 («Lo apruebo»), abans que
-  existís aquest text, i l'esmena necessita la seva pròpia acceptació. Les
-  decisions D1–D9 consten a
+- Estat: acceptada pel propietari el 2026-10-18 («Sí a todo»), amb l'opció
+  recomanada en cada decisió:
+  1. en actualitzar, s'activen una vegada les llistes dels comptes existents, amb
+     l'avís i «Treu-la», i s'accepta que una llista suprimida abans d'aquesta
+     versió torni una vegada;
+  2. CalDAV s'inclou ara, amb la regla del §1;
+  3. cada llista CalDAV automàtica té una còpia pròpia de la contrasenya;
+  4. suprimir una llista de compte la suprimeix i es recorda;
+  5. les llistes manuals d'ADR-0039 que coincideixen amb una col·lecció del
+     compte s'adopten sense lligar-les a la vida del compte.
+
+  La decisió D8 de la proposta de redisseny, aprovada el 2026-10-17 («Lo
+  apruebo»), demanava escriure aquesta esmena. Les decisions D1–D9 consten a
   [#288](https://github.com/adilelhaji/oreneta/issues/288#issuecomment-6240630278).
-- Data: 2026-10-17.
+- Data: 2026-10-17 (proposta); 2026-10-18 (acceptació).
 - Abast: #281 (fila SET-20 del registre d'acceptació, #103) i peça 6 de la
   proposta de redisseny, dins de #288. Esmena el primer punt del §4 d'ADR-0058
   («Una llista per compte d'Exchange…») i, d'ADR-0039, els apartats «Enllaç»,
@@ -241,8 +249,7 @@
     calendari d'on surt.
 - **ADR-0038:** el que es purga en suprimir un perfil amb dades inclou també
   les claus `caldav-tasks-pending:`.
-- A totes dues ADR s'afegeix a l'estat una línia que remet a aquesta
-  (proposada).
+- A totes dues ADR s'afegeix a l'estat una línia que remet a aquesta.
 
 ## Alternatives descartades
 
@@ -307,7 +314,9 @@
 - **Documents que s'actualitzen amb la peça:** caldav-tasks.md i
   task-lists.md.
 
-## Decisions que ha de prendre el propietari
+## Decisions del propietari
+
+Preses el 2026-10-18: en totes, l'opció recomanada (vegeu l'estat).
 
 1. **Actualització:** activar una vegada les llistes dels comptes existents,
    amb l'avís i «Treu-la», i acceptar que una llista suprimida abans d'aquesta

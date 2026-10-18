@@ -1,12 +1,20 @@
 # ADR-0069: Barra lateral dreta de tota l'aplicació: agenda, dia i persona
 
-- Estat: proposada. Cal que el propietari l'accepti abans d'escriure'n el codi.
-  La decisió D8 de la proposta de redisseny demanava escriure aquesta ADR; el
-  propietari va aprovar la proposta el 2026-10-17 («Lo apruebo»), abans que
-  existís aquest text, i l'ADR necessita la seva pròpia acceptació. Les
-  decisions D1–D9 consten a
+- Estat: acceptada pel propietari el 2026-10-18 («Sí a todo»), amb l'opció
+  recomanada en cada decisió:
+  1. estat per defecte, en un perfil nou i en actualitzar: minimitzada;
+  2. el panell Conversa, dins de la barra de l'aplicació;
+  3. el panell Dia, a Calendari, pren el dia seleccionat en obrir-se;
+  4. l'historial a Persones fa servir el compte de la llibreta del contacte i el
+     demana quan la llibreta no en té;
+  5. amplada mínima del contingut als mòduls que no són correu: 360 px;
+  6. quan la barra es desplega al costat, cedeixen primer les carpetes i després
+     la llista (al correu, la barra hi va a partir de 1120 px).
+
+  La decisió D8 de la proposta de redisseny, aprovada el 2026-10-17 («Lo
+  apruebo»), demanava escriure aquesta ADR. Les decisions D1–D9 consten a
   [#288](https://github.com/adilelhaji/oreneta/issues/288#issuecomment-6240630278).
-- Data: 2026-10-17.
+- Data: 2026-10-17 (proposta); 2026-10-18 (acceptació).
 - Abast: #223 (fila SET-23 del registre d'acceptació, #86) i peça 12 de la
   proposta de redisseny, dins de #288. Substitueix part d'ADR-0059 (vegeu el
   §5); depèn del marc d'ADR-0068. Fora d'abast: els panells de contactes,
@@ -171,7 +179,7 @@
   l'agenda; obrir esdeveniments i tasques; el teclat; el separador i els seus
   límits; les preferències `details_panel_width`, `thread_list_width` i
   `kanban_pane_width`.
-- A ADR-0059 s'afegeix a l'estat una línia que remet a aquesta ADR (proposada).
+- A ADR-0059 s'afegeix a l'estat una línia que remet a aquesta ADR.
 
 ### 6. Proves
 
@@ -230,7 +238,9 @@
   (`ConversationDetailsPanel.test.tsx`, `paneResize.test.ts`, `startup.e2e.ts`)
   es tornen a registrar amb el resum (hash) nou.
 
-## Decisions que ha de prendre el propietari
+## Decisions del propietari
+
+Preses el 2026-10-18: en totes, l'opció recomanada (vegeu l'estat).
 
 1. **Estat per defecte** en un perfil nou i en actualitzar: minimitzada
    (recomanat: no pren espai sense demanar-ho) o desplegada (com el client de

@@ -1,15 +1,27 @@
 # ADR-0068: Marc comú de l'aplicació: banda superior, barra d'eines, subfinestra de carpetes i selector de mòduls
 
-- Estat: proposada. Cal que el propietari l'accepti abans d'escriure'n el codi.
-  El 2026-10-17 el propietari va aprovar la proposta de redisseny («Lo
-  apruebo») amb les decisions D1 (selector de mòduls com a tira al peu de la
+- Estat: acceptada pel propietari el 2026-10-18 («Sí a todo»), amb l'opció
+  recomanada en cada decisió:
+  1. Ctrl/⌘+1…9 mantenen la seqüència d'avui (safata unificada, taulers,
+     comptes);
+  2. entre 769 i 1024 px, barra estreta d'icones de mòduls;
+  3. una sola amplada de la subfinestra de carpetes per a tots els mòduls, en px;
+  4. el camp de la banda substitueix els camps de cerca de les subfinestres;
+  5. els taulers kanban, a la secció «Taulers» de la subfinestra del correu;
+  6. Xat i Adjunts, dins de la subfinestra comuna;
+  7. F6 i Maj+F6 com a dreceres per defecte, que actuen també dins d'un camp de
+     text;
+  8. l'estat de la sincronització a la banda, només amb els textos d'avui, sense
+     «Sincronitzat».
+
+  Abans, el 2026-10-17, el propietari havia aprovat la proposta de redisseny
+  («Lo apruebo») amb les decisions D1 (selector de mòduls com a tira al peu de la
   subfinestra de carpetes, en lloc de la barra vertical) i D7 (banda superior
   dins de la finestra, sota la barra de títol nativa, i no una finestra sense
-  vora). Aquesta ADR concreta com es fa i encara no és acceptada. Les decisions
-  D1–D9, la frase i la data consten a
+  vora). Les decisions D1–D9, la frase i la data consten a
   [#288](https://github.com/adilelhaji/oreneta/issues/288#issuecomment-6240630278),
   perquè la proposta no és al repositori.
-- Data: 2026-10-17.
+- Data: 2026-10-17 (proposta); 2026-10-18 (acceptació).
 - Abast: #288, peces 10 (subfinestra de carpetes comuna), 13 (banda
   superior) i 14 (selector de mòduls) de la proposta de redisseny. Sobre
   ADR-0059 (separadors), ADR-0061 (dreta a esquerra) i ADR-0062 (català), i
@@ -362,7 +374,9 @@ verd:
   (#37, dreta a esquerra) i SET-23 (#86). Cap fila no canvia d'estat sense
   l'evidència nativa (N4) que demana.
 
-## Decisions que ha de prendre el propietari
+## Decisions del propietari
+
+Preses el 2026-10-18: en totes, l'opció recomanada (vegeu l'estat).
 
 1. **Ctrl/⌘+1…9:** mantenir la seqüència d'avui (recomanat) o fer-les servir
    per als mòduls.
