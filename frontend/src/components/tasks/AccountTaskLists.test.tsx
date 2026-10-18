@@ -121,78 +121,93 @@ describe('the task lists that come with an account (ADR-0070)', () => {
     await settled()
   })
 
-  it('says why a list could not be read, tries again and declines it on request', async () => {
-    let declined = false
-    const calls = stubBridge({
-      'tasks.list': () => ({ tasks: [] }),
-      'tasks.lists': () => ({
-        lists: [mail],
-        account_lists: [declined ? { ...waiting, state: 'declined' } : { ...waiting, last_error: 'ErrorAccessDenied' }],
-      }),
-      'tasks.sync': () => ({ lists: [], accounts: [{ account: 'acc', source: 'ews', ok: false }] }),
-      'tasks.declineAccountList': () => {
-        declined = true
-        return { ok: true }
-      },
-    })
-    const view = render(<TasksView />)
-    await waitFor(() =>
-      expect(view.getByRole('alert').textContent).toContain('The tasks of me@corp.example could not be read: ErrorAccessDenied'),
-    )
-    const syncs = () => calls.filter((c) => c.command === 'tasks.sync').length
-    await waitFor(() => expect(syncs()).toBe(1))
-    await waitFor(() => expect((view.getByRole('button', { name: 'Try again' }) as HTMLButtonElement).disabled).toBe(false))
-    fireEvent.click(view.getByRole('button', { name: 'Try again' }))
-    await waitFor(() => expect(syncs()).toBe(2))
-    fireEvent.click(view.getByRole('button', { name: 'Don’t add it' }))
-    await waitFor(() => expect(view.queryByRole('alert')).toBeNull())
-    expect(calls.find((c) => c.command === 'tasks.declineAccountList')!.payload).toEqual({ account: 'acc', source: 'ews' })
-    // Declined, it is offered under “Add a list”, and “No tasks” is true now.
-    expect(view.getByText(/Add a list/)).toBeTruthy()
-    expect(view.getByText('No tasks')).toBeTruthy()
-    await settled()
-  })
+  // Text queries only: role queries over the whole Tasks view are slow
+  // enough under happy-dom to starve these flows past the test timeout.
+  const button = (view: ReturnType<typeof render>, text: string) =>
+    view.getByText(text).closest('button') as HTMLButtonElement
 
-  it('shows the upgrade’s notice until “Remove it” or “OK”, kept by the core', async () => {
-    let answered = ''
-    const calls = stubBridge({
-      'tasks.list': () => ({ tasks: answered === 'removed' ? [] : [fromAccount] }),
-      'tasks.lists': () =>
-        answered === 'removed'
-          ? { lists: [mail], account_lists: [{ ...upgraded, state: 'declined', list_id: '', notified: true }] }
-          : { lists: [mail, davList], account_lists: [{ ...upgraded, notified: answered === 'ok' }] },
-      'tasks.sync': () => ({ lists: [{ id: 'list:dav', ok: true }], accounts: [] }),
-      'tasks.acknowledgeAccountList': () => {
-        answered = 'ok'
-        return { ok: true }
-      },
-      'tasks.declineAccountList': () => {
-        answered = 'removed'
-        return { ok: true }
-      },
-    })
-    const view = render(<TasksView />)
-    await waitFor(() =>
-      expect(view.getByText('The list Feina of me@corp.example was added on its own when Oreneta was updated.')).toBeTruthy(),
-    )
-    fireEvent.click(view.getByRole('button', { name: 'OK' }))
-    await waitFor(() => expect(view.queryByText(/was added on its own/)).toBeNull())
-    expect(calls.find((c) => c.command === 'tasks.acknowledgeAccountList')!.payload).toEqual({
-      account: 'acc',
-      source: upgraded.source,
-    })
+  it(
+    'says why a list could not be read, tries again and declines it on request',
+    async () => {
+      let declined = false
+      const calls = stubBridge({
+        'tasks.list': () => ({ tasks: [] }),
+        'tasks.lists': () => ({
+          lists: [mail],
+          account_lists: [declined ? { ...waiting, state: 'declined' } : { ...waiting, last_error: 'ErrorAccessDenied' }],
+        }),
+        'tasks.sync': () => ({ lists: [], accounts: [{ account: 'acc', source: 'ews', ok: false }] }),
+        'tasks.declineAccountList': () => {
+          declined = true
+          return { ok: true }
+        },
+      })
+      const view = render(<TasksView />)
+      await waitFor(() =>
+        expect(view.queryByText('The tasks of me@corp.example could not be read: ErrorAccessDenied')).not.toBeNull(),
+      )
+      const syncs = () => calls.filter((c) => c.command === 'tasks.sync').length
+      await waitFor(() => expect(syncs()).toBe(1))
+      await waitFor(() => expect(tasks$.syncing.get()).toBe(false))
+      await waitFor(() => expect(button(view, 'Try again').disabled).toBe(false))
+      fireEvent.click(button(view, 'Try again'))
+      await waitFor(() => expect(syncs()).toBe(2))
+      await waitFor(() => expect(tasks$.syncing.get()).toBe(false))
+      fireEvent.click(button(view, 'Don’t add it'))
+      await waitFor(() => expect(tasks$.accountLists.get()[0]?.state).toBe('declined'))
+      await waitFor(() => expect(view.queryByText(/could not be read/)).toBeNull())
+      expect(calls.find((c) => c.command === 'tasks.declineAccountList')!.payload).toEqual({ account: 'acc', source: 'ews' })
+      // Declined, it is offered under “Add a list”, and “No tasks” is true now.
+      await waitFor(() => expect(view.queryByText(/Add a list/)).not.toBeNull())
+      expect(view.queryByText('No tasks')).not.toBeNull()
+      await settled()
+    },
+    15_000,
+  )
 
-    // «Treu-la» on another one: the list goes, declined.
-    answered = ''
-    await act(async () => {
+  it(
+    'shows the upgrade’s notice until “Remove it” or “OK”, kept by the core',
+    async () => {
+      let answered = ''
+      const calls = stubBridge({
+        'tasks.list': () => ({ tasks: answered === 'removed' ? [] : [fromAccount] }),
+        'tasks.lists': () =>
+          answered === 'removed'
+            ? { lists: [mail], account_lists: [{ ...upgraded, state: 'declined', list_id: '', notified: true }] }
+            : { lists: [mail, davList], account_lists: [{ ...upgraded, notified: answered === 'ok' }] },
+        'tasks.sync': () => ({ lists: [{ id: 'list:dav', ok: true }], accounts: [] }),
+        'tasks.acknowledgeAccountList': () => {
+          answered = 'ok'
+          return { ok: true }
+        },
+        'tasks.declineAccountList': () => {
+          answered = 'removed'
+          return { ok: true }
+        },
+      })
+      const view = render(<TasksView />)
+      const notice = 'The list Feina of me@corp.example was added on its own when Oreneta was updated.'
+      await waitFor(() => expect(view.queryByText(notice)).not.toBeNull())
+      await waitFor(() => expect(tasks$.syncing.get()).toBe(false))
+      fireEvent.click(button(view, 'OK'))
+      await waitFor(() => expect(view.queryByText(notice)).toBeNull())
+      expect(calls.find((c) => c.command === 'tasks.acknowledgeAccountList')!.payload).toEqual({
+        account: 'acc',
+        source: upgraded.source,
+      })
+
+      // «Treu-la» on another one: the list goes, declined.
+      answered = ''
       tasks$.accountLists.set([upgraded])
-    })
-    fireEvent.click(view.getByRole('button', { name: 'Remove it' }))
-    await waitFor(() => expect(calls.some((c) => c.command === 'tasks.declineAccountList')).toBe(true))
-    await waitFor(() => expect(view.queryByText('Informe')).toBeNull())
-    expect(view.getByText(/Add a list/)).toBeTruthy()
-    await settled()
-  })
+      await waitFor(() => expect(view.queryByText('Remove it')).not.toBeNull())
+      fireEvent.click(button(view, 'Remove it'))
+      await waitFor(() => expect(calls.some((c) => c.command === 'tasks.declineAccountList')).toBe(true))
+      await waitFor(() => expect(view.queryByText('Informe')).toBeNull())
+      await waitFor(() => expect(view.queryByText(/Add a list/)).not.toBeNull())
+      await settled()
+    },
+    15_000,
+  )
 
   it('shows a list read behind the view as soon as the core says it is here', async () => {
     const listeners: Record<string, () => void> = {}

@@ -145,6 +145,11 @@ fn read_multistatus(body: &str) -> (Vec<DavResponse>, bool) {
             }
             Ok(Event::Empty(element)) => {
                 let name = local_name(element.name().as_ref());
+                // An answer with nothing in it, written `<multistatus/>`
+                // (Radicale, for a collection with no match), is complete.
+                if name == "multistatus" && current.is_none() && path.is_empty() {
+                    closed = true;
+                }
                 // `<collection/>` and `<addressbook/>` inside a resourcetype.
                 if name == "comp" {
                     record_component(current.as_mut(), &path, &element, reader.decoder());

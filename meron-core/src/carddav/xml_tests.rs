@@ -141,6 +141,21 @@ fn a_truncated_document_yields_what_it_managed_to_read() {
     assert_eq!(parsed[0].prop("displayname"), Some("A"));
 }
 
+/// An answer with nothing in it, as Radicale writes it for a query that
+/// matches nothing, is complete: an empty collection is empty, not cut off.
+#[test]
+fn an_empty_multistatus_written_as_one_element_is_complete() {
+    for body in [
+        r#"<?xml version='1.0' encoding='utf-8'?>
+<multistatus xmlns="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav" />"#,
+        r#"<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"></d:multistatus>"#,
+    ] {
+        assert!(parse_multistatus_complete(body).unwrap().is_empty(), "{body}");
+    }
+    // A single element that is not the multistatus is still not an answer.
+    assert!(parse_multistatus_complete(r#"<?xml version="1.0"?><d:error xmlns:d="DAV:"/>"#).is_err());
+}
+
 /// ADR-0070: which components a calendar collection takes, as Nextcloud,
 /// Radicale and others write it, and the property left out.
 #[test]
