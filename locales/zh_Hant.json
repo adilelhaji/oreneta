@@ -2814,5 +2814,19 @@
   "people.deleteGroupText": "將刪除群組 {name}。其中的人員會保留。",
   "people.deleteGroupTextServer": "將從伺服器上的通訊錄中刪除群組 {name}。其中的人員會保留。",
   "people.deleteText": "將從這台電腦上的通訊錄中刪除 {name}。",
-  "people.deleteTextServer": "將從伺服器上的通訊錄中刪除 {name}，對讀取該通訊錄的所有 App 都生效。"
+  "people.deleteTextServer": "將從伺服器上的通訊錄中刪除 {name}，對讀取該通訊錄的所有 App 都生效。",
+  "folders.hide.action": "隱藏資料夾",
+  "folders.hide.show": "重新顯示資料夾",
+  "folders.hide.mark": "已隱藏",
+  "folders.hide.toggle": "顯示隱藏的資料夾（{count}）",
+  "folders.hide.hidden": "已隱藏 {folder}",
+  "folders.hide.shown": "已重新顯示 {folder}",
+  "folders.hide.blocked.inbox": "無法隱藏收件匣",
+  "folders.hide.blocked.containsInbox": "此資料夾包含收件匣，無法隱藏",
+  "folders.hide.blocked.parentHidden": "因其上層資料夾已隱藏而隱藏",
+  "search.scope.starred": "在所有帳戶的所有資料夾中搜尋已加星號的郵件，包括隱藏的資料夾。",
+  "search.scope.unified": "在「{folder}」中搜尋：整合資料夾中每個帳戶的該資料夾，即使已隱藏。",
+  "search.scope.folder": "僅在「{folder}」中搜尋。不包括隱藏的資料夾。",
+  "search.scope.hiddenFolder": "僅在隱藏的資料夾「{folder}」中搜尋。",
+  "search.scope.unifiedInbox": "在「{folder}」中搜尋：整合資料夾中每個帳戶的收件匣。"
 }

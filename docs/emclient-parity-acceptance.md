@@ -78,6 +78,12 @@ de mencions, però comptada com a no llegida) i les mencions sense llegir de cad
 compte. L'absència automàtica per inactivitat necessita una API nova del sistema: el propietari va
 triar l'opció A de l'ADR-0065, que encara no està implementada (#265). La fila es manté `partial` (hi falten aquest punt i
 l'evidència nativa de Windows).
+El 2026-10-17 (#273) SET-07 va incorporar amagar carpetes de l'arbre de carpetes i tornar-les
+a mostrar («Amaga la carpeta», «Mostra les carpetes amagades», «Torna a mostrar la carpeta»),
+amb les subcarpetes incloses, com a preferència local (`folder_hidden`) que no arriba mai al
+servidor: les carpetes amagades es continuen sincronitzant, i «Opcions de cerca» diu si la
+cerca les inclou. La safata d'entrada no es pot amagar. Cap fila no canvia d'estat: SET-07
+es manté `partial` i l'evidència nativa de Windows continua pendent.
 El 2026-10-17 (#287) l'aparença (S01-01, S01-02) va incorporar la primera peça del
 redisseny aprovat pel propietari: dos tons de superfície a tots els temes (el marc per a
 la finestra, les capçaleres i el panell de carpetes; el contingut per a les llistes i el

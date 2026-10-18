@@ -196,6 +196,30 @@
 .mail-folder-destination[data-folder-color] > svg {
   color: var(--folder-color);
 }
+/* Hidden folders (#273), while they are shown: the name keeps full contrast,
+   the eye mark says what is different. */
+.mail-folder-destination > svg.mail-folder-hidden-mark {
+  color: var(--me-text-secondary);
+}
+.mail-folder-destination[data-folder-hidden] > span {
+  font-style: italic;
+}
+.mail-folder-hidden-toggle {
+  display: flex;
+  width: 100%;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 4px;
+  padding: 6px 8px;
+  border-radius: var(--radius-control-sm);
+  color: var(--me-text-secondary);
+  font-size: var(--text-caption);
+  text-align: start;
+  cursor: pointer;
+}
+.mail-folder-hidden-toggle[aria-pressed='true'] {
+  color: var(--me-text-primary);
+}
 .folder-color-swatch {
   display: inline-flex;
   width: 24px;
