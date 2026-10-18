@@ -8,6 +8,7 @@ import { Chip } from '../chip/Chip'
 import { SelectInput, TextInput } from '../field/Field'
 import { Notice } from '../notice/Notice'
 import { MenuItem } from '../menu/MenuItem'
+import { MenuGroup, MenuList, MenuSeparator } from '../menu/Menu'
 import { EmptyState } from '../empty-state/EmptyState'
 import { ErrorState, LoadingState } from '../empty-state/StateViews'
 import { SettingsGroup, Switch, ToggleRow } from './AccountSettingsRows'
@@ -156,8 +157,8 @@ export function DesignCatalogue() {
           </Row>
         </Section>
 
-        <Section title="Menu items">
-          <div className="w-56 rounded-control border border-border bg-chats p-1 shadow-overlay">
+        <Section title="Menu items" note="28 px rows. A static sample: popup menus take focus when they open.">
+          <MenuList label="Sample menu" className="w-56 rounded-control border border-border bg-chats p-1 shadow-overlay">
             <MenuItem
               icon={<Bookmark size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-secondary" />}
               label="Item"
@@ -167,13 +168,19 @@ export function DesignCatalogue() {
               label="Archivar los mensajes seleccionados"
               trailing={<span className="text-2xs text-secondary">⌘E</span>}
             />
+            <MenuItem role="menuitemcheckbox" checked label="Checkbox item, checked" />
+            <MenuGroup label="Group">
+              <MenuItem role="menuitemradio" checked label="Radio item, checked" />
+              <MenuItem role="menuitemradio" checked={false} label="Radio item" />
+            </MenuGroup>
+            <MenuSeparator />
             <MenuItem
               icon={<Trash2 size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />}
               label="Danger item"
               danger
             />
             <MenuItem label="Disabled item" disabled />
-          </div>
+          </MenuList>
         </Section>
 
         <Section title="Notices" note="Tone paints the border and the icon, not the box.">

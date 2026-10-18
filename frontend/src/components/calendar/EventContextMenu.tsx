@@ -27,10 +27,11 @@ export function EventContextMenu({ state, onClose }: { state: EventContextMenuSt
     <FloatingContextMenu
       x={state.x}
       y={state.y}
+      label={state.event.subject || t('calendar.untitled', { defaultValue: '(No title)' })}
       onClose={onClose}
       overlay
       overlayClassName="fixed inset-0 z-[60]"
-      className="fixed z-[61] min-w-[160px] rounded-control border border-border bg-header p-1 shadow-overlay"
+      className="fixed z-[61] min-w-[160px] rounded-control border border-border bg-chats p-1 shadow-overlay"
     >
       <MenuItem
         icon={<SquarePen size={14} className="text-accent" strokeWidth={1.75} />}

@@ -1137,7 +1137,8 @@ fn publish(conn: &Connection, lease: &Lease) -> Result<()> {
         let existing:Option<String>=tx.query_row("SELECT COALESCE(json_extract(config,'$.auth_type'),'') FROM accounts WHERE id=?1",[&lease.account],|r|r.get(0)).optional()?;
         if existing.as_deref().is_some_and(|v|v!="graph_oauth") {return Err(Error::new(ErrorKind::AccountConflict).into());}
         let config=json!({"auth_type":"graph_oauth","user":lease.account,"proxy":{"mode":"global"}}).to_string();
-        tx.execute("INSERT INTO accounts(id,engine,provider,email,display_name,avatar_url,config,created_at,updated_at,sender_name,sort_order) SELECT account,'mail','outlook',account,display_name,'',?3,?4,?4,'',COALESCE((SELECT MAX(sort_order)+1 FROM accounts),0) FROM graph_profiles WHERE account=?1 AND generation=?2 ON CONFLICT(id) DO NOTHING",params![lease.account,lease.generation,config,chrono::Utc::now().timestamp()])?;
+        // A new account checks its mail periodically (ADR-0071, 1B).
+        tx.execute("INSERT INTO accounts(id,engine,provider,email,display_name,avatar_url,config,created_at,updated_at,sender_name,sort_order,prefs) SELECT account,'mail','outlook',account,display_name,'',?3,?4,?4,'',COALESCE((SELECT MAX(sort_order)+1 FROM accounts),0),?5 FROM graph_profiles WHERE account=?1 AND generation=?2 ON CONFLICT(id) DO NOTHING",params![lease.account,lease.generation,config,chrono::Utc::now().timestamp(),crate::mail_check::new_account_prefs()])?;
         tx.execute("UPDATE graph_profiles SET state='ready',error=NULL,retry_after=NULL WHERE account=?1 AND generation=?2",params![lease.account,lease.generation])?;
         tx.commit()?;
         Ok(())

@@ -10,10 +10,31 @@ import {
   setAccountPaused,
   setAccountSaveSentCopy,
   setRSSSyncInterval,
+  setMailCheckInterval,
 } from '../../states/accounts'
 import { settings$, setAccountSideNavHidden } from '../../states/settings'
+import { ARCHIVE_ACCOUNT } from '../../states/archive'
 import type { Account } from '../../types'
-import { NumberRow, SegmentedRow, SettingsGroup, ToggleRow } from './AccountSettingsRows'
+import { NumberRow, SegmentedRow, SelectRow, SettingsGroup, ToggleRow } from './AccountSettingsRows'
+
+// The intervals offered for the periodic mail check (#270), in minutes; 0 is
+// "manual only". A value set elsewhere (a restored backup) is offered too.
+export const MAIL_CHECK_CHOICES = [0, 5, 10, 15, 30, 60, 120]
+/** What an account with no choice of its own does: accounts from before #270 stay manual (ADR-0071, 1B). */
+export const DEFAULT_MAIL_CHECK_MINUTES = 0
+
+export function mailCheckChoices(current: number): number[] {
+  return MAIL_CHECK_CHOICES.includes(current)
+    ? MAIL_CHECK_CHOICES
+    : [...MAIL_CHECK_CHOICES, current].sort((a, b) => a - b)
+}
+
+// What the periodic check covers depends on how the account gets its mail.
+function mailCheckHintKey(account: Account): string {
+  if (account.auth_type === 'pop3') return 'settings.account.mailCheckHintPop3'
+  if (account.auth_type === 'graph_oauth' || account.ews_url) return 'settings.account.mailCheckHintNoPush'
+  return 'settings.account.mailCheckHintImap'
+}
 
 function sentCopyDefault(account: Account): boolean {
   const host = account.smtp_host.trim().replace(/\.$/, '').toLowerCase()
@@ -49,6 +70,7 @@ export function AccountTogglesSection({ account, isRSS }: { account: Account; is
   const loadImages = account.load_remote_images ?? isRSS
   const conversationHtml = account.conversation_html ?? true
   const saveSentCopy = account.save_sent_copy ?? sentCopyDefault(account)
+  const mailCheck = account.mail_check_interval_minutes ?? DEFAULT_MAIL_CHECK_MINUTES
 
   const updateRSSInterval = (value: string) => {
     setRssIntervalVal(value)
@@ -102,6 +124,22 @@ export function AccountTogglesSection({ account, isRSS }: { account: Account; is
             step={5}
             suffix="min"
             onChange={updateRSSInterval}
+          />
+        )}
+        {!isRSS && account.auth_type !== 'local_archive' && account.id !== ARCHIVE_ACCOUNT && (
+          <SelectRow
+            icon={<Clock size={16} strokeWidth={1.75} />}
+            title={t('settings.account.mailCheckInterval')}
+            hint={t(mailCheckHintKey(account))}
+            value={String(mailCheck)}
+            options={mailCheckChoices(mailCheck).map((minutes) => ({
+              value: String(minutes),
+              label:
+                minutes === 0
+                  ? t('settings.account.mailCheckManual')
+                  : t('settings.account.mailCheckEvery', { minutes }),
+            }))}
+            onChange={(value) => void setMailCheckInterval(account.id, Number(value))}
           />
         )}
       </SettingsGroup>

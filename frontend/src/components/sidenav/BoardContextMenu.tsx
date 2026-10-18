@@ -18,7 +18,7 @@ export function BoardContextMenu({
 }) {
   const { t } = useTranslation()
   return (
-    <RailContextMenu x={x} y={y} onClose={onClose}>
+    <RailContextMenu x={x} y={y} label={board.name} onClose={onClose}>
       <RailMenuItem
         icon={<Settings size={14} className="text-secondary" strokeWidth={1.75} />}
         label={t('kanban.board.settings')}

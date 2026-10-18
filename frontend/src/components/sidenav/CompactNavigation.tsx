@@ -22,6 +22,8 @@ export function CompactNavigation() {
         ref={opener}
         icon={MoreHorizontal}
         label={t('common.more')}
+        aria-haspopup="menu"
+        aria-expanded={anchor !== null}
         onClick={(event) => {
           const rect = event.currentTarget.getBoundingClientRect()
           setAnchor({ x: startEdgeX(rect), y: rect.bottom, placement: 'down' })

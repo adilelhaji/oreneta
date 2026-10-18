@@ -5,12 +5,13 @@ import { Mail } from 'lucide-react'
 import { Button } from './button/Button'
 import { IconButton } from './button/IconButton'
 import { Chip } from './chip/Chip'
-import { TextInput } from './field/Field'
+import { SelectInput, TextInput } from './field/Field'
 import { Notice } from './notice/Notice'
 import { EmptyState } from './empty-state/EmptyState'
 import { ErrorState, LoadingState } from './empty-state/StateViews'
 import { DesignCatalogue } from './dialog/DesignCatalogue'
 import { MenuItem } from './menu/MenuItem'
+import { MenuList } from './menu/Menu'
 
 afterEach(() => {
   cleanup()
@@ -54,17 +55,40 @@ describe('shared control interactions', () => {
     expect(field.hasAttribute('aria-invalid')).toBe(false)
   })
 
+  it('outlines fields with the 3:1 input border and invalid ones with danger (#287)', () => {
+    const view = render(
+      <>
+        <TextInput aria-label="Valid" />
+        <TextInput aria-label="Invalid" invalid />
+        <SelectInput aria-label="Choice" defaultValue="a">
+          <option value="a">A</option>
+        </SelectInput>
+      </>,
+    )
+    const classes = (name: string) =>
+      view.getByRole(name === 'Choice' ? 'combobox' : 'textbox', { name }).className.split(' ')
+    expect(classes('Valid')).toContain('border-input')
+    expect(classes('Valid')).not.toContain('border-border')
+    expect(classes('Invalid')).toContain('border-danger')
+    expect(classes('Invalid')).not.toContain('border-input')
+    expect(classes('Choice')).toContain('border-input')
+  })
+
   it('keeps disabled menu actions inert and preserves long action names with shortcuts', () => {
     const click = mock(() => {})
     const view = render(
-      <>
+      <MenuList label="Actions">
         <MenuItem label="Delete selected messages" danger disabled onClick={click} />
         <MenuItem label="Archive all reviewed messages" trailing={<kbd>Ctrl+E</kbd>} onClick={click} />
-      </>,
+      </MenuList>,
     )
-    fireEvent.click(view.getByRole('button', { name: 'Delete selected messages' }))
+    // Disabled, yet still focusable and announced: aria-disabled, not the attribute.
+    const disabled = view.getByRole('menuitem', { name: 'Delete selected messages' })
+    expect(disabled.getAttribute('aria-disabled')).toBe('true')
+    expect(disabled.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(disabled)
     expect(click).not.toHaveBeenCalled()
-    fireEvent.click(view.getByRole('button', { name: 'Archive all reviewed messages Ctrl+E' }))
+    fireEvent.click(view.getByRole('menuitem', { name: 'Archive all reviewed messages Ctrl+E' }))
     expect(click).toHaveBeenCalledTimes(1)
   })
 

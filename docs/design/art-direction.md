@@ -9,7 +9,9 @@ modes convencionals existents de llista i lector mitjançant els
 de la disposició continua a part. El
 [lliurament dels controls compartits](shared-controls.md) (#152) aplica aquesta
 direcció als controls i a les respostes comunes; #33 continua obert per a la
-resta de pantalles.
+resta de pantalles. El [sistema de disseny](design-system.md) (#287) hi afegeix els
+dos tons de superfície (marc i contingut), la vora dels camps, l'anell de focus sòlid
+i els radis gairebé rectes.
 
 Una referència escrita i comprovable de com ha de ser la interfície: la direcció
 sobre la qual es construeix cada incidència de disseny posterior a aquesta, en
@@ -48,7 +50,7 @@ Els colors objectiu són:
 |---|---|---|---|
 | `accent` | `#2056dd` | `#7ea6ff` | Interactiu, selecció, l'únic color saturat d'una pantalla |
 | `bg-sidenav` | Blau marí proper a `#15316e` | Blau marí gairebé negre | La barra de comptes |
-| Neutres | Blanc trencat amb un to fred lleu, no `#fff` pur | Blau marí gairebé negre, no `#000` pur | Tota la resta |
+| Neutres | Blanc trencat amb un to fred lleu, no `#fff` pur, llevat de la superfície elevada dels camps (`#ffffff`, #287) | Blau marí gairebé negre, no `#000` pur | Tota la resta |
 
 ### Tokens semàntics
 

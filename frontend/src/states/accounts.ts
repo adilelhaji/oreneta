@@ -123,6 +123,25 @@ export async function setRSSSyncInterval(accountId: string, minutes: number) {
   }
 }
 
+/** How often a mail account is checked for what push does not cover (#270);
+ * 0 is "manual only". The core bounds anything else and says what it kept. */
+export async function setMailCheckInterval(accountId: string, minutes: number) {
+  const asked = Math.max(0, Math.round(minutes))
+  const previous = accounts$.get()
+  const withInterval = (value: number) =>
+    accounts$.set(
+      accounts$.get().map((acc) => (acc.id === accountId ? { ...acc, mail_check_interval_minutes: value } : acc)),
+    )
+  withInterval(asked)
+  try {
+    const res = await invoke<{ minutes?: number }>('account.setMailCheckInterval', { id: accountId, minutes: asked })
+    if (typeof res?.minutes === 'number' && res.minutes !== asked) withInterval(res.minutes)
+  } catch (error) {
+    accounts$.set(previous)
+    showToast(error instanceof Error ? error.message : t('accounts.toast.failedToUpdateMailCheckInterval'), 'error')
+  }
+}
+
 export async function setAccountChatWallpaper(accountId: string, wallpaper: ChatWallpaper | null) {
   const previous = accounts$.get()
   accounts$.set(previous.map((acc) => (acc.id === accountId ? { ...acc, chat_wallpaper: wallpaper } : acc)))

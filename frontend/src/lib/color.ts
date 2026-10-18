@@ -82,6 +82,23 @@ export function withAlpha(color: string, alpha: number): string {
   return formatColor({ ...parsed, a: clamp01(alpha) })
 }
 
+/**
+ * The opaque color a translucent `color` shows when painted over the opaque
+ * `under`, so its contrast can be measured. Null when either is unparseable
+ * or `under` is itself translucent: there is nothing resolved to measure.
+ */
+export function composite(color: string, under: string): string | null {
+  const top = parseColor(color)
+  const base = parseColor(under)
+  if (!top || !base || base.a !== 1) return null
+  return formatColor({
+    r: top.r * top.a + base.r * (1 - top.a),
+    g: top.g * top.a + base.g * (1 - top.a),
+    b: top.b * top.a + base.b * (1 - top.a),
+    a: 1,
+  })
+}
+
 /** Perceived luminance 0..1 (WCAG-ish, good enough to pick contrasting text). */
 export function luminance(color: string): number {
   const parsed = parseColor(color)

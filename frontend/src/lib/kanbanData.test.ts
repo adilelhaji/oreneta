@@ -229,6 +229,47 @@ describe('kanban column loading filters', () => {
     expect(handlers.size).toBe(0)
   })
 
+  it('lets a periodic check finish a sync only when it synced that folder, and never fail it (#270)', async () => {
+    const handlers = new Map<string, (detail: unknown) => void>()
+    ;(window as any).runtime = {
+      EventsOn: (name: string, handler: (detail: unknown) => void) => {
+        handlers.set(name, handler)
+        return () => handlers.delete(name)
+      },
+    }
+    accounts$.set([account('acc1')])
+    ;(window as any).go = {
+      main: {
+        App: {
+          Invoke: async (command: string) =>
+            command === 'mail.threadList'
+              ? { threads: [], next_cursor: '', folder_unread: 0 }
+              : { online: true, queued: true },
+        },
+      },
+    }
+
+    const sync = syncKanbanColumn({ accountId: 'acc1', folderId: 'Clients' })
+    // An object, so the callbacks' writes are not narrowed away by the compiler.
+    const state: { settled: 'done' | 'failed' | null } = { settled: null }
+    sync.then(
+      () => (state.settled = 'done'),
+      () => (state.settled = 'failed'),
+    )
+    await Promise.resolve()
+
+    // About the account, not this folder: neither ends the wait.
+    handlers.get('mail.syncError')?.({ account: 'acc1', message: 'periodic check: 1 of 3 folders failed', periodic: true })
+    handlers.get('mail.synced')?.({ account: 'acc1', periodic: true, synced_folders: ['Sent'] })
+    await Promise.resolve()
+    expect(state.settled).toBe(null)
+
+    // The check synced this folder, which the core left to it.
+    handlers.get('mail.synced')?.({ account: 'acc1', periodic: true, synced_folders: ['Sent', 'Clients'] })
+    await sync
+    expect(state.settled).toBe('done')
+  })
+
   it('sends the active global filter when loading a single-account column', async () => {
     const calls: { command: string; payload: unknown }[] = []
     ;(window as any).go = {
@@ -729,6 +770,20 @@ describe('subscribeKanbanMailReloads', () => {
           refresh: false,
           limit: 50,
         },
+      ])
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('reloads every column a periodic check synced, from its single event (#270)', async () => {
+    const { calls, cleanup, handlers } = setup()
+    try {
+      kanban$.activeBoardId.set('board-b')
+      handlers.get('mail.synced')?.({ account: 'acc2', synced_folders: ['Sent', 'Archive'] } as any)
+      await Bun.sleep(275)
+      expect(calls.filter((call) => call.command === 'mail.threadList').map((call) => call.payload.folder_id)).toEqual([
+        'Archive',
       ])
     } finally {
       cleanup()

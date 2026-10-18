@@ -17,6 +17,8 @@ fitada de [#33](https://github.com/adilelhaji/oreneta/issues/33). Fa servir la
 - Un xip que es pot seleccionar i treure té dos botons germans. Treure'l amb el
   teclat o amb el punter no el pot seleccionar alhora; qui el crida ha de
   proporcionar una etiqueta per a l'acció de treure.
+- Els menús són menús WAI-ARIA amb teclat, retorn del focus i files de 28 px
+  ([menús](menus.md), #289).
 - Les etiquetes dels menús, els botons i els avisos ajusten el text llarg. Els
   estats buit, de càrrega i d'error comparteixen una disposició discreta i
   conserven rols diferenciats i accions explícites per tornar-ho a provar.

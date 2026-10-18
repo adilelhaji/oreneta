@@ -2,12 +2,12 @@ import { useRef, useState } from 'react'
 import { Check, Tag } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
-import { clsx } from '../../lib/utils'
 import { assignLabels, labels$ } from '../../states/labels'
 import { showToast, ui$ } from '../../states/ui'
 import { IconButton } from '../button/IconButton'
 import { useDismissOnOutside } from '../menu/useDismissOnOutside'
-import { menuItemClass } from '../menu/menuStyles'
+import { MenuItem } from '../menu/MenuItem'
+import { MenuList, MenuSeparator } from '../menu/Menu'
 
 /**
  * Puts labels on the open conversation.
@@ -15,7 +15,7 @@ import { menuItemClass } from '../menu/menuStyles'
  * A list of toggles rather than an add-and-remove pair: what a reader wants to
  * say is "this one is Work and not Urgent", and seeing every label with its
  * state says that in one glance. Each toggle saves the whole set, which is
- * also what the core stores.
+ * also what the core stores. The toggles are checkbox menu items (#289).
  */
 export function LabelPicker({ threadId, applied }: { threadId: string; applied: string[] }) {
   const { t } = useTranslation()
@@ -47,47 +47,57 @@ export function LabelPicker({ threadId, applied }: { threadId: string; applied: 
         icon={Tag}
         label={t('labels.label')}
         active={open || applied.length > 0}
+        aria-haspopup="menu"
+        aria-expanded={open}
         onClick={() => setOpen((was) => !was)}
       />
       {open && (
-        <div className="absolute end-0 top-full z-50 mt-2 min-w-[14rem] rounded-control border border-border bg-chats p-1 shadow-overlay">
+        <MenuList
+          label={t('labels.label')}
+          autoFocus
+          onClose={() => setOpen(false)}
+          className="absolute end-0 top-full z-50 mt-2 min-w-[14rem] rounded-control border border-border bg-chats p-1 shadow-overlay"
+        >
           {labels.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-secondary">{t('labels.noneYet')}</p>
+            // Said as a disabled item so the arrow keys reach it too.
+            <MenuItem disabled label={t('labels.noneYet')} />
           ) : (
             labels.map((label) => {
               const on = applied.includes(label.id)
               return (
-                <button
+                <MenuItem
                   key={label.id}
-                  type="button"
+                  role="menuitemcheckbox"
+                  checked={on}
                   disabled={saving}
+                  icon={
+                    <span
+                      aria-hidden="true"
+                      style={{ backgroundColor: label.colour }}
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    />
+                  }
+                  label={
+                    <span dir="auto" className="block min-w-0 truncate">
+                      {label.name}
+                    </span>
+                  }
+                  trailing={on ? <Check size={14} className="shrink-0 text-accent" strokeWidth={1.75} /> : undefined}
                   onClick={() => void toggle(label.id)}
-                  className={clsx(menuItemClass, 'disabled:opacity-60')}
-                >
-                  <span
-                    aria-hidden="true"
-                    style={{ backgroundColor: label.colour }}
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                  />
-                  <span dir="auto" className="min-w-0 flex-1 truncate">{label.name}</span>
-                  {on && <Check size={14} className="shrink-0 text-accent" strokeWidth={1.75} />}
-                </button>
+                />
               )
             })
           )}
-          <div className="my-1 border-t border-border" />
-          <button
-            type="button"
+          <MenuSeparator />
+          <MenuItem
+            icon={<Tag size={14} className="text-secondary" strokeWidth={1.75} />}
+            label={t('labels.manage')}
             onClick={() => {
               setOpen(false)
               ui$.settingsOpen.set(true)
             }}
-            className={menuItemClass}
-          >
-            <Tag size={14} className="text-secondary" strokeWidth={1.75} />
-            <span className="min-w-0 flex-1 truncate text-start">{t('labels.manage')}</span>
-          </button>
-        </div>
+          />
+        </MenuList>
       )}
     </div>
   )

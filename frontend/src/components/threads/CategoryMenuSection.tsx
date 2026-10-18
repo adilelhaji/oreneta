@@ -13,6 +13,7 @@ import {
 } from '../../states/categories'
 import { isInboxFolder } from '../../states/mail'
 import { MenuItem } from '../menu/MenuItem'
+import { MenuGroup } from '../menu/Menu'
 
 const icon = (Icon: typeof Tag) => <Icon size={14} className="text-secondary" strokeWidth={1.75} />
 
@@ -85,15 +86,19 @@ export function CategoryMenuSection({
   const corrected = verdict.reason.kind === 'conversation' || verdict.reason.kind === 'sender'
 
   return (
-    <>
-      <div className="my-1 border-t border-border" />
-      <div className="px-2 pb-1 pt-0.5">
-        <p className="flex items-center gap-1.5 text-caption font-semibold text-primary">
-          <Inbox size={14} className="text-secondary" strokeWidth={1.75} />
+    // Where it is and why, naming the group of the ways to say otherwise.
+    <MenuGroup
+      separated
+      label={
+        <span className="flex items-center gap-1.5">
+          <Inbox size={14} aria-hidden="true" className="text-secondary" strokeWidth={1.75} />
           {t('categories.inCategory', { name: nameOf(verdict.category), defaultValue: 'Category: {name}' })}
-        </p>
-        <p className="mt-0.5 text-2xs leading-snug text-secondary">{reason}</p>
-      </div>
+        </span>
+      }
+      labelClassName="px-2 pt-0.5 text-caption font-semibold text-primary"
+      description={reason}
+      descriptionClassName="mt-0.5 px-2 pb-1 text-2xs leading-snug text-secondary"
+    >
       {targets.map((id) => (
         <MenuItem
           key={id || 'other'}
@@ -120,6 +125,6 @@ export function CategoryMenuSection({
           onClick={() => act(null, verdict.reason.kind === 'sender' ? 'sender' : 'conversation')}
         />
       )}
-    </>
+    </MenuGroup>
   )
 }

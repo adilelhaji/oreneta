@@ -52,7 +52,7 @@ it('follows the clock into scheduled quiet hours, and Resume skips the rest of t
 it('the More menu offers the pauses, then Resume', async () => {
   const onClose = () => {}
   const screen = render(<QuickSettingsMenu anchor={{ x: 0, y: 0, placement: 'down' }} onClose={onClose} />)
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Do not disturb until tomorrow' })))
+  await act(async () => fireEvent.click(screen.getByRole('menuitem', { name: 'Do not disturb until tomorrow' })))
   expect(settings$.notifications.peek().pause).toEqual({ until: new Date(2026, 9, 14, 8).getTime() })
-  expect(screen.getByRole('button', { name: 'Resume notifications' })).toBeTruthy()
+  expect(screen.getByRole('menuitem', { name: 'Resume notifications' })).toBeTruthy()
 })
