@@ -2875,5 +2875,7 @@
   "settings.signature.placementHint": "موضع التوقيع بالنسبة إلى الرسالة الأصلية المقتبسة",
   "settings.signature.placementWithText": "مع ما أكتبه",
   "settings.signature.placementAbove": "فوق الاقتباس",
-  "settings.signature.placementBelow": "تحت الاقتباس"
+  "settings.signature.placementBelow": "تحت الاقتباس",
+  "shell.region.mail": "البريد",
+  "shell.region.modules": "الوحدات"
 }

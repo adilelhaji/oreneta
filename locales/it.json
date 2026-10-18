@@ -2875,5 +2875,7 @@
   "settings.signature.placementHint": "Dove va la firma rispetto al messaggio citato",
   "settings.signature.placementWithText": "Con ciò che scrivo",
   "settings.signature.placementAbove": "Sopra la citazione",
-  "settings.signature.placementBelow": "Sotto la citazione"
+  "settings.signature.placementBelow": "Sotto la citazione",
+  "shell.region.mail": "Posta",
+  "shell.region.modules": "Moduli"
 }

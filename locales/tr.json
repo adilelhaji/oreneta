@@ -2875,5 +2875,7 @@
   "settings.signature.placementHint": "İmzanın alıntılanan özgün iletiye göre yeri",
   "settings.signature.placementWithText": "Yazdığımla birlikte",
   "settings.signature.placementAbove": "Alıntının üstünde",
-  "settings.signature.placementBelow": "Alıntının altında"
+  "settings.signature.placementBelow": "Alıntının altında",
+  "shell.region.mail": "Posta",
+  "shell.region.modules": "Modüller"
 }
