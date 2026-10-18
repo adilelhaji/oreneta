@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import type { Message } from '../types'
-import { compose$, forwardMessage, openReplyInFullEditor, sendReply } from './compose'
+import { compose$, forwardMessage, openComposeTab, openReplyInFullEditor, sendReply, updateComposeDraft } from './compose'
 import { accounts$ } from './accounts'
-import { settings$ } from './settings'
+import {
+  hydrateSettings,
+  sanitizeSignaturePlacements,
+  setSignaturePlacement,
+  settings$,
+  signaturePlacementFor,
+} from './settings'
 import { ui$ } from './ui'
 import { mail$ } from './mail'
 import { DEFAULT_REPLY_FORWARD_PREFS, type ReplyForwardPrefs } from '../lib/replyForward'
@@ -80,6 +86,7 @@ beforeEach(() => {
   settings$.signature.set('')
   settings$.undoSendSeconds.set(0)
   settings$.replyForward.set(DEFAULT_REPLY_FORWARD_PREFS)
+  settings$.signaturePlacement.set({})
   ;(window as any).go = {
     main: {
       App: {
@@ -98,6 +105,7 @@ beforeEach(() => {
 
 afterEach(() => {
   settings$.replyForward.set(DEFAULT_REPLY_FORWARD_PREFS)
+  settings$.signaturePlacement.set({})
   delete (window as any).go
 })
 
@@ -245,5 +253,190 @@ describe('forward', () => {
     await forwardMessage(withFile)
     expect(draft()?.attachments).toEqual([])
     expect(calls.some((call) => call.command === 'mail.readAttachment')).toBe(false)
+  })
+})
+
+// Account → Signature: above or below the quoted original (#277).
+describe('signature placement against the quote', () => {
+  const ATTRIBUTION = 'On [^\n]+ wrote:\n> Line one\n> Line two'
+  const re = (pattern: string) => new RegExp(pattern)
+  const withCc = () => original({ cc: 'me@example.com, Bo <bo@example.com>' })
+  // A second open in the same test starts from a fresh quick reply, as it
+  // does in the app once the thread is opened again.
+  const reset = () => {
+    compose$.tabs.set([])
+    compose$.composer.set('')
+    compose$.quickReplySignature.set(null)
+  }
+  const switchTo = (accountId: string) => updateComposeDraft(compose$.tabs.get()[0].id, { accountId })
+
+  beforeEach(() => settings$.signature.set('<p>Me</p>'))
+
+  it('keeps the signature with the reply by default, and above the quote when asked (reply)', () => {
+    for (const choice of ['withText', 'above'] as const) {
+      reset()
+      setSignaturePlacement('acc-1', choice)
+      openThread(original())
+      openReplyInFullEditor()
+      expect(draft()?.text).toMatch(re(`^\n\nMe\n\n${ATTRIBUTION}$`))
+      expect(draft()?.signature).toEqual({ html: '<p>Me</p>', text: 'Me', placement: 'aboveQuote' })
+      expect(draft()?.caret).toBeUndefined()
+    }
+  })
+
+  it('puts the signature below the quote when asked (reply)', () => {
+    setSignaturePlacement('acc-1', 'below')
+    openThread(original())
+    openReplyInFullEditor()
+    expect(draft()?.text).toMatch(re(`^\n\n${ATTRIBUTION}\n\nMe$`))
+    expect(draft()?.signature).toEqual({ html: '<p>Me</p>', text: 'Me', placement: 'belowText' })
+    // The person still writes above the quote, so the editor opens there.
+    expect(draft()?.caret).toBe('start')
+  })
+
+  it('places it above or below the quote in a reply all, with text carried over', () => {
+    setSignaturePlacement('acc-1', 'above')
+    openThread(withCc())
+    compose$.composer.set('Sounds good')
+    openReplyInFullEditor()
+    expect(draft()?.cc).toBe('Bo <bo@example.com>')
+    expect(draft()?.text).toMatch(re(`^Sounds good\n\nMe\n\n${ATTRIBUTION}$`))
+
+    reset()
+    setSignaturePlacement('acc-1', 'below')
+    openThread(withCc())
+    compose$.composer.set('Sounds good')
+    openReplyInFullEditor()
+    expect(draft()?.cc).toBe('Bo <bo@example.com>')
+    expect(draft()?.text).toMatch(re(`^Sounds good\n\n${ATTRIBUTION}\n\nMe$`))
+    expect(draft()?.signature?.placement).toBe('belowText')
+  })
+
+  it('moves the signature above the quote of a reply written below it, only when asked', () => {
+    setPrefs({ replyPosition: 'below' })
+    openThread(original())
+    compose$.composer.set('Sounds good')
+    openReplyInFullEditor()
+    // By default it stays with the text, under the quote.
+    expect(draft()?.text).toMatch(re(`^${ATTRIBUTION}\n\nSounds good\n\nMe$`))
+
+    reset()
+    setSignaturePlacement('acc-1', 'above')
+    openThread(original())
+    compose$.composer.set('Sounds good')
+    openReplyInFullEditor()
+    expect(draft()?.text).toMatch(re(`^\n\nMe\n\n${ATTRIBUTION}\n\nSounds good$`))
+    expect(draft()?.signature?.placement).toBe('aboveQuote')
+  })
+
+  it('places it above or below the quote of an HTML reply', () => {
+    const html = original({ body_html: '<p>Hello</p>' })
+    setSignaturePlacement('acc-1', 'below')
+    openThread(html)
+    openReplyInFullEditor()
+    expect(draft()?.rich).toBe(true)
+    expect(draft()?.html).toMatch(
+      /^<p><\/p><p>On .+ wrote:<\/p><blockquote><p>Hello<\/p><\/blockquote><p><\/p><p>Me<\/p>$/,
+    )
+
+    reset()
+    setPrefs({ replyPosition: 'below' })
+    setSignaturePlacement('acc-1', 'above')
+    openThread(html)
+    openReplyInFullEditor()
+    expect(draft()?.html).toMatch(/^<p><\/p><p>Me<\/p><p>On .+ wrote:<\/p><blockquote><p>Hello<\/p><\/blockquote>/)
+    expect(draft()?.signature?.placement).toBe('aboveQuote')
+  })
+
+  it('puts it above the forwarded message by default and below it when asked (forward)', async () => {
+    await forwardMessage(original())
+    expect(draft()?.text).toStartWith('\n\nMe\n\n')
+    expect(draft()?.text).toContain('Line one\nLine two')
+    expect(draft()?.signature?.placement).toBe('aboveQuote')
+
+    reset()
+    setSignaturePlacement('acc-1', 'above')
+    await forwardMessage(original())
+    expect(draft()?.text).toStartWith('\n\nMe\n\n')
+    expect(draft()?.signature?.placement).toBe('aboveQuote')
+
+    reset()
+    setSignaturePlacement('acc-1', 'below')
+    await forwardMessage(original())
+    expect(draft()?.text).toEndWith('Line two\n\nMe')
+    expect(draft()?.signature?.placement).toBe('belowText')
+
+    reset()
+    await forwardMessage(original({ body_html: '<p>Hello</p>' }))
+    expect(draft()?.html).toEndWith('<p>Hello</p></div><p></p><p>Me</p>')
+  })
+
+  it('swaps the signature in its place when the draft changes account', async () => {
+    const two = { ...account, id: 'acc-2', email: 'two@example.com' }
+    accounts$.set([account, { ...two, signature: { mode: 'custom' as const, html: '<p>Two</p>' } }])
+    setSignaturePlacement('acc-1', 'below')
+    await forwardMessage(original())
+    switchTo('acc-2')
+    expect(draft()?.text).toEndWith('Line two\n\nTwo')
+    expect(draft()?.text).not.toMatch(/^Me$/m)
+
+    reset()
+    setPrefs({ replyPosition: 'below' })
+    setSignaturePlacement('acc-1', 'above')
+    openThread(original())
+    compose$.composer.set('Sounds good')
+    openReplyInFullEditor()
+    switchTo('acc-2')
+    expect(draft()?.text).toMatch(re(`^\n\nTwo\n\n${ATTRIBUTION}\n\nSounds good$`))
+  })
+
+  it('leaves new messages, other accounts and replies without the original as they were', () => {
+    setSignaturePlacement('acc-1', 'below')
+    openComposeTab({ accountId: 'acc-1' })
+    expect(draft()?.text).toBe('\n\nMe')
+    expect(draft()?.signature?.placement).toBe('belowText')
+
+    reset()
+    setPrefs({ includeOriginal: false })
+    openThread(original())
+    compose$.composer.set('Just this')
+    openReplyInFullEditor()
+    expect(draft()?.text).toBe('Just this\n\nMe')
+
+    reset()
+    setPrefs({})
+    setSignaturePlacement('acc-1', 'withText')
+    setSignaturePlacement('other', 'below')
+    openThread(original())
+    openReplyInFullEditor()
+    expect(draft()?.text).toMatch(re(`^\n\nMe\n\n${ATTRIBUTION}$`))
+  })
+})
+
+describe('signature placement preference (#277)', () => {
+  it('is kept per account, removed when it goes back to the default, and read back without junk', () => {
+    setSignaturePlacement('acc-1', 'below')
+    setSignaturePlacement('acc-2', 'above')
+    expect(signaturePlacementFor('acc-1')).toBe('below')
+    expect(signaturePlacementFor('acc-3')).toBe('withText')
+    expect(signaturePlacementFor(undefined)).toBe('withText')
+    setSignaturePlacement('acc-1', 'withText')
+    expect(settings$.signaturePlacement.get()).toEqual({ 'acc-2': 'above' })
+    expect(calls.filter((call) => call.command === 'app.prefsSet').at(-1)?.payload).toEqual({
+      key: 'signature_placement',
+      value: { 'acc-2': 'above' },
+    })
+    expect(sanitizeSignaturePlacements({ a: 'above', b: 'sideways', '': 'below', c: 3 })).toEqual({ a: 'above' })
+    expect(sanitizeSignaturePlacements('{"a":"below"}')).toEqual({ a: 'below' })
+    expect(sanitizeSignaturePlacements('not json')).toEqual({})
+    expect(sanitizeSignaturePlacements(['above'])).toEqual({})
+    expect(signaturePlacementFor('constructor')).toBe('withText')
+  })
+
+  it('is read back at startup, and a row that was not read keeps what is held', () => {
+    hydrateSettings({ signature_placement: { 'acc-1': 'below', 'acc-2': 'sideways' } }, { languageRead: false })
+    expect(settings$.signaturePlacement.get()).toEqual({ 'acc-1': 'below' })
+    hydrateSettings({}, { languageRead: false })
+    expect(settings$.signaturePlacement.get()).toEqual({ 'acc-1': 'below' })
   })
 })

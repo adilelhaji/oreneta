@@ -2829,5 +2829,10 @@
   "search.scope.unified": "Pesquisa em “{folder}”: essa pasta em cada conta incluída nas pastas unificadas, mesmo que esteja oculta.",
   "search.scope.folder": "Pesquisa somente em “{folder}”. As pastas ocultas não são incluídas.",
   "search.scope.hiddenFolder": "Pesquisa somente em “{folder}”, uma pasta oculta.",
-  "search.scope.unifiedInbox": "Pesquisa em “{folder}”: a caixa de entrada de cada conta incluída nas pastas unificadas."
+  "search.scope.unifiedInbox": "Pesquisa em “{folder}”: a caixa de entrada de cada conta incluída nas pastas unificadas.",
+  "settings.signature.placement": "Em respostas e encaminhamentos",
+  "settings.signature.placementHint": "Onde fica a assinatura em relação ao original citado",
+  "settings.signature.placementWithText": "Com o que escrevo",
+  "settings.signature.placementAbove": "Acima da citação",
+  "settings.signature.placementBelow": "Abaixo da citação"
 }

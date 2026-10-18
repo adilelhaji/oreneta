@@ -341,6 +341,13 @@ export type ComposeDraft = {
    * `SignatureTracking` in lib/signature.ts — the three states differ.
    */
   signature?: SignatureMark | null
+  /**
+   * Where the caret goes when the editor first opens, when the signature is
+   * not next to the person's own text (#277): 'start' for a reply written above
+   * the quote with the signature below it, 'end' for one written below the
+   * quote with the signature above it. Absent: next to the signature, as before.
+   */
+  caret?: 'start' | 'end'
   /** Server-side draft row this compose tab was restored from, if any. */
   sourceDraft?: {
     threadId: string

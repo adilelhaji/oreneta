@@ -2829,5 +2829,10 @@
   "search.scope.unified": "“{folder}” içinde arar: birleşik klasörlere dahil her hesabın bu klasörü, gizli olsa bile.",
   "search.scope.folder": "Yalnızca “{folder}” içinde arar. Gizli klasörler dahil değildir.",
   "search.scope.hiddenFolder": "Yalnızca gizli bir klasör olan “{folder}” içinde arar.",
-  "search.scope.unifiedInbox": "“{folder}” içinde arar: birleşik klasörlere dahil her hesabın gelen kutusu."
+  "search.scope.unifiedInbox": "“{folder}” içinde arar: birleşik klasörlere dahil her hesabın gelen kutusu.",
+  "settings.signature.placement": "Yanıtlarda ve iletmelerde",
+  "settings.signature.placementHint": "İmzanın alıntılanan özgün iletiye göre yeri",
+  "settings.signature.placementWithText": "Yazdığımla birlikte",
+  "settings.signature.placementAbove": "Alıntının üstünde",
+  "settings.signature.placementBelow": "Alıntının altında"
 }

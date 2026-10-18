@@ -258,6 +258,12 @@ export type Settings = {
   undoSendSeconds: number
   /** Mail → Replies and forwards: quote, header and forward preferences (ADR-0047). */
   replyForward: ReplyForwardPrefs
+  /**
+   * Account id -> where its signature goes in replies and forwards, relative
+   * to the quoted original (#277). An account without an entry keeps the
+   * signature with its own text (ADR-0047).
+   */
+  signaturePlacement: Record<string, SignatureQuotePlacement>
   /** General → Print: headers, scope, order and attachment list (ADR-0060). */
   print: PrintOptions
   /** Whether native spell checking is requested in composer prose fields. */
@@ -415,6 +421,7 @@ const DB_KEY = {
   markReadDelaySeconds: 'mark_read_delay_seconds',
   undoSendSeconds: 'undo_send_seconds',
   replyForward: 'reply_forward',
+  signaturePlacement: 'signature_placement',
   print: 'print_options',
   spellCheck: 'spell_check',
   grammarCheck: 'grammar_check',
@@ -673,6 +680,7 @@ export const settings$ = observable<Settings>({
   // thread, short enough that nobody waits on it.
   undoSendSeconds: 5,
   replyForward: DEFAULT_REPLY_FORWARD_PREFS,
+  signaturePlacement: {},
   // A copy: the headers are nested, and the defaults must stay as they are.
   print: structuredClone(DEFAULT_PRINT_OPTIONS),
   spellCheck: true,
@@ -903,6 +911,54 @@ function sanitizeStringArray(raw: unknown): string[] | null {
   return out
 }
 
+/** Where the signature sits against the quoted original, when an account says so (#277). */
+export type SignatureQuotePlacement = 'above' | 'below'
+/** The account's choice, or 'withText': the signature stays with what the person writes (ADR-0047). */
+export type SignaturePlacementChoice = SignatureQuotePlacement | 'withText'
+
+function isSignatureQuotePlacement(value: unknown): value is SignatureQuotePlacement {
+  return value === 'above' || value === 'below'
+}
+
+/** A saved row, read back: unknown accounts' entries are kept, invalid values dropped. */
+export function sanitizeSignaturePlacements(raw: unknown): Record<string, SignatureQuotePlacement> {
+  const value = typeof raw === 'string' ? safeJson(raw) : raw
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const out: Record<string, SignatureQuotePlacement> = {}
+  for (const [accountId, placement] of Object.entries(value as Record<string, unknown>)) {
+    if (accountId && isSignatureQuotePlacement(placement)) out[accountId] = placement
+  }
+  return out
+}
+
+function safeJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+/** An account's choice; pass `placements` (from `.get()`) to read it reactively. */
+export function signaturePlacementFor(
+  accountId: string | undefined,
+  placements: Record<string, SignatureQuotePlacement> = settings$.signaturePlacement.peek(),
+): SignaturePlacementChoice {
+  return accountId && Object.hasOwn(placements, accountId) ? placements[accountId] : 'withText'
+}
+
+/** Set one account's placement; 'withText' removes its entry, so it follows the default again. */
+export function setSignaturePlacement(accountId: string, choice: SignaturePlacementChoice) {
+  if (!accountId) return
+  const current = settings$.signaturePlacement.peek()
+  if ((Object.hasOwn(current, accountId) ? current[accountId] : 'withText') === choice) return
+  const next = { ...current }
+  if (choice === 'withText') delete next[accountId]
+  else if (isSignatureQuotePlacement(choice)) next[accountId] = choice
+  else return
+  settings$.signaturePlacement.set(next)
+}
+
 export function isAccountHiddenFromSideNav(accountId: string): boolean {
   return settings$.hiddenSideNavAccounts.peek().includes(accountId)
 }
@@ -1063,6 +1119,11 @@ export function hydrateSettings(prefs: Record<string, unknown>, { languageRead =
 
     const replyForward = sanitizeReplyForwardPrefs(prefs[DB_KEY.replyForward])
     if (replyForward) settings$.replyForward.set(replyForward)
+    // Only a row that was read replaces what is held: a failed read must not
+    // wipe the other accounts' choices before the next write saves the rest.
+    if (Object.hasOwn(prefs, DB_KEY.signaturePlacement)) {
+      settings$.signaturePlacement.set(sanitizeSignaturePlacements(prefs[DB_KEY.signaturePlacement]))
+    }
     const print = sanitizePrintOptions(prefs[DB_KEY.print])
     if (print) settings$.print.set(print)
 
