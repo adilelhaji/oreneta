@@ -122,7 +122,8 @@ D'inici a final i de dalt a baix, en propietats lògiques (ADR-0061):
   - **no es degrada mai a una icona sola:** quan un compte necessita tornar a
     iniciar la sessió o hi ha una fallada no descartada (el cas `prominent`
     d'avui), es continua mostrant la barra d'amplada completa sota la
-    capçalera fins que es descarti, com avui.
+    capçalera fins que es resolgui o es descarti, com avui (una sessió que
+    s'ha de tornar a iniciar no es pot descartar).
 - **Finestra estreta (menys de 769 px):** el menú, un botó de cerca que obre
   el camp sobre la banda i l'estat de la sincronització com a icona.
 
@@ -138,8 +139,8 @@ D'inici a final i de dalt a baix, en propietats lògiques (ADR-0061):
   amb desplaçament horitzontal. Una acció que no es pot fer amb la selecció
   actual es mostra desactivada i s'anuncia.
 - **Sempre visibles:** «Més accions» i, al correu, «Arxiva la conversa» no van
-  mai al menú de desbordament i conserven el nom accessible d'avui, que les
-  proves de límits del correu esperen dins de la pantalla.
+  mai al menú de desbordament i conserven el nom accessible d'avui: les proves
+  de límits del correu els esperen dins de la pantalla.
 - Cada mòdul declara les seves accions; el marc només les col·loca. Les
   dreceres d'una lletra (j, k, e, s…) continuen igual.
 
@@ -152,7 +153,7 @@ D'inici a final i de dalt a baix, en propietats lògiques (ADR-0061):
   `PaneResizer` d'ADR-0059 (punter, teclat, dreta a esquerra, mida dibuixada).
   Una sola amplada per a tots els mòduls, desada a la preferència nova
   `folder_pane_width` i ajustada als límits en llegir-la. En px, com les altres
-  amplades que es poden arrossegar: amb el zoom de l'aplicació el text hi
+  amplades que s'ajusten amb un separador: amb el zoom de l'aplicació el text hi
   creix i la subfinestra no (§7); un nom que no hi cap es talla amb «…» i el
   nom sencer va a la indicació.
 - **Què hi posa cada mòdul:**
@@ -168,13 +169,15 @@ D'inici a final i de dalt a baix, en propietats lògiques (ADR-0061):
   | Adjunts | Els filtres d'avui (nom, remitent, tipus, data, compte) | Canvi de lloc; ampliació de la proposta |
 
   La proposta aprovada parlava de Correu, Calendari, Tasques, Persones i
-  Notes; Xat i Adjunts hi entren per tenir un sol marc, i és una decisió del
-  propietari.
+  Notes; Xat i Adjunts hi entren per tenir un sol marc, i ho ha de decidir el
+  propietari (decisió 6).
 - **Taulers kanban:** amb un tauler obert, la subfinestra de carpetes del
   correu es continua mostrant (el tauler hi és seleccionat). La subfinestra de
   conversa del tauler passa a ser un percentatge de l'àrea de contingut (la
   fila menys les carpetes), amb els límits d'avui (25–60 % i 320 px com a
   mínim).
+- Al correu, el cos conserva l'ocultació de carpetes de #273 (`folder_hidden` i
+  «Mostra les carpetes amagades») tal com és a `MailNavigation`.
 - La semàntica d'arbre (`tree`, `treeitem`, fletxes) arriba amb cada mòdul en
   la seva peça, amb les seves proves; mentrestant cada mòdul conserva la que
   té.
@@ -184,7 +187,7 @@ D'inici a final i de dalt a baix, en propietats lògiques (ADR-0061):
 - **Per sobre de 1024 px:** una tira al peu de la subfinestra de carpetes, de
   2,5 rem d'alçada: Correu, Calendari, Persones, Tasques, Notes, Xat i Adjunts.
   Els que no hi caben (mesurat amb `ResizeObserver`; al 200 % de l'aplicació,
-  en 260 px n'hi caben uns tres) van a «Més», en l'ordre de la tira; l'actiu no
+  en 260 px n'hi caben dos més el botó «Més») van a «Més», en l'ordre de la tira; l'actiu no
   hi va mai. Icones Lucide sense text; el nom va a `title` (indicació) i al nom
   accessible, de manera que les proves que fan `getByTitle('People')` continuen
   trobant el botó. L'actiu porta `aria-current="page"`, el fons de selecció i
@@ -234,7 +237,8 @@ D'inici a final i de dalt a baix, en propietats lògiques (ADR-0061):
   F1–F12 en queden fora, perquè no escriuen text. Si algú reassigna la drecera
   a una lletra, torna a valer la barrera. El marc aïllat (iframe) del missatge
   HTML, que avui només reenvia les tecles amb Ctrl/⌘ o Alt i les fletxes, també
-  reenviarà F1–F12. No fa res amb un diàleg modal obert, que reté el focus.
+  reenviarà F1–F12. Amb un diàleg modal obert, F6 no fa res: el diàleg reté el
+  focus.
 - Les dues dreceres són al catàleg (`pane.next`, `pane.prev`) i es poden
   reassignar.
 - Wails desactiva les dreceres del navegador al WebView; encara no s'ha
@@ -251,14 +255,16 @@ D'inici a final i de dalt a baix, en propietats lògiques (ADR-0061):
   a la dreta i la barra lateral a l'esquerra; les fletxes del selector, de la
   barra d'eines i dels separadors segueixen la lectura.
 - **Zoom de l'aplicació (`font_scale`) al 200 %:** les media queries no
-  canvien, de manera que a 1440 i 1024 px es veu el marc ample amb el que és en
-  rem al doble. A dalt, banda i barra d'eines fan 4,75 rem (152 px); al peu de
+  canvien, de manera que es veu el mateix marc que al 100 % per a aquella
+  amplada (ample a 1440 px, amb la barra estreta a 1024 px), amb tot el que es
+  mesura en rem al doble de mida. A dalt, banda i barra d'eines fan 4,75 rem
+  (152 px); al peu de
   les carpetes, la tira fa 2,5 rem (80 px), i el selector de panells de la barra
   lateral, també. La tira hi cap perquè desborda a «Més» (§5); la barra
   d'eines, perquè desborda a «Més accions» (§3). Les columnes que avui són en
   rem (Calendari, Persones, Notes, Xat) passen a l'amplada en px de la
   subfinestra i deixen de créixer amb el zoom: és el criteri que
-  keyboard-zoom.md ja aplica a les amplades arrossegables.
+  keyboard-zoom.md ja aplica a les amplades que s'ajusten amb un separador.
 - **Zoom del sistema o de WebView2:** 1440 px al 200 % són 720 px CSS, i el
   marc és el de les finestres de menys de 769 px.
 - **Amplades a 1025 px** (la més estreta amb carpetes), al 100 %: amb els
@@ -291,8 +297,8 @@ D'inici a final i de dalt a baix, en propietats lògiques (ADR-0061):
   (`region`, `landmark-unique`, `landmark-one-main`), que no són a les etiquetes
   WCAG que es fan servir avui, no troba res al marc nou; la tira, la barra
   estreta i el menú compacte a 1025, 1024, 769 i 768 px; el desbordament de la
-  tira i de la barra d'eines al 200 % de l'aplicació a 1440 i 1024 px, sense
-  desplaçament horitzontal; l'amplada de les carpetes es desa, es recupera i
+  tira i de la barra d'eines al 200 % de l'aplicació a 1440 i 1025 px, i la
+  barra estreta al 200 % a 1024 px, sense desplaçament horitzontal; l'amplada de les carpetes es desa, es recupera i
   s'ajusta als límits; Ctrl/⌘+1…9 obren les mateixes posicions que abans.
 
 ### 9. Ordre de migració
@@ -323,8 +329,9 @@ verd:
   propietari va triar la banda dins de la finestra.
 - **Amplada de carpetes per mòdul:** més preferències per a una diferència que
   ningú no ha demanat; el client de referència en fa servir una.
-- **Ctrl/⌘+1…6 per als mòduls,** com el client de referència: canviaria el
-  que fan avui aquestes dreceres per a qui ja les fa servir.
+- **Ctrl/⌘+1…7 per als set mòduls** (el client de referència fa servir
+  Ctrl+número per als seus): canviaria el que fan avui aquestes dreceres per a
+  qui ja les fa servir.
 - **Mantenir els camps de cerca de cada subfinestra a més del de la banda:**
   dos camps per a la mateixa consulta, que poden dir coses diferents.
 - **Un resum «Sincronitzat» a la banda:** l'aplicació no té cap senyal que ho
@@ -362,7 +369,7 @@ verd:
 2. **Entre 769 i 1024 px:** barra estreta d'icones de mòduls (recomanat) o cap
    selector visible (mòduls només des del menú de l'aplicació).
 3. **Amplada de la subfinestra de carpetes:** una per a tots els mòduls, en px
-   com les altres arrossegables (recomanat), o una per mòdul.
+   com les altres amplades que s'ajusten amb un separador (recomanat), o una per mòdul.
 4. **Cerca:** el camp de la banda substitueix els de les subfinestres
    (recomanat) o conviuen.
 5. **Taulers kanban:** secció «Taulers» a la subfinestra del correu (recomanat)

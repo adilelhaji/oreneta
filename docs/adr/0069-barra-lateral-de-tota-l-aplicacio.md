@@ -25,8 +25,12 @@
   a 280 px més 360 px de lector; si no, és una capa sobre el lector. L'amplada
   (`details_panel_width`, 280–560 px) i l'última secció
   (`session_sidebar_section_main`: `overview`, `media`, `files` o `agenda`)
-  es desen; si és oberta o tancada només dura la sessió (`thread$.mediaOpen`,
-  la tecla `i`).
+  es desen; l'estat obert o tancat només dura la sessió (`thread$.mediaOpen`,
+  la tecla `i`). La fila que es mesura és la del lector: la barra vertical, la
+  navegació (60 + 220 px) i la llista en queden fora i la llista no cedeix. Per
+  això, al correu, avui la barra només va al costat a partir d'uns 1200 px amb
+  la llista al mínim (280 px) i d'uns 1270 px amb la llista per defecte
+  (350 px).
 - La fila SET-23 continua `partial` perquè a l'agenda no s'hi arriba sense
   conversa oberta ni des de Calendari, Tasques, Persones o Notes. El client de
   referència té la barra lateral als mòduls de correu, calendari, contactes i
@@ -50,8 +54,9 @@
   | Conversa | El resum, la multimèdia i els fitxers (les subseccions actuals) | Correu i taulers, amb una conversa oberta |
 
 - **Selector de panells** al peu, de 2,5 rem: una llista de pestanyes
-  (`tablist`), amb les fletxes laterals en cercle i en el sentit de lectura, i
-  totes les pestanyes a l'abast del Tab, com a ADR-0061. Sense conversa oberta,
+  (`tablist`): les fletxes esquerra i dreta passen d'una pestanya a l'altra en
+  bucle i segueixen el sentit de lectura, i totes les pestanyes són accessibles
+  amb la tecla de tabulació, com a ADR-0061. Sense conversa oberta,
   la pestanya Conversa no hi és (no es mostra desactivada: no tindria
   contingut).
 
@@ -63,8 +68,9 @@
   desa a la preferència nova `app_sidebar_state` (`expanded`, `minimized`,
   `hidden`).
 - **Què canvia l'estat desat:** el botó «Barra lateral» de la barra d'eines,
-  les icones de la tira, el botó de minimitzar de la barra i la tecla `i`. Tancar
-  la capa (Esc, un clic al fons) no el canvia: la capa és una manera de
+  les icones de la tira, el botó de minimitzar de la barra i la tecla `i` quan
+  la barra és al costat. Tancar la capa (Esc, un clic al fons, o `i` quan la
+  barra es mostra com a capa) no el canvia: la capa és una manera de
   mostrar-la quan no hi cap, no una preferència.
 - **En arrencar no s'obre mai una capa sola:** si l'estat desat és `expanded`
   però la barra no hi cap al costat, es pinta minimitzada (per sota de 769 px,
@@ -86,22 +92,26 @@
   `resta = fila − carpetes (mín. 200) − llista (mín. 280, només al correu) − contingut (mín. 360) ≥ 280`,
 
   on la fila és l'amplada dibuixada sense la barra lateral i les carpetes
-  compten només si són visibles. Al costat, el màxim és `min(560, resta)`. Per
+  compten només si són visibles. Amb un tauler obert, en lloc de la llista i el
+  contingut compten la columna del tauler (mín. 280) i la subfinestra de conversa
+  del tauler (mín. 320 px). Al costat, el màxim és `min(560, resta)`. Per
   fer-hi lloc, cedeixen primer les carpetes fins al seu mínim i després la
-  llista; si encara no hi cap, és una capa sobre el contingut (com a màxim el
+  llista (comportament nou: avui la llista no cedeix davant de la barra); si encara no hi cap, és una capa sobre el contingut (com a màxim el
   85 % de la finestra, amb fons). La tira minimitzada sempre va al costat.
 - **Comptes al correu** (carpetes, llista i lector als mínims): a 1100 px,
   1100 − 200 − 280 − 360 = 260 < 280, i és una capa; a 1180 px, la resta és
   340 i va al costat fins a 340 px; a 1440 px, 600, i va al costat fins a 560
   px. Als altres mòduls, sense llista, a 1100 px la resta és 540. Per tant, al
-  correu el llindar real passa de 1100 a 1120 px, i les proves de #212 a 1100 px
-  amb 560 px desats passen d'esperar la barra al costat a esperar-la com a capa.
+  correu la barra va al costat a partir de 1120 px, abans que avui (uns 1200 o
+  1270 px, vegeu el context). Les proves de #212 a 1100 px ja accepten la capa i
+  no canvien d'expectativa.
 - **Per sota de 769 px** no hi ha tira: la barra només s'obre com a capa des de
   la barra d'eines o el menú, i en tancar-se torna a quedar amagada.
 - **Obrir i tancar:** el botó «Barra lateral» de la barra d'eines de cada mòdul
   (`aria-expanded`), una ordre a la paleta i al menú de l'aplicació, i la tecla
   `i` (`thread.details`) al correu: si la barra és desplegada al panell
-  Conversa, la minimitza; si no, la desplega al panell Conversa.
+  Conversa, la minimitza (o, si és una capa, la tanca com Esc); si no, la
+  desplega al panell Conversa.
 
 ### 3. Panell Dia (nou)
 
@@ -233,6 +243,7 @@
    quan la llibreta no en té (recomanat), o no oferir el panell a Persones.
 5. **Amplada mínima del contingut** als mòduls que no són correu: 360 px com
    el lector (recomanat) fins que la seva peça en fixi una altra.
-6. **Llindar al correu:** acceptar que, amb les carpetes visibles, la barra va
-   al costat a partir de 1120 px i no de 1100 (recomanat), o amagar les carpetes
-   quan la barra es desplega entre 1100 i 1120 px.
+6. **Qui cedeix l'espai** quan la barra es desplega al costat: primer les
+   carpetes i després la llista, fins als seus mínims (recomanat: la barra hi va
+   a partir de 1120 px al correu), o ningú, com avui (la barra hi va a partir
+   d'uns 1200 px o més segons la llista).

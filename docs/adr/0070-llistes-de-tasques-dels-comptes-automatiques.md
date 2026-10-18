@@ -11,7 +11,8 @@
   proposta de redisseny, dins de #288. Esmena el primer punt del §4 d'ADR-0058
   («Una llista per compte d'Exchange…») i, d'ADR-0039, els apartats «Enllaç»,
   «Suprimir una llista enllaçada», la nota de l'«Esquema 56» sobre la supressió
-  per compte i l'aplicació de «Seguretat (#28)» (vegeu el §7). Fora d'abast:
+  per compte i l'aplicació de «Seguretat (#28)», i amplia la purga d'ADR-0038
+  (vegeu el §7). Fora d'abast:
   Google Tasks i To Do de Microsoft Graph (encara no existeixen, ADR-0013),
   altres carpetes de tasques d'Exchange i el mòbil.
 
@@ -50,9 +51,9 @@
   - només `VTODO`: és una llista del compte;
   - `VEVENT` i `VTODO`, o sense la propietat (Nextcloud i Radicale creen així
     els calendaris): és una llista del compte només si una consulta `VTODO`
-    (`calendar-query`) hi troba almenys una tasca; si no, no es converteix cada
-    calendari d'esdeveniments en una llista buida, i continua disponible amb
-    «Llista de tasques CalDAV…»;
+    (`calendar-query`) hi troba almenys una tasca; si no, no ho és (així no es
+    converteix cada calendari d'esdeveniments en una llista buida) i es pot
+    continuar enllaçant a mà amb «Llista de tasques CalDAV…»;
   - només `VEVENT`: no.
 - La propietat es demana en el mateix `PROPFIND` (profunditat 1) que ja llista
   les col·leccions, de manera que no cal una consulta per col·lecció per saber
@@ -71,11 +72,11 @@
   | Columna | Contingut |
   |---|---|
   | `account` | El compte |
-  | `source` | `ews`, o `caldav:<URL normalitzada de la col·lecció>` |
-  | `state` | `pending` (encara no llegida), `linked` (enllaçada) o `declined` (la persona no la vol) |
+  | `source` | `ews`; `caldav:<URL normalitzada de la col·lecció>`; o `caldav-server:<origen>|<usuari>`, la marca d'un servidor ja llistat (§4) |
+  | `state` | `pending` (encara no llegida), `linked` (enllaçada), `declined` (la persona no la vol) o, només per a les marques de servidor, `scanned` (ja llistat) |
   | `list_id` | La llista, quan és `linked` |
   | `adopted` | 1 si és una llista manual d'ADR-0039 que ja existia (§4) |
-  | `notified` | 1 quan ja s'ha mostrat l'avís de l'actualització (§4) |
+  | `notified` | 1 quan la persona ha confirmat l'avís de l'actualització (§4). Només hi neixen amb 0 les entrades creades per la migració o per la relectura del §4 que no són adoptades; totes les altres neixen amb 1 |
   | `last_error` | El motiu de l'última lectura fallida |
   | `updated_at` | Quan va canviar d'estat |
 
@@ -93,23 +94,32 @@
 - **CalDAV:** `caldav.discover` torna també els components de cada col·lecció,
   i el diàleg mostra, sota els calendaris, les llistes de tasques del §1 ja
   marcades. `caldav.add` rep les col·leccions de tasques triades i desa
-  `pending` per a cadascuna. Cada llista té la seva còpia de la contrasenya
-  (`caldav-tasks:{llista}`), com les d'ADR-0039 i com cada calendari CalDAV ja
-  té la seva. La contrasenya només va a l'origen de la col·lecció, comprovat en
-  enllaçar i a cada petició (#28).
+  `pending` per a cadascuna, les col·leccions de tasques que la persona
+  desmarca com a `declined` i la marca del servidor com a `scanned` (§4), de
+  manera que aquest servidor no es torna a llistar sol. Cada llista té la seva
+  còpia de la contrasenya (`caldav-tasks:{llista}`), com les d'ADR-0039 i com
+  cada calendari CalDAV ja té la seva. Mentre l'entrada és `pending` i encara no
+  hi ha llista, la còpia es desa amb una clau pròpia
+  (`caldav-tasks-pending:{compte}:{resum (hash) del source}`), que és la que
+  fan servir els nous intents; en enllaçar-la passa a `caldav-tasks:{llista}`
+  (primer s'escriu la nova i, quan la transacció s'ha confirmat, s'esborra la
+  pendent). La clau pendent s'esborra quan l'entrada passa a `declined` i quan
+  se suprimeix el compte, i s'afegeix al que purga ADR-0038. La contrasenya
+  només va a l'origen de la col·lecció, comprovat en enllaçar i a cada petició
+  (#28).
 - **La primera lectura** la fa el nucli, sencera, com avui
   `tasks.exchangeAdd` o l'enllaç d'ADR-0039. Primer es llegeix; després, en una
   sola transacció, es creen la llista i les seves tasques i l'entrada passa a
   `linked`. Si la lectura falla, no es crea res, l'entrada continua `pending` i
   es desa el motiu. Així no hi pot quedar una llista a mitges si l'aplicació es
   tanca durant la lectura.
-- És una lectura: no s'envia res al servidor, i es fa una sola vegada, perquè
-  algú ha afegit el compte. Els reintents d'una entrada `pending` es fan en
+- És una lectura: no s'envia res al servidor, i es fa una sola vegada, com a
+  resposta a una acció de la persona (afegir el compte). Els reintents d'una entrada `pending` es fan en
   obrir Tasques i amb «Sincronitza», que són els moments en què ja se
   sincronitzen les tasques (ADR-0039). No hi ha cap temporitzador nou.
 - Quan una llista passa a `linked`, el nucli emet `tasks.changed`, i Tasques i
   l'agenda de la barra lateral (ADR-0069) la tornen a llegir encara que ja
-  fossin obertes.
+  estiguin obertes.
 - **Mai no es diu «cap tasca» d'un compte que no s'ha llegit:** `tasks.lists`
   torna també les entrades `pending` i `declined` dels comptes. Mentre n'hi
   hagi una de `pending`, amb error o sense, Tasques mostra «S'estan llegint les
@@ -129,11 +139,16 @@
   calendaris en un compte (mateix origen i usuari), es tornen a llistar les
   col·leccions amb la contrasenya d'un d'aquests calendaris, només a aquell
   origen, i s'hi aplica el §1. Una col·lecció d'un altre origen no s'enllaça
-  sola. Es fa una vegada per servidor: es desa a la taula del §2 com una entrada
-  amb `source` = `caldav-server:<origen>|<usuari>` i `state` = `linked` quan
-  la relectura ha anat bé, o `pending` amb el motiu, que es torna a provar com les
-  altres. Les col·leccions que apareguin després al servidor no s'afegeixen
-  soles.
+  sola. Es fa una vegada per servidor, i es recorda amb la marca
+  `caldav-server:<origen>|<usuari>` del §2: `scanned` quan la relectura ha anat
+  bé; si falla, `pending` amb el motiu, que Tasques mostra («No s'ha pogut
+  tornar a llistar el servidor <origen>: <motiu>», amb «Torna-ho a provar» i
+  «No l'afegeixis», que la passa a `declined`) i que es torna a provar com les
+  altres entrades. Una marca no té llista (`list_id` buit). Un servidor afegit
+  després de l'actualització ja té la seva marca (§3) i no es torna a llistar.
+  Les col·leccions que apareguin després al servidor no s'afegeixen soles. Les
+  entrades que crea aquesta relectura desen la contrasenya amb la clau pendent
+  del §3.
 - **Llistes manuals d'ADR-0039** que ja apunten a una col·lecció trobada (la
   mateixa URL normalitzada): es registren `linked` amb `adopted = 1`. No es
   dupliquen, conserven la seva contrasenya i no se suprimeixen amb el compte.
@@ -142,8 +157,9 @@
   distingir d'una que no es va afegir mai, i torna una vegada. Per això, les
   llistes afegides soles en actualitzar porten un avís, a Tasques i a dalt de
   l'agenda de la barra lateral, amb «Treu-la» (que la marca `declined`, §5) i
-  «D'acord». L'avís es manté fins que es fa una de les dues coses; es desa a
-  `notified`, al perfil, i no a la interfície. A partir d'aquesta versió, una
+  «D'acord». L'avís es manté fins que es fa una de les dues coses, i la
+  confirmació es desa a `notified`, al perfil, i no a la interfície. Un compte
+  nou no mostra mai aquest avís. A partir d'aquesta versió, una
   supressió queda registrada i es respecta sempre. El criteri de #281 («una
   llista suprimida continua suprimida») només es pot complir per a les
   supressions fetes des d'aquesta versió: és una limitació que el propietari ha
@@ -153,13 +169,15 @@
 
 | Des de | Què passa | A |
 |---|---|---|
-| — | Afegir el compte, el servidor o actualitzar | `pending` |
+| — | Afegir el compte, el servidor o actualitzar | `pending` (una col·lecció desmarcada al diàleg: `declined`) |
 | `pending` | Lectura correcta | `linked` |
 | `pending` | Lectura fallida | `pending`, amb el motiu |
 | `pending` | «No l'afegeixis» | `declined` |
 | `linked` | «Suprimeix la llista» | `declined` |
 | `declined` | «Afegeix una llista» → la llista, lectura correcta | `linked` |
 | `declined` | «Afegeix una llista» → la llista, lectura fallida | `declined`; el diàleg diu el motiu, com avui |
+| marca `pending` | Relectura correcta | marca `scanned`, i una entrada per col·lecció trobada |
+| marca `pending` | «No l'afegeixis» | marca `declined` |
 | qualsevol | Suprimir el compte | l'entrada desapareix |
 
 - **Suprimir una llista de compte:** se'n van d'Oreneta la llista i les seves
@@ -172,11 +190,13 @@
   actualitzar.
 - Els botons «Tasques d'Exchange de {email}» deixen la barra de llistes; passen
   a un menú «Afegeix una llista», només per a les entrades `declined`, al costat
-  de «Llista de tasques CalDAV…».
+  de «Llista de tasques CalDAV…». Tornar a afegir una llista CalDAV fa servir
+  la contrasenya d'un calendari del compte amb el mateix origen i el mateix
+  usuari, amb la regla de #28; si no n'hi ha cap, el diàleg la demana.
 - **Una col·lecció que desapareix del servidor** (404 en llegir-la): la llista
   `linked` mostra l'error de sincronització d'ADR-0039 i no se suprimeix sola;
   la persona la pot suprimir.
-- **Suprimir el compte** se n'emporta les entrades, les llistes d'Exchange (com
+- **Suprimir el compte** s'emporta les entrades, les claus pendents del §3, les llistes d'Exchange (com
   avui) i les llistes CalDAV enllaçades soles, amb les seves contrasenyes. Les
   llistes adoptades (`adopted = 1`) es queden, com diu ADR-0039.
 
@@ -206,8 +226,11 @@
     passa a `declined` (§5);
   - «Esquema 56»: les llistes CalDAV enllaçades soles se suprimeixen amb el
     compte a través de `account_task_lists`; les manuals i les adoptades, no;
-  - «Seguretat (#28)»: s'aplica igual a la relectura del §4, que només fa
-    servir una contrasenya a l'origen del calendari d'on surt.
+  - «Seguretat (#28)»: s'aplica igual a la relectura del §4 i a tornar a
+    afegir una llista (§5), que només fan servir una contrasenya a l'origen del
+    calendari d'on surt.
+- **ADR-0038:** el que es purga en suprimir un perfil amb dades inclou també
+  les claus `caldav-tasks-pending:`.
 - A totes dues ADR s'afegeix a l'estat una línia que remet a aquesta
   (proposada).
 
@@ -237,10 +260,16 @@
 - **Nucli:** compte d'Exchange nou (lectura correcta, `linked`; lectura
   fallida, sense llista, `pending` amb el motiu, i el nou intent; tancament a
   mitja lectura sense llista a mitges); migració (amb llista, sense llista, una
-  sola vegada); cada transició de la taula del §5; suprimir no torna, ni en
+  sola vegada); cada transició de la taula del §5; una llista suprimida no torna, ni en
   sincronitzar ni en tornar a migrar; suprimir una llista CalDAV de compte no
   toca `caldav:` i el calendari se sincronitza; suprimir el compte s'emporta les
-  llistes soles i conserva les adoptades; la prova d'ADR-0011 amb la taula nova;
+  llistes soles i conserva les adoptades; la clau pendent d'una entrada CalDAV
+  (nou intent amb ella, pas a `caldav-tasks:` en enllaçar, esborrada en passar
+  a `declined` i amb el compte); la marca `scanned` (un servidor afegit després
+  no es torna a llistar; les col·leccions desmarcades queden `declined`); un
+  compte nou no mostra l'avís de l'actualització; tornar a afegir una llista
+  CalDAV amb la contrasenya d'un calendari del mateix origen, i sense cap; la
+  prova d'ADR-0011 amb la taula nova;
   CalDAV amb una col·lecció només `VTODO`, una mixta amb tasques i una sense,
   una sense la propietat, una d'un altre origen, una d'ADR-0039 ja enllaçada
   (adoptada, sense duplicat) i la mateixa URL escrita de formes diferents, amb
