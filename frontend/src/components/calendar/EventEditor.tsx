@@ -22,6 +22,7 @@ import { ScopeAsk } from './ScopeAsk'
 import { NotifyAsk } from './NotifyAsk'
 import { ConflictNote } from './ConflictNote'
 import { RepeatFields } from './RepeatFields'
+import { ModalCard } from '../dialog/ModalCard'
 
 /// Creates or edits one event.
 ///
@@ -113,11 +114,8 @@ export function EventEditor() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={closeEditor}>
-      {/* A modal dialog, so the keyboard's region shortcuts stay out (ADR-0068 §6). */}
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={
+      <ModalCard
+        label={
           isNew
             ? t('calendar.newEvent', { defaultValue: 'New event' })
             : t('calendar.editEvent', { defaultValue: 'Edit event' })
@@ -390,7 +388,7 @@ export function EventEditor() {
             </button>
           </div>
         </div>
-      </div>
+      </ModalCard>
     </div>
   )
 }

@@ -93,6 +93,17 @@ describe('F6 in AppHotkeys', () => {
     expect(focusedId()).toBe('search')
   })
 
+  it('a side-navigation slot on a function key stands down for a modal dialog of a module', () => {
+    // Slot 1 is the unified inbox (shown by default), which would select it.
+    const before = ui$.selectedAccount.peek()
+    setShortcutOverrides({ 'view.rail1': { key: 'F8' } })
+    const { byId } = shell(true)
+    byId('ok').focus()
+    expect(fireEvent.keyDown(byId('ok'), { key: 'F8' })).toBe(false)
+    expect(ui$.selectedAccount.peek()).toBe(before)
+    expect(focusedId()).toBe('ok')
+  })
+
   it('rebound to another function key: works while typing, stands down for a modal', () => {
     setShortcutOverrides({ 'pane.next': { key: 'F8' } })
     const { byId } = shell()

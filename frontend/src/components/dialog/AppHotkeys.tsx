@@ -171,7 +171,9 @@ function handleChatArrowNavigation(key: string, target: EventTarget | null): boo
 
 function handleRailShortcut(action: ShortcutId): boolean {
   const slot = RAIL_SHORTCUT_IDS.indexOf(action as RailShortcutId)
-  if (slot === -1 || modalOpen()) return false
+  // A modal dialog keeps the account or board behind it as it is, whatever
+  // key the slot is bound to (an F-key included).
+  if (slot === -1 || modalOpen() || modalDialogOpen()) return false
 
   let target = slot
   if (settings$.showUnifiedInboxInSideNav.peek()) {

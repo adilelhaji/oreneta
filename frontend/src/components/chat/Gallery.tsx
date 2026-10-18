@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { ModalCard } from '../dialog/ModalCard'
 import { ChevronLeft, ChevronRight, Copy, Download, X } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { useEscapeKey } from '../../lib/useEscapeKey'
@@ -186,11 +187,8 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
   // overflow-clipped ancestor (e.g. a chat bubble's slide-up animation), which
   // would otherwise mis-position the overlay and clip its controls.
   return createPortal(
-    // A modal dialog, so the keyboard's region shortcuts stay out (ADR-0068 §6).
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={t('chat.media')}
+    <ModalCard
+      label={t('chat.media')}
       className="fixed inset-0 z-50 flex flex-col bg-black/90 animate-fade-in select-none"
       onClick={onClose}
     >
@@ -331,7 +329,7 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
           {current.caption || current.filename}
         </div>
       )}
-    </div>,
+    </ModalCard>,
     document.body,
   )
 }

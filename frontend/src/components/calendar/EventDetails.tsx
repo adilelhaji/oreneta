@@ -3,6 +3,7 @@ import { AlignLeft, Bell, CalendarDays, Clock, MapPin, Repeat, SquarePen, Trash2
 import { openExternal } from '../../lib/native'
 import i18n, { useTranslation } from '../../lib/i18n'
 import { useEscapeKey } from '../../lib/useEscapeKey'
+import { ModalCard } from '../dialog/ModalCard'
 import { useEffect, useState } from 'react'
 import {
   allDayLocalDays,
@@ -87,11 +88,8 @@ export function EventDetails() {
         if (mouse.target === mouse.currentTarget) closeDetails()
       }}
     >
-      {/* A modal dialog, so the keyboard's region shortcuts stay out (ADR-0068 §6). */}
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={event.subject || t('calendar.noSubject', { defaultValue: '(no subject)' })}
+      <ModalCard
+        label={event.subject || t('calendar.noSubject', { defaultValue: '(no subject)' })}
         className="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col rounded-panel border border-border bg-app shadow-overlay"
       >
         {/* A band in the calendar's colour, so which calendar this belongs to
@@ -311,7 +309,7 @@ export function EventDetails() {
             </button>
           )}
         </div>
-      </div>
+      </ModalCard>
     </div>
   )
 }

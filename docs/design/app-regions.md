@@ -41,8 +41,12 @@ mòdul.
   d'un esdeveniment, la revisió del context de l'assistent, la galeria
   d'imatges) es pinten dins d'aquest mòdul i són modals (`aria-modal="true"`).
   L'editor i el detall d'un esdeveniment, la revisió de l'assistent i la galeria
-  no ho eren: ara tenen `role="dialog"`, `aria-modal` i nom, sense cap canvi
-  visual.
+  no ho eren. Ara són `ModalCard` (`components/dialog/ModalCard.tsx`), sense cap
+  canvi visual: `role="dialog"`, `aria-modal` i nom; en obrir-se prenen el focus
+  (si no el té ja un control de dins) i en tancar-se el tornen a l'element que
+  els havia obert, com el `Dialog` compartit.
+- Amb un diàleg modal obert tampoc no actuen les dreceres de les posicions de la
+  barra vertical (Ctrl/⌘+1…9 o la tecla que s'hi hagi assignat).
 - La barra vertical i «Comptes i carpetes» continuen dins de `<main>` fins que
   la subfinestra de carpetes i el selector de mòduls les substitueixin (passos
   2 i 4). Les proves que hi arriben amb `main > aside` canvien al pas 4
@@ -102,7 +106,8 @@ mòdul.
 | Nivell | Què cobreix |
 |---|---|
 | N1 (`lib/regions.test.ts`) | L'ordre del marc i, dins d'un mateix tipus, el del document; un tipus desconegut falla; les regions amagades, inertes o sense res que pugui rebre el focus se salten; un element que no accepta el focus no compta; el cicle d'anada i tornada; el focus torna a l'últim element; una regió dins d'una altra; un diàleg modal |
-| N2 (`components/dialog/AppHotkeys.test.tsx`) | F6 des d'un camp de text, amb la tecla consumida; res amb un diàleg modal d'un mòdul ni amb Configuració oberta; la paleta d'ordres es queda les tecles; reassignada a una lletra, s'escriu dins d'un camp; reassignada a F8, actua mentre s'escriu i no amb un diàleg modal |
+| N2 (`components/dialog/AppHotkeys.test.tsx`) | F6 des d'un camp de text, amb la tecla consumida; res amb un diàleg modal d'un mòdul ni amb Configuració oberta; la paleta d'ordres es queda les tecles; reassignada a una lletra, s'escriu dins d'un camp; reassignada a F8, actua mentre s'escriu i no amb un diàleg modal; una posició de la barra vertical assignada a una tecla de funció no actua amb un diàleg modal d'un mòdul |
+| N2 (`components/dialog/ModalCard.test.tsx`) | Diàleg modal amb nom; pren el focus de l'element que l'obre i l'hi torna en tancar-se; respecta el focus que un control de dins ja ha pres |
 | N1 (`lib/shortcuts.test.ts`) | F6 i Maj+F6 per defecte, sense col·lisions; F1–F12 no són nues; reassignar F6 a una lletra torna a posar la barrera |
 | N2 (`HtmlFrame.test.tsx`) | El marc reenvia F1–F12, amb Maj o sense, i no una lletra |
 | N1 (`states/uiModule.test.ts`) | Els set mòduls; el botó de la barra vertical obre el mòdul i, si ja és obert, torna al correu; mai dos mòduls alhora |

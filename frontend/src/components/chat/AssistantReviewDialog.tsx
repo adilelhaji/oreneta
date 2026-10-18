@@ -25,6 +25,7 @@ import {
 import { saveTask } from '../../states/tasks'
 import { accounts$ } from '../../states/accounts'
 import { isDraftFolder } from '../../states/mail'
+import { ModalCard } from '../dialog/ModalCard'
 
 export function AssistantReviewDialog({ messages, onClose }: { messages: Message[]; onClose: () => void }) {
   const { t } = useTranslation()
@@ -232,11 +233,8 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={close}>
-      {/* A modal dialog, so the keyboard's region shortcuts stay out (ADR-0068 §6). */}
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={t('assistant.reviewTitle', { defaultValue: 'Review assistant context' })}
+      <ModalCard
+        label={t('assistant.reviewTitle', { defaultValue: 'Review assistant context' })}
         className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-app p-5 shadow-overlay"
         onClick={(event) => event.stopPropagation()}
       >
@@ -532,7 +530,7 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
             {t('assistant.activate', { defaultValue: 'Activate' })}
           </button>
         </div>
-      </div>
+      </ModalCard>
     </div>
   )
 }
