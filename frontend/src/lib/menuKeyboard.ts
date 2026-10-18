@@ -175,6 +175,53 @@ export function focusMenuEdge(surface: HTMLElement | null, edge: 'first' | 'last
   return true
 }
 
+const TABBABLE_SELECTOR =
+  'a[href], area[href], button, input, select, textarea, iframe, summary, [tabindex], [contenteditable=""], [contenteditable="true"]'
+
+function tabbable(element: HTMLElement): boolean {
+  if (element.tabIndex < 0 || (element as HTMLButtonElement).disabled) return false
+  if (element instanceof HTMLInputElement && element.type === 'hidden') return false
+  if (element.closest('[hidden], [inert], [aria-hidden="true"]')) return false
+  for (let node: HTMLElement | null = element; node; node = node.parentElement) {
+    const style = getComputedStyle(node)
+    if (style.display === 'none' || style.visibility === 'hidden') return false
+  }
+  return true
+}
+
+/**
+ * The element Tab (step 1) or Shift+Tab (step -1) moves to from `from`, in
+ * document order, or null at either end. A menu that closes on Tab moves
+ * from its opener, not from where the removed menu was (#289).
+ */
+export function tabNeighbour(from: HTMLElement, step: 1 | -1): HTMLElement | null {
+  const all = [...document.querySelectorAll<HTMLElement>(TABBABLE_SELECTOR)]
+  const index = all.indexOf(from)
+  if (index === -1) return null
+  for (let next = index + step; next >= 0 && next < all.length; next += step) {
+    if (tabbable(all[next])) return all[next]
+  }
+  return null
+}
+
+/**
+ * The name a typeahead search compares against: what assistive technology
+ * announces — `aria-labelledby`, then `aria-label`, then the text — so an
+ * icon-only item (a colour swatch, "Forget") is reached by typing its name.
+ */
+export function itemName(item: HTMLElement): string {
+  const ids = item.getAttribute('aria-labelledby')
+  if (ids) {
+    const text = ids
+      .split(/\s+/)
+      .map((id) => document.getElementById(id)?.textContent ?? '')
+      .join(' ')
+      .trim()
+    if (text) return text
+  }
+  return item.getAttribute('aria-label')?.trim() || item.textContent || ''
+}
+
 /** True when focus sits in some open menu surface (any menu, any depth). */
 export function focusInMenu(active: Element | null): boolean {
   return Boolean(active?.closest?.(`[${MENU_SURFACE_ATTRIBUTE}]`))

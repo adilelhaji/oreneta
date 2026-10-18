@@ -6,9 +6,11 @@ import {
   focusInMenu,
   focusMenuEdge,
   focusMenuItem,
+  itemName,
   menuItemsOf,
   menuKeyAction,
   movedIndex,
+  tabNeighbour,
   typeaheadIndex,
   typeaheadLabel,
 } from '../../lib/menuKeyboard'
@@ -18,6 +20,10 @@ import {
  * menu (Tab closes every level, not just the innermost).
  */
 export const MenuTreeContext = createContext<{ closeAll?: () => void }>({})
+
+// Set when a menu closes on Tab: the menu that gives focus back to its opener
+// then moves it on from there, the way Tab would have from the opener.
+let pendingTab: 1 | -1 | 0 = 0
 
 /**
  * Focus lifecycle of a menu surface (#289). On open, focus moves to the first
@@ -56,6 +62,9 @@ export function useMenuFocus(
         if (!(opener instanceof HTMLElement) || !opener.isConnected || opener.matches(':disabled')) return
         if (opener.closest('[hidden], [inert], [aria-hidden="true"]')) return
         opener.focus({ preventScroll: true })
+        const step = pendingTab
+        pendingTab = 0
+        if (step !== 0) tabNeighbour(opener, step)?.focus()
       })
     }
   }, [surfaceRef])
@@ -132,8 +141,15 @@ export function useMenuKeys({
         if (event.key.startsWith('Arrow')) event.preventDefault()
         return
       case 'close':
-        // Tab keeps its default: focus returns to the opener as the menu
-        // closes, and moves on from there.
+        // Tab moves on from the opener, not from the removed portal at the
+        // end of the page: the menu gives focus back to its opener, then
+        // takes the step the key asked for (see useMenuFocus).
+        event.preventDefault()
+        pendingTab = event.shiftKey ? -1 : 1
+        // Never left over for an unrelated close later.
+        setTimeout(() => {
+          pendingTab = 0
+        }, 0)
         closeMenu?.()
         return
       case 'move': {
@@ -164,7 +180,7 @@ export function useMenuKeys({
         // never starts with one.
         const query = (typing ? typeahead.current.query : '') + action.char.toLocaleLowerCase()
         typeahead.current = { query, at: now }
-        const labels = items.map((item) => typeaheadLabel(item.textContent))
+        const labels = items.map((item) => typeaheadLabel(itemName(item)))
         const found = typeaheadIndex(labels, index, query)
         if (found >= 0) focusMenuItem(items[found])
         return

@@ -366,8 +366,13 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       await page.goto('/')
       await expect(page.getByRole('textbox').first()).toBeVisible()
       const openArea = async (name: string) => {
-        if (width < 769) await page.getByRole('button', { name: 'Más', exact: true }).click()
-        await page.getByRole('button', { name, exact: true }).click()
+        // Narrow: the areas are items of the More menu (#289).
+        if (width < 769) {
+          await page.getByRole('button', { name: 'Más', exact: true }).click()
+          await page.getByRole('menuitem', { name, exact: true }).click()
+        } else {
+          await page.getByRole('button', { name, exact: true }).click()
+        }
       }
       const bounds = async () => {
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -434,14 +439,14 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       if (width < 769) {
         const more = page.getByRole('button', { name: 'Más', exact: true })
         await more.click()
-        const settings = page.getByRole('button', { name: /Ajustes/ })
+        const settings = page.getByRole('menuitem', { name: /Ajustes/ })
         await settings.scrollIntoViewIfNeeded()
         await expect(settings).toBeInViewport({ ratio: 1 })
         expect(await settings.evaluate((element) => {
           const box = element.parentElement!.getBoundingClientRect()
           return box.left >= 0 && box.top >= 0 && box.right <= innerWidth && box.bottom <= innerHeight
         })).toBe(true)
-        const lastItem = page.getByRole('button', { name: 'Acerca de Oreneta', exact: true })
+        const lastItem = page.getByRole('menuitem', { name: 'Acerca de Oreneta', exact: true })
         await lastItem.scrollIntoViewIfNeeded()
         await expect(lastItem).toBeInViewport({ ratio: 1 })
         await bounds()
@@ -1859,7 +1864,7 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       const openArea = async (name: string) => {
         if (width < 769) {
           await page.getByRole('button', { name: 'المزيد', exact: true }).first().click()
-          await page.getByRole('button', { name, exact: true }).last().click()
+          await page.getByRole('menuitem', { name, exact: true }).last().click()
         } else {
           await page.getByTitle(name, { exact: true }).click()
         }
@@ -2061,12 +2066,16 @@ for (const language of ['en', 'ar'] as const) {
     await expect(menu).toHaveCount(0)
     await expect(trigger).toBeFocused()
     await expect(trigger).toHaveAttribute('aria-expanded', 'false')
-    // Tab closes it as well, and moves on from the trigger.
+    // Tab closes it as well, and moves on from the trigger, not from the
+    // removed menu at the end of the page.
     await page.keyboard.press('Enter')
     await expect(items.first()).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(menu).toHaveCount(0)
     await expect(trigger).not.toBeFocused()
+    expect(await page.evaluate(() => document.activeElement !== document.body)).toBe(true)
+    await page.keyboard.press('Shift+Tab')
+    await expect(trigger).toBeFocused()
     expect(errors).toEqual([])
   })
 }
@@ -3777,7 +3786,7 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       const openArea = async (key: string) => {
         if (width < 769) {
           await page.getByRole('button', { name: caCatalog['common.more'], exact: true }).first().click()
-          await page.getByRole('button', { name: caCatalog[key], exact: true }).last().click()
+          await page.getByRole('menuitem', { name: caCatalog[key], exact: true }).last().click()
         } else {
           await page.getByTitle(caCatalog[key], { exact: true }).click()
         }

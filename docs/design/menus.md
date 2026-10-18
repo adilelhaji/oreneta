@@ -33,12 +33,15 @@ desactivats, perquè les fletxes també hi arribin.
 - Una lletra va al següent element que hi comença; la mateixa lletra repetida
   recorre tots els que hi comencen, i unes quantes lletres escrites amb menys de mig
   segon entre l'una i l'altra porten a l'element que comença amb tot el que s'ha
-  escrit. Qualsevol altra tecla acaba la cerca.
+  escrit. Qualsevol altra tecla acaba la cerca. Es compara amb el nom que s'anuncia
+  (`aria-labelledby`, `aria-label` o el text), de manera que també es pot arribar així
+  als elements que només tenen icona, com les mostres de color.
 - La fletxa cap al final de la línia (Dreta; Esquerra en àrab, ADR-0061), Retorn o
   Espai obren el submenú i hi posen el focus; la fletxa cap a l'inici el tanca i
   torna el focus a la fila que l'havia obert.
 - Escapada tanca només el menú de més a dins (la pila compartida de
-  `useEscapeKey`). Tab tanca tot el menú.
+  `useEscapeKey`). Tab tanca tot el menú i el focus avança des de l'element que l'havia
+  obert (cap enrere amb Maj+Tab), no des del final de la pàgina, on era el menú.
 - Un menú de colors en fila (`orientation="horizontal"`) es mou amb les fletxes
   laterals, en l'ordre de lectura.
 - Les tecles que el menú fa servir no arriben a cap altre lloc: ni a la navegació

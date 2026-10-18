@@ -26,9 +26,11 @@ function ContextMenuHarness({
   const [open, setOpen] = useState(false)
   return (
     <div onKeyDown={onParentKey}>
+      <button type="button">Before</button>
       <button type="button" onClick={() => setOpen(true)}>
         Opener
       </button>
+      <button type="button">Next</button>
       {open && (
         <FloatingContextMenu x={0} y={0} label="Thread" onClose={() => setOpen(false)} className="fixed">
           <MenuItem label="Archive" onClick={() => onAction('archive')} />
@@ -129,10 +131,30 @@ describe('a context menu (#289)', () => {
     expect(active()).toBe(opener)
   })
 
-  it('closes on Tab', () => {
+  it('closes on Tab and moves on from the opener, not from where the menu was', async () => {
     const { view } = openHarness()
     key(view.getByRole('menuitem', { name: 'Archive' }), 'Tab')
     expect(view.queryByRole('menu')).toBeNull()
+    await settle()
+    expect(active()?.textContent).toBe('Next')
+  })
+
+  it('goes back from the opener on Shift+Tab', async () => {
+    const { view } = openHarness()
+    key(view.getByRole('menuitem', { name: 'Archive' }), 'Tab', { shiftKey: true })
+    await settle()
+    expect(active()?.textContent).toBe('Before')
+  })
+
+  it('finds icon-only items by their accessible name when typing', () => {
+    const view = render(
+      <MenuList label="Colour" autoFocus>
+        <MenuItem label="First" />
+        <button type="button" role="menuitemradio" aria-checked={false} tabIndex={-1} aria-label="Teal" />
+      </MenuList>,
+    )
+    key(view.getByRole('menuitem', { name: 'First' }), 't')
+    expect(active()?.getAttribute('aria-label')).toBe('Teal')
   })
 
   it('does not take focus back from a surface that took it meanwhile', async () => {
@@ -214,7 +236,7 @@ describe('a submenu (#289)', () => {
     expect(active()?.textContent).toBe('Inbox')
   })
 
-  it('closes every level on Tab from inside it, focus back on the opener', async () => {
+  it('closes every level on Tab from inside it, moving on from the opener', async () => {
     const actions: string[] = []
     const { view, opener } = openHarness({ onAction: (name) => actions.push(name) })
     const trigger = view.getByRole('menuitem', { name: 'Move to' })
@@ -224,7 +246,8 @@ describe('a submenu (#289)', () => {
     key(active()!, 'Tab')
     expect(view.queryByRole('menu')).toBeNull()
     await settle()
-    expect(active()).toBe(opener)
+    expect(opener.nextElementSibling).toBe(active())
+    expect(active()?.textContent).toBe('Next')
     expect(actions).toEqual([])
   })
 })
