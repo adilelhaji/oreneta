@@ -10,7 +10,7 @@ import { calendar$, type CalendarEvent } from '../../states/calendar'
 import { accounts$ } from '../../states/accounts'
 import { settings$ } from '../../states/settings'
 import { ui$ } from '../../states/ui'
-import { cancelMove, move$ } from '../../states/calendarMove'
+import { cancelMove, clickFollowsDrop, markDrop, move$ } from '../../states/calendarMove'
 import { DEFAULT_CALENDAR_PREFS } from '../../lib/calendarWeek'
 import { CalendarDnd } from './CalendarDnd'
 import { MiniCalendar } from './MiniCalendar'
@@ -441,14 +441,25 @@ describe('creating events on the grid (#267)', () => {
     expect(allDay.start).toBe(Date.UTC(2020, 9, 13) / 1000)
   })
 
-  it('opens the slot menu from the keyboard menu key', async () => {
+  it('opens the slot menu from the keyboard menu key, keeping the length chosen', async () => {
     const screen = view()
+    await press(slot(screen), 'ArrowDown', { shiftKey: true })
     await act(async () => {
       fireEvent.contextMenu(slot(screen))
     })
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'New event' }))
     })
-    expect(clock(calendar$.editing.peek()!.start)).toBe('12 9:00')
+    const draft = calendar$.editing.peek()!
+    expect(clock(draft.start)).toBe('12 9:00')
+    expect(clock(draft.end)).toBe('12 10:15')
+  })
+})
+
+describe('the click a drop leaves behind', () => {
+  it('is swallowed for the event that was dropped only', () => {
+    markDrop('a1:ev1')
+    expect(clickFollowsDrop({ accountId: 'a1', id: 'ev1' })).toBe(true)
+    expect(clickFollowsDrop({ accountId: 'a1', id: 'ev2' })).toBe(false)
   })
 })

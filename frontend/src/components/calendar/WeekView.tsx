@@ -75,7 +75,8 @@ type Selection = { day: number; from: number; to: number; pointerId: number; sta
 type Slot = { day: number; minute: number; length: number }
 
 /// The menu of an empty slot: where it opens and what it would create.
-type SlotMenu = { x: number; y: number; start: number; day: Date }
+/// `end` is set when it opens from the keyboard slot, whose length was chosen.
+type SlotMenu = { x: number; y: number; start: number; end?: number; day: Date }
 
 /// The week (or a single day) as an hour grid.
 ///
@@ -492,7 +493,7 @@ export function WeekView({
                 menuKey.preventDefault()
                 menuKey.stopPropagation()
                 const box = menuKey.currentTarget.getBoundingClientRect()
-                setMenu({ x: startEdgeX(box), y: box.bottom, start: slotTimes.start, day: slotDay })
+                setMenu({ x: startEdgeX(box), y: box.bottom, start: slotTimes.start, end: slotTimes.end, day: slotDay })
               }}
               className="absolute inset-x-0.5 rounded-md opacity-0 outline-none focus-visible:opacity-100 bg-accent/10 ring-2 ring-accent"
               style={{
@@ -519,7 +520,7 @@ export function WeekView({
             disabled={!canCreate}
             onClick={() => {
               setMenu(null)
-              newEvent(menu.start)
+              newEvent(menu.start, menu.end === undefined ? {} : { end: menu.end })
             }}
           />
           <MenuItem
@@ -691,7 +692,7 @@ function TimedEvent({
       aria-describedby={hintId}
       {...listeners}
       onClick={() => {
-        if (!clickFollowsDrop()) openEvent(event)
+        if (!clickFollowsDrop(event)) openEvent(event)
       }}
       onKeyDown={(press) => onEventKey(press, event)}
       onContextMenu={(mouse) => {
@@ -767,7 +768,7 @@ function AllDayChip({
       aria-describedby={hintId}
       {...listeners}
       onClick={() => {
-        if (!clickFollowsDrop()) openEvent(event)
+        if (!clickFollowsDrop(event)) openEvent(event)
       }}
       onKeyDown={(press) => onEventKey(press, event)}
       onContextMenu={(mouse) => {

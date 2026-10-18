@@ -13,6 +13,7 @@ import { useTranslation } from '../../lib/i18n'
 import { instantAtOffset, landingTimes, type DropTarget } from '../../lib/calendarDrag'
 import {
   cancelMove,
+  eventKey,
   markDrop,
   move$,
   previewMove,
@@ -106,24 +107,30 @@ export function CalendarDnd({ children }: { children: ReactNode }) {
       }}
       onDragMove={({ over }) => update(over)}
       onDragOver={({ over }) => update(over)}
-      onDragEnd={({ over }) => {
+      onDragEnd={({ active, over }) => {
         update(over)
         const wasHeld = held.current !== null
         held.current = null
         // Also after a refused drag: the click it leaves behind does not open the event.
-        markDrop()
+        dropped(active.data.current)
         if (wasHeld && move$.moving.peek()?.via === 'pointer') void settleMove()
       }}
-      onDragCancel={() => {
+      onDragCancel={({ active }) => {
         const wasHeld = held.current !== null
         held.current = null
-        markDrop()
+        dropped(active.data.current)
         if (wasHeld) cancelMove()
       }}
     >
       {children}
     </DndContext>
   )
+}
+
+/// Notes the end of a drag on the event it held.
+function dropped(data: unknown) {
+  const drag = data as CalendarDrag | undefined
+  if (drag) markDrop(eventKey(drag.event))
 }
 
 /// The instant under the pointer in the hour-grid column of a day, read from

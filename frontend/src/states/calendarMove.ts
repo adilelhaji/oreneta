@@ -64,6 +64,8 @@ let generation = 0
 /// When the last pointer move ended, so the click a drop leaves behind on the
 /// event does not also open it.
 let lastDropAt = 0
+/// Which event that drop held: only its own click is swallowed.
+let lastDropKey = ''
 
 /// The key an event is known by on the grid.
 export function eventKey(event: Pick<CalendarEvent, 'accountId' | 'id'>): string {
@@ -95,7 +97,8 @@ export function previewMove(times: { start: number; end: number }) {
 
 /// Gives the move up: nothing is written.
 export function cancelMove() {
-  if (move$.moving.peek()?.via === 'pointer') lastDropAt = Date.now()
+  const current = move$.moving.peek()
+  if (current?.via === 'pointer') markDrop(eventKey(current.event))
   generation++
   pending = null
   move$.question.set(null)
@@ -104,13 +107,14 @@ export function cancelMove() {
 
 /// A pointer drag ended, written or not: the click it leaves behind on the
 /// event is not a click to open it.
-export function markDrop() {
+export function markDrop(key: string) {
   lastDropAt = Date.now()
+  lastDropKey = key
 }
 
 /// Whether a click on an event is the one a drop just left behind.
-export function clickFollowsDrop(): boolean {
-  return Date.now() - lastDropAt < 400
+export function clickFollowsDrop(event: Pick<CalendarEvent, 'accountId' | 'id'>): boolean {
+  return eventKey(event) === lastDropKey && Date.now() - lastDropAt < 400
 }
 
 /// Settles the move in hand: refused again if its calendar became read-only
@@ -119,7 +123,7 @@ export function clickFollowsDrop(): boolean {
 export async function settleMove() {
   const current = move$.moving.peek()
   if (!current || current.settled) return
-  if (current.via === 'pointer') lastDropAt = Date.now()
+  if (current.via === 'pointer') markDrop(eventKey(current.event))
   if (current.start === current.event.start && current.end === current.event.end) return cancelMove()
   const refusal = changeRefusal(current.event, calendar$.calendars.peek())
   if (refusal) {
