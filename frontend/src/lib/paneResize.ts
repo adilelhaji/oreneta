@@ -3,6 +3,11 @@
 // components/resizer/PaneResizer, which takes the pointer and the keyboard.
 
 export const THREAD_LIST_WIDTH = { min: 280, max: 560 } as const
+/**
+ * The thread list's width on a profile that never resized it (#283): room for
+ * a sender and a subject on their own lines without taking the reader's.
+ */
+export const THREAD_LIST_DEFAULT_WIDTH = 360
 /** Percent of the app shell. */
 export const KANBAN_PANE_WIDTH = { min: 25, max: 60 } as const
 /** The board's conversation pane is never drawn narrower than this, whatever its percentage. */

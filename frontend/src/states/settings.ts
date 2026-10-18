@@ -44,7 +44,13 @@ import {
 } from '../lib/calendarWeek'
 import { sanitizeNameDisplay, sanitizeNameSort, type NameDisplay, type NameSort } from '../lib/contactNames'
 import { DEFAULT_NOTIFICATION_PREFS, sanitizeNotificationPrefs, type NotificationPrefs } from '../lib/quietHours'
-import { clampPaneSize, DETAILS_PANEL_WIDTH, KANBAN_PANE_WIDTH, THREAD_LIST_WIDTH } from '../lib/paneResize'
+import {
+  clampPaneSize,
+  DETAILS_PANEL_WIDTH,
+  KANBAN_PANE_WIDTH,
+  THREAD_LIST_DEFAULT_WIDTH,
+  THREAD_LIST_WIDTH,
+} from '../lib/paneResize'
 import i18n, {
   DEFAULT_I18N_LANGUAGE,
   languageChoiceFromStore,
@@ -98,11 +104,19 @@ export type SavedSearch = {
 
 /**
  * How the thread list is drawn.
+ * 'auto': rows while the list is narrow and the table once it is wide enough
+ * for columns (#283; the width is in `components/threads/listView.ts`).
  * 'cards': the two-line rows with an avatar, as the app has always looked.
  * 'table': columns with sortable headers, for reading a mailbox as a list of
  * facts rather than a conversation.
  */
-export type ListView = 'cards' | 'table'
+export type ListView = 'auto' | 'cards' | 'table'
+export const LIST_VIEWS: readonly ListView[] = ['auto', 'cards', 'table']
+
+/** Whether a stored value is a list view this version can draw. */
+export function isListView(value: unknown): value is ListView {
+  return (LIST_VIEWS as readonly unknown[]).includes(value)
+}
 
 /** What the list is ordered by, and which way. */
 export type SortKey = 'date' | 'sender' | 'subject'
@@ -223,7 +237,7 @@ export type Settings = {
    * for working the same question through several.
    */
   stickyFilters: boolean
-  /** Cards or a sortable table. */
+  /** Automatic, cards or a sortable table. */
   listView: ListView
   /** Raw JSON retained so a newer version is never silently overwritten. */
   mailboxViews: Record<string, unknown> | null
@@ -650,7 +664,9 @@ export const settings$ = observable<Settings>({
   readerFoldQuotes: true,
   readerFoldSignatures: false,
   readerFitWidth: false,
-  listView: 'table',
+  // Rows in a narrow list, the table in a wide one (#283): a table squeezed
+  // into a narrow list cut the sender and the subject to a few characters.
+  listView: 'auto',
   mailboxViews: null,
   // Newest first, which is what a mailbox means when nobody has said otherwise.
   listSort: { key: 'date', dir: 'desc' },
@@ -672,7 +688,7 @@ export const settings$ = observable<Settings>({
   grammarCheck: 'off',
   signature: '',
   kanbanBoards: [],
-  threadListWidth: 350,
+  threadListWidth: THREAD_LIST_DEFAULT_WIDTH,
   kanbanPaneWidth: 33,
   detailsPanelWidth: 340,
   kanbanColumnWidth: KANBAN_COLUMN_DEFAULT_WIDTH,
@@ -1073,9 +1089,7 @@ export function hydrateSettings(prefs: Record<string, unknown>, { languageRead =
       const views = prefs[DB_KEY.mailboxViews]
       settings$.mailboxViews.set(views && typeof views === 'object' && !Array.isArray(views) ? views as Record<string, unknown> : null)
     }
-    if (listView === 'cards' || listView === 'table') {
-      settings$.listView.set(listView)
-    }
+    if (isListView(listView)) settings$.listView.set(listView)
 
     const storedSort = prefs[DB_KEY.listSort]
     const sort = sanitizeListSort(storedSort)

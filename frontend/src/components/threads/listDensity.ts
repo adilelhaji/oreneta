@@ -48,7 +48,25 @@ const STYLES: Record<ListDensity, DensityStyle> = {
   },
 }
 
-/** The measures for a density, falling back to the default for an unknown one. */
-export function densityStyle(density: ListDensity): DensityStyle {
+/**
+ * Compact in a narrow list of the automatic view (#283): two lines, the sender
+ * and the date over the subject and the preview, about 56 px high. On one line
+ * a list of 280 to 520 px cut the sender and the subject to a few characters.
+ */
+const NARROW_COMPACT: DensityStyle = {
+  rowPadding: 'py-2',
+  avatarSize: 32,
+  rowGap: 'gap-1',
+  singleLine: false,
+  previewOnOwnLine: false,
+}
+
+/**
+ * The measures for a density, falling back to the default for an unknown one.
+ * `narrowAuto` says the rows are the automatic view's narrow rows, where
+ * compact keeps two lines; the other densities already have two or more.
+ */
+export function densityStyle(density: ListDensity, narrowAuto = false): DensityStyle {
+  if (narrowAuto && density === 'compact') return NARROW_COMPACT
   return STYLES[density] ?? STYLES.cosy
 }

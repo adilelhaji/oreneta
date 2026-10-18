@@ -66,7 +66,7 @@
       "section": "Appearance/Lists; Mail/Conversations",
       "outcome": "New profiles open conventional list and reader; explicit old modes remain",
       "status": "implemented-unverified",
-      "present": "#84 uses table/compact/traditional when preferences are absent; preserves explicit saved values; native certification pending",
+      "present": "#84 uses table/compact/traditional when preferences are absent; since #283 an absent list view is automatic (two-line rows below 520 px of list, the table above) and the list starts at 360 px; preserves explicit saved values; native certification pending",
       "code": "frontend/src/states/settings.ts",
       "acceptance": "Test missing vs saved preferences and production read/reply/select workflow",
       "platform": "Windows desktop",
@@ -79,6 +79,14 @@
           {
             "sha": "d5a8f977513fe8f412fb60cefc41a27f95fa8f75",
             "result": "https://github.com/adilelhaji/oreneta/actions/runs/34327478903"
+          },
+          {
+            "sha": "d70e518eafce9e7afd4ff2ee87af74db2578ab56",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "d70e518eafce9e7afd4ff2ee87af74db2578ab56",
+            "result": "frontend/baseline/autoListView.test.tsx"
           }
         ],
         "native": [],
@@ -161,7 +169,7 @@
       "section": "Appearance/Lists",
       "outcome": "Unread, open, focused and multi-selected rows have distinct meaning",
       "status": "implemented-unverified",
-      "present": "Table rows keep opened edge, unread dot/bold, checkbox tint and focus outline as separate signals; arrivals never join a bulk selection; keyboard/pointer production-entry cases in both cobalt themes (#154, #186); card-list polish and native evidence pending",
+      "present": "Table rows keep opened edge, unread dot/bold, checkbox tint and focus outline as separate signals; arrivals never join a bulk selection; keyboard/pointer production-entry cases in both cobalt themes (#154, #186); since #283 the default narrow list draws two-line rows (open row bg-active + 3 px start edge and aria-current; unread and selection tints unchanged), with open/select production-entry cases; card-list polish and native evidence pending",
       "code": "frontend/src/components/threads/ThreadTable.tsx",
       "acceptance": "Production-entry keyboard/pointer scenarios in both themes; reviewed selection excludes new arrivals",
       "platform": "Windows desktop",
