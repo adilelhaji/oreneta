@@ -1768,9 +1768,10 @@ test('the resized message list is kept across restarts and the automatic view fo
 })
 
 test('a remembered wide list squeezed by the window draws two-line rows (#283)', async ({ page }) => {
-  // 60 + 220 + 560 + 360 does not fit in 1024 px: the list gives way, too
-  // narrow for columns, and the automatic view follows the drawn width.
-  await page.setViewportSize({ width: 1024, height: 900 })
+  // A remembered 560 px list and the reader's 360 px do not fit in 880 px
+  // (the folder pane is hidden at this width): the list gives way, too narrow
+  // for columns, and the automatic view follows the drawn width.
+  await page.setViewportSize({ width: 880, height: 900 })
   const errors = await prepareStartup(page, true, {
     navigation: true,
     theme: 'oreneta-dark',

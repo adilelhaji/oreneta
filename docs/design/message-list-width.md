@@ -75,7 +75,7 @@ entre la casella, el remitent, l'assumpte i la data.
     (axe comprova la llista en repòs, sense cap fila oberta ni seleccionada);
   - redimensionar la llista amb el teclat i recarregar: l'amplada es conserva, i
     la vista automàtica canvia a taula a 560 px i torna a files a 296 px;
-  - una llista desada de 560 px que s'estreny en una finestra de 1024 px passa a files
+  - una llista desada de 560 px que s'estreny en una finestra de 880 px passa a files
     (segueix l'amplada dibuixada);
   - obrir, respondre, seleccionar i navegar sobre les files per
     defecte, en clar i en fosc;
