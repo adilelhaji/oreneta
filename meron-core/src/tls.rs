@@ -320,6 +320,7 @@ async fn probe_with_timeout(
         let tcp = if starttls {
             match protocol {
                 "smtp" => crate::smtp::starttls_socket(tcp).await?,
+                "pop3" => crate::pop3::starttls_socket(tcp).await?,
                 _ => crate::imap::starttls_socket(tcp).await?,
             }
         } else {
@@ -365,6 +366,28 @@ mod tests {
 
         assert!(err.to_string().contains("timed out"));
         assert!(started.elapsed() < std::time::Duration::from_secs(1));
+    }
+
+    /// A POP3 server asked for its certificate is spoken to in POP3 (STLS),
+    /// not in IMAP: the probe of a failed POP3 test must reach the handshake.
+    #[tokio::test]
+    async fn a_pop3_probe_upgrades_with_stls() {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let mut io = tokio::io::BufReader::new(tcp);
+            io.get_mut().write_all(b"+OK ready\r\n").await.unwrap();
+            let mut line = String::new();
+            io.read_line(&mut line).await.unwrap();
+            io.get_mut().write_all(b"+OK begin TLS\r\n").await.unwrap();
+            // No TLS follows: the probe fails at the handshake, after STLS.
+            line
+        });
+        let result = probe_with_timeout("127.0.0.1", port, "pop3", true, None, std::time::Duration::from_secs(5)).await;
+        assert!(result.is_err());
+        assert_eq!(server.await.unwrap().trim_end(), "STLS");
     }
 
     #[test]
