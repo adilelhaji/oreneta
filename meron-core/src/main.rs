@@ -9799,10 +9799,12 @@ async fn pop3_check(engine: &Arc<Engine>, account: &str) -> anyhow::Result<(usiz
         .into_iter()
         .map(|header| header.uid)
         .collect();
+    let downloaded_before = meron_core::pop3::has_downloaded(&engine.db.lock().unwrap(), account)?;
     let synced = sync_messages(engine, account, inbox, SYNC_LIMIT).await?;
-    // An Inbox with nothing in it yet is a first download: the backlog it
-    // brings is not new mail to announce.
-    if before.is_empty() {
+    // The account's first download brings the server's backlog, which is not
+    // new mail to announce. An Inbox the person emptied later is no first
+    // download: what arrives into it is announced.
+    if !downloaded_before {
         return Ok((synced.count, Vec::new()));
     }
     let arrived = synced

@@ -321,6 +321,21 @@ async fn the_password_is_never_sent_to_a_server_without_tls() {
     assert!(!seen.lock().unwrap().commands.iter().any(|c| c.starts_with("PASS") || c.starts_with("USER")));
 }
 
+/// #270: a first download is told apart from an Inbox emptied later, so the
+/// periodic check announces what arrives in the second case only.
+#[test]
+fn an_account_that_downloaded_once_stays_known_after_its_inbox_is_emptied() {
+    let conn = crate::store::open_in_memory_for_test().unwrap();
+    assert!(!has_downloaded(&conn, "pop").unwrap());
+    conn.execute(
+        "INSERT INTO pop3_seen(account, uidl, hash, uid, fetched_at) VALUES('pop', 'u1', 'h1', 1, 0)",
+        [],
+    )
+    .unwrap();
+    assert!(has_downloaded(&conn, "pop").unwrap());
+    assert!(!has_downloaded(&conn, "other").unwrap());
+}
+
 #[test]
 fn retention_is_kept_and_keeping_is_the_default() {
     let conn = crate::store::open_in_memory_for_test().unwrap();

@@ -73,13 +73,15 @@ function waitForKanbanSync(
   }
   const folderAccepted = (synced: string) =>
     folderIds ? [...folderIds].some((wanted) => folderMatches(wanted, synced)) : folderMatches(folderId, synced)
-  // A periodic check's events are about the whole account, not the sync this
-  // waits for: they neither complete nor fail it.
-  const matches = (detail: MailSyncEvent) =>
-    !!detail?.account &&
-    !detail.periodic &&
-    pending.has(detail.account) &&
-    (!detail.folder || folderAccepted(detail.folder))
+  // A periodic check's event completes the wait only when it synced the folder
+  // waited for — the core leaves that folder to the check when the check
+  // already claimed it, so its event is the only one that will come. It never
+  // fails the wait: its error is about the whole account.
+  const matches = (detail: MailSyncEvent) => {
+    if (!detail?.account || !pending.has(detail.account)) return false
+    if (detail.periodic) return (detail.synced_folders ?? []).some(folderAccepted)
+    return !detail.folder || folderAccepted(detail.folder)
+  }
   const completeAccount = (detail: MailSyncEvent) => {
     if (!matches(detail)) return
     pending.delete(detail.account!)

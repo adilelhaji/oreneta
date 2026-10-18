@@ -75,6 +75,16 @@ pub fn retention(conn: &Connection, account: &str) -> Result<Retention> {
     })
 }
 
+/// Whether anything was ever downloaded for `account`. A first download
+/// brings the server's backlog, which is not new mail to announce (#270);
+/// an Inbox emptied by the person afterwards is not a first download.
+pub fn has_downloaded(conn: &Connection, account: &str) -> Result<bool> {
+    Ok(conn
+        .query_row("SELECT 1 FROM pop3_seen WHERE account = ?1 LIMIT 1", params![account], |_| Ok(()))
+        .optional()?
+        .is_some())
+}
+
 pub fn set_retention(conn: &Connection, account: &str, retention: Retention) -> Result<()> {
     let (policy, days) = match retention {
         Retention::Keep => ("keep", 0),
