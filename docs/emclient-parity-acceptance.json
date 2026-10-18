@@ -1224,31 +1224,31 @@
             "result": "frontend/src/components/tasks/ExchangeTaskLists.test.tsx"
           },
           {
-            "sha": "24a55b7a456192cb5647b3a16e50d83ee90a1c16",
+            "sha": "5b13b75003a439b59391d72b0faf54b0d323e013",
             "result": "meron-core/src/task_sync/account_lists/tests.rs"
           },
           {
-            "sha": "24a55b7a456192cb5647b3a16e50d83ee90a1c16",
+            "sha": "5b13b75003a439b59391d72b0faf54b0d323e013",
             "result": "meron-core/src/task_sync/exchange/tests.rs"
           },
           {
-            "sha": "24a55b7a456192cb5647b3a16e50d83ee90a1c16",
+            "sha": "5b13b75003a439b59391d72b0faf54b0d323e013",
             "result": "meron-core/src/store/tests.rs"
           },
           {
-            "sha": "24a55b7a456192cb5647b3a16e50d83ee90a1c16",
+            "sha": "5b13b75003a439b59391d72b0faf54b0d323e013",
             "result": "meron-core/src/profile_purge.rs"
           },
           {
-            "sha": "24a55b7a456192cb5647b3a16e50d83ee90a1c16",
+            "sha": "5b13b75003a439b59391d72b0faf54b0d323e013",
             "result": "frontend/src/components/tasks/AccountTaskLists.test.tsx"
           },
           {
-            "sha": "24a55b7a456192cb5647b3a16e50d83ee90a1c16",
+            "sha": "5b13b75003a439b59391d72b0faf54b0d323e013",
             "result": "frontend/src/components/dialog/CalDavCalendars.test.tsx"
           },
           {
-            "sha": "24a55b7a456192cb5647b3a16e50d83ee90a1c16",
+            "sha": "5b13b75003a439b59391d72b0faf54b0d323e013",
             "result": "integration_account_task_lists_test.go"
           }
         ],
