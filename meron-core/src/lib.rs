@@ -19,6 +19,7 @@ pub mod cloud;
 pub mod carddav;
 pub mod changelog;
 pub mod chat;
+pub mod connection_test;
 pub mod contacts;
 pub mod conversation_page;
 pub mod crypto;

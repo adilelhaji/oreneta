@@ -464,6 +464,9 @@ func sidecarCallTimeout(method string) time.Duration {
 	// A probe dials the server and shakes hands; the core caps that at 15s.
 	case "account.probeCert":
 		return 20 * time.Second
+	// Both servers are tested at once; the core bounds each at 45s.
+	case "account.testConnection":
+		return 60 * time.Second
 	// A full-folder STORE + EXPUNGE on a large Trash can take a while.
 	case "messages.emptyFolder":
 		return 60 * time.Second

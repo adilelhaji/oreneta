@@ -88,6 +88,17 @@ El 2026-10-17 (#277, ADR-0047 esmenada el 2026-10-18, `docs/design/quicktext-pla
 signatura a les respostes i els reenviaments: amb el text propi (com fins ara), damunt de la citació o sota la
 citació, com a preferència local (`signature_placement`). Cap fila no canvia d'estat: SET-10
 es manté `implemented-unverified` i l'evidència nativa de Windows continua pendent.
+El 2026-10-17 (#269) la configuració manual IMAP/POP3/SMTP va incorporar «Prova la
+connexió»: comprova el servidor d'entrada i el de sortida per separat, pas a pas (DNS, TCP,
+TLS i inici de sessió), diu què cal corregir en cada error i n'ofereix la correcció
+probable (parells de port i seguretat, forma del nom d'usuari, inspecció del certificat)
+sense desar res. «Desa el compte» fa la prova primer, i la contrasenya no es desa abans
+d'una prova satisfactòria tret que la persona triï «Desa igualment». Vegeu
+[account-setup.md](account-setup.md). Cap fila no canvia d'estat: no hi ha cap fila per a
+la configuració manual de comptes (S15-01, de POP3, tracta la baixada del correu i es
+manté `implemented-unverified`), i l'evidència nativa de Windows (N4) i amb proveïdors
+reals (N5) continua pendent; les proves amb servidors falsos i amb maddy (MAIL-17 del
+paquet d'acceptació de proveïdors) són sintètiques.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|
