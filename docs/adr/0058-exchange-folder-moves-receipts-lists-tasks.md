@@ -3,7 +3,9 @@
 - Estat: acceptada per delegació (el propietari va delegar les decisions de
   disseny de #211 i va demanar l'opció més prudent); pendent de revisió del
   propietari al final del pla. ADR-0066 (2026-10-17) amplia el punt 3: les
-  carpetes de contactes sota Contactes i l'edició de les persones.
+  carpetes de contactes sota Contactes i l'edició de les persones. ADR-0070
+  (acceptada pel propietari el 2026-10-18) esmena el primer punt del §4: la
+  llista de tasques arriba amb el compte, sense que calgui afegir-la a mà.
 - Data: 2026-10-15.
 - Abast: #211, la part d'Exchange (EWS) de quatre files de la paritat
   amb eM Client 10.4: SET-07 (#87, moure carpetes), SET-11 (#107,
