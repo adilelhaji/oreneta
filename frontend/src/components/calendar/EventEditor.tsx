@@ -17,7 +17,7 @@ import {
   type Participant,
 } from '../../states/calendar'
 import { accounts$ } from '../../states/accounts'
-import { mailsNotices, noticeRecipients, noticeSender, organizerFor } from '../../states/organizerNotices'
+import { noticePlan } from '../../states/organizerNotices'
 import { ScopeAsk } from './ScopeAsk'
 import { NotifyAsk } from './NotifyAsk'
 import { ConflictNote } from './ConflictNote'
@@ -89,18 +89,8 @@ export function EventEditor() {
   // mail from here, which needs an account that sends as the organizer.
   // Without one the question is not asked, since nothing could follow it.
   const kind = calendars.find((c) => c.id === event.calendar_id && c.accountId === event.accountId)?.kind
-  const byMail = mailsNotices(kind)
-  const sender = byMail ? noticeSender(event, accounts) : null
-  const canNotify = !byMail || sender !== null
-  const invitees = !canNotify
-    ? []
-    : byMail
-      ? noticeRecipients(event, sender)
-      : event.attendees.map((person) => person.addr.trim()).filter(Boolean)
-  // A meeting with guests is saved naming its organizer: the identity the
-  // notice goes out from, when it names none yet.
-  const toSave: EventDraft =
-    byMail && sender && event.attendees.length > 0 ? { ...event, organizer: organizerFor(event, sender) } : event
+  // A meeting with guests told by mail is saved naming its organizer.
+  const { sender, canNotify, invitees, toSave } = noticePlan(event, kind, accounts)
 
   /// Runs an action through the questions it raises, in order: which
   /// occurrences, then whether to tell anyone. Neither is asked when it has
