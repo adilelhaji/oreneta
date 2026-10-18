@@ -37,7 +37,9 @@ Mod és ⌘ al macOS i Ctrl a la resta.
   alinea a la dreta i la bústia no se sincronitza (`FormattingShortcuts`, a
   `frontend/src/components/composer/richText.ts`).
 - En els teclats on `[` i `]` s'escriuen amb AltGr (català, castellà, francès,
-  alemany), Mod+AltGr+] i Mod+AltGr+[ també funcionen.
+  alemany), Mod+] i Mod+[ no es poden prémer: un claudàtor escrit amb AltGr
+  arriba com a Ctrl+Alt, i l'editor el deixa escriure. Allà el sagnat es fa
+  amb la barra d'eines.
 - L'editor es queda aquestes combinacions encara que una drecera de
   l'aplicació s'hi hagi assignat a la configuració.
 - Els editors de signatures i de notes no les tenen: allà Mod+Maj+R continua
@@ -68,8 +70,7 @@ Mod és ⌘ al macOS i Ctrl a la resta.
 
 - `richText.test.ts`: els validadors, cada ordre, el límit de les cel·les, la
   graella a l'editor, les dreceres (també que Mod+Maj+R no arribi a la
-  finestra des de l'editor i que hi arribi des d'un altre camp, i AltGr per als
-  claudàtors), Tab a les taules i l'HTML i el text pla que s'envien.
+  finestra des de l'editor i que hi arribi des d'un altre camp, i que un claudàtor escrit amb AltGr arribi al text), Tab a les taules i l'HTML i el text pla que s'envien.
 - `ComposerToolbar.test.tsx`: cada control de la barra amb l'editor.
 - `composerHelpers.test.ts` i `lib/html.test.ts`: els estils en línia i el text
   pla de les taules de dades i de maquetació.

@@ -251,21 +251,24 @@ const ALIGN_KEYS = new Map<string, Alignment>([
 /**
  * The formatting command a keydown asks for, or null. Mod is ⌘ on macOS and
  * Ctrl elsewhere: Mod+Shift+L/E/R/J align left, centre, right and justify;
- * Mod+] and Mod+[ increase and decrease the indent. The brackets also take Alt
- * held: on Catalan, Spanish, French or German keyboards `[` and `]` are typed
- * with AltGr, which arrives as Ctrl+Alt.
+ * Mod+] and Mod+[ increase and decrease the indent.
+ *
+ * Never with Alt (or AltGraph) held. On Catalan, Spanish, French or German
+ * keyboards `[` and `]` are typed with AltGr, which arrives as Ctrl+Alt: a
+ * bracket typed on its own looks exactly like Ctrl+AltGr+bracket, and taking
+ * it would stop the writer from typing a bracket at all (Codex, #298). There,
+ * indent from the toolbar.
  */
 export function formattingCommandFor(event: KeyboardEvent): ((editor: Editor) => boolean) | null {
   const mod = isMac ? event.metaKey : event.ctrlKey
   const otherMod = isMac ? event.ctrlKey : event.metaKey
-  if (!mod || otherMod) return null
-  // The key as typed, whatever it took to type it (AltGr, Option or Shift).
+  if (!mod || otherMod || event.altKey || event.getModifierState?.('AltGraph')) return null
   if (event.key === ']' || event.key === '[') {
     return event.key === ']'
       ? (editor) => editor.chain().focus().increaseIndent().run()
       : (editor) => editor.chain().focus().decreaseIndent().run()
   }
-  if (event.altKey || !event.shiftKey) return null
+  if (!event.shiftKey) return null
   const to = ALIGN_KEYS.get(event.key.toLowerCase())
   return to ? (editor) => editor.chain().focus().setTextAlign(to).run() : null
 }

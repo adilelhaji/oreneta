@@ -7,8 +7,7 @@
   fila.
 - Afegit en implementar (#274), sense canviar la decisió: la classe
   `oreneta-table` (punt 3), el límit de les cel·les que ocupen més d'una
-  columna o fila (punt 2), l'extensió `FormattingShortcuts` i AltGr per als
-  claudàtors (punt 5), la lectura de les taules de maquetació en text pla
+  columna o fila (punt 2), l'extensió `FormattingShortcuts` i els claudàtors amb AltGr (punt 5), la lectura de les taules de maquetació en text pla
   (punt 6) i les conseqüències.
 - Data: 2026-10-17.
 - Abast: #274 (fila SET-10, pare #88). Només el redactor de l'aplicació
@@ -176,7 +175,12 @@ Com s'aplica:
   `TextAlign`. L'editor atura l'esdeveniment de tecla (`stopPropagation`)
   perquè el gestor de dreceres de la finestra no el vegi.
 - En els teclats català, castellà, francès o alemany, `[` i `]` s'escriuen amb
-  AltGr, que arriba com a Ctrl+Alt: per als claudàtors s'accepta Alt premuda.
+  AltGr, que arriba com a Ctrl+Alt. Un claudàtor escrit sol és idèntic a
+  Ctrl+AltGr+claudàtor, i prendre'l com a drecera impediria escriure'l (Codex,
+  #298). Per això cap drecera de format no actua amb Alt (ni AltGr) premuda:
+  en aquests teclats, el sagnat es fa amb la barra d'eines. El propietari havia
+  acceptat AltGr per als claudàtors el 2026-10-18; no es pot fer sense aquest
+  efecte, i es retira.
 - L'editor es queda aquestes combinacions encara que la persona hagi assignat
   una drecera de l'aplicació a alguna d'elles (`lib/shortcuts.ts` permet
   canviar-les). Les dreceres per defecte de l'aplicació no en fan servir cap

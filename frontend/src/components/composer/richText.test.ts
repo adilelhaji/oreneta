@@ -270,9 +270,18 @@ describe('the formatting shortcuts', () => {
     expect(formattingCommandFor(new KeyboardEvent('keydown', { key: 'R', shiftKey: true }))).toBeNull()
     expect(formattingCommandFor(new KeyboardEvent('keydown', { key: 'R', shiftKey: true, altKey: true, ctrlKey: !isMac, metaKey: isMac }))).toBeNull()
     // Catalan, Spanish, French and German keyboards type the brackets with
-    // AltGr, which arrives as Ctrl+Alt.
-    expect(formattingCommandFor(new KeyboardEvent('keydown', { key: ']', altKey: true, ctrlKey: !isMac, metaKey: isMac }))).not.toBeNull()
-    expect(formattingCommandFor(new KeyboardEvent('keydown', { key: '[', altKey: true, ctrlKey: !isMac, metaKey: isMac }))).not.toBeNull()
+    // AltGr, which arrives as Ctrl+Alt: that is a bracket being typed.
+    expect(formattingCommandFor(new KeyboardEvent('keydown', { key: ']', altKey: true, ctrlKey: true }))).toBeNull()
+    expect(formattingCommandFor(new KeyboardEvent('keydown', { key: '[', altKey: true, ctrlKey: true }))).toBeNull()
+  })
+
+  // Codex on #298: AltGr+] on its own must type "]", not indent.
+  it('lets a bracket typed with AltGr through to the text', () => {
+    const editor = editorWith('<p>Hello</p>')
+    const altGr = new KeyboardEvent('keydown', { key: ']', ctrlKey: true, altKey: true, bubbles: true, cancelable: true })
+    editor.view.dom.dispatchEvent(altGr)
+    expect(altGr.defaultPrevented).toBe(false)
+    expect(html(editor)).toBe('<p>Hello</p>')
   })
 
   it('aligns with Mod+Shift+L, E, R and J', () => {
