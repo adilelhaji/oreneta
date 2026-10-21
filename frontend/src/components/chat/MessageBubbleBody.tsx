@@ -151,7 +151,7 @@ export function MessageBubbleBody({
                       onFocus={() => onLinkHover?.(part.content)}
                       onBlur={() => onLinkHover?.(null)}
                       title={part.content}
-                      className="text-accent hover:underline break-all font-semibold cursor-pointer"
+                      className="text-accent-fg hover:underline break-all font-semibold cursor-pointer"
                     >
                       {part.label
                         ? renderText(part.label, `${keyPrefix}-link-${blockIndex}-${index}`)

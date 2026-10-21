@@ -17,7 +17,7 @@ export function ConversationTabs() {
       <button
         onClick={() => activateConversationTab()}
         className={`flex items-center gap-1.5 px-3 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
-          activeTab === '' ? 'border-accent text-accent' : 'border-transparent text-secondary hover:text-primary'
+          activeTab === '' ? 'border-accent text-accent-fg' : 'border-transparent text-secondary hover:text-primary'
         }`}
         title={t('chat.currentConversation')}
       >
@@ -34,7 +34,7 @@ export function ConversationTabs() {
             if (tab.kind === 'thread') ui$.selectedThread.set(tab.threadId)
           }}
           className={`group flex max-w-[200px] cursor-pointer items-center gap-1.5 px-3 text-xs font-semibold border-b-2 transition-colors ${
-            activeTab === tab.id ? 'border-accent text-accent' : 'border-transparent text-secondary hover:text-primary'
+            activeTab === tab.id ? 'border-accent text-accent-fg' : 'border-transparent text-secondary hover:text-primary'
           }`}
           title={tab.subject}
         >

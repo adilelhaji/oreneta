@@ -81,7 +81,7 @@ export function SearchBuilder({ query }: { query: string }) {
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={hint}
-        className="rounded-control border border-border bg-app px-2.5 py-1.5 text-ui text-primary outline-none focus:border-accent"
+        className="rounded-control border border-border bg-app px-2.5 py-1.5 text-ui text-primary outline-none focus:border-accent-fg"
       />
     </label>
   )

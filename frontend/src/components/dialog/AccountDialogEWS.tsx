@@ -80,7 +80,7 @@ export function AccountDialogEWS({
                 void save()
               }
             }}
-            className={`${inputClass ?? 'w-full text-xs py-2 px-3.5 rounded-control border border-border bg-raised text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'} pe-11`}
+            className={`${inputClass ?? 'w-full text-xs py-2 px-3.5 rounded-control border border-border bg-raised text-primary placeholder-secondary focus:ring-1 focus:ring-accent-fg focus:border-transparent focus:bg-chats transition-all outline-none'} pe-11`}
           />
           <button
             type="button"

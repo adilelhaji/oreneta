@@ -35,7 +35,7 @@ export function StateFrame({
         <div
           className={clsx(
             'flex h-12 w-12 shrink-0 items-center justify-center rounded-control border',
-            iconClassName ?? 'border-border bg-raised text-accent',
+            iconClassName ?? 'border-border bg-raised text-accent-fg',
           )}
         >
           <Icon size={20} strokeWidth={1.75} aria-hidden="true" className={clsx(spinning && 'animate-spin')} />

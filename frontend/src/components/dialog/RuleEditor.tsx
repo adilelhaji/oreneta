@@ -132,7 +132,7 @@ export function RuleEditor({
               conditions: [...rule.conditions, { field: 'from', op: 'contains', value: '' }],
             })
           }
-          className="flex w-fit items-center gap-1 rounded-control-sm px-2 py-1 text-caption font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer"
+          className="flex w-fit items-center gap-1 rounded-control-sm px-2 py-1 text-caption font-semibold text-accent-fg transition-colors hover:bg-accent/10 cursor-pointer"
         >
           <Plus size={14} strokeWidth={1.75} />
           {t('rules.addCondition')}
@@ -195,7 +195,7 @@ export function RuleEditor({
         <button
           type="button"
           onClick={() => onChange({ ...rule, actions: [...rule.actions, blankAction('markRead', '')] })}
-          className="flex w-fit items-center gap-1 rounded-control-sm px-2 py-1 text-caption font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer"
+          className="flex w-fit items-center gap-1 rounded-control-sm px-2 py-1 text-caption font-semibold text-accent-fg transition-colors hover:bg-accent/10 cursor-pointer"
         >
           <Plus size={14} strokeWidth={1.75} />
           {t('rules.addAction')}

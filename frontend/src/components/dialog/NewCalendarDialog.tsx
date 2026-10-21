@@ -425,7 +425,7 @@ function KindTab({
           : 'text-secondary hover:bg-chats/60 hover:text-primary'
       }`}
     >
-      <span className={active ? 'text-accent' : ''}>{icon}</span>
+      <span className={active ? 'text-accent-fg' : ''}>{icon}</span>
       <span className="text-2xs font-semibold leading-tight">{label}</span>
     </button>
   )

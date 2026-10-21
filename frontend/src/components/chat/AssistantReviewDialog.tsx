@@ -241,7 +241,7 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-semibold text-primary">
-              <Sparkles size={16} className="text-accent" strokeWidth={1.75} />
+              <Sparkles size={16} className="text-accent-fg" strokeWidth={1.75} />
               {t('assistant.reviewTitle', { defaultValue: 'Review assistant context' })}
             </h2>
             <p className="mt-1 text-caption text-secondary">
@@ -373,7 +373,7 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
                       )}{' '}
                       {selected && (
                         <details className="mt-1">
-                          <summary className="cursor-pointer text-caption font-semibold text-accent">
+                          <summary className="cursor-pointer text-caption font-semibold text-accent-fg">
                             {t('assistant.viewExactContent', { defaultValue: 'View exact text sent' })}
                           </summary>
                           <pre
@@ -447,7 +447,7 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
                         type="button"
                         aria-label={`Open source message ${message.subject || source.message_id}`}
                         onClick={() => openMessageTab(message)}
-                        className="text-accent underline"
+                        className="text-accent-fg underline"
                       >
                         {message.subject || source.message_id}
                       </button>

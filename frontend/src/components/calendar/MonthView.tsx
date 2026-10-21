@@ -176,7 +176,7 @@ export function MonthView({ onEventMenu }: { onEventMenu: (x: number, y: number,
                 <button
                   type="button"
                   onClick={() => openDay(date)}
-                  className="self-start rounded px-1 text-2xs font-medium text-accent hover:bg-accent/10 cursor-pointer"
+                  className="self-start rounded px-1 text-2xs font-medium text-accent-fg hover:bg-accent/10 cursor-pointer"
                 >
                   {t('calendar.moreEvents', { defaultValue: '{count} more', count: overflow })}
                 </button>

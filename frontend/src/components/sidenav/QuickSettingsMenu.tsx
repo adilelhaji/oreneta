@@ -144,7 +144,11 @@ export function QuickSettingsMenu({
         )}
         <MenuItem
           icon={
-            <RefreshCw size={14} className={busy ? 'animate-spin text-accent' : 'text-secondary'} strokeWidth={1.75} />
+            <RefreshCw
+              size={14}
+              className={busy ? 'animate-spin text-accent-fg' : 'text-secondary'}
+              strokeWidth={1.75}
+            />
           }
           label={busy ? t('connectivity.health.pending') : t('threads.actions.syncMailbox')}
           disabled={busy}

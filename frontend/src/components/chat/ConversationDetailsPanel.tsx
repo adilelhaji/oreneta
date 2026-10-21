@@ -300,7 +300,7 @@ export function ConversationDetailsPanel({
                           : 'cursor-default'
                       }`}
                     >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control-sm bg-accent/10 text-accent">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control-sm bg-accent/10 text-accent-fg">
                         <FileIcon size={16} />
                       </span>
                       <div className="min-w-0 flex-1">
@@ -344,7 +344,7 @@ export function ConversationDetailsPanel({
         >
           {accountId && onOpenConversation && (
             <MenuItem
-              icon={<MessageSquare size={14} className="text-accent" strokeWidth={1.75} />}
+              icon={<MessageSquare size={14} className="text-accent-fg" strokeWidth={1.75} />}
               label={t('person.history', {
                 name: personMenu.person.name || personMenu.person.email,
                 defaultValue: 'History with {name}',
@@ -356,7 +356,7 @@ export function ConversationDetailsPanel({
             />
           )}
           <MenuItem
-            icon={<Search size={14} className="text-accent" strokeWidth={1.75} />}
+            icon={<Search size={14} className="text-accent-fg" strokeWidth={1.75} />}
             label={t('chat.viewMessagesWith', { name: personMenu.person.name || personMenu.person.email })}
             onClick={() => {
               onViewMessagesWith(personMenu.person)
@@ -364,7 +364,7 @@ export function ConversationDetailsPanel({
             }}
           />
           <MenuItem
-            icon={<Copy size={14} className="text-accent" strokeWidth={1.75} />}
+            icon={<Copy size={14} className="text-accent-fg" strokeWidth={1.75} />}
             label={t('chat.copyEmailAddress')}
             onClick={() => {
               navigator.clipboard?.writeText(personMenu.person.email).catch(() => undefined)
@@ -467,7 +467,7 @@ function PeopleList({
             <p className="flex items-center gap-1.5 truncate text-xs font-semibold text-primary selectable-text">
               <span dir="auto" className="truncate">{person.name}</span>
               {person.isSelf && (
-                <span className="shrink-0 rounded-full bg-accent/15 px-1.5 py-px text-2xs font-bold uppercase tracking-wide text-accent">
+                <span className="shrink-0 rounded-full bg-accent/15 px-1.5 py-px text-2xs font-bold uppercase tracking-wide text-accent-fg">
                   {t('chat.you')}
                 </span>
               )}

@@ -279,7 +279,7 @@ export function NoteEditor({ initialId }: { initialId: string | null }) {
             }}
             className={clsx(
               'flex h-8 w-8 items-center justify-center rounded-control-sm transition-colors cursor-pointer',
-              pinned ? 'text-accent' : 'text-secondary hover:bg-hover',
+              pinned ? 'text-accent-fg' : 'text-secondary hover:bg-hover',
             )}
           >
             <Pin size={16} strokeWidth={1.75} />
@@ -352,7 +352,7 @@ export function NoteEditor({ initialId }: { initialId: string | null }) {
             changed({ tags: parseTags(event.target.value) })
           }}
           placeholder={t('notes.tagsPlaceholder', { defaultValue: 'work, ideas' })}
-          className="min-w-0 flex-1 rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent"
+          className="min-w-0 flex-1 rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent-fg"
         />
         <span className="text-2xs text-secondary">
           {t('notes.localOnly', { defaultValue: 'Kept on this computer only' })}

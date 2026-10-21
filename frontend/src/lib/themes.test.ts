@@ -7,6 +7,7 @@ import {
   DEFAULT_LIGHT_ID,
   THEME_TOKEN_KEYS,
   TOKEN_CSS_VAR,
+  READABLE_CONTRAST,
   UI_CONTRAST,
   cssVarStyle,
   builtinTheme,
@@ -32,30 +33,16 @@ const SAMPLE_INPUT: CustomThemeInput = {
 
 const worst = (fg: string, backgrounds: string[]) => Math.min(...backgrounds.map((bg) => contrastRatio(fg, bg) ?? 0))
 
-/**
- * Accent drawn as text (the selected folder, links) and as the focus ring is
- * below its floor in these palettes. The fix changes the accent colour of a
- * palette people already chose, so it waits for the owner's decision (#287);
- * the test below fails as soon as a listed theme passes or an unlisted one fails.
- */
-const ACCENT_BELOW_AA: Record<string, { text: boolean; ring: boolean }> = {
-  'indigo-dark': { text: true, ring: false },
-  light: { text: true, ring: false },
-  mist: { text: true, ring: true },
-  paper: { text: true, ring: false },
-  dawn: { text: true, ring: true },
-  honey: { text: true, ring: true },
-  lilac: { text: true, ring: false },
-  graphite: { text: true, ring: false },
-}
-
-/** WCAG AA for everything a palette paints, accent excepted (asserted apart). */
+/** WCAG AA for everything a palette paints. */
 function expectReadable(t: ThemeTokens) {
   const surfaces = themeSurfaces(t)
   expect(surfaces.length).toBeGreaterThan(0)
   expect(worst(t.textPrimary, surfaces)).toBeGreaterThanOrEqual(4.5)
   expect(worst(t.textSecondary, surfaces)).toBeGreaterThanOrEqual(4.5)
   expect(worst(t.borderInput, surfaces)).toBeGreaterThanOrEqual(UI_CONTRAST)
+  // The accent as text, icon and focus ring (#311): the accent fill is not held to this.
+  expect(worst(t.accentFg, surfaces)).toBeGreaterThanOrEqual(READABLE_CONTRAST)
+  expect(worst(t.accentFg, surfaces)).toBeGreaterThanOrEqual(UI_CONTRAST)
   expect(contrastRatio(t.accentText, t.accent)!).toBeGreaterThanOrEqual(4.5)
   expect(contrastRatio(t.accentText, composite(t.accentHover, t.bgChats)!)!).toBeGreaterThanOrEqual(4.5)
   for (const [fg, soft] of [
@@ -99,13 +86,33 @@ describe('frame and content tones (#287)', () => {
     for (const theme of BUILTIN_THEMES) expectReadable(theme.tokens)
   })
 
-  it('keeps accent text and the focus ring at their floors, except where the owner must decide', () => {
+  it('keeps accent as text at 4.5:1 and the focus ring at 3:1 on every surface, without touching the accent', () => {
     for (const theme of BUILTIN_THEMES) {
-      const accent = worst(theme.tokens.accent, themeSurfaces(theme.tokens))
-      const below = ACCENT_BELOW_AA[theme.id] ?? { text: false, ring: false }
-      expect({ id: theme.id, text: accent < 4.5, ring: accent < UI_CONTRAST }).toEqual({ id: theme.id, ...below })
+      const { accent, accentFg } = theme.tokens
+      const surfaces = themeSurfaces(theme.tokens)
+      expect({ id: theme.id, text: worst(accentFg, surfaces) >= READABLE_CONTRAST }).toEqual({
+        id: theme.id,
+        text: true,
+      })
+      expect({ id: theme.id, ring: worst(accentFg, surfaces) >= UI_CONTRAST }).toEqual({ id: theme.id, ring: true })
+      // Adjusted only as far as needed: an accent that already passes is kept.
+      if (worst(accent, surfaces) >= READABLE_CONTRAST) expect(accentFg).toBe(accent)
+      else expect(worst(accentFg, surfaces)).toBeLessThan(READABLE_CONTRAST + 0.1)
     }
-    for (const id of [DEFAULT_LIGHT_ID, DEFAULT_DARK_ID]) expect(ACCENT_BELOW_AA[id]).toBeUndefined()
+  })
+
+  it('keeps the legacy accent fills as chosen (#83)', () => {
+    const fills: Record<string, string> = {
+      'indigo-dark': '#6366f1',
+      light: '#0e7a58',
+      mist: '#0ea5b7',
+      paper: '#64748b',
+      dawn: '#c06c84',
+      honey: '#b07c10',
+      lilac: '#7a5bc4',
+      graphite: '#8b9bb4',
+    }
+    for (const [id, accent] of Object.entries(fills)) expect(builtinTheme(id)!.tokens.accent).toBe(accent)
   })
 
   it('paints headers in the frame tone and the lists in a different content tone', () => {
@@ -190,7 +197,7 @@ describe('cobalt defaults', () => {
       expect(contrastRatio(t.accentText, t.accentHover)!).toBeGreaterThanOrEqual(4.5)
       // The selected folder and account are accent text on the active
       // background; the automated audit flagged the dark pair at 4.42:1.
-      expect(contrastRatio(t.accent, t.bgActive)!).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(t.accentFg, t.bgActive)!).toBeGreaterThanOrEqual(4.5)
       for (const [fg, bg] of [
         [t.success, t.successSoft],
         [t.warning, t.warningSoft],
@@ -223,6 +230,7 @@ describe('cobalt defaults', () => {
       'infoSoft',
       'accentText',
       'borderInput',
+      'accentFg',
     ])
       delete tokens[key]
     const saved = { id: 'custom-legacy', name: 'Old choice', appearance: 'light', source: SAMPLE_INPUT, tokens }
@@ -233,7 +241,27 @@ describe('cobalt defaults', () => {
     expect(restored.tokens.accentText).toBe('#ffffff')
     // The outline is derived for the saved surfaces, the saved #123456 frame included.
     expect(worst(restored.tokens.borderInput, themeSurfaces(restored.tokens))).toBeGreaterThanOrEqual(UI_CONTRAST)
+    // The accent as text is derived from the saved accent and surfaces; no saved colour is rewritten.
+    // (This frame is unreadable under the saved text, so it falls back to the text.)
+    expect(restored.tokens.accent).toBe('#654321')
+    expect(restored.tokens.accentFg).toBe(restored.tokens.textPrimary)
     expect(sanitizeCustomThemes([restored])![0]).toEqual(restored)
+  })
+
+  it('derives the accent as text for custom themes and leaves the accent fill alone', () => {
+    const pale = { ...SAMPLE_INPUT, accent: '#0ea5b7' }
+    const t = deriveThemeTokens(pale)
+    expect(t.accent).toBe('#0ea5b7')
+    expect(t.accentFg).not.toBe(t.accent)
+    expect(worst(t.accentFg, themeSurfaces(t))).toBeGreaterThanOrEqual(READABLE_CONTRAST)
+    expect(deriveThemeTokens(SAMPLE_INPUT).accentFg).toBe(SAMPLE_INPUT.accent)
+    // A theme saved before the slot existed gets one derived from its saved colours; none is rewritten.
+    const legacy: Record<string, string> = { ...t }
+    delete legacy.accentFg
+    const restored = sanitizeCustomThemes([{ id: 'custom-pale', name: 'Pale', source: pale, tokens: legacy }])![0]
+    expect(restored.tokens).toEqual(t)
+    const saved = { id: 'custom-pale', name: 'Pale', source: pale, tokens: { ...t, accentFg: '#123456' } }
+    expect(sanitizeCustomThemes([saved])![0].tokens.accentFg).toBe('#123456')
   })
 
   it('keeps a saved field outline and falls back to the text where no surface resolves', () => {

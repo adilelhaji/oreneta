@@ -63,8 +63,9 @@ avisa quan el text o l'accent no arriben a 4,5:1:
 - La vora de camp, almenys 3:1 a cada superfície (WCAG 1.4.11).
 - Els colors d'estat (èxit, avís, perill, informació), almenys 4,5:1 sobre el seu to
   suau, el marc, el contingut i el lector.
-- L'accent com a text, almenys 4,5:1, i l'anell de focus, almenys 3:1, a cada
-  superfície, llevat dels temes de la secció [Pendent](#pendent).
+- L'accent com a text i com a anell de focus (`--me-accent-fg`), almenys 4,5:1 a cada
+  superfície, a tots els temes (4,5:1 compleix també el 3:1 de l'anell). Vegeu
+  [L'accent com a text i com a anell](#laccent-com-a-text-i-com-a-anell-311).
 
 «Cada superfície» vol dir el marc, la capçalera, el contingut, el lector, la superfície
 elevada, el pas del punter i la selecció. Les superfícies translúcides (el pas del
@@ -73,7 +74,7 @@ sobre el marc, que és on es pinten (`composite` a `lib/color.ts`). Una superfí
 no es pot resoldre no es compta i no es dedueix.
 
 Valors mínims d'Oreneta Light i Dark: vora de camp 3,36:1 i 3,57:1 (sobre la
-selecció), accent 4,73:1 i 4,77:1, text secundari 4,72:1 i 5,66:1.
+selecció), accent com a text 4,73:1 i 4,77:1, text secundari 4,72:1 i 5,66:1.
 
 ## Temes integrats i personalitzats
 
@@ -108,7 +109,8 @@ llegeix. Una vora de camp ja desada es conserva tal com és.
 
 ## Anell de focus
 
-Un sol anell per a tot el que rep el focus del teclat: 2 px d'accent sòlid, a 2 px de
+Un sol anell per a tot el que rep el focus del teclat: 2 px d'accent com a text i anell
+(`--me-accent-fg`, sòlid), a 2 px de
 l'element (0 px dins dels camps). Abans era l'accent al 75 % d'opacitat, de manera
 que el contrast depenia del fons. La casella ja no hi afegeix un halo translúcid propi, i
 en passar-hi el punter conserva la vora de camp en lloc de barrejar-la amb l'accent.
@@ -127,31 +129,72 @@ Cantonades gairebé rectes (D3). Els noms dels tokens no canvien; només els val
 Les files, les subfinestres i la selecció de fila completa sense cantonades arriben amb
 les peces de la llista i del panell de carpetes.
 
+## L'accent com a text i com a anell (#311)
+
+Decisió del propietari a #287 (opció A del comentari «DECISION REQUIRED», acceptada a la
+PR #295 el 2026-10-18), aplicada a #311. Abans, l'accent pintat com a text (la carpeta
+seleccionada, els enllaços) quedava per sota de 4,5:1 en vuit temes integrats (Indigo
+Dark, Legacy Green, Mist, Paper, Dawn, Honey, Lilac i Graphite) i l'anell de focus per
+sota de 3:1 en tres (Mist, Dawn i Honey). No es canvia cap color d'accent: els temes
+heretats conserven els seus colors (#83) i el farciment de l'accent no varia.
+
+### Rols
+
+| Rol | Token | Utilitat | Ús |
+|---|---|---|---|
+| Farciment de l'accent | `--me-accent` | `bg-accent`, `border-accent`, `bg-accent/10` | Botons plens, caselles marcades, vores i tints translúcids |
+| Text sobre l'accent | `--me-accent-text` | `text-on-accent` | El text dibuixat sobre el farciment |
+| Accent com a text i anell | `--me-accent-fg` | `text-accent-fg`, `ring-accent-fg`, `border-accent-fg` | L'accent com a text, icona en primer pla o indicador de focus |
+
+`--me-accent-fg` és un token derivat (com `--me-accent-text` i `--me-border-input`): cap
+tema no el fixa a mà. S'obté movent l'accent cap al color del text principal, d'1 % en 1
+%, només fins que arriba a 4,5:1 a totes les superfícies (les mateixes que es
+comproven per al text; vegeu [Contrast](#contrast)). Així conserva el to i només
+s'enfosqueix o s'aclareix el necessari. Quan l'accent ja compleix, el valor és
+exactament l'accent. Si cap punt entre l'accent i el text no hi arriba, pren el color del
+text i l'editor avisa que l'accent no es llegeix; si no es pot resoldre cap superfície,
+pren l'accent.
+
+### Quan fer servir cada token
+
+- Text, icona en primer pla (`text-accent-fg`, també amb `hover:`), enllaços del cos del
+  missatge i l'element actiu de la navegació: `accent-fg`.
+- Anell o vora que indica el focus (`:focus-visible`, `focus:ring-accent-fg`,
+  `focus-within:ring-accent-fg`, `focus:border-accent-fg`) i la vora discontínua de
+  deixar anar: `accent-fg`.
+- Farciments, vores d'estat seleccionat, tints translúcids (`bg-accent/10`) i halos
+  decoratius (`ring-accent/20`): continuen amb l'accent, perquè no són text ni l'únic
+  indicador de focus.
+
+### Valors
+
+El contrast mínim és el pitjor sobre totes les superfícies del tema.
+
+| Tema | Accent | `--me-accent-fg` | Contrast abans | Contrast ara |
+|---|---|---|---|---|
+| Indigo Dark | `#6366f1` | `#8184f3` | 3,27:1 | 4,55:1 |
+| Legacy Green | `#0e7a58` | `#0f7555` | 4,26:1 | 4,54:1 |
+| Mist | `#0ea5b7` | `#117281` | 2,39:1 | 4,51:1 |
+| Paper | `#64748b` | `#566476` | 3,57:1 | 4,52:1 |
+| Dawn | `#c06c84` | `#805466` | 2,66:1 | 4,51:1 |
+| Honey | `#b07c10` | `#805d17` | 2,77:1 | 4,54:1 |
+| Lilac | `#7a5bc4` | `#6a51a8` | 3,71:1 | 4,56:1 |
+| Graphite | `#8b9bb4` | `#93a2b9` | 4,16:1 | 4,53:1 |
+
+Els altres vuit temes ja complien i `--me-accent-fg` és el seu accent. L'anell de Mist,
+Dawn i Honey passa així de 2,39:1, 2,66:1 i 2,77:1 a més de 4,5:1.
+
+### Temes personalitzats
+
+Els temes nous deriven `--me-accent-fg` de l'accent i del text triats. Els temes
+personalitzats desats abans d'aquest canvi reben el token calculat a partir dels seus
+colors desats (accent, text i superfícies); no es reescriu cap color desat, i un
+`--me-accent-fg` ja desat es conserva. La prova de `lib/themes.test.ts` ja no té cap
+llista d'excepcions: comprova els 16 temes, les paletes de mostra i la restauració.
+
 ## Pendent
 
-Decisió del propietari demanada a #287 (comentari «DECISION REQUIRED»). La condició de
-D2 («sempre que cada tema compleixi el contrast AA») encara no es compleix en els punts
-següents.
-
-En vuit temes integrats l'accent queda per sota de 4,5:1 com a text (la carpeta
-seleccionada, els enllaços), i en tres d'ells també per sota de 3:1 com a anell de
-focus. Ja era així abans d'aquest canvi. Arreglar-ho vol dir canviar el color d'accent
-d'un tema que algú ja ha triat, de manera que és una decisió del propietari (#287).
-Mentrestant, la prova enumera aquests temes i falla si n'hi entra un de nou o si un
-dels enumerats ja compleix.
-
-| Tema | Accent | Contrast mínim | Anell per sota de 3:1 |
-|---|---|---|---|
-| Indigo Dark | `#6366f1` | 3,27:1 | No |
-| Legacy Green | `#0e7a58` | 4,26:1 | No |
-| Mist | `#0ea5b7` | 2,39:1 | Sí |
-| Paper | `#64748b` | 3,57:1 | No |
-| Dawn | `#c06c84` | 2,66:1 | Sí |
-| Honey | `#b07c10` | 2,77:1 | Sí |
-| Lilac | `#7a5bc4` | 3,71:1 | No |
-| Graphite | `#8b9bb4` | 4,16:1 | No |
-
-L'anell de focus sobre la barra de mòduls (`--me-bg-sidenav`) tampoc no arriba a 3:1 en
+L'anell de focus sobre la barra de mòduls (`--me-bg-sidenav`) no arriba a 3:1 en
 alguns temes, Oreneta Light inclòs (2,03:1). Aquesta barra no forma part de les
 superfícies comprovades i canvia amb la peça del selector de mòduls, que necessita
 ADR; el seu anell es resol allà.
@@ -164,7 +207,8 @@ d'alta del xat (`MessagingView`), que pinta amb `bg-header`.
 
 ## Verificació
 
-- Proves unitàries: `lib/themes.test.ts` (contrast dels 16 temes, tons de marc i
+- Proves unitàries: `lib/themes.test.ts` (contrast dels 16 temes, accent com a text i
+  anell, tons de marc i
   contingut, valors aprovats d'Oreneta, derivació i restauració de temes
   personalitzats, sincronia entre `index.css` i el registre), `lib/color.test.ts`
   (`composite`) i `components/design-primitives.test.tsx` (vores dels camps).

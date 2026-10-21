@@ -242,7 +242,7 @@ export function NotificationsGroup() {
                         })
                       }
                       className={`rounded-md px-1.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
-                        on ? 'bg-chats text-accent shadow-sm' : 'text-secondary hover:text-primary'
+                        on ? 'bg-chats text-accent-fg shadow-sm' : 'text-secondary hover:text-primary'
                       }`}
                     >
                       {dayLabel(day)}

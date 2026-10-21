@@ -126,7 +126,7 @@ export function CategoriesGroup() {
               onChange={(e) => setEditing({ ...editing, name: e.target.value })}
               aria-label={t('categories.name', { defaultValue: 'Name' })}
               placeholder={t('categories.name', { defaultValue: 'Name' })}
-              className={`${field} outline-none focus:border-accent`}
+              className={`${field} outline-none focus:border-accent-fg`}
             />
             <span
               role="radiogroup"

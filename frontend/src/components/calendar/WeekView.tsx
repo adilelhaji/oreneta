@@ -517,7 +517,7 @@ export function WeekView({
           className="fixed z-[61] min-w-[180px] rounded-control border border-border bg-header p-1 shadow-overlay"
         >
           <MenuItem
-            icon={<Plus size={14} className="text-accent" strokeWidth={1.75} />}
+            icon={<Plus size={14} className="text-accent-fg" strokeWidth={1.75} />}
             label={t('calendar.newEvent', { defaultValue: 'New event' })}
             disabled={!canCreate}
             onClick={() => {

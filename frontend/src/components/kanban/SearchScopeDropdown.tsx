@@ -81,7 +81,11 @@ export function SearchScopeDropdown({
             appearance={value === 'all' ? menuItemSelectedClass : undefined}
             className="select-none"
             icon={
-              <Columns3 size={14} className={value === 'all' ? 'text-accent' : 'text-secondary'} strokeWidth={1.75} />
+              <Columns3
+                size={14}
+                className={value === 'all' ? 'text-accent-fg' : 'text-secondary'}
+                strokeWidth={1.75}
+              />
             }
             label={<span className="font-semibold">{t('kanban.searchScope.allColumns')}</span>}
             onClick={() => {

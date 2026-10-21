@@ -214,7 +214,7 @@ export function ConversationHeader({
               type="button"
               onClick={openSenderMenu}
               onContextMenu={openSenderMenu}
-              className="mt-0.5 block max-w-full truncate rounded-sm text-start text-xs font-medium text-secondary outline-none transition-colors cursor-context-menu hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/40"
+              className="mt-0.5 block max-w-full truncate rounded-sm text-start text-xs font-medium text-secondary outline-none transition-colors cursor-context-menu hover:text-accent-fg focus-visible:ring-2 focus-visible:ring-accent/40"
               title={`${activeThread.from_name} (${activeThread.from_addr})`}
               aria-label={t('chat.copyFullAddress')}
             >
@@ -485,7 +485,7 @@ export function ConversationHeader({
           onContextMenu={(event) => event.preventDefault()}
         >
           <MenuItem
-            icon={<Copy size={14} className="text-accent" strokeWidth={1.75} />}
+            icon={<Copy size={14} className="text-accent-fg" strokeWidth={1.75} />}
             label={t('chat.copyName', { defaultValue: 'Copy name' })}
             disabled={!senderDisplayName}
             onClick={() => {
@@ -494,7 +494,7 @@ export function ConversationHeader({
             }}
           />
           <MenuItem
-            icon={<Mail size={14} className="text-accent" strokeWidth={1.75} />}
+            icon={<Mail size={14} className="text-accent-fg" strokeWidth={1.75} />}
             label={t('chat.copyEmailAddress')}
             disabled={!senderEmail}
             onClick={() => {
@@ -503,7 +503,7 @@ export function ConversationHeader({
             }}
           />
           <MenuItem
-            icon={<Search size={14} className="text-accent" strokeWidth={1.75} />}
+            icon={<Search size={14} className="text-accent-fg" strokeWidth={1.75} />}
             label={t('chat.viewMessagesWith', { name: senderDisplayName })}
             disabled={!senderEmail}
             onClick={() => {
@@ -512,7 +512,7 @@ export function ConversationHeader({
             }}
           />
           <MenuItem
-            icon={<SquarePen size={14} className="text-accent" strokeWidth={1.75} />}
+            icon={<SquarePen size={14} className="text-accent-fg" strokeWidth={1.75} />}
             label={t('chat.newMessageTo', { email: senderEmail })}
             disabled={!senderEmail || sendingBlocked}
             onClick={() => {
