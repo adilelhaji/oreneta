@@ -327,6 +327,7 @@ export function showUndoToast(msg: string, undo: () => void) {
 // Run the pending undo (if any) and dismiss the toast.
 export function runToastUndo() {
   const undo = ui$.toastUndo.peek() as (() => void) | null
+  // Retire the pending timer with the toast it belonged to.
   toastSeq++
   ui$.toast.set('')
   ui$.toastUndo.set(null)

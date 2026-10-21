@@ -9,8 +9,11 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  jest.advanceTimersByTime(10_000)
-  jest.useRealTimers()
+  try {
+    jest.advanceTimersByTime(10_000)
+  } finally {
+    jest.useRealTimers()
+  }
   ui$.toast.set('')
   ui$.toastUndo.set(null)
 })
