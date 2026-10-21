@@ -122,6 +122,18 @@ Les proves automàtiques de límits, de dreta a esquerra i de zoom es mantenen, 
 afegeixen de noves: F6 en anglès, en català i en àrab, i les regles de regions d'axe. Cap fila no canvia d'estat (S01-04, S01-05, SET-02,
 SET-23, SET-27): l'evidència nativa de Windows continua pendent, i també cal comprovar que F6
 arriba a la pàgina a WebView2 i a WebKitGTK.
+El 2026-10-21 (#317, pas 2 d'ADR-0068, `docs/design/mail-navigation.md`) la navegació
+«Comptes i carpetes» del correu va passar a ser el cos de la subfinestra de carpetes comuna,
+amb el mateix contingut, el mateix nom i la mateixa regió d'F6: una fila de títol, 260 px per
+defecte i de 200 a 400 px, redimensionable amb el separador d'ADR-0059 (punter, teclat, dreta a
+esquerra), desada a la preferència nova `folder_pane_width` i en px, de manera que el zoom de
+l'aplicació no la fa créixer. Quan l'espai no arriba, les carpetes cedeixen fins al seu mínim
+abans que la llista, i la llista abans que el lector. Les proves automàtiques de límits, de
+dreta a esquerra, de zoom, de regions i d'axe es mantenen, i se n'hi afegeixen de noves de
+l'amplada desada, recuperada i ajustada, del teclat i del punter. Amb la barra vertical encara
+a la pantalla, a 1440 px la barra lateral de detalls arriba com a màxim a 400 px al costat del
+lector (abans, 440), i la prova de #212 ho reflecteix. Cap fila no canvia d'estat (S01-04,
+S01-05, SET-23, SET-27): l'evidència nativa de Windows continua pendent.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per
