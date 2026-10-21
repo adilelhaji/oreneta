@@ -237,7 +237,7 @@
   background: var(--me-bg-hover);
 }
 .folder-color-swatch[aria-checked='true'] {
-  box-shadow: 0 0 0 2px var(--me-accent-fg);
+  box-shadow: 0 0 0 2px var(--me-accent);
 }
 .mail-navigation [data-drop-target='ok'] {
   outline: 2px dashed var(--me-accent-fg);
@@ -554,6 +554,13 @@ textarea {
   outline: 2px solid var(--me-accent-fg);
   outline-offset: 2px;
   border-radius: inherit;
+}
+/* The module rail is dark in every theme, and the accent as text is darkened
+   for light content surfaces, which would drop the ring under 3:1 there in
+   Mist, Dawn and Honey. The rail keeps the accent fill until piece 14
+   replaces it (#311). */
+[data-region='modules'] :focus-visible {
+  outline-color: var(--me-accent);
 }
 input:focus-visible,
 textarea:focus-visible,

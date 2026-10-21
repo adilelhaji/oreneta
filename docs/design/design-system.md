@@ -109,9 +109,9 @@ llegeix. Una vora de camp ja desada es conserva tal com és.
 
 ## Anell de focus
 
-Un sol anell per a tot el que rep el focus del teclat: 2 px d'accent com a text i anell
-(`--me-accent-fg`, sòlid), a 2 px de
-l'element (0 px dins dels camps). Abans era l'accent al 75 % d'opacitat, de manera
+Un sol anell per a tot el que rep el focus del teclat: 2 px de color d'accent sòlid
+(`--me-accent-fg`), a 2 px de l'element (0 px dins dels camps). A la barra de mòduls,
+que és fosca, l'anell fa servir el farciment de l'accent (vegeu [Pendent](#pendent)). Abans era l'accent al 75 % d'opacitat, de manera
 que el contrast depenia del fons. La casella ja no hi afegeix un halo translúcid propi, i
 en passar-hi el punter conserva la vora de camp en lloc de barrejar-la amb l'accent.
 
@@ -147,8 +147,8 @@ heretats conserven els seus colors (#83) i el farciment de l'accent no varia.
 | Accent com a text i anell | `--me-accent-fg` | `text-accent-fg`, `ring-accent-fg`, `border-accent-fg` | L'accent com a text, icona en primer pla o indicador de focus |
 
 `--me-accent-fg` és un token derivat (com `--me-accent-text` i `--me-border-input`): cap
-tema no el fixa a mà. S'obté movent l'accent cap al color del text principal, d'1 % en 1
-%, només fins que arriba a 4,5:1 a totes les superfícies (les mateixes que es
+tema no el fixa a mà. S'obté movent l'accent cap al color del text principal, d'1 % en
+1 %, només fins que arriba a 4,5:1 a totes les superfícies (les mateixes que es
 comproven per al text; vegeu [Contrast](#contrast)). Així conserva el to i només
 s'enfosqueix o s'aclareix el necessari. Quan l'accent ja compleix, el valor és
 exactament l'accent. Si cap punt entre l'accent i el text no hi arriba, pren el color del
@@ -157,18 +157,21 @@ pren l'accent.
 
 ### Quan fer servir cada token
 
-- Text, icona en primer pla (`text-accent-fg`, també amb `hover:`), enllaços del cos del
-  missatge i l'element actiu de la navegació: `accent-fg`.
+- Text, icones en primer pla (`text-accent-fg`, també amb `hover:`), enllaços del cos del
+  missatge i element actiu de la navegació: `accent-fg`.
 - Anell o vora que indica el focus (`:focus-visible`, `focus:ring-accent-fg`,
   `focus-within:ring-accent-fg`, `focus:border-accent-fg`) i la vora discontínua de
   deixar anar: `accent-fg`.
-- Farciments, vores d'estat seleccionat, tints translúcids (`bg-accent/10`) i halos
-  decoratius (`ring-accent/20`): continuen amb l'accent, perquè no són text ni l'únic
-  indicador de focus.
+- Farciments, vores d'estat seleccionat (també la mostra de color triada) i tints
+  translúcids (`bg-accent/10`): continuen amb l'accent, perquè no són text ni indiquen
+  el focus.
+- Els halos translúcids que fan d'únic indicador de focus (`focus:ring-accent/40` i
+  semblants) encara no compleixen 3:1; queden a [Pendent](#pendent).
 
 ### Valors
 
-El contrast mínim és el pitjor sobre totes les superfícies del tema.
+El contrast mínim és el més baix de totes les superfícies del tema que es comproven
+(vegeu [Contrast](#contrast)).
 
 | Tema | Accent | `--me-accent-fg` | Contrast abans | Contrast ara |
 |---|---|---|---|---|
@@ -182,7 +185,8 @@ El contrast mínim és el pitjor sobre totes les superfícies del tema.
 | Graphite | `#8b9bb4` | `#93a2b9` | 4,16:1 | 4,53:1 |
 
 Els altres vuit temes ja complien i `--me-accent-fg` és el seu accent. L'anell de Mist,
-Dawn i Honey passa així de 2,39:1, 2,66:1 i 2,77:1 a més de 4,5:1.
+Dawn i Honey passa així de 2,39:1, 2,66:1 i 2,77:1 a més de 4,5:1 sobre aquestes
+superfícies.
 
 ### Temes personalitzats
 
@@ -194,10 +198,19 @@ llista d'excepcions: comprova els 16 temes, les paletes de mostra i la restaurac
 
 ## Pendent
 
-L'anell de focus sobre la barra de mòduls (`--me-bg-sidenav`) no arriba a 3:1 en
-alguns temes, Oreneta Light inclòs (2,03:1). Aquesta barra no forma part de les
-superfícies comprovades i canvia amb la peça del selector de mòduls, que necessita
-ADR; el seu anell es resol allà.
+L'anell de focus sobre la barra de mòduls (`--me-bg-sidenav`) fa servir el farciment de
+l'accent i no `--me-accent-fg`: com que la barra és fosca, enfosquir l'accent baixaria
+l'anell de Mist, Dawn i Honey per sota de 3:1 (#311). Tot i així, no arriba a 3:1 en
+alguns temes, Oreneta Light inclòs (2,03:1). La barra canvia amb la peça del selector de
+mòduls (ADR-0068); el seu anell es resol allà.
+
+`--me-accent-fg` es calcula sobre les superfícies del tema, però encara no sobre la
+bombolla de sortida del xat ni sobre els tints d'accent més forts (`bg-accent/15`,
+`bg-accent/25`), on queda per sota de 4,5:1 en alguns temes foscos (Oreneta Dark 4,42:1 a
+la bombolla). Tampoc no compleixen 3:1 els halos translúcids que fan d'únic indicador de
+focus (per exemple a `ConversationSubject`, `ReadingHeaderSummary`,
+`ConversationHeader`, `KanbanView` i `FolderSwitcher`). En tots aquests casos el contrast
+és igual o millor que abans; es resoldran en una incidència posterior.
 
 Altres punts que queden per a peces posteriors: els camps que encara porten
 `border-border` (per exemple els dels assistents d'alta de compte), els diàlegs i el
@@ -208,8 +221,7 @@ d'alta del xat (`MessagingView`), que pinta amb `bg-header`.
 ## Verificació
 
 - Proves unitàries: `lib/themes.test.ts` (contrast dels 16 temes, accent com a text i
-  anell, tons de marc i
-  contingut, valors aprovats d'Oreneta, derivació i restauració de temes
+  anell, anell de la barra de mòduls, tons de marc i contingut, valors aprovats d'Oreneta, derivació i restauració de temes
   personalitzats, sincronia entre `index.css` i el registre), `lib/color.test.ts`
   (`composite`) i `components/design-primitives.test.tsx` (vores dels camps).
 - Proves d'entrada de producció: el catàleg de disseny comprova el color sòlid de

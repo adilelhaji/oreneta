@@ -495,7 +495,7 @@ export function WeekView({
                 const box = menuKey.currentTarget.getBoundingClientRect()
                 setMenu({ x: startEdgeX(box), y: box.bottom, start: slotTimes.start, end: slotTimes.end, day: slotDay })
               }}
-              className="absolute inset-x-0.5 rounded-md opacity-0 outline-none focus-visible:opacity-100 bg-accent/10 ring-2 ring-accent"
+              className="absolute inset-x-0.5 rounded-md opacity-0 outline-none focus-visible:opacity-100 bg-accent/10 ring-2 ring-accent-fg"
               style={{
                 top: (shownSlot.minute / 60) * HOUR_PX,
                 height: (shownSlot.length / 60) * HOUR_PX,

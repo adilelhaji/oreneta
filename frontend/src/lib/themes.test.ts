@@ -186,6 +186,17 @@ describe('cobalt defaults', () => {
     }
   })
 
+  it('keeps the accent fill for the focus ring on the dark module rail', () => {
+    // The accent as text is darkened for light content surfaces, which would
+    // drop the ring under 3:1 on the rail in Mist, Dawn and Honey (#311).
+    const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\[data-region='modules'\] :focus-visible \{\s*outline-color: var\(--me-accent\);/)
+    for (const id of ['mist', 'dawn', 'honey']) {
+      const t = builtinTheme(id)!.tokens
+      expect(contrastRatio(t.accent, t.bgSideNav)!).toBeGreaterThanOrEqual(3)
+    }
+  })
+
   it('has readable body, accent buttons and semantic notices in both defaults', () => {
     for (const id of [DEFAULT_LIGHT_ID, DEFAULT_DARK_ID]) {
       const t = builtinTheme(id)!.tokens

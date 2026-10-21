@@ -59,6 +59,6 @@ Tots els temes, i els personalitzats derivats o desats, tenen el token nou
 `--me-border-input` per a la vora dels camps, derivat fins a 3:1 quan els colors ho
 permeten (una vora ja desada es conserva). L'anell de focus és l'accent sòlid
 i els radis passen a 4/6/8/12 px. La llavor de l'editor de temes personalitzats segueix
-els valors nous d'Oreneta. Vuit temes integrats tenen l'accent per sota de 4,5:1 com a
-text des d'abans d'aquest canvi; corregir-ho canviaria el seu accent i espera la
-decisió del propietari (#287).
+els valors nous d'Oreneta. Vuit temes integrats tenien l'accent per sota de 4,5:1 com a
+text; el token derivat `--me-accent-fg` ho corregeix sense canviar cap accent (#311, vegeu
+[design-system.md](design-system.md#laccent-com-a-text-i-com-a-anell-311)).
