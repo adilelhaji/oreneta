@@ -41,9 +41,11 @@
 
 # AI assistant workspace files.
 /.antigravitycli/
-/.claude/
+# CLAUDE.md and the project subagents in .claude/agents/ are shared, so they
+# are tracked; the rest of .claude/ (local settings, worktrees) stays local.
+/.claude/*
+!/.claude/agents/
 /AGENTS.md
-/CLAUDE.md
 frontend/baseline-results/
 frontend/playwright-report/
 frontend/baseline/playwright-report/
