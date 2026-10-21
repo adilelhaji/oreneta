@@ -1,7 +1,7 @@
 import type { RefObject } from 'react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
-import { drawnPane, kanbanPane, THREAD_LIST_WIDTH } from '../../lib/paneResize'
+import { drawnPane, FOLDER_PANE_WIDTH, kanbanPane, THREAD_LIST_WIDTH } from '../../lib/paneResize'
 import { settings$ } from '../../states/settings'
 import { PaneResizer } from './PaneResizer'
 import { useElementWidth } from './useElementWidth'
@@ -28,6 +28,32 @@ export function ThreadListResizer({ list }: { list: RefObject<HTMLElement | null
       }}
       onResize={(size) => settings$.threadListWidth.set(size)}
       className="absolute end-0 top-0 hidden h-full translate-x-1 rtl:-translate-x-1 min-[769px]:block"
+    />
+  )
+}
+
+/**
+ * The folder pane's separator, on its end edge (ADR-0068 §4). One width for
+ * every module, so one separator; like the list's, it states the width as
+ * drawn, which is less than the one remembered where the folders give way.
+ */
+export function FolderPaneResizer({ pane }: { pane: RefObject<HTMLElement | null> }) {
+  const { t } = useTranslation()
+  const stored = useValue(settings$.folderPaneWidth)
+  const { value, limits } = drawnPane(stored, useElementWidth(pane), FOLDER_PANE_WIDTH)
+  return (
+    <PaneResizer
+      label={t('layout.resizeFolderPane')}
+      value={value}
+      limits={limits}
+      edge="end"
+      sizeAt={(clientX, rtl) => {
+        const rect = pane.current?.getBoundingClientRect()
+        if (!rect) return value
+        return rtl ? rect.right - clientX : clientX - rect.left
+      }}
+      onResize={(size) => settings$.folderPaneWidth.set(size)}
+      className="absolute end-0 top-0 h-full translate-x-1 rtl:-translate-x-1"
     />
   )
 }

@@ -47,6 +47,8 @@ import { DEFAULT_NOTIFICATION_PREFS, sanitizeNotificationPrefs, type Notificatio
 import {
   clampPaneSize,
   DETAILS_PANEL_WIDTH,
+  FOLDER_PANE_DEFAULT_WIDTH,
+  FOLDER_PANE_WIDTH,
   KANBAN_PANE_WIDTH,
   THREAD_LIST_DEFAULT_WIDTH,
   THREAD_LIST_WIDTH,
@@ -283,6 +285,8 @@ export type Settings = {
   kanbanPaneWidth: number
   /** Pixel width of the conversation details sidebar beside the reader (ADR-0059). */
   detailsPanelWidth: number
+  /** Pixel width of the common folder pane, the same in every module (ADR-0068 §4). */
+  folderPaneWidth: number
   /** Pixel width used by every expanded kanban column. */
   kanbanColumnWidth: number
   /** kanbanColumnKey -> whether the column is collapsed to a vertical bar. */
@@ -430,6 +434,7 @@ const DB_KEY = {
   threadListWidth: 'thread_list_width',
   kanbanPaneWidth: 'kanban_pane_width',
   detailsPanelWidth: 'details_panel_width',
+  folderPaneWidth: 'folder_pane_width',
   kanbanColumnWidth: 'kanban_column_width',
   kanbanMinimizedColumns: 'kanban_minimized_columns',
   hiddenSideNavAccounts: 'hidden_sidenav_accounts',
@@ -691,6 +696,7 @@ export const settings$ = observable<Settings>({
   threadListWidth: THREAD_LIST_DEFAULT_WIDTH,
   kanbanPaneWidth: 33,
   detailsPanelWidth: 340,
+  folderPaneWidth: FOLDER_PANE_DEFAULT_WIDTH,
   kanbanColumnWidth: KANBAN_COLUMN_DEFAULT_WIDTH,
   kanbanMinimizedColumns: {},
   hiddenSideNavAccounts: [],
@@ -1156,6 +1162,11 @@ export function hydrateSettings(prefs: Record<string, unknown>, { languageRead =
     const detailsWidth = prefs[DB_KEY.detailsPanelWidth]
     if (typeof detailsWidth === 'number' && Number.isFinite(detailsWidth)) {
       settings$.detailsPanelWidth.set(clampPaneSize(detailsWidth, DETAILS_PANEL_WIDTH))
+    }
+
+    const folderWidth = prefs[DB_KEY.folderPaneWidth]
+    if (typeof folderWidth === 'number' && Number.isFinite(folderWidth)) {
+      settings$.folderPaneWidth.set(clampPaneSize(folderWidth, FOLDER_PANE_WIDTH))
     }
 
     const columnWidth = prefs[DB_KEY.kanbanColumnWidth]

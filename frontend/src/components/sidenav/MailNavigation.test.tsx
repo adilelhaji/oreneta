@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { cleanup, fireEvent, render, within } from '@testing-library/react'
 import { MailNavigationView } from './MailNavigation'
+import { FolderPane } from '../shell/FolderPane'
 import { folderPrefs$ } from '../../states/folderPrefs'
 import type { Account, Folder } from '../../types'
 
@@ -432,5 +433,51 @@ describe('folder favorites, colors and moves (ADR-0050)', () => {
     expect(screen.getByRole('status').textContent).toContain('2 favorite folders no longer exist and were removed.')
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
     expect(screen.queryByRole('status')).toBeNull()
+  })
+})
+
+describe('mail in the common folder pane (ADR-0068 §4, #317)', () => {
+  beforeEach(() => {
+    folderPrefs$.favorites.set([{ accountId: account.id, folderId: 'Sent' }])
+    folderPrefs$.hidden.set([])
+    folderPrefs$.dropped.set(0)
+    ;(window as any).go = { main: { App: { Invoke: async () => ({}) } } }
+  })
+  afterEach(() => {
+    cleanup()
+    folderPrefs$.favorites.set([])
+  })
+
+  it('is the body of the "folders" region, its sections under the pane title', () => {
+    const screen = render(
+      <FolderPane title="Accounts and folders">
+        <MailNavigationView {...props} />
+      </FolderPane>,
+    )
+    const nav = screen.getByRole('navigation', { name: 'Accounts and folders' })
+    expect(nav.dataset.region).toBe('folders')
+    // One region: the navigation does not nest a second one of its own.
+    expect(nav.querySelectorAll('nav, [data-region]')).toHaveLength(0)
+    expect(screen.getByRole('heading', { level: 2, name: 'Accounts and folders' })).toBeTruthy()
+    for (const section of ['Favorites', 'Accounts', 'Folders']) {
+      expect(within(nav).getByRole('heading', { level: 3, name: section })).toBeTruthy()
+    }
+    expect(within(nav).getByRole('button', { name: 'Inbox 3' }).getAttribute('aria-current')).toBe('page')
+    expect(within(nav).getByRole('searchbox')).toBeTruthy()
+  })
+
+  it('gives every name that can end in "…" its whole text in the tooltip', () => {
+    const long = { ...account, display_name: 'Alexandra Montserrat Vilaseca i Puigdomènech' }
+    const screen = render(<MailNavigationView {...props} accounts={[long]} />)
+    expect(screen.getByRole('button', { name: /Alexandra Montserrat/ }).getAttribute('title')).toBe(
+      'Alexandra Montserrat Vilaseca i Puigdomènech — alex@example.test',
+    )
+    expect(screen.getByRole('button', { name: 'Unified inbox' }).getAttribute('title')).toBe('Unified inbox')
+    const tree = screen.getAllByRole('list').at(-1)!
+    expect(within(tree).getByRole('button', { name: 'Sent' }).getAttribute('title')).toBe('Sent')
+    cleanup()
+    // An account without a name of its own is named by its address alone.
+    const bare = render(<MailNavigationView {...props} accounts={[{ ...account, display_name: '' }]} />)
+    expect(bare.getByRole('button', { name: /^alex@example\.test/ }).getAttribute('title')).toBe('alex@example.test')
   })
 })

@@ -895,6 +895,7 @@
   "labels.unnamed": "αυτή η ετικέτα",
   "layout.resizeConversation": "Αλλαγή μεγέθους συνομιλίας",
   "layout.resizeDetails": "Αλλαγή μεγέθους πλαισίου λεπτομερειών",
+  "layout.resizeFolderPane": "Αλλαγή μεγέθους πλαισίου φακέλων",
   "layout.resizeThreadList": "Αλλαγή μεγέθους λίστας νημάτων",
   "mail.toast.archiveFailed": "Η αρχειοθέτηση απέτυχε",
   "mail.toast.bulkPartial": "Ολοκληρώθηκαν {done} από {total}, μετά διακόπηκε: {reason}",

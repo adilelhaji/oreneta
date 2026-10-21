@@ -895,6 +895,7 @@
   "labels.unnamed": "aquesta etiqueta",
   "layout.resizeConversation": "Canvia la mida de la conversa",
   "layout.resizeDetails": "Canvia la mida del panell de detalls",
+  "layout.resizeFolderPane": "Canvia la mida del panell de carpetes",
   "layout.resizeThreadList": "Canvia la mida de la llista de converses",
   "mail.toast.archiveFailed": "No s'ha pogut arxivar",
   "mail.toast.bulkPartial": "{done} de {total} fets i després s'ha aturat: {reason}",

@@ -895,6 +895,7 @@
   "labels.unnamed": "see silt",
   "layout.resizeConversation": "Muuda vestluse suurust",
   "layout.resizeDetails": "Muuda üksikasjade paani suurust",
+  "layout.resizeFolderPane": "Muuda kaustade paani suurust",
   "layout.resizeThreadList": "Muuda lõimeloendi suurust",
   "mail.toast.archiveFailed": "Arhiivimine ebaõnnestus",
   "mail.toast.bulkPartial": "Tehtud {done}/{total}, seejärel peatus: {reason}",

@@ -895,6 +895,7 @@
   "labels.unnamed": "this label",
   "layout.resizeConversation": "Resize conversation",
   "layout.resizeDetails": "Resize details panel",
+  "layout.resizeFolderPane": "Resize folder pane",
   "layout.resizeThreadList": "Resize thread list",
   "mail.toast.archiveFailed": "Archive failed",
   "mail.toast.bulkPartial": "{done} of {total} done, then stopped: {reason}",

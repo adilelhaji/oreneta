@@ -895,6 +895,7 @@
   "labels.unnamed": "هذا التصنيف",
   "layout.resizeConversation": "تغيير حجم المحادثة",
   "layout.resizeDetails": "تغيير حجم لوحة التفاصيل",
+  "layout.resizeFolderPane": "تغيير حجم لوحة المجلدات",
   "layout.resizeThreadList": "تغيير حجم قائمة سلاسل الرسائل",
   "mail.toast.archiveFailed": "فشل الأرشفة",
   "mail.toast.bulkPartial": "اكتمل {done} من {total} ثم توقف: {reason}",

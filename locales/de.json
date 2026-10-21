@@ -895,6 +895,7 @@
   "labels.unnamed": "dieses Label",
   "layout.resizeConversation": "Größe der Unterhaltung ändern",
   "layout.resizeDetails": "Größe des Detailbereichs ändern",
+  "layout.resizeFolderPane": "Größe des Ordnerbereichs ändern",
   "layout.resizeThreadList": "Größe der Thread-Liste ändern",
   "mail.toast.archiveFailed": "Archivierung fehlgeschlagen",
   "mail.toast.bulkPartial": "{done} von {total} erledigt, dann angehalten: {reason}",

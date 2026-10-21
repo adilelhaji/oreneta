@@ -895,6 +895,7 @@
   "labels.unnamed": "bu etiket",
   "layout.resizeConversation": "Konuşma boyutunu ayarla",
   "layout.resizeDetails": "Ayrıntılar panelini yeniden boyutlandır",
+  "layout.resizeFolderPane": "Klasör panelini yeniden boyutlandır",
   "layout.resizeThreadList": "İleti dizisi listesi boyutunu ayarla",
   "mail.toast.archiveFailed": "Arşivleme başarısız oldu",
   "mail.toast.bulkPartial": "{total} işlemden {done} tanesi yapıldı, sonra durdu: {reason}",

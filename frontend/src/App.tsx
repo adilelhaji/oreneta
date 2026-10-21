@@ -10,6 +10,7 @@ import { settings$ } from './states/settings'
 import { useAppEffects } from './useAppEffects'
 import { SideNav } from './components/sidenav/SideNav'
 import { MailNavigation } from './components/sidenav/MailNavigation'
+import { FolderPane } from './components/shell/FolderPane'
 import { ThreadList } from './components/threads/ThreadList'
 import { KanbanView } from './components/kanban/KanbanView'
 import { CalendarView } from './components/calendar/CalendarView'
@@ -102,16 +103,20 @@ export default function App() {
       <ConnectivityBanner />
       <UpdateBanner />
       {/* One <main>, named after the module on screen (ADR-0068 §1). The rail
-          and the mail navigation are still inside it until the folder pane
-          and the module strip replace them (ADR-0068 §9). */}
+          and, after it, the folder pane are still inside it until the module
+          strip replaces the rail (ADR-0068 §9, step 4). */}
       <main ref={mainRef} aria-label={moduleNames[activeModule]} className="flex min-h-0 w-full flex-1 overflow-hidden">
         <ErrorBoundary label="side navigation">
           <SideNav />
         </ErrorBoundary>
         {activeModule === 'mail' && !activeBoardId && (
-          <ErrorBoundary label="mail navigation">
-            <MailNavigation />
-          </ErrorBoundary>
+          // The common folder pane, mail first (ADR-0068 §4 and §9, step 2):
+          // today's accounts and folders are its body.
+          <FolderPane title={t('mailNavigation.title')}>
+            <ErrorBoundary label="mail navigation">
+              <MailNavigation />
+            </ErrorBoundary>
+          </FolderPane>
         )}
         {activeModule === 'people' ? (
           <ErrorBoundary label="people">

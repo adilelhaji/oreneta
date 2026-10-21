@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'bun:test'
-import { clampPaneSize, drawnPane, kanbanPane, sidebarLayout, THREAD_LIST_WIDTH } from './paneResize'
+import {
+  clampPaneSize,
+  drawnPane,
+  FOLDER_PANE_DEFAULT_WIDTH,
+  FOLDER_PANE_WIDTH,
+  kanbanPane,
+  sidebarLayout,
+  THREAD_LIST_WIDTH,
+} from './paneResize'
 
 describe('pane limits (#212)', () => {
   it('clamps and rounds; something that is not a size is the minimum', () => {
@@ -7,6 +15,16 @@ describe('pane limits (#212)', () => {
     expect(clampPaneSize(9000, THREAD_LIST_WIDTH)).toBe(560)
     expect(clampPaneSize(NaN, THREAD_LIST_WIDTH)).toBe(280)
     expect(clampPaneSize(Infinity, THREAD_LIST_WIDTH)).toBe(280)
+  })
+
+  it('gives the folder pane 260 px by default, between 200 and 400 (ADR-0068 §4, #317)', () => {
+    expect(FOLDER_PANE_WIDTH).toEqual({ min: 200, max: 400 })
+    expect(FOLDER_PANE_DEFAULT_WIDTH).toBe(260)
+    expect(clampPaneSize(FOLDER_PANE_DEFAULT_WIDTH, FOLDER_PANE_WIDTH)).toBe(260)
+    expect(clampPaneSize(120, FOLDER_PANE_WIDTH)).toBe(200)
+    expect(clampPaneSize(9000, FOLDER_PANE_WIDTH)).toBe(400)
+    // Folders squeezed to 230 px on a narrow window: the separator says 230.
+    expect(drawnPane(260, 230, FOLDER_PANE_WIDTH)).toEqual({ value: 230, limits: { min: 200, max: 230 } })
   })
 
   it('states a squeezed pane at the width it is drawn, and no wider than that', () => {

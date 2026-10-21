@@ -27,7 +27,7 @@ mòdul.
 | Regió | Element | Nom accessible | `data-region` |
 |---|---|---|---|
 | Barra vertical | `<aside>` | «Mòduls» | `modules` |
-| Comptes i carpetes (correu) | `<nav>` | «Comptes i carpetes» | `folders` |
+| Subfinestra de carpetes del correu (`FolderPane`, des de #317) | `<nav>` | el de la seva fila de títol: «Comptes i carpetes» | `folders` |
 | Columna esquerra de Calendari, Persones, Notes i Xat | la d'avui | la d'avui | `folders` |
 | Mòdul | `<main>` | el del mòdul: «Correu», «Calendari», «Persones», «Tasques», «Notes», «Xat», «Adjunts» | — |
 | Llista de converses o tauler; als altres mòduls, el mòdul sencer | la d'avui | — | `content` |
@@ -47,10 +47,13 @@ mòdul.
   els havia obert, com el `Dialog` compartit.
 - Amb un diàleg modal obert tampoc no actuen les dreceres de les posicions de la
   barra vertical (Ctrl/⌘+1…9 o la tecla que s'hi hagi assignat).
-- La barra vertical i «Comptes i carpetes» continuen dins de `<main>` fins que
-  la subfinestra de carpetes i el selector de mòduls les substitueixin (passos
-  2 i 4). Les proves que hi arriben amb `main > aside` canvien al pas 4
-  (ADR-0068 §8), quan la barra passa a ser el `<nav>` «Mòduls» d'ADR-0068 §1.
+- La barra vertical i la subfinestra de carpetes continuen dins de `<main>`
+  fins que el selector de mòduls substitueixi la barra (pas 4): la barra es
+  pinta abans que les carpetes, a la mateixa fila. Al pas 2 (#317) la
+  subfinestra de carpetes comuna va substituir «Comptes i carpetes» al correu,
+  amb el mateix nom i la mateixa regió. Les proves que hi arriben amb
+  `main > aside` canvien al pas 4 (ADR-0068 §8), quan la barra passa a ser el
+  `<nav>` «Mòduls» d'ADR-0068 §1.
 - La barra vertical té nom perquè no hi hagi dues regions complementàries sense
   nom quan la barra lateral de detalls és oberta.
 - Fins al pas 2, la columna de Calendari i la de Notes tenen el mateix nom que

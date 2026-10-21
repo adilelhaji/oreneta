@@ -895,6 +895,7 @@
   "labels.unnamed": "cette étiquette",
   "layout.resizeConversation": "Redimensionner la conversation",
   "layout.resizeDetails": "Redimensionner le panneau de détails",
+  "layout.resizeFolderPane": "Redimensionner le panneau des dossiers",
   "layout.resizeThreadList": "Redimensionner la liste des fils",
   "mail.toast.archiveFailed": "L'archivage a échoué",
   "mail.toast.bulkPartial": "{done} sur {total} effectués, puis arrêt : {reason}",

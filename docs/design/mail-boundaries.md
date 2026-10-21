@@ -14,7 +14,10 @@ subfinestra perquè Envia, Descarta i l'estat de l'esborrany continuïn sent
 accessibles fins i tot en una subfinestra dividida estreta d'escriptori.
 La navegació completa de carpetes
 conserva el seu límit independent de >1024 px. No s'afegeix cap escoltador de canvi
-de mida ni cap estat nou.
+de mida ni cap estat nou. Des de #317 aquesta navegació és la subfinestra de
+carpetes comuna (ADR-0068 §4, [navegació del correu](mail-navigation.md)), de 260 px
+per defecte: a 1025 px, quan no hi cap tot, les carpetes cedeixen fins a 200 px abans
+que la llista, i la llista abans que el lector.
 
 El menú compacte de l'aplicació també enllaça a Persones, Tasques i Calendari
 (#177). Aquestes superfícies conserven el menú i una tornada a l'espai de treball

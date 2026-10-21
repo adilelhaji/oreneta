@@ -15,6 +15,9 @@ export const KANBAN_PANE_MIN_PX = 320
 export const DETAILS_PANEL_WIDTH = { min: 280, max: 560 } as const
 /** What the reader keeps beside the details sidebar when it sits next to it. */
 export const READER_ROOM = 360
+/** The common folder pane (ADR-0068 §4): one width for every module, in px. */
+export const FOLDER_PANE_WIDTH = { min: 200, max: 400 } as const
+export const FOLDER_PANE_DEFAULT_WIDTH = 260
 
 export type PaneLimits = { readonly min: number; readonly max: number }
 
