@@ -115,7 +115,8 @@ d'[ADR-0068](../adr/0068-marc-comu-de-l-aplicacio.md) (§4, §7 i §9), primer a
 correu; els altres mòduls hi entren després, un per PR.
 
 - **Què és:** un sol component, `frontend/src/components/shell/FolderPane.tsx`,
-  amb una fila de títol de 40 px al 100 % (2,5 rem), el cos que hi posa el
+  amb una fila de títol de 40 px al 100 % (2,5 rem, de manera que creix amb el
+  zoom de l'aplicació, decisió del propietari del 2026-10-21), el cos que hi posa el
   mòdul, una ranura de peu opcional (el minicalendari, peça 4) i, al peu de tot,
   el lloc del selector de mòduls (peça 14). Al correu, el peu i el selector són
   buits.
@@ -123,9 +124,10 @@ correu; els altres mòduls hi entren després, un per PR.
   contingut: carpetes preferides, safata d'entrada unificada, grups de comptes,
   comptes, filtre i arbre de carpetes, i les carpetes amagades de #273 amb
   «Mostra les carpetes amagades». Les cerques desades continuen on eren: al
-  selector «Canvia de carpeta» i al menú de cerques de la llista. La barra vertical i els taulers kanban
-  no es mouen (peça 14); amb un tauler obert, la subfinestra no es mostra, com
-  abans.
+  selector «Canvia de carpeta» i al menú de cerques de la llista; el propietari
+  va decidir el 2026-10-21 que passin a la subfinestra en un pas posterior
+  (#319). La barra vertical i els taulers kanban no es mouen (peça 14); amb un
+  tauler obert, la subfinestra no es mostra, com abans.
 - **Regió i noms:** la subfinestra és el `<nav>` de la regió «carpetes» d'F6
   (`data-region="folders"`) i pren el nom de la seva fila de títol: «Comptes i
   carpetes», el mateix d'abans. El títol és un encapçalament de nivell 2, i
@@ -151,7 +153,9 @@ correu; els altres mòduls hi entren després, un per PR.
   subfinestra de 260 px (abans 220), la fila del lector fa 40 px menys. A
   1440 px, amb la llista per defecte, la barra lateral de detalls arriba com a
   màxim a 400 px al costat del lector (abans, 440). Que les carpetes i la llista
-  cedeixin també davant d'aquesta barra és la peça 12 (ADR-0069 §2).
+  cedeixin també davant d'aquesta barra és la peça 12 (ADR-0069 §2); el
+  propietari va acceptar el 2026-10-21 que fins aleshores la barra tingui aquest
+  espai menys.
 - **Proves:** `frontend/src/components/shell/FolderPane.test.tsx` (regió i nom,
   títol amb indicació, peu i lloc del selector, amplada en px, teclat i punter
   en totes dues direccions, mida dibuixada, amplada desada, recuperada i

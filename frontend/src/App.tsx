@@ -112,11 +112,11 @@ export default function App() {
         {activeModule === 'mail' && !activeBoardId && (
           // The common folder pane, mail first (ADR-0068 §4 and §9, step 2):
           // today's accounts and folders are its body.
-          <FolderPane title={t('mailNavigation.title')}>
-            <ErrorBoundary label="mail navigation">
+          <ErrorBoundary label="mail navigation">
+            <FolderPane title={t('mailNavigation.title')}>
               <MailNavigation />
-            </ErrorBoundary>
-          </FolderPane>
+            </FolderPane>
+          </ErrorBoundary>
         )}
         {activeModule === 'people' ? (
           <ErrorBoundary label="people">
