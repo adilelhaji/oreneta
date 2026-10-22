@@ -1733,6 +1733,7 @@
   "attachmentsView.coverage": "Lista z poczty pobranej na ten komputer. {missing} z {messages} wiadomości nie zostało jeszcze pobranych, więc ich załączników tu nie ma.",
   "attachmentsView.emptyText": "Zawartość plików nie jest przeszukiwana — tylko nazwy, nadawcy i daty.",
   "attachmentsView.emptyTitle": "Nie znaleziono załączników",
+  "attachmentsView.filters": "Filtry załączników",
   "attachmentsView.isLink": "Link do pliku przechowywanego gdzie indziej; otwórz wiadomość, aby z niego skorzystać.",
   "attachmentsView.kindAll": "Wszystkie typy",
   "attachmentsView.lastMonth": "Ostatnie 30 dni",

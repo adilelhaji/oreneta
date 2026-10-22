@@ -1733,6 +1733,7 @@
   "attachmentsView.coverage": "このコンピューターにダウンロードされたメールから一覧表示しています。{messages} 件中 {missing} 件のメッセージがまだダウンロードされていないため、その添付ファイルはここにありません。",
   "attachmentsView.emptyText": "ファイルの中身は検索されません。名前、差出人、日付のみが対象です。",
   "attachmentsView.emptyTitle": "添付ファイルが見つかりません",
+  "attachmentsView.filters": "添付ファイルのフィルター",
   "attachmentsView.isLink": "別の場所に保存されたファイルへのリンクです。リンクを開くにはメッセージを開いてください。",
   "attachmentsView.kindAll": "すべての種類",
   "attachmentsView.lastMonth": "過去 30 日間",

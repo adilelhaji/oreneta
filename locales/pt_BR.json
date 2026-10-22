@@ -1733,6 +1733,7 @@
   "attachmentsView.coverage": "Listados a partir dos e-mails baixados para este computador. {missing} de {messages} mensagens ainda não foram baixadas, então os anexos delas não estão aqui.",
   "attachmentsView.emptyText": "O conteúdo dos arquivos não é pesquisado — apenas nomes, remetentes e datas.",
   "attachmentsView.emptyTitle": "Nenhum anexo encontrado",
+  "attachmentsView.filters": "Filtros de anexos",
   "attachmentsView.isLink": "Um link para um arquivo guardado em outro lugar; abra a mensagem para segui-lo.",
   "attachmentsView.kindAll": "Todos os tipos",
   "attachmentsView.lastMonth": "Últimos 30 dias",

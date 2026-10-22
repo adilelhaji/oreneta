@@ -1733,6 +1733,7 @@
   "attachmentsView.coverage": "Uzskaitīts no šajā datorā lejupielādētā pasta. {missing} no {messages} ziņām vēl nav lejupielādētas, tāpēc to pielikumu šeit nav.",
   "attachmentsView.emptyText": "Failu saturs netiek meklēts — tikai nosaukumi, sūtītāji un datumi.",
   "attachmentsView.emptyTitle": "Pielikumi nav atrasti",
+  "attachmentsView.filters": "Pielikumu filtri",
   "attachmentsView.isLink": "Saite uz citur glabātu failu; atveriet ziņu, lai tai sekotu.",
   "attachmentsView.kindAll": "Visi veidi",
   "attachmentsView.lastMonth": "Pēdējās 30 dienas",

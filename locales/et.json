@@ -1733,6 +1733,7 @@
   "attachmentsView.coverage": "Loetletud sellesse arvutisse laaditud kirjadest. {missing} kirja {messages}-st pole veel laaditud, seega nende manuseid siin pole.",
   "attachmentsView.emptyText": "Failide sisu ei otsita — ainult nimesid, saatjaid ja kuupäevi.",
   "attachmentsView.emptyTitle": "Manuseid ei leitud",
+  "attachmentsView.filters": "Manuste filtrid",
   "attachmentsView.isLink": "Link mujal hoitavale failile; selle avamiseks ava kiri.",
   "attachmentsView.kindAll": "Kõik tüübid",
   "attachmentsView.lastMonth": "Viimased 30 päeva",

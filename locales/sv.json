@@ -1733,6 +1733,7 @@
   "attachmentsView.coverage": "Listat från e-post som hämtats till den här datorn. {missing} av {messages} meddelanden har inte hämtats än, så deras bilagor finns inte här.",
   "attachmentsView.emptyText": "Filernas innehåll genomsöks inte — bara namn, avsändare och datum.",
   "attachmentsView.emptyTitle": "Inga bilagor hittades",
+  "attachmentsView.filters": "Bilagefilter",
   "attachmentsView.isLink": "En länk till en fil som finns någon annanstans; öppna meddelandet för att följa den.",
   "attachmentsView.kindAll": "Alla typer",
   "attachmentsView.lastMonth": "Senaste 30 dagarna",

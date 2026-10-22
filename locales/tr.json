@@ -1733,6 +1733,7 @@
   "attachmentsView.coverage": "Bu bilgisayara indirilen postalardan listelenmiştir. {messages} iletiden {missing} tanesi henüz indirilmedi, bu yüzden ekleri burada yok.",
   "attachmentsView.emptyText": "Dosya içerikleri aranmaz — yalnızca adlar, gönderenler ve tarihler.",
   "attachmentsView.emptyTitle": "Ek bulunamadı",
+  "attachmentsView.filters": "Ek filtreleri",
   "attachmentsView.isLink": "Başka bir yerde tutulan bir dosyanın bağlantısı; izlemek için iletiyi açın.",
   "attachmentsView.kindAll": "Tüm türler",
   "attachmentsView.lastMonth": "Son 30 gün",

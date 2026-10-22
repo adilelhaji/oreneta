@@ -1733,6 +1733,7 @@
   "attachmentsView.coverage": "Elenco basato sulla posta scaricata su questo computer. {missing} messaggi su {messages} non sono ancora stati scaricati, quindi i loro allegati non sono qui.",
   "attachmentsView.emptyText": "Il contenuto dei file non viene cercato: solo nomi, mittenti e date.",
   "attachmentsView.emptyTitle": "Nessun allegato trovato",
+  "attachmentsView.filters": "Filtri degli allegati",
   "attachmentsView.isLink": "Un link a un file conservato altrove; apri il messaggio per seguirlo.",
   "attachmentsView.kindAll": "Tutti i tipi",
   "attachmentsView.lastMonth": "Ultimi 30 giorni",

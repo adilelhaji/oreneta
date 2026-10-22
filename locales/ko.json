@@ -1733,6 +1733,7 @@
   "attachmentsView.coverage": "이 컴퓨터에 다운로드된 메일에서 가져온 목록입니다. 메시지 {messages}개 중 {missing}개가 아직 다운로드되지 않아 해당 첨부 파일은 여기에 없습니다.",
   "attachmentsView.emptyText": "파일 내용은 검색하지 않으며 이름, 보낸 사람, 날짜만 검색합니다.",
   "attachmentsView.emptyTitle": "첨부 파일이 없습니다",
+  "attachmentsView.filters": "첨부 파일 필터",
   "attachmentsView.isLink": "다른 곳에 보관된 파일의 링크입니다. 링크를 열려면 메시지를 여세요.",
   "attachmentsView.kindAll": "모든 형식",
   "attachmentsView.lastMonth": "최근 30일",

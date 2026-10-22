@@ -1733,6 +1733,7 @@
   "attachmentsView.coverage": "Listado a partir del correo descargado en este ordenador. {missing} de {messages} mensajes aún no se han descargado, así que sus adjuntos no aparecen aquí.",
   "attachmentsView.emptyText": "No se busca en el contenido de los archivos, solo en nombres, remitentes y fechas.",
   "attachmentsView.emptyTitle": "No se encontraron adjuntos",
+  "attachmentsView.filters": "Filtros de adjuntos",
   "attachmentsView.isLink": "Un enlace a un archivo guardado en otro sitio; abre el mensaje para seguirlo.",
   "attachmentsView.kindAll": "Todos los tipos",
   "attachmentsView.lastMonth": "Últimos 30 días",

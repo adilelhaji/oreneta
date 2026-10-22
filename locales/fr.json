@@ -1733,6 +1733,7 @@
   "attachmentsView.coverage": "D’après le courrier téléchargé sur cet ordinateur. {missing} messages sur {messages} n’ont pas encore été téléchargés, leurs pièces jointes ne figurent donc pas ici.",
   "attachmentsView.emptyText": "Le contenu des fichiers n’est pas recherché, seulement les noms, les expéditeurs et les dates.",
   "attachmentsView.emptyTitle": "Aucune pièce jointe trouvée",
+  "attachmentsView.filters": "Filtres des pièces jointes",
   "attachmentsView.isLink": "Un lien vers un fichier stocké ailleurs ; ouvrez le message pour le suivre.",
   "attachmentsView.kindAll": "Tous les types",
   "attachmentsView.lastMonth": "30 derniers jours",

@@ -205,6 +205,18 @@ dreta a esquerra, de regions i d'axe es mantenen, i se n'hi afegeixen de noves: 
 1025, 1100 i 1440 px sense desplaçament horitzontal, l'amplada compartida, la columna a 1024 px,
 l'àrab i el recorregut d'F6. SET-21 es manté `partial` (falten l'absència automàtica, #265, i
 l'evidència nativa de Windows).
+El 2026-10-22 (#339, pas 2 d'ADR-0068, `docs/design/mail-navigation.md`) els filtres de la vista
+d'adjunts (C13 del pla de paritat, «Cerca de tots els adjunts»; no té cap fila pròpia en aquest
+registre), que eren una barra sota la capçalera, van passar a ser el cos de la subfinestra de
+carpetes comuna a partir de 1025 px: els mateixos cinc filtres, en el mateix ordre i amb les
+mateixes accions, un per fila i amb etiqueta visible. Fa servir l'amplada del correu, del
+Calendari, de Persones, de Tasques, de Notes i del xat (`folder_pane_width`, en px) i és la regió
+d'F6 «Filtres d'adjunts», que en cap idioma no coincideix amb la de `<main>` ni amb les altres
+regions. Per sota de 1025 px es conserva la barra d'abans. Les proves de la vista d'adjunts, de
+límits, de dreta a esquerra, de regions i d'axe es mantenen, i se n'hi afegeixen de noves: la llista
+a 1025, 1100 i 1440 px sense desplaçament horitzontal, l'amplada compartida, la barra a 1024 px, els
+valors dels filtres en travessar els 1025 px, l'àrab i el recorregut d'F6. És una nota d'evidència:
+cap fila no canvia d'estat.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per

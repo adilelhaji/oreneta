@@ -1733,6 +1733,7 @@
   "attachmentsView.coverage": "Liệt kê từ thư đã tải về máy tính này. {missing} trong số {messages} thư chưa được tải về, nên tệp đính kèm của chúng không có ở đây.",
   "attachmentsView.emptyText": "Không tìm kiếm trong nội dung tệp — chỉ tìm theo tên, người gửi và ngày.",
   "attachmentsView.emptyTitle": "Không tìm thấy tệp đính kèm",
+  "attachmentsView.filters": "Bộ lọc tệp đính kèm",
   "attachmentsView.isLink": "Liên kết tới một tệp lưu ở nơi khác; hãy mở thư để theo liên kết.",
   "attachmentsView.kindAll": "Mọi loại",
   "attachmentsView.lastMonth": "30 ngày qua",

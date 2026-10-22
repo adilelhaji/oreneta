@@ -1733,6 +1733,7 @@
   "attachmentsView.coverage": "Llistat a partir del correu baixat en aquest ordinador. {missing} de {messages} missatges encara no s'han baixat, de manera que els seus adjunts no hi són.",
   "attachmentsView.emptyText": "No es cerca en el contingut dels fitxers, només en els noms, els remitents i les dates.",
   "attachmentsView.emptyTitle": "No s'ha trobat cap adjunt",
+  "attachmentsView.filters": "Filtres d'adjunts",
   "attachmentsView.isLink": "Un enllaç a un fitxer desat en un altre lloc; obre el missatge per seguir-lo.",
   "attachmentsView.kindAll": "Tots els tipus",
   "attachmentsView.lastMonth": "Últims 30 dies",
