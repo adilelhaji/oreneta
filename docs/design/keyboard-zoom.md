@@ -42,6 +42,9 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
     empenyia «Cc/Cco» fora de la pantalla.
 - **El que continua en px:**
   - l'amplada dels taulers que la persona arrossega;
+  - l'amplada de la subfinestra de carpetes (260 px per defecte, de 200 a 400,
+    #317, ADR-0068 §7): al 200 % hi creix el text, no la subfinestra, i un nom
+    que no hi cap acaba en «…» amb el nom sencer a la indicació;
   - el llindar de la cerca a la conversa (900 px), que va coordinat amb la
     barra mòbil i amb un `matchMedia`.
 

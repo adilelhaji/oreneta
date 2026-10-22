@@ -895,6 +895,7 @@
   "labels.unnamed": "nhãn này",
   "layout.resizeConversation": "Thay đổi kích thước cuộc hội thoại",
   "layout.resizeDetails": "Đổi kích thước bảng chi tiết",
+  "layout.resizeFolderPane": "Đổi kích thước bảng thư mục",
   "layout.resizeThreadList": "Thay đổi kích thước danh sách luồng",
   "mail.toast.archiveFailed": "Lưu trữ không thành công",
   "mail.toast.bulkPartial": "Đã xong {done}/{total}, sau đó dừng: {reason}",

@@ -895,6 +895,7 @@
   "labels.unnamed": "ta etykieta",
   "layout.resizeConversation": "Zmień rozmiar konwersacji",
   "layout.resizeDetails": "Zmień rozmiar panelu szczegółów",
+  "layout.resizeFolderPane": "Zmień rozmiar panelu folderów",
   "layout.resizeThreadList": "Zmień rozmiar listy wątków",
   "mail.toast.archiveFailed": "Archiwizacja nie powiodła się",
   "mail.toast.bulkPartial": "Wykonano {done} z {total}, potem zatrzymano: {reason}",

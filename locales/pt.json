@@ -895,6 +895,7 @@
   "labels.unnamed": "esta etiqueta",
   "layout.resizeConversation": "Redimensionar conversa",
   "layout.resizeDetails": "Redimensionar painel de detalhes",
+  "layout.resizeFolderPane": "Redimensionar painel de pastas",
   "layout.resizeThreadList": "Redimensionar lista de tópicos",
   "mail.toast.archiveFailed": "Falha no arquivamento",
   "mail.toast.bulkPartial": "{done} de {total} concluídos; depois parou: {reason}",

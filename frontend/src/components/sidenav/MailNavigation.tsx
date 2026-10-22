@@ -260,7 +260,7 @@ function FavoritesSection({
   if (!favorites.length && !dropped) return null
   return (
     <section className="mail-navigation-favorites" aria-labelledby="mail-navigation-favorites-title">
-      <h2 id="mail-navigation-favorites-title">{t('mailNavigation.favorites', { defaultValue: 'Favorites' })}</h2>
+      <h3 id="mail-navigation-favorites-title">{t('mailNavigation.favorites', { defaultValue: 'Favorites' })}</h3>
       {dropped > 0 && (
         <div className="mail-navigation-note" role="status">
           <span>
@@ -539,8 +539,10 @@ export function MailNavigationView({
   }
 
   const rootBlock = dragged ? actions.dropBlock(null) : undefined
+  // The body of the folder pane, which is the <nav> and its "folders" region
+  // (components/shell/FolderPane.tsx, ADR-0068 §4); its title heads these sections.
   return (
-    <nav data-region="folders" className="mail-navigation" aria-label={t('mailNavigation.title')}>
+    <div className="mail-navigation">
       <FavoritesSection
         favorites={favorites}
         favoriteCount={favoriteRefs.length}
@@ -554,12 +556,13 @@ export function MailNavigationView({
           else if (accountId === selectedAccount) onFolder(folderId)
         }}
       />
-      <h2>{t('mailNavigation.accounts')}</h2>
+      <h3>{t('mailNavigation.accounts')}</h3>
       <div className="mail-navigation-accounts">
         {unifiedVisible && (
           <button
             type="button"
             className="mail-account-destination"
+            title={t('kanban.columns.unifiedInbox')}
             aria-current={selectedAccount === 'unified' && !activeGroup ? 'true' : undefined}
             onClick={() => onAccount('unified')}
           >
@@ -586,7 +589,12 @@ export function MailNavigationView({
             key={account.id}
             type="button"
             className="mail-account-destination"
-            title={account.email || account.display_name}
+            // Both lines can end in "…" in a narrow pane: the tooltip has them whole.
+            title={
+              account.display_name && account.email && account.display_name !== account.email
+                ? `${account.display_name} — ${account.email}`
+                : account.email || account.display_name
+            }
             aria-current={account.id === selectedAccount ? 'true' : undefined}
             onClick={() => onAccount(account.id)}
           >
@@ -599,7 +607,7 @@ export function MailNavigationView({
         ))}
       </div>
       {/* Dropping a dragged folder on the heading moves it to the top level. */}
-      <h2
+      <h3
         data-drop-target={dragged && rootDrop ? (rootBlock ? 'blocked' : 'ok') : undefined}
         onDragOver={(event) => {
           if (rootBlock === undefined) return
@@ -616,10 +624,15 @@ export function MailNavigationView({
         }}
       >
         {t('mailNavigation.folders')}
-      </h2>
+      </h3>
       {isRSS ? (
-        <button type="button" className="mail-account-destination" onClick={() => onFolder('inbox')}>
-          {t('filters.allFeeds')}
+        <button
+          type="button"
+          className="mail-account-destination"
+          title={t('filters.allFeeds')}
+          onClick={() => onFolder('inbox')}
+        >
+          <span>{t('filters.allFeeds')}</span>
         </button>
       ) : (
         <>
@@ -716,7 +729,7 @@ export function MailNavigationView({
       <p className="sr-only" aria-live="polite">
         {hideAnnouncement}
       </p>
-    </nav>
+    </div>
   )
 }
 

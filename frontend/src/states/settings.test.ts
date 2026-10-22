@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from 'bun:test'
-import { clampPaneSize, THREAD_LIST_DEFAULT_WIDTH, THREAD_LIST_WIDTH } from '../lib/paneResize'
+import {
+  clampPaneSize,
+  FOLDER_PANE_DEFAULT_WIDTH,
+  THREAD_LIST_DEFAULT_WIDTH,
+  THREAD_LIST_WIDTH,
+} from '../lib/paneResize'
 import {
   EMPTY_PROXY,
   hydrateSettings,
@@ -13,6 +18,7 @@ import {
   sanitizeListSort,
   sanitizeProxy,
   settings$,
+  SETTINGS_DB_KEYS,
   sortParam,
 } from './settings'
 import {
@@ -356,6 +362,23 @@ describe('pane sizes (#212)', () => {
     settings$.threadListWidth.set(360)
     settings$.kanbanPaneWidth.set(33)
     settings$.detailsPanelWidth.set(340)
+    settings$.folderPaneWidth.set(260)
+  })
+
+  it('gives a profile that never resized the folder pane 260 px of it, and restores it clamped (#317)', () => {
+    expect(settings$.folderPaneWidth.get()).toBe(FOLDER_PANE_DEFAULT_WIDTH)
+    // An absent or unreadable width leaves the default alone.
+    hydrateSettings({})
+    hydrateSettings({ folder_pane_width: 'wide' })
+    expect(settings$.folderPaneWidth.get()).toBe(260)
+    hydrateSettings({ folder_pane_width: 333.6 })
+    expect(settings$.folderPaneWidth.get()).toBe(334)
+    // A width stored by hand or by another version is brought within 200–400 px.
+    hydrateSettings({ folder_pane_width: 5000 })
+    expect(settings$.folderPaneWidth.get()).toBe(400)
+    hydrateSettings({ folder_pane_width: 12 })
+    expect(settings$.folderPaneWidth.get()).toBe(200)
+    expect(SETTINGS_DB_KEYS).toContain('folder_pane_width')
   })
 
   it('gives a profile that never resized the list 360 px of it (#283)', () => {

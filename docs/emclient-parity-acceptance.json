@@ -120,6 +120,14 @@
           {
             "sha": "7d1d3f7b2fc59db86390f5214a3aa836446bfb3e",
             "result": "frontend/src/lib/regions.test.ts"
+          },
+          {
+            "sha": "846cbc5f994dda622376372f89de3bc00daba97b",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "846cbc5f994dda622376372f89de3bc00daba97b",
+            "result": "frontend/src/components/shell/FolderPane.test.tsx"
           }
         ],
         "native": [],
@@ -156,6 +164,10 @@
           },
           {
             "sha": "7d1d3f7b2fc59db86390f5214a3aa836446bfb3e",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "846cbc5f994dda622376372f89de3bc00daba97b",
             "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
@@ -1401,6 +1413,14 @@
           {
             "sha": "7d1d3f7b2fc59db86390f5214a3aa836446bfb3e",
             "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "846cbc5f994dda622376372f89de3bc00daba97b",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "846cbc5f994dda622376372f89de3bc00daba97b",
+            "result": "frontend/src/lib/paneResize.test.ts"
           }
         ],
         "native": [],
@@ -1549,6 +1569,14 @@
           {
             "sha": "7d1d3f7b2fc59db86390f5214a3aa836446bfb3e",
             "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "846cbc5f994dda622376372f89de3bc00daba97b",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "846cbc5f994dda622376372f89de3bc00daba97b",
+            "result": "frontend/src/components/shell/FolderPane.test.tsx"
           }
         ],
         "native": [],

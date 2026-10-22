@@ -895,6 +895,7 @@
   "labels.unnamed": "このラベル",
   "layout.resizeConversation": "会話のサイズ変更",
   "layout.resizeDetails": "詳細パネルのサイズを変更",
+  "layout.resizeFolderPane": "フォルダーパネルのサイズを変更",
   "layout.resizeThreadList": "スレッドリストのサイズ変更",
   "mail.toast.archiveFailed": "アーカイブに失敗しました",
   "mail.toast.bulkPartial": "{total} 件中 {done} 件完了後、停止しました: {reason}",

@@ -895,6 +895,7 @@
   "labels.unnamed": "den här etiketten",
   "layout.resizeConversation": "Ändra storlek på konversation",
   "layout.resizeDetails": "Ändra storlek på informationspanelen",
+  "layout.resizeFolderPane": "Ändra storlek på mappanelen",
   "layout.resizeThreadList": "Ändra storlek på trådlista",
   "mail.toast.archiveFailed": "Arkivering misslyckades",
   "mail.toast.bulkPartial": "{done} av {total} klara, sedan stopp: {reason}",

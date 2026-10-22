@@ -3727,18 +3727,20 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       let kept = '340'
       if (width >= 1100) {
         // Beside the reader: the keyboard and the pointer both resize it.
+        // With the rail and the 260 px folder pane (#317) the reader's row
+        // is 760 px at 1440, so the widest beside the reader is 400 px.
         await handle.focus()
         await page.keyboard.press('ArrowLeft')
-        await page.keyboard.press('Shift+ArrowLeft')
-        await expect(handle).toHaveAttribute('aria-valuenow', '420')
-        expect(Math.round((await panel.boundingBox())!.width)).toBe(420)
+        await page.keyboard.press('ArrowLeft')
+        await expect(handle).toHaveAttribute('aria-valuenow', '372')
+        expect(Math.round((await panel.boundingBox())!.width)).toBe(372)
         const grip = (await handle.boundingBox())!
         await page.mouse.move(grip.x + grip.width / 2, grip.y + 200)
         await page.mouse.down()
         await page.mouse.move(grip.x + grip.width / 2 + 60, grip.y + 200, { steps: 4 })
         await page.mouse.up()
         const dragged = Number(await handle.getAttribute('aria-valuenow'))
-        expect(Math.abs(dragged - 360)).toBeLessThanOrEqual(2)
+        expect(Math.abs(dragged - 312)).toBeLessThanOrEqual(2)
         expect(Math.abs((await panel.boundingBox())!.width - dragged)).toBeLessThanOrEqual(1)
         // The widest it goes still leaves the reader its room; the narrowest is 280.
         await page.keyboard.press('End')
@@ -4648,3 +4650,136 @@ for (const language of ['en', 'ca', 'ar']) {
     expect(errors).toEqual([])
   })
 }
+
+// #317: the common folder pane (ADR-0068 §4), mail first. One width for every
+// module, 260 px by default and 200 to 400, in px so the app's zoom grows the
+// text in it and not the pane, and kept across restarts.
+test('the folder pane resizes from the keyboard and the pointer, is kept across restarts and does not grow with the zoom (#317)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  const pane = page.getByRole('navigation', { name: 'Accounts and folders' })
+  const handle = pane.getByRole('separator', { name: 'Resize folder pane' })
+  const list = page.locator('[data-thread-list]')
+  const reader = page.locator('[data-message-pane]')
+  const drawn = async (locator: ReturnType<Page['locator']>) => Math.round((await locator.boundingBox())!.width)
+  const stored = () => page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}'))
+  await expect(pane).toHaveAttribute('data-region', 'folders')
+  await expect(handle).toHaveAttribute('aria-valuenow', '260')
+  await expect(handle).toHaveAttribute('aria-valuemin', '200')
+  await expect(handle).toHaveAttribute('aria-valuemax', '400')
+  expect(await drawn(pane)).toBe(260)
+  // Its 40 px title row names it.
+  const title = pane.getByRole('heading', { level: 2, name: 'Accounts and folders' })
+  expect(Math.round((await title.locator('..').boundingBox())!.height)).toBe(40)
+
+  // The keyboard: the widest it goes, while the list and the reader keep theirs.
+  await handle.focus()
+  await page.keyboard.press('End')
+  await expect(handle).toHaveAttribute('aria-valuenow', '400')
+  expect(await drawn(pane)).toBe(400)
+  expect(await drawn(list)).toBe(360)
+  expect(await drawn(reader)).toBeGreaterThanOrEqual(360)
+  await expect.poll(async () => (await stored()).folder_pane_width).toBe(400)
+  await page.reload()
+  await expect(handle).toHaveAttribute('aria-valuenow', '400')
+  expect(await drawn(pane)).toBe(400)
+
+  // The pointer: 80 px towards the start of the line.
+  const grip = (await handle.boundingBox())!
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + 300)
+  await page.mouse.down()
+  await page.mouse.move(grip.x + grip.width / 2 - 80, grip.y + 300, { steps: 4 })
+  await page.mouse.up()
+  const dragged = Number(await handle.getAttribute('aria-valuenow'))
+  expect(Math.abs(dragged - 320)).toBeLessThanOrEqual(2)
+  expect(Math.abs((await pane.boundingBox())!.width - dragged)).toBeLessThanOrEqual(1)
+  await expect.poll(async () => (await stored()).folder_pane_width).toBe(dragged)
+
+  // The narrowest and one step more; then the app's 200 %, which grows the
+  // text and leaves the pane as wide as it was.
+  await handle.focus()
+  await page.keyboard.press('Home')
+  await page.keyboard.press('ArrowRight')
+  await expect(handle).toHaveAttribute('aria-valuenow', '216')
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
+  expect(await drawn(pane)).toBe(216)
+  // A name that does not fit ends in "…", and the tooltip has it whole.
+  expect(await title.evaluate((element) => getComputedStyle(element).textOverflow)).toBe('ellipsis')
+  expect(await title.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true)
+  await expect(title).toHaveAttribute('title', 'Accounts and folders')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.keyboard.press(`${mod}+Digit0`)
+  await page.reload()
+  await expect(handle).toHaveAttribute('aria-valuenow', '216')
+  expect(errors).toEqual([])
+})
+
+// When the row runs short the folders give way first, down to 200 px, then
+// the list, and the reader keeps its 360 px (ADR-0068 §7). With a remembered
+// 560 px list beside the 60 px rail: at 1200 px the folders are 220 px and the
+// list is whole; at 1100 and 1025 px the folders are at their minimum and the
+// list gives way.
+for (const [width, folders, listWidth] of [
+  [1025, 200, 405],
+  [1100, 200, 480],
+  [1200, 220, 560],
+  [1440, 260, 560],
+] as const) {
+  test(`the folders give way before the list, and the list before the reader, at ${width}px (#317)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const errors = await prepareStartup(page, true, { navigation: true, preferences: { thread_list_width: 560 } })
+    await page.goto('/')
+    const pane = page.getByRole('navigation', { name: 'Accounts and folders' })
+    const reader = page.locator('[data-message-pane]')
+    await expect(pane).toBeVisible()
+    await expect(reader).toBeVisible()
+    const paneBox = (await pane.boundingBox())!
+    const listBox = (await page.locator('[data-thread-list]').boundingBox())!
+    const readerBox = (await reader.boundingBox())!
+    expect(Math.abs(paneBox.width - folders)).toBeLessThanOrEqual(1)
+    expect(Math.abs(listBox.width - listWidth)).toBeLessThanOrEqual(1)
+    expect(readerBox.width).toBeGreaterThanOrEqual(360 - 1)
+    expect(readerBox.x + readerBox.width).toBeLessThanOrEqual(width + 1)
+    // The separator states the width on screen, and that it goes no wider there.
+    const handle = pane.getByRole('separator', { name: 'Resize folder pane' })
+    await expect(handle).toHaveAttribute('aria-valuenow', String(folders))
+    await expect(handle).toHaveAttribute('aria-valuemax', String(folders < 260 ? folders : 400))
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    expect(errors).toEqual([])
+  })
+}
+
+test('in Arabic the folder pane sits between the rail and the list, and its separator follows the reading (#317)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, language: 'ar' })
+  await page.goto('/')
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+  const pane = page.getByRole('navigation', { name: arCatalog['mailNavigation.title'], exact: true })
+  await expect(pane).toBeVisible()
+  const railBox = (await page.locator('main > aside').first().boundingBox())!
+  const paneBox = (await pane.boundingBox())!
+  const listBox = (await page.locator('[data-thread-list]').boundingBox())!
+  expect(paneBox.x + paneBox.width).toBeLessThanOrEqual(railBox.x + 1)
+  expect(listBox.x + listBox.width).toBeLessThanOrEqual(paneBox.x + 1)
+  // The separator is on the pane's end edge, on the left: ArrowLeft widens it,
+  // and the pane grows to the left with its start edge against the rail.
+  const handle = pane.getByRole('separator', { name: arCatalog['layout.resizeFolderPane'], exact: true })
+  const handleBox = (await handle.boundingBox())!
+  expect(Math.abs(handleBox.x + handleBox.width / 2 - paneBox.x)).toBeLessThanOrEqual(1)
+  await handle.focus()
+  await page.keyboard.press('ArrowLeft')
+  await expect(handle).toHaveAttribute('aria-valuenow', '276')
+  const grown = (await pane.boundingBox())!
+  expect(Math.round(grown.width)).toBe(276)
+  expect(Math.round(grown.x + grown.width)).toBe(Math.round(paneBox.x + paneBox.width))
+  await page.keyboard.press('Shift+ArrowRight')
+  await expect(handle).toHaveAttribute('aria-valuenow', '212')
+  expect(errors).toEqual([])
+})

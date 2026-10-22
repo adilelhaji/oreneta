@@ -895,6 +895,7 @@
   "labels.unnamed": "此标签",
   "layout.resizeConversation": "调整会话大小",
   "layout.resizeDetails": "调整详细信息面板大小",
+  "layout.resizeFolderPane": "调整文件夹面板大小",
   "layout.resizeThreadList": "调整会话列表大小",
   "mail.toast.archiveFailed": "存档失败",
   "mail.toast.bulkPartial": "已完成 {done}/{total}，随后停止：{reason}",

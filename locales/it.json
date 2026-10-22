@@ -895,6 +895,7 @@
   "labels.unnamed": "questa etichetta",
   "layout.resizeConversation": "Ridimensiona conversazione",
   "layout.resizeDetails": "Ridimensiona il pannello dei dettagli",
+  "layout.resizeFolderPane": "Ridimensiona il pannello delle cartelle",
   "layout.resizeThreadList": "Ridimensiona elenco thread",
   "mail.toast.archiveFailed": "Archivio non riuscito",
   "mail.toast.bulkPartial": "{done} di {total} completati, poi interrotto: {reason}",
