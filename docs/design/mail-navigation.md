@@ -515,7 +515,7 @@ sota la capçalera, passa a ser el cos de la subfinestra de carpetes comuna
 (ADR-0068 §4). Adjunts no tenia cap columna de «carpetes».
 
 - **Cos:** els mateixos cinc filtres, en l'ordre d'abans i lligats al mateix
-  `attachmentList$.filter` amb la mateixa espera de 200 ms en els camps de text:
+  `attachmentList$.filter` amb el mateix retard de 200 ms en els camps de text:
   nom del fitxer, remitent, tipus, quan i, només amb més d'un compte, compte. Van
   apilats, un per fila, cadascun amb una etiqueta visible (`<label>`, amb el
   mateix text que el nom accessible d'abans: «Nom del fitxer», «De», «Tipus»,
@@ -541,8 +541,9 @@ sota la capçalera, passa a ser el cos de la subfinestra de carpetes comuna
   `<main>` («Adjunts») i de la resta de noms de regió i de panell, i de les
   etiquetes dels controls d'Adjunts, en els 20 catàlegs, com comprova una prova.
   Atès que els filtres ja no són dins del contingut, una llista buida deixa el
-  contingut sense cap element on F6 pugui posar el focus, i F6 el salta; amb
-  fitxers a la llista, hi arriba al botó «Obre'n el missatge».
+  contingut sense cap element on F6 pugui posar el focus, i F6 el salta, com al
+  Xat sense cap conversa oberta; amb fitxers a la llista, F6 arriba fins al
+  primer botó de la llista (o al darrer element que hi tenia el focus).
 - **Per sota de 1025 px** la subfinestra no es mostra i la barra de filtres és
   exactament la d'abans, sota la capçalera, amb els noms accessibles i sense
   etiquetes visibles. Mai no són a dos llocs alhora.

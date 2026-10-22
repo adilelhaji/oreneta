@@ -178,10 +178,10 @@ export function AttachmentsView() {
   )
 
   // From 1025 px the same filters are the pane's body: one per row, each with
-  // its visible label, and every control keeps its accessible name. `min-w-0`
-  // and `w-full` let a select with a long account address give way to the
-  // pane instead of pushing the body sideways.
-  const label = 'text-caption font-semibold text-secondary'
+  // its visible label, which names the control as the bar's aria-label does.
+  // `min-w-0` and `w-full` let a select with a long account address give way
+  // to the pane instead of pushing the body sideways.
+  const label = 'min-w-0 break-words text-caption font-semibold text-secondary'
   const field = 'w-full min-w-0 rounded-control border border-border bg-chats px-2.5 py-1.5 text-caption text-primary'
   const filterPane = (
     <FolderPane title={t('attachmentsView.filters', { defaultValue: 'Attachment filters' })}>
@@ -197,7 +197,6 @@ export function AttachmentsView() {
               value={filter.name}
               onChange={(event) => attachmentList$.filter.name.set(event.target.value)}
               placeholder={nameLabel}
-              aria-label={nameLabel}
               className="min-w-0 flex-1 bg-transparent text-caption text-primary placeholder-secondary outline-none"
             />
           </div>
@@ -211,7 +210,6 @@ export function AttachmentsView() {
             value={filter.sender}
             onChange={(event) => attachmentList$.filter.sender.set(event.target.value)}
             placeholder={senderLabel}
-            aria-label={senderLabel}
             className={clsx(field, 'placeholder-secondary outline-none focus:border-accent-fg')}
           />
         </div>
@@ -219,13 +217,7 @@ export function AttachmentsView() {
           <label htmlFor={`${fieldId}-type`} className={label}>
             {typeLabel}
           </label>
-          <select
-            id={`${fieldId}-type`}
-            value={filter.kind}
-            onChange={setKind}
-            aria-label={typeLabel}
-            className={field}
-          >
+          <select id={`${fieldId}-type`} value={filter.kind} onChange={setKind} className={field}>
             {kindOptions}
           </select>
         </div>
@@ -233,13 +225,7 @@ export function AttachmentsView() {
           <label htmlFor={`${fieldId}-when`} className={label}>
             {whenLabel}
           </label>
-          <select
-            id={`${fieldId}-when`}
-            value={filter.within}
-            onChange={setWithin}
-            aria-label={whenLabel}
-            className={field}
-          >
+          <select id={`${fieldId}-when`} value={filter.within} onChange={setWithin} className={field}>
             {whenOptions}
           </select>
         </div>
@@ -248,13 +234,7 @@ export function AttachmentsView() {
             <label htmlFor={`${fieldId}-account`} className={label}>
               {accountLabel}
             </label>
-            <select
-              id={`${fieldId}-account`}
-              value={filter.account}
-              onChange={setAccount}
-              aria-label={accountLabel}
-              className={field}
-            >
+            <select id={`${fieldId}-account`} value={filter.account} onChange={setAccount} className={field}>
               {accountOptions}
             </select>
           </div>

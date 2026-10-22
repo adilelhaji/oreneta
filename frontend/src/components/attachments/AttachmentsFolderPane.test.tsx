@@ -141,7 +141,8 @@ describe('Attachments in the common folder pane (ADR-0068 §4, #339)', () => {
     expect(labels.map((label) => label.textContent)).toEqual(['File name', 'From', 'Type', 'When', 'Account'])
     labels.forEach((label, index) => {
       expect(label.htmlFor).toBe(controls[index].id)
-      expect(controls[index].getAttribute('aria-label')).toBe(label.textContent)
+      // The visible label is the name, as the bar's aria-label is: one source, nothing to drift.
+      expect(controls[index].getAttribute('aria-label')).toBeNull()
     })
     // Stacked: each control in a row of its own, which may shrink and fills the pane.
     for (const control of controls.slice(1)) expect(control.className).toContain('w-full')
@@ -192,6 +193,8 @@ describe('Attachments in the common folder pane (ADR-0068 §4, #339)', () => {
     fireEvent.change(within(nav).getByRole('textbox', { name: 'From' }), { target: { value: 'ana' } })
     expect(attachmentList$.filter.name.peek()).toBe('scan')
     expect(attachmentList$.filter.sender.peek()).toBe('ana')
+    // Nothing goes out before the wait is over, not even after 100 ms.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 100)))
     expect(listed()).toHaveLength(before)
     await waitFor(() => expect(listed().at(-1)!.payload).toMatchObject({ name: 'scan', sender: 'ana' }))
     expect(listed().length).toBe(before + 1)
