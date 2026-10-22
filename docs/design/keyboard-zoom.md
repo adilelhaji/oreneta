@@ -47,7 +47,9 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
     que no hi cap acaba en «…» amb el nom sencer a la indicació. Al Calendari
     (#323), a partir de 1025 px els calendaris són a la subfinestra, i no a la
     columna de 12 rem d'abans, i els dies del calendari petit s'encongeixen fins
-    a cabre-hi;
+    a cabre-hi. A Persones (#326), a partir de 1025 px els grups són a la
+    subfinestra, i la columna de la llista és de 288 px, no de 18 rem, perquè al
+    200 % la persona no es quedi sense lloc;
   - el llindar de la cerca a la conversa (900 px), que va coordinat amb la
     barra mòbil i amb un `matchMedia`.
 

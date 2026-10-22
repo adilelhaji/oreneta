@@ -150,6 +150,21 @@ calendari es mantenen, i se n'hi afegeixen de noves: l'agenda, el dia, la setman
 1025, 1100 i 1440 px sense desplaçament horitzontal, l'amplada compartida amb el correu, la
 llista i el menú de colors a la subfinestra, l'àrab i el 200 %. Cap fila no canvia d'estat
 (S01-04, S01-05, SET-18, SET-27): l'evidència nativa de Windows continua pendent.
+El 2026-10-22 (#326, pas 2 d'ADR-0068, `docs/design/mail-navigation.md`) els grups de contactes
+de Persones (SET-19) van passar a ser la subfinestra de carpetes comuna a partir de 1025 px, amb
+el mateix contingut que el filtre d'abans: «Tots els contactes» i cada grup amb quantes persones
+té, i crear-lo, escriure a tothom, canviar-li el nom i suprimir-lo, amb les mateixes condicions
+(els grups de només lectura, de Google, no es poden canviar); cada acció diu quin grup afecta.
+Fa servir l'amplada del correu i del Calendari (`folder_pane_width`, en px) i no creix amb el zoom
+de l'aplicació; la columna de la llista és de 288 px al seu costat, i el mòdul demana
+360 px per a la fitxa de la persona, de manera que la subfinestra cedeix abans. És la regió d'F6 «Grups de
+contactes», que en cap idioma no coincideix amb la de `<main>` ni amb «Grups». Per sota de
+1025 px es conserva el filtre d'abans. Les llibretes no es poden triar ni filtrar a Persones; per
+decisió del propietari, la subfinestra només té els grups i les llibretes són la incidència #327.
+Les proves automàtiques de límits, de dreta a esquerra, de zoom, de regions i d'axe es mantenen,
+i se n'hi afegeixen de noves: la llista i la persona a 1025, 1100 i 1440 px sense desplaçament
+horitzontal, l'amplada compartida, els grups a la subfinestra, l'àrab i el 200 %. Cap fila no
+canvia d'estat (S01-04, S01-05, SET-19, SET-27): l'evidència nativa de Windows continua pendent.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per

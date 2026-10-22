@@ -3597,7 +3597,11 @@ test('contact names and groups in the address book and the composer', async ({ p
   await page.getByTitle('People', { exact: true }).click()
   const list = page.getByRole('listbox', { name: 'People' })
   await expect(list.getByRole('option')).toHaveText([/Abbot, Zed/, /Babbage, Charles/, /Lovelace, Ada/])
-  await page.getByLabel('Show group').selectOption({ label: 'Engines (2)' })
+  // At 1440 px the groups are the folder pane's body (#326): a button, not a select.
+  await page
+    .getByRole('navigation', { name: 'Contact groups', exact: true })
+    .getByRole('button', { name: 'Engines (2)', exact: true })
+    .click()
   await expect(list.getByRole('option')).toHaveCount(2)
   await list.getByRole('option', { name: /Lovelace, Ada/ }).click()
   await expect(page.getByRole('heading', { name: 'Lovelace, Ada' })).toBeVisible()
@@ -4633,9 +4637,14 @@ for (const language of ['en', 'ca', 'ar']) {
     await expect(page.locator('[data-details-panel]')).toBeVisible()
     await audit('conversation', catalog['shell.region.mail'])
 
-    await page.getByTitle(catalog['people.title'], { exact: true }).click()
+    const peopleButton = page.getByTitle(catalog['people.title'], { exact: true })
+    await peopleButton.click()
     await page.getByRole('option', { name: /Morgan Rivera/ }).click()
     await expect(page.getByRole('heading', { name: 'Morgan Rivera' })).toBeVisible()
+    // The groups are the folder pane (#326), beside the module: from the rail,
+    // F6 goes to the module, then the pane, then back to the rail.
+    await peopleButton.focus()
+    expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'folders', 'modules'])
     await audit('people', catalog['people.title'])
 
     await page.getByTitle(catalog['tasks.title'], { exact: true }).click()
@@ -5101,6 +5110,295 @@ for (const width of [1440, 1024]) {
     await swatch.click()
     await expect(menu).toHaveCount(0)
     expect((await requests('calendar.setColor')).at(-1)).toMatchObject({ calendar_id: 'holidays', color: colour })
+    expect(errors).toEqual([])
+  })
+}
+
+// #326: People's groups in the common folder pane (ADR-0068 §4), at the one
+// width every module shares. The list and the person stay beside it. At
+// 1024 px and below the pane is not drawn, and the groups keep their filter
+// under the list's header.
+async function openPeoplePane(page: Page, options: SetupOptions = {}, catalog = enCatalog) {
+  const errors = await prepareStartup(page, true, { navigation: true, ...options })
+  await page.addInitScript(() => {
+    const replies = (window as any).startupProbe.replies
+    const person = (id: string, given: string, family: string, addr: string) => ({
+      id, source: 'local', account: '', book: 'local', name: `${given} ${family}`, given, family,
+      organisation: '', note: '', photo: '', emails: [{ addr, label: 'work' }], phones: [{ number: '+34 600 000 000', label: 'cell' }],
+      version: '1', editable: true,
+    })
+    replies['people.list'] = {
+      people: [
+        person('local::local:a', 'Ada', 'Lovelace', 'ada.lovelace.with.a.long.address@example.test'),
+        person('local::local:c', 'Charles', 'Babbage', 'charles@example.test'),
+      ],
+    }
+    replies['people.groups'] = {
+      groups: [
+        {
+          id: 'group:local::local:g', source: 'local', account: '', book: 'local', name: 'Engines', version: '3', editable: true,
+          members: [
+            { id: 'local::local:a', name: 'Ada Lovelace', given: 'Ada', family: 'Lovelace', addr: 'ada.lovelace.with.a.long.address@example.test' },
+            { id: 'local::local:c', name: 'Charles Babbage', given: 'Charles', family: 'Babbage', addr: 'charles@example.test' },
+          ],
+        },
+        {
+          id: 'group:carddav::src:s', source: 'carddav', account: '', book: 'src', name: 'A shared group on a server with a very long name', version: '1', editable: false,
+          members: [{ id: 'local::local:c', name: 'Charles Babbage', given: 'Charles', family: 'Babbage', addr: 'charles@example.test' }],
+        },
+      ],
+    }
+    replies['people.groupSave'] = { ok: true, id: 'group:local::local:g', version: '4' }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await page.getByTitle(catalog['people.title'], { exact: true }).click()
+  await expect(page.getByRole('main', { name: catalog['people.title'], exact: true })).toBeVisible()
+  return errors
+}
+
+for (const [width, paneWidth] of [
+  [1025, 200],
+  [1025, 260],
+  [1025, 400],
+  [1100, 200],
+  [1100, 260],
+  [1440, 200],
+  [1440, 260],
+] as const) {
+  test(`People's folder pane leaves the list and a person whole at ${width}px, ${paneWidth}px wide (#326)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const errors = await openPeoplePane(page, { preferences: { folder_pane_width: paneWidth } })
+    const pane = page.getByRole('navigation', { name: 'Contact groups', exact: true })
+    const content = page.locator('main > [data-region="content"]')
+    await expect(pane).toHaveAttribute('data-region', 'folders')
+    await expect(pane.getByRole('heading', { level: 2, name: 'Contact groups' })).toBeVisible()
+    await expect(pane.getByRole('button', { name: 'All contacts', exact: true })).toBeVisible()
+    await expect(pane.getByRole('button', { name: 'Engines (2)', exact: true })).toBeVisible()
+    await expect(pane.getByRole('button', { name: 'New group', exact: true })).toBeVisible()
+    // Right after the rail, at the shared width, and the module right after it.
+    const rail = await boxOf(page.locator('main > aside').first())
+    const paneBox = await boxOf(pane)
+    expect(Math.abs(paneBox.x - (rail.x + rail.width))).toBeLessThanOrEqual(1)
+    // The person keeps the reader's 360 px (ADR-0068 §7): where the pane and
+    // the list leave less, the pane gives way first, down to 200 px.
+    const drawnPane = Math.max(200, Math.min(paneWidth, width - 60 - 288 - 360))
+    expect(Math.abs(paneBox.width - drawnPane)).toBeLessThanOrEqual(1)
+    // The separator reports the width that is drawn, squeezed or not.
+    const valueNow = await pane.getByRole('separator', { name: 'Resize folder pane' }).getAttribute('aria-valuenow')
+    expect(Math.abs(Number(valueNow) - drawnPane)).toBeLessThanOrEqual(1)
+    const contentBox = await boxOf(content)
+    expect(Math.abs(contentBox.x - (paneBox.x + paneBox.width))).toBeLessThanOrEqual(1)
+    expect(contentBox.x + contentBox.width).toBeLessThanOrEqual(width + 1)
+    // The group row is not in the list's header as well.
+    await expect(content.locator('[data-region="folders"]')).toHaveCount(0)
+    await expect(content.getByLabel('Show group')).toHaveCount(0)
+
+    // A person opens in the details beside the list, whole.
+    const list = page.getByRole('listbox', { name: 'People' })
+    await expect(list.getByRole('option')).toHaveCount(2)
+    await list.getByRole('option', { name: /Lovelace/ }).click()
+    await expect(page.getByRole('heading', { name: 'Ada Lovelace' })).toBeVisible()
+    await settled(page)
+    await ltrInView(page, `people at ${width}px, folders ${paneWidth}px`)
+    const outside = await content.evaluate((region) => {
+      const { left, right } = region.getBoundingClientRect()
+      return [...region.querySelectorAll<HTMLElement>('button, input, select, h1, h2')]
+        .map((element) => ({ element, box: element.getBoundingClientRect() }))
+        .filter(({ box }) => box.width > 0 && (box.left < left - 1 || box.right > right + 1))
+        .map(({ element }) => element.getAttribute('aria-label') ?? element.textContent?.trim().slice(0, 40))
+    })
+    expect(outside).toEqual([])
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    const detail = await boxOf(page.getByRole('region', { name: 'Ada Lovelace' }))
+    // The person takes all the room the rail, the pane and the list leave: at
+    // 1025 px, 477 and 417 px for a pane of 200 and 260, and 360 px for 400,
+    // when the pane is drawn 317 px wide instead.
+    expect(detail.width).toBeGreaterThanOrEqual(width - 60 - drawnPane - 288 - 2)
+    await insidePane(page, pane)
+    expect(errors).toEqual([])
+  })
+}
+
+test('at 1024px People keeps its groups as a filter in the list, and draws no folder pane (#326)', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 900 })
+  const errors = await openPeoplePane(page)
+  await expect(page.locator('[data-folder-pane]')).toHaveCount(0)
+  await expect(page.getByRole('separator', { name: 'Resize folder pane' })).toHaveCount(0)
+  await expect(page.getByRole('navigation', { name: 'Contact groups' })).toHaveCount(0)
+  const column = page.locator('main > [data-region="content"] [data-region="folders"]')
+  await expect(column).toHaveCount(1)
+  // 18 rem wide, as before.
+  expect(Math.round((await boxOf(column)).width)).toBe(288)
+  await column.getByLabel('Show group').selectOption({ label: 'Engines (2)' })
+  await expect(page.getByRole('listbox', { name: 'People' }).getByRole('option')).toHaveCount(2)
+  await expect(column.getByRole('button', { name: 'Rename group', exact: true })).toBeVisible()
+  await expect(column.getByRole('button', { name: 'Delete group', exact: true })).toBeVisible()
+  await ltrInView(page, 'people at 1024px')
+  expect(errors).toEqual([])
+})
+
+test("People's groups choose, create and rename from the folder pane (#326)", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const errors = await openPeoplePane(page)
+  const pane = page.getByRole('navigation', { name: 'Contact groups', exact: true })
+  const list = page.getByRole('listbox', { name: 'People' })
+  const requests = (command: string) =>
+    page.evaluate(
+      (name) => (window as any).startupProbe.requests.filter((request: any) => request.command === name).map((request: any) => request.payload),
+      command,
+    )
+  // The long name is cut with "…" and whole in its tooltip.
+  const long = pane.getByTitle('A shared group on a server with a very long name (1)')
+  await expect(long).toBeVisible()
+  await long.click()
+  await expect(long).toHaveAttribute('aria-current', 'true')
+  await expect(list.getByRole('option')).toHaveCount(1)
+  // A group a book cannot write offers neither a rename nor a delete.
+  await expect(pane.getByRole('button', { name: /^(Rename|Delete) /, })).toHaveCount(0)
+
+  await pane.getByRole('button', { name: 'Engines (2)', exact: true }).click()
+  await expect(list.getByRole('option')).toHaveCount(2)
+  await pane.getByRole('button', { name: 'Rename Engines', exact: true }).click()
+  const name = page.getByLabel('Group name')
+  await expect(name).toHaveValue('Engines')
+  await name.fill('Analytical Engines')
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect
+    .poll(async () => (await requests('people.groupSave')).at(-1))
+    .toEqual({ id: 'group:local::local:g', version: '3', name: 'Analytical Engines', members: ['local::local:a', 'local::local:c'] })
+
+  await pane.getByRole('button', { name: 'New group', exact: true }).click()
+  await page.getByLabel('Group name').fill('Book club')
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect.poll(async () => (await requests('people.groupSave')).at(-1)).toEqual({ name: 'Book club', members: [] })
+
+  await pane.getByRole('button', { name: 'All contacts', exact: true }).click()
+  await expect(pane.getByRole('button', { name: 'All contacts', exact: true })).toHaveAttribute('aria-current', 'true')
+  await expect(list.getByRole('option')).toHaveCount(2)
+  expect(errors).toEqual([])
+})
+
+test('the folder pane resized in People is the width mail draws, and the reverse (#326)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await openPeoplePane(page)
+  const people = page.getByRole('navigation', { name: 'Contact groups', exact: true })
+  const mail = page.getByRole('navigation', { name: 'Accounts and folders', exact: true })
+  const handleIn = (pane: ReturnType<Page['locator']>) => pane.getByRole('separator', { name: 'Resize folder pane' })
+  const drawn = async (pane: ReturnType<Page['locator']>) => Math.round((await boxOf(pane)).width)
+  const stored = () => page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}').folder_pane_width)
+  const peopleButton = page.getByTitle('People', { exact: true })
+  await expect(handleIn(people)).toHaveAttribute('aria-valuenow', '260')
+
+  // The keyboard in People: the widest it goes, kept for mail.
+  await handleIn(people).focus()
+  await page.keyboard.press('End')
+  await expect(handleIn(people)).toHaveAttribute('aria-valuenow', '400')
+  expect(await drawn(people)).toBe(400)
+  await expect.poll(stored).toBe(400)
+  await peopleButton.click()
+  await expect(mail).toBeVisible()
+  await expect(handleIn(mail)).toHaveAttribute('aria-valuenow', '400')
+  expect(await drawn(mail)).toBe(400)
+
+  // Narrowed in mail, People's is as narrow.
+  await handleIn(mail).focus()
+  await page.keyboard.press('Home')
+  await expect.poll(stored).toBe(200)
+  await peopleButton.click()
+  await expect(handleIn(people)).toHaveAttribute('aria-valuenow', '200')
+  expect(await drawn(people)).toBe(200)
+
+  // The pointer in People: 60 px towards the end of the line.
+  const grip = await boxOf(handleIn(people))
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + 300)
+  await page.mouse.down()
+  await page.mouse.move(grip.x + grip.width / 2 + 60, grip.y + 300, { steps: 4 })
+  await page.mouse.up()
+  const dragged = Number(await handleIn(people).getAttribute('aria-valuenow'))
+  expect(Math.abs(dragged - 260)).toBeLessThanOrEqual(2)
+  expect(Math.abs((await boxOf(people)).width - dragged)).toBeLessThanOrEqual(1)
+  await expect.poll(stored).toBe(dragged)
+
+  // Kept across a restart, in both modules.
+  await page.reload()
+  await expect(handleIn(mail)).toHaveAttribute('aria-valuenow', String(dragged))
+  await peopleButton.click()
+  await expect(handleIn(people)).toHaveAttribute('aria-valuenow', String(dragged))
+  expect(errors).toEqual([])
+})
+
+test("in Arabic People's folder pane sits between the rail and the list, and its separator follows the reading (#326)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await openPeoplePane(page, { language: 'ar' }, arCatalog)
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+  const pane = page.getByRole('navigation', { name: arCatalog['people.contactGroups'], exact: true })
+  await expect(pane).toBeVisible()
+  const railBox = await boxOf(page.locator('main > aside').first())
+  const paneBox = await boxOf(pane)
+  const contentBox = await boxOf(page.locator('main > [data-region="content"]'))
+  expect(Math.abs(paneBox.x + paneBox.width - railBox.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(contentBox.x + contentBox.width - paneBox.x)).toBeLessThanOrEqual(1)
+  expect(contentBox.x).toBeGreaterThanOrEqual(-1)
+  const handle = pane.getByRole('separator', { name: arCatalog['layout.resizeFolderPane'], exact: true })
+  const handleBox = await boxOf(handle)
+  expect(Math.abs(handleBox.x + handleBox.width / 2 - paneBox.x)).toBeLessThanOrEqual(1)
+  await handle.focus()
+  await page.keyboard.press('ArrowLeft')
+  await expect(handle).toHaveAttribute('aria-valuenow', '276')
+  const grown = await boxOf(pane)
+  expect(Math.round(grown.width)).toBe(276)
+  expect(Math.round(grown.x + grown.width)).toBe(Math.round(paneBox.x + paneBox.width))
+  await page.keyboard.press('Shift+ArrowRight')
+  await expect(handle).toHaveAttribute('aria-valuenow', '212')
+  await page.getByRole('option', { name: /Lovelace/ }).click()
+  await insidePane(page, pane)
+  await rtlInView(page, 'people folder pane')
+  await settled(page)
+  const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+  const blocking = results.violations
+    .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+    .map((violation) => `${violation.id} (${violation.impact}) on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`)
+  expect(blocking).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// At the app's 200 % the pane keeps its px width (ADR-0068 §7): its text grows.
+for (const width of [1440, 1025]) {
+  test(`People's folder pane stays in px at the app's 200 %, everything in it inside it: ${width}px (#326)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 })
+    const errors = await openPeoplePane(page)
+    const pane = page.getByRole('navigation', { name: 'Contact groups', exact: true })
+    await expect(pane).toBeVisible()
+    const before = Math.round((await boxOf(pane)).width)
+    expect(before).toBe(260)
+    const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+    for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
+    await expect(pane.getByRole('heading', { level: 2, name: 'Contact groups' })).toBeVisible()
+    // It does not grow with the zoom. At 1025 px the rail's rem width grows and
+    // the pane, which gives way before the person's 360 px, loses a few px.
+    const zoomed = Math.round((await boxOf(pane)).width)
+    if (width === 1440) expect(zoomed).toBe(before)
+    else expect(zoomed).toBeGreaterThanOrEqual(before - 10)
+    expect(zoomed).toBeLessThanOrEqual(before)
+    await settled(page)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await ltrInView(page, `people at 200 %, ${width}px`)
+    // And a person opens beside the list, whole.
+    await page.getByRole('option', { name: /Lovelace/ }).click()
+    await expect(page.getByRole('heading', { name: 'Ada Lovelace' })).toBeVisible()
+    await settled(page)
+    await ltrInView(page, `a person at 200 %, ${width}px`)
+    await insidePane(page, pane)
+    await page.keyboard.press(`${mod}+Digit0`)
+    expect(Math.round((await boxOf(pane)).width)).toBe(before)
     expect(errors).toEqual([])
   })
 }

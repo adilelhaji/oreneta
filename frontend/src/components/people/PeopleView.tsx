@@ -48,11 +48,14 @@ import { EmptyState } from '../empty-state/EmptyState'
 import { LoadingState } from '../empty-state/StateViews'
 import { IconButton } from '../button/IconButton'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
+import { FOLDER_PANE_MIN_WINDOW, FolderPane } from '../shell/FolderPane'
+import { useWideWindow } from '../resizer/useElementWidth'
 import { Button } from '../button/Button'
 import { PersonEditor } from './PersonEditor'
 import { VcfImportDialog } from './VcfImportDialog'
 import { DuplicatesDialog } from './DuplicatesDialog'
 import { GroupDialog } from './GroupDialog'
+import { PeopleGroups } from './PeopleGroups'
 
 /**
  * The address book, as a place rather than as a dropdown.
@@ -67,6 +70,11 @@ import { GroupDialog } from './GroupDialog'
  * edit and a delete button. A synced book's people have neither — there is no
  * edit button that turns out not to save. Editing those lives where the book
  * does until writing back to it exists.
+ *
+ * Its groups are the "folders" region. From 1025 px they are the common folder
+ * pane, beside the whole module, at the width every module shares (ADR-0068
+ * §4); below that the pane is not drawn and they keep their place under the
+ * list's header, as a filter, as before.
  */
 export function PeopleView() {
   const { t } = useTranslation()
@@ -88,6 +96,7 @@ export function PeopleView() {
   const lastSelection = useRef<HTMLButtonElement | null>(null)
   const detailRef = useRef<HTMLElement | null>(null)
   const focusNavigation = useRef(false)
+  const inPane = useWideWindow(FOLDER_PANE_MIN_WINDOW)
 
   useEffect(() => {
     if (!loaded) void loadPeople()
@@ -147,7 +156,8 @@ export function PeopleView() {
         group.source === 'carddav' || group.source === 'exchange'
           ? t('people.deleteGroupTextServer', {
               name: group.name,
-              defaultValue: 'The group {name} will be deleted from the address book on its server. The people in it stay.',
+              defaultValue:
+                'The group {name} will be deleted from the address book on its server. The people in it stay.',
             })
           : t('people.deleteGroupText', {
               name: group.name,
@@ -183,293 +193,316 @@ export function PeopleView() {
   }
 
   return (
-    <div data-region="content" className="flex min-h-0 min-w-0 flex-1 bg-app">
-      <section
-        data-region="folders"
-        className={clsx(
-          'min-w-0 w-full shrink-0 flex-col border-e border-border bg-chats min-[769px]:flex min-[769px]:w-72',
-          selected ? 'hidden' : 'flex',
-        )}
+    <>
+      {inPane && (
+        <FolderPane title={t('people.contactGroups')}>
+          <PeopleGroups onWrite={writeToGroup} onDelete={(group) => void removeGroup(group)} />
+        </FolderPane>
+      )}
+      <div
+        data-region="content"
+        // Beside the pane the module asks for its list (288 px) and the
+        // reader's minimum for the person (360 px, ADR-0068 §7) as its basis:
+        // the pane, whose shrink factor dwarfs this one's, gives way first.
+        className={clsx('flex min-h-0 min-w-0 bg-app', inPane ? 'flex-[1_1_648px]' : 'flex-1')}
       >
-        <header className="flex shrink-0 flex-col gap-3 border-b border-border bg-header px-4 py-3">
-          <CompactNavigation />
-          <div className="flex items-center justify-between gap-2">
-            <h1 className="flex items-center gap-2 text-heading-sm font-bold text-primary">
-              <BookUser size={20} strokeWidth={1.75} aria-hidden="true" />
-              {t('people.title')}
-            </h1>
-            <div className="flex items-center gap-1">
-              <IconButton
-                icon={Upload}
-                iconSize={14}
-                size="sm"
-                label={t('people.import', { defaultValue: 'Import contacts' })}
-                onClick={() => void startVcfImport()}
-              />
-              <IconButton
-                icon={Download}
-                iconSize={14}
-                size="sm"
-                label={t('people.export', { defaultValue: 'Export contacts' })}
-                // What the list shows: everybody, or the people a search found.
-                onClick={() => void exportVcf(query ? people.map((person) => person.id) : undefined)}
-              />
-              <Button variant="secondary" size="sm" onClick={() => people$.editing.set({ draft: emptyDraft() })}>
-                <UserPlus size={14} strokeWidth={1.75} />
-                {t('people.newContact', { defaultValue: 'New contact' })}
-              </Button>
+        <section
+          // The pane is the "folders" region from 1025 px; this is the list.
+          data-region={inPane ? undefined : 'folders'}
+          className={clsx(
+            'min-w-0 w-full shrink-0 flex-col border-e border-border bg-chats min-[769px]:flex',
+            // 18 rem, as before; beside the folder pane it is in px, like the
+            // pane, so at the app's 200 % the person keeps their room
+            // (ADR-0068 §7).
+            inPane ? 'min-[769px]:w-[288px]' : 'min-[769px]:w-72',
+            selected ? 'hidden' : 'flex',
+          )}
+        >
+          <header className="flex shrink-0 flex-col gap-3 border-b border-border bg-header px-4 py-3">
+            <CompactNavigation />
+            <div className={clsx('flex items-center justify-between gap-2', inPane && 'flex-wrap')}>
+              <h1 className="flex items-center gap-2 text-heading-sm font-bold text-primary">
+                <BookUser size={20} strokeWidth={1.75} aria-hidden="true" />
+                {t('people.title')}
+              </h1>
+              <div className="flex items-center gap-1">
+                <IconButton
+                  icon={Upload}
+                  iconSize={14}
+                  size="sm"
+                  label={t('people.import', { defaultValue: 'Import contacts' })}
+                  onClick={() => void startVcfImport()}
+                />
+                <IconButton
+                  icon={Download}
+                  iconSize={14}
+                  size="sm"
+                  label={t('people.export', { defaultValue: 'Export contacts' })}
+                  // What the list shows: everybody, or the people a search found.
+                  onClick={() => void exportVcf(query ? people.map((person) => person.id) : undefined)}
+                />
+                <Button variant="secondary" size="sm" onClick={() => people$.editing.set({ draft: emptyDraft() })}>
+                  <UserPlus size={14} strokeWidth={1.75} />
+                  {t('people.newContact', { defaultValue: 'New contact' })}
+                </Button>
+              </div>
             </div>
-          </div>
-          <div className="flex min-w-0 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-2 focus-within:border-accent-fg">
-            <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
-            <input
-              value={query}
-              onChange={(event) => people$.query.set(event.target.value)}
-              placeholder={t('people.search')}
-              aria-label={t('people.search')}
-              className="min-w-0 flex-1 bg-transparent text-ui text-primary placeholder-secondary outline-none"
-            />
-          </div>
-          <div className="flex min-w-0 items-center gap-1">
-            <Users size={14} className="shrink-0 text-secondary" strokeWidth={1.75} aria-hidden="true" />
-            {groups.length > 0 ? (
-              <select
-                value={shownGroup ? shownGroup.id : ''}
-                onChange={(event) => people$.groupFilter.set(event.target.value)}
-                aria-label={t('people.groupFilter', { defaultValue: 'Show group' })}
-                className="min-w-0 flex-1 rounded-control-sm border border-border bg-chats px-2 py-1 text-caption text-primary outline-none focus:border-accent-fg"
-              >
-                <option value="">{t('people.allContacts', { defaultValue: 'All contacts' })}</option>
-                {groups.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {t('people.groupOption', {
-                      name: group.name,
-                      count: group.members.length,
-                      defaultValue: '{name} ({count})',
-                    })}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="min-w-0 flex-1 truncate text-caption text-secondary">
-                {t('people.groupsNone', { defaultValue: 'No groups yet' })}
-              </span>
-            )}
-            <IconButton
-              icon={Plus}
-              iconSize={14}
-              size="sm"
-              label={t('people.newGroup', { defaultValue: 'New group' })}
-              onClick={() => people$.groupEditing.set({ name: '', book: '', members: [] })}
-            />
-            {shownGroup && (
-              <IconButton
-                icon={Mail}
-                iconSize={14}
-                size="sm"
-                label={t('people.writeToGroup', { name: shownGroup.name, defaultValue: 'Write to everyone in {name}' })}
-                disabled={groupRecipients(shownGroup).length === 0}
-                onClick={() => writeToGroup(shownGroup)}
+            <div className="flex min-w-0 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-2 focus-within:border-accent-fg">
+              <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
+              <input
+                value={query}
+                onChange={(event) => people$.query.set(event.target.value)}
+                placeholder={t('people.search')}
+                aria-label={t('people.search')}
+                className="min-w-0 flex-1 bg-transparent text-ui text-primary placeholder-secondary outline-none"
               />
-            )}
-            {shownGroup?.editable && (
-              <>
+            </div>
+            {!inPane && (
+              <div className="flex min-w-0 items-center gap-1">
+                <Users size={14} className="shrink-0 text-secondary" strokeWidth={1.75} aria-hidden="true" />
+                {groups.length > 0 ? (
+                  <select
+                    value={shownGroup ? shownGroup.id : ''}
+                    onChange={(event) => people$.groupFilter.set(event.target.value)}
+                    aria-label={t('people.groupFilter', { defaultValue: 'Show group' })}
+                    className="min-w-0 flex-1 rounded-control-sm border border-border bg-chats px-2 py-1 text-caption text-primary outline-none focus:border-accent-fg"
+                  >
+                    <option value="">{t('people.allContacts', { defaultValue: 'All contacts' })}</option>
+                    {groups.map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {t('people.groupOption', {
+                          name: group.name,
+                          count: group.members.length,
+                          defaultValue: '{name} ({count})',
+                        })}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="min-w-0 flex-1 truncate text-caption text-secondary">
+                    {t('people.groupsNone', { defaultValue: 'No groups yet' })}
+                  </span>
+                )}
                 <IconButton
-                  icon={Pencil}
+                  icon={Plus}
                   iconSize={14}
                   size="sm"
-                  label={t('people.renameGroup', { defaultValue: 'Rename group' })}
-                  onClick={() =>
-                    people$.groupEditing.set({
-                      id: shownGroup.id,
-                      version: shownGroup.version,
+                  label={t('people.newGroup', { defaultValue: 'New group' })}
+                  onClick={() => people$.groupEditing.set({ name: '', book: '', members: [] })}
+                />
+                {shownGroup && (
+                  <IconButton
+                    icon={Mail}
+                    iconSize={14}
+                    size="sm"
+                    label={t('people.writeToGroup', {
                       name: shownGroup.name,
-                      book: shownGroup.book,
-                      members: shownGroup.members.map((member) => member.id),
-                    })
-                  }
-                />
-                <IconButton
-                  icon={Trash2}
-                  iconSize={14}
-                  size="sm"
-                  label={t('people.deleteGroup', { defaultValue: 'Delete group' })}
-                  onClick={() => void removeGroup(shownGroup)}
-                />
-              </>
+                      defaultValue: 'Write to everyone in {name}',
+                    })}
+                    disabled={groupRecipients(shownGroup).length === 0}
+                    onClick={() => writeToGroup(shownGroup)}
+                  />
+                )}
+                {shownGroup?.editable && (
+                  <>
+                    <IconButton
+                      icon={Pencil}
+                      iconSize={14}
+                      size="sm"
+                      label={t('people.renameGroup', { defaultValue: 'Rename group' })}
+                      onClick={() =>
+                        people$.groupEditing.set({
+                          id: shownGroup.id,
+                          version: shownGroup.version,
+                          name: shownGroup.name,
+                          book: shownGroup.book,
+                          members: shownGroup.members.map((member) => member.id),
+                        })
+                      }
+                    />
+                    <IconButton
+                      icon={Trash2}
+                      iconSize={14}
+                      size="sm"
+                      label={t('people.deleteGroup', { defaultValue: 'Delete group' })}
+                      onClick={() => void removeGroup(shownGroup)}
+                    />
+                  </>
+                )}
+              </div>
             )}
-          </div>
-          {duplicates.length > 0 && (
-            <button
-              type="button"
-              onClick={() => people$.duplicatesOpen.set(true)}
-              className="self-start rounded-control-sm px-2 py-1 text-caption font-semibold text-accent-fg hover:bg-hover cursor-pointer"
-            >
-              {t('people.duplicatesCount', {
-                count: duplicates.length,
-                defaultValue: '{count, plural, one {# possible duplicate} other {# possible duplicates}}',
-              })}
-            </button>
-          )}
-        </header>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {!loaded && loading ? (
-            <LoadingState title={t('people.loading')} />
-          ) : people.length === 0 ? (
-            <EmptyState
-              title={
-                query
-                  ? t('people.noMatch')
-                  : shownGroup
-                    ? t('people.groupEmpty', { defaultValue: 'Nobody in this group' })
-                    : t('people.emptyTitle')
-              }
-              text={
-                query
-                  ? t('people.tryAnother')
-                  : shownGroup
-                    ? t('people.groupEmptyText', {
-                        defaultValue: 'Open a contact and add them to the group from their card.',
-                      })
-                    : t('people.emptyText')
-              }
-            />
-          ) : (
-            <ul role="listbox" aria-label={t('people.title')}>
-              {people.map((person) => {
-                const active = person.id === selectedId
-                return (
-                  // The option is the listbox's child as far as assistive
-                  // technology is concerned; the list item is only layout.
-                  <li key={person.id} role="none">
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={active}
-                      onClick={(event) => {
-                        lastSelection.current = event.currentTarget
-                        focusNavigation.current = true
-                        people$.selectedId.set(person.id)
-                        if (selected?.id === person.id) {
-                          focusNavigation.current = false
-                          detailRef.current?.focus()
-                        }
-                      }}
-                      className={clsx(
-                        'flex w-full items-center gap-3 border-b border-border/50 px-3 py-2 text-start transition-colors cursor-pointer',
-                        active ? 'bg-accent/20 dark:bg-accent/30' : 'hover:bg-hover',
-                      )}
-                    >
-                      <Avatar
-                        name={person.name}
-                        email={person.emails[0]?.addr}
-                        src={person.photo ? `/media/${person.photo}` : undefined}
-                        size={34}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span dir="auto" className="block truncate text-ui font-semibold text-primary">
-                          {names.format(person)}
-                        </span>
-                        {/* On the selected row's tinted background the secondary
-                            colour falls just under 4.5:1, so it uses the primary. */}
-                        <span
-                          className={clsx('block truncate text-caption', active ? 'text-primary' : 'text-secondary')}
-                        >
-                          {person.organisation || person.emails[0]?.addr || ''}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </div>
-      </section>
-
-      <section
-        ref={detailRef}
-        tabIndex={-1}
-        aria-label={selected ? names.format(selected) : undefined}
-        className={clsx(
-          'min-h-0 min-w-0 flex-1 flex-col overflow-y-auto min-[769px]:flex',
-          selected ? 'flex' : 'hidden',
-        )}
-      >
-        {selected ? (
-          <>
-            <div className="shrink-0 border-b border-border bg-header px-4 py-3 min-[769px]:hidden">
+            {duplicates.length > 0 && (
               <button
                 type="button"
-                onClick={() => {
-                  focusNavigation.current = true
-                  people$.selectedId.set('')
-                }}
-                className="inline-flex min-h-8 items-center gap-2 rounded-control-sm px-2 text-ui font-semibold text-secondary hover:bg-hover cursor-pointer"
+                onClick={() => people$.duplicatesOpen.set(true)}
+                className="self-start rounded-control-sm px-2 py-1 text-caption font-semibold text-accent-fg hover:bg-hover cursor-pointer"
               >
-                <ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" />
-                {t('buttons.back')}
+                {t('people.duplicatesCount', {
+                  count: duplicates.length,
+                  defaultValue: '{count, plural, one {# possible duplicate} other {# possible duplicates}}',
+                })}
               </button>
-            </div>
-            <PersonCard
-              person={selected}
-              displayName={names.format(selected)}
-              groups={groups}
-              onWrite={(addr) => writeTo(selected, addr)}
-              onCopy={copy}
-              onEdit={() =>
-                people$.editing.set({
-                  id: selected.id,
-                  version: selected.version,
-                  serverBook:
-                    selected.source === 'carddav' || selected.source === 'exchange' ? selected.book : undefined,
-                  draft: draftOf(selected),
-                })
-              }
-              onDelete={() => void removePerson(selected)}
-            />
-            {copies.length > 1 && (
-              <section className="mx-auto w-full max-w-2xl px-4 pb-6 min-[769px]:px-6">
-                <h2 className="mb-2 text-caption font-bold uppercase tracking-wide text-secondary">
-                  {t('people.linkedCopies', { defaultValue: 'Linked copies' })}
-                </h2>
-                <ul className="overflow-hidden rounded-control border border-border">
-                  {copies.map((copy) => (
-                    <li
-                      key={copy.id}
-                      className="flex flex-wrap items-center gap-2 border-b border-border bg-chats px-3 py-2 last:border-b-0"
-                    >
+            )}
+          </header>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {!loaded && loading ? (
+              <LoadingState title={t('people.loading')} />
+            ) : people.length === 0 ? (
+              <EmptyState
+                title={
+                  query
+                    ? t('people.noMatch')
+                    : shownGroup
+                      ? t('people.groupEmpty', { defaultValue: 'Nobody in this group' })
+                      : t('people.emptyTitle')
+                }
+                text={
+                  query
+                    ? t('people.tryAnother')
+                    : shownGroup
+                      ? t('people.groupEmptyText', {
+                          defaultValue: 'Open a contact and add them to the group from their card.',
+                        })
+                      : t('people.emptyText')
+                }
+              />
+            ) : (
+              <ul role="listbox" aria-label={t('people.title')}>
+                {people.map((person) => {
+                  const active = person.id === selectedId
+                  return (
+                    // The option is the listbox's child as far as assistive
+                    // technology is concerned; the list item is only layout.
+                    <li key={person.id} role="none">
                       <button
                         type="button"
-                        aria-current={copy.id === selected.id}
-                        onClick={() => people$.selectedId.set(copy.id)}
-                        className="min-w-0 flex-1 text-start text-ui text-primary cursor-pointer"
+                        role="option"
+                        aria-selected={active}
+                        onClick={(event) => {
+                          lastSelection.current = event.currentTarget
+                          focusNavigation.current = true
+                          people$.selectedId.set(person.id)
+                          if (selected?.id === person.id) {
+                            focusNavigation.current = false
+                            detailRef.current?.focus()
+                          }
+                        }}
+                        className={clsx(
+                          'flex w-full items-center gap-3 border-b border-border/50 px-3 py-2 text-start transition-colors cursor-pointer',
+                          active ? 'bg-accent/20 dark:bg-accent/30' : 'hover:bg-hover',
+                        )}
                       >
-                        {names.format(copy)}{' '}
-                        <span className="text-caption text-secondary">
-                          · {t(`people.source.${sourceLabel(copy.source)}`)}
+                        <Avatar
+                          name={person.name}
+                          email={person.emails[0]?.addr}
+                          src={person.photo ? `/media/${person.photo}` : undefined}
+                          size={34}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span dir="auto" className="block truncate text-ui font-semibold text-primary">
+                            {names.format(person)}
+                          </span>
+                          {/* On the selected row's tinted background the secondary
+                            colour falls just under 4.5:1, so it uses the primary. */}
+                          <span
+                            className={clsx('block truncate text-caption', active ? 'text-primary' : 'text-secondary')}
+                          >
+                            {person.organisation || person.emails[0]?.addr || ''}
+                          </span>
                         </span>
                       </button>
-                      <Button variant="ghost" size="sm" onClick={() => void unlinkPerson(copy.id)}>
-                        {t('people.unlink', { defaultValue: 'Unlink' })}
-                      </Button>
                     </li>
-                  ))}
-                </ul>
-              </section>
+                  )
+                })}
+              </ul>
             )}
-          </>
-        ) : (
-          <div className="flex flex-1 items-center justify-center">
-            <EmptyState title={t('people.pickSomeone')} text={t('people.pickSomeoneText')} />
           </div>
-        )}
-      </section>
-      <PersonEditor />
-      <VcfImportDialog />
-      <DuplicatesDialog />
-      <GroupDialog />
-    </div>
+        </section>
+
+        <section
+          ref={detailRef}
+          tabIndex={-1}
+          aria-label={selected ? names.format(selected) : undefined}
+          className={clsx(
+            'min-h-0 min-w-0 flex-1 flex-col overflow-y-auto min-[769px]:flex',
+            selected ? 'flex' : 'hidden',
+          )}
+        >
+          {selected ? (
+            <>
+              <div className="shrink-0 border-b border-border bg-header px-4 py-3 min-[769px]:hidden">
+                <button
+                  type="button"
+                  onClick={() => {
+                    focusNavigation.current = true
+                    people$.selectedId.set('')
+                  }}
+                  className="inline-flex min-h-8 items-center gap-2 rounded-control-sm px-2 text-ui font-semibold text-secondary hover:bg-hover cursor-pointer"
+                >
+                  <ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" />
+                  {t('buttons.back')}
+                </button>
+              </div>
+              <PersonCard
+                person={selected}
+                displayName={names.format(selected)}
+                groups={groups}
+                onWrite={(addr) => writeTo(selected, addr)}
+                onCopy={copy}
+                onEdit={() =>
+                  people$.editing.set({
+                    id: selected.id,
+                    version: selected.version,
+                    serverBook:
+                      selected.source === 'carddav' || selected.source === 'exchange' ? selected.book : undefined,
+                    draft: draftOf(selected),
+                  })
+                }
+                onDelete={() => void removePerson(selected)}
+              />
+              {copies.length > 1 && (
+                <section className="mx-auto w-full max-w-2xl px-4 pb-6 min-[769px]:px-6">
+                  <h2 className="mb-2 text-caption font-bold uppercase tracking-wide text-secondary">
+                    {t('people.linkedCopies', { defaultValue: 'Linked copies' })}
+                  </h2>
+                  <ul className="overflow-hidden rounded-control border border-border">
+                    {copies.map((copy) => (
+                      <li
+                        key={copy.id}
+                        className="flex flex-wrap items-center gap-2 border-b border-border bg-chats px-3 py-2 last:border-b-0"
+                      >
+                        <button
+                          type="button"
+                          aria-current={copy.id === selected.id}
+                          onClick={() => people$.selectedId.set(copy.id)}
+                          className="min-w-0 flex-1 text-start text-ui text-primary cursor-pointer"
+                        >
+                          {names.format(copy)}{' '}
+                          <span className="text-caption text-secondary">
+                            · {t(`people.source.${sourceLabel(copy.source)}`)}
+                          </span>
+                        </button>
+                        <Button variant="ghost" size="sm" onClick={() => void unlinkPerson(copy.id)}>
+                          {t('people.unlink', { defaultValue: 'Unlink' })}
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </>
+          ) : (
+            <div className="flex flex-1 items-center justify-center">
+              <EmptyState title={t('people.pickSomeone')} text={t('people.pickSomeoneText')} />
+            </div>
+          )}
+        </section>
+        <PersonEditor />
+        <VcfImportDialog />
+        <DuplicatesDialog />
+        <GroupDialog />
+      </div>
+    </>
   )
 }
 
@@ -641,7 +674,10 @@ function PersonCard({
       {person.note && (
         <section className="mt-6">
           <h2 className="mb-2 text-caption font-bold uppercase tracking-wide text-secondary">{t('people.note')}</h2>
-          <p dir="auto" className="bidi-plaintext whitespace-pre-wrap wrap-anywhere text-ui leading-relaxed text-primary">
+          <p
+            dir="auto"
+            className="bidi-plaintext whitespace-pre-wrap wrap-anywhere text-ui leading-relaxed text-primary"
+          >
             {person.note}
           </p>
         </section>
