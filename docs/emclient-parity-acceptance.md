@@ -194,6 +194,17 @@ de regions i d'axe es mantenen, i se n'hi afegeixen de noves: la llista i la not
 1440 px sense desplaçament horitzontal, l'amplada compartida, les etiquetes a la subfinestra, la
 paperera i l'àrab. NOTE-01 es manté `partial` (falta la sincronització de notes amb proveïdors) i
 l'evidència nativa de Windows continua pendent.
+El 2026-10-22 (#337, pas 2 d'ADR-0068, `docs/design/mail-navigation.md`) la columna de converses
+del xat (SET-21) va passar a ser la subfinestra de carpetes comuna a partir de 1025 px, amb el
+mateix contingut i el mateix ordre (el compte, el teu estat, «Xateja amb», els grups, les
+invitacions, les converses directes i «Elimina aquest compte de xat»). Fa servir l'amplada del
+correu, del Calendari, de Persones, de Tasques i de Notes (`folder_pane_width`, en px) i és la
+regió d'F6 «Converses», que en cap idioma no coincideix amb la de `<main>` ni amb les altres
+regions. Per sota de 1025 px es conserva la columna d'abans. Les proves del xat, de límits, de
+dreta a esquerra, de regions i d'axe es mantenen, i se n'hi afegeixen de noves: la conversa a
+1025, 1100 i 1440 px sense desplaçament horitzontal, l'amplada compartida, la columna a 1024 px,
+l'àrab i el recorregut d'F6. SET-21 es manté `partial` (falten l'absència automàtica, #265, i
+l'evidència nativa de Windows).
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per

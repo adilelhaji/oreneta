@@ -1387,6 +1387,14 @@
           {
             "sha": "3bd15c9cd50f1905f512441d2647a828b3a85c51",
             "result": "frontend/src/components/messaging/MessagingView.test.tsx"
+          },
+          {
+            "sha": "3991bddecde7d7624adcee93b766467ae395598b",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "3991bddecde7d7624adcee93b766467ae395598b",
+            "result": "frontend/src/components/messaging/MessagingFolderPane.test.tsx"
           }
         ],
         "native": [],

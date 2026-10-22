@@ -32,7 +32,7 @@ mòdul.
 | Subfinestra de carpetes de Persones (`FolderPane`, des de #326): els grups; per sota de 1025 px, el filtre de grups d'abans, sota la capçalera de la llista | `<nav>` | «Grups de contactes» | `folders` |
 | Subfinestra de carpetes de Tasques (`FolderPane`, des de #329): les llistes; per sota de 1025 px, les pestanyes d'abans, sota la capçalera | `<nav>` | «Llistes de tasques» | `folders` |
 | Subfinestra de carpetes de Notes (`FolderPane`, des de #335): les etiquetes; per sota de 1025 px, els botons d'etiqueta d'abans, sobre la llista de notes | `<nav>` | «Etiquetes de notes» | `folders` |
-| Columna esquerra de Xat | la d'avui | la d'avui | `folders` |
+| Subfinestra de carpetes de Xat (`FolderPane`, des de #337): les converses; per sota de 1025 px, la columna d'abans | `<nav>` | «Converses» | `folders` |
 | Mòdul | `<main>` | el del mòdul: «Correu», «Calendari», «Persones», «Tasques», «Notes», «Xat», «Adjunts» | — |
 | Llista de converses o tauler; als altres mòduls, el mòdul sencer | la d'avui | — | `content` |
 | Lector | `[data-message-pane]` | — | `reader` |
@@ -57,7 +57,7 @@ mòdul.
   subfinestra de carpetes comuna va substituir «Comptes i carpetes» al correu,
   amb el mateix nom i la mateixa regió, i a partir de 1025 px també la columna
   de calendaris del Calendari (#323), els grups de Persones (#326), les llistes
-  de Tasques (#329) i les etiquetes de Notes (#335). Les proves que hi arriben
+  de Tasques (#329), les etiquetes de Notes (#335) i les converses de Xat (#337). Les proves que hi arriben
   amb `main > aside` canvien al pas 4 (ADR-0068 §8), quan la barra passa a ser
   el `<nav>` «Mòduls» d'ADR-0068 §1.
 - La barra vertical té nom perquè no hi hagi dues regions complementàries sense
@@ -76,7 +76,12 @@ mòdul.
   «carpetes» a partir de 1025 px: ho és la subfinestra de #335, que es diu
   «Etiquetes de notes» (`notes.tagsPane`), diferent de `<main>` («Notes») i de
   la resta de noms de regió en els 20 catàlegs, com comprova una prova. Per sota
-  de 1025 px la columna conserva la regió i el nom d'abans.
+  de 1025 px la columna conserva la regió i el nom d'abans. A Xat passa el mateix:
+  la columna de converses, que ja es deia «Converses» (`messaging.conversations`),
+  és la subfinestra de #337 a partir de 1025 px i conserva el nom, que és
+  diferent de `<main>` («Xat») i de la resta de noms de regió i de llista de Xat
+  («Grups», «Converses directes», «Invitacions») en els 20 catàlegs, com comprova
+  una prova; per sota de 1025 px és la columna d'abans.
 - L'avís d'actualització és una regió que té per nom el mateix text de l'avís,
   perquè no quedi contingut fora de cap regió. Encara no té cap prova
   automàtica: les proves arrenquen sense cap actualització disponible.
@@ -132,7 +137,7 @@ mòdul.
 | N2 (`HtmlFrame.test.tsx`) | El marc reenvia F1–F12, amb Maj o sense, i no una lletra |
 | N1 (`states/uiModule.test.ts`) | Els set mòduls; el botó de la barra vertical obre el mòdul i, si ja és obert, torna al correu; mai dos mòduls alhora |
 | N2 (proves dels mòduls) | `ui$.module` en lloc dels sis booleans |
-| e2e (`startup.e2e.ts`, «#306») | A 1440 px, en anglès, català i àrab: un sol `<main>` amb el nom del mòdul, la barra vertical «Mòduls» i F6 / Maj+F6 en el mateix ordre, fins a tornar a la fila de la llista. Des d'un camp de text, des del missatge HTML i amb un diàleg modal obert; un avís emergent (toast) i el diàleg fora de `<main>`. Al calendari, a Persones, a Tasques i a Notes, F6 va del mòdul a la seva columna (des de #323, #326, #329 i #335, a la subfinestra de carpetes) i torna a la barra vertical. Una reassignació a una lletra. A 600 px, només les regions que es veuen; al 200 % de l'aplicació, el mateix ordre sense desplaçament horitzontal. Les regles de regions d'axe (`region`, `landmark-unique`, `landmark-one-main`) no troben res a la bústia ni a cap mòdul |
+| e2e (`startup.e2e.ts`, «#306») | A 1440 px, en anglès, català i àrab: un sol `<main>` amb el nom del mòdul, la barra vertical «Mòduls» i F6 / Maj+F6 en el mateix ordre, fins a tornar a la fila de la llista. Des d'un camp de text, des del missatge HTML i amb un diàleg modal obert; un avís emergent (toast) i el diàleg fora de `<main>`. Al calendari, a Persones, a Tasques, a Notes i a Xat, F6 va del mòdul a la seva columna (des de #323, #326, #329, #335 i #337, a la subfinestra de carpetes) i torna a la barra vertical. Una reassignació a una lletra. A 600 px, només les regions que es veuen; al 200 % de l'aplicació, el mateix ordre sense desplaçament horitzontal. Les regles de regions d'axe (`region`, `landmark-unique`, `landmark-one-main`) no troben res a la bústia ni a cap mòdul |
 
 Les proves de límits, de zoom, de dreta a esquerra i les auditories axe que ja
 hi havia no canvien: aquest pas no mou res de lloc.
