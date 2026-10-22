@@ -293,18 +293,26 @@ export function focusGlobalSearch() {
   ui$.globalSearchFocus.set(ui$.globalSearchFocus.peek() + 1)
 }
 
-// Show a transient toast for ~2.2s. Clears only if it's still showing this
-// message, so a newer toast isn't cut short. Pass tone "error" for failures.
+// Each toast takes the next number, and its timer clears only that toast. A
+// newer toast, even with the same text, is never cut short by an older timer
+// (#321).
+let toastSeq = 0
+
+function clearToastAfter(ms: number) {
+  const seq = ++toastSeq
+  setTimeout(() => {
+    if (toastSeq !== seq) return
+    ui$.toast.set('')
+    ui$.toastUndo.set(null)
+  }, ms)
+}
+
+// Show a transient toast for ~2.2s. Pass tone "error" for failures.
 export function showToast(msg: string, tone: ToastTone = 'success') {
   ui$.toastUndo.set(null)
   ui$.toastTone.set(tone)
   ui$.toast.set(msg)
-  setTimeout(() => {
-    if (ui$.toast.get() === msg) {
-      ui$.toast.set('')
-      ui$.toastUndo.set(null)
-    }
-  }, 2200)
+  clearToastAfter(2200)
 }
 
 // Like showToast but pairs the message with an Undo affordance. Given a longer
@@ -313,17 +321,14 @@ export function showUndoToast(msg: string, undo: () => void) {
   ui$.toastTone.set('success')
   ui$.toast.set(msg)
   ui$.toastUndo.set(() => undo)
-  setTimeout(() => {
-    if (ui$.toast.get() === msg) {
-      ui$.toast.set('')
-      ui$.toastUndo.set(null)
-    }
-  }, 5000)
+  clearToastAfter(5000)
 }
 
 // Run the pending undo (if any) and dismiss the toast.
 export function runToastUndo() {
   const undo = ui$.toastUndo.peek() as (() => void) | null
+  // Retire the pending timer with the toast it belonged to.
+  toastSeq++
   ui$.toast.set('')
   ui$.toastUndo.set(null)
   undo?.()

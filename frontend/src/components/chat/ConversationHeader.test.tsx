@@ -102,8 +102,8 @@ afterEach(() => {
   ui$.selectedFolder.set(previousState.selectedFolder)
   mail$.foldersByAccount.set(previousState.foldersByAccount)
   mail$.folders.set(previousState.folders)
-  // Pending toast timers compare the text: a cleared toast cannot cut short
-  // the next test's.
+  // Reset what is on screen; a pending timer from this test cannot clear the
+  // next test's toast, whatever its text (#321).
   ui$.toast.set('')
   ui$.toastUndo.set(null)
   ;(window as any).go = previousGo
