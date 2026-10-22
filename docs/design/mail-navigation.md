@@ -114,7 +114,7 @@ Data: 2026-10-21. Pas 2 de l'ordre de migració
 d'[ADR-0068](../adr/0068-marc-comu-de-l-aplicacio.md) (§4, §7 i §9), primer al
 correu; els altres mòduls hi entren després, un per PR. El Calendari hi va entrar
 el 2026-10-22 ([més avall](#calendari-323)), i Persones el mateix dia
-([més avall](#persones-326)).
+([més avall](#persones-326)); Tasques hi va entrar després ([més avall](#tasques-329)).
 
 - **Què és:** un sol component, `frontend/src/components/shell/FolderPane.tsx`,
   amb una fila de títol de 40 px al 100 % (2,5 rem, de manera que creix amb el
@@ -321,3 +321,62 @@ que el filtre d'abans (ADR-0068 §4, fila de Persones).
   amb axe; el 200 % a 1440 i 1025 px). El recorregut d'F6 de #306 hi afegeix
   Persones, i la prova de SET-19 (grups i noms de contacte) tria el grup a la
   subfinestra a 1440 px, perquè el desplegable només és per sota de 1025 px.
+
+### Tasques (#329)
+
+Data: 2026-10-22. El quart mòdul del pas 2: les llistes de tasques, que fins ara
+eren pestanyes sota la capçalera, passen a ser la subfinestra de carpetes comuna
+(ADR-0068 §4, fila de Tasques: «Canvi de lloc»).
+
+- **Cos:** «Totes» i cada llista, amb el mateix ordre i els mateixos recomptes
+  que les pestanyes (les tasques obertes; «Totes» i una llista sense cap de
+  oberta no en mostren): la llista de seguiment del correu, les locals, les
+  CalDAV i les que arriben amb un compte (ADR-0070, #281). La fila triada té
+  `aria-current="true"`. El nom que no hi cap acaba en «…»; la indicació el
+  mostra sencer amb el recompte, per exemple «Home (2)» (`tasks.listOption`), i
+  és també el nom accessible del botó. Triar una llista filtra les tasques com
+  la pestanya, i la tria es manté en passar de 1024 a 1025 px i a l'inrevés.
+- **Accions:** a dalt, com a Persones, «Llista nova» (que demana el nom en lloc,
+  com abans), «Llista de tasques CalDAV…» (que obre el mateix diàleg) i, amb una
+  llista triada que no sigui la del correu, canviar-li el nom i suprimir-la; com que
+  la fila és sobre la llista, aquestes dues diuen quina llista afecten amb el nom
+  accessible i la indicació: «Canvia el nom de Home» (`tasks.renameListNamed`) i
+  «Suprimeix Home» (`tasks.deleteListNamed`). Les confirmacions de suprimir, també
+  les de les llistes d'un compte i les de CalDAV («no se suprimeix res al servidor»),
+  no canvien. «Afegeix una llista», per a les llistes de compte que s'han declinat
+  (ADR-0070), és a sota de la llista i s'obre dins la subfinestra, no com a menú
+  flotant, que la vora de la subfinestra tallaria.
+- **Què queda al mòdul:** els avisos de les llistes de compte (les que s'estan
+  llegint, les que no s'han pogut llegir, i l'avís d'una llista afegida en actualitzar), l'estat de
+  sincronització d'una llista amb servidor i els conflictes no són llistes, i
+  continuen sobre les tasques, com abans. També la capçalera (títol, «Mostra les
+  completades», «Tasca nova») i la cerca. Tasques no té filtres d'estat més enllà
+  de «Mostra les completades», ni reordenar llistes, ni arrossegar i deixar anar,
+  ni menús contextuals a les pestanyes, de manera que no se n'ha hagut de moure
+  cap.
+- **Regió i nom:** la subfinestra és la regió «carpetes» d'F6 de Tasques i es diu
+  «Llistes de tasques» (`tasks.taskLists`), una cadena pròpia de l'escriptori i
+  diferent de `<main>` («Tasques») en els 20 catàlegs, com comprova una prova.
+  Abans Tasques no tenia cap regió «carpetes». F6 va de la barra vertical al mòdul,
+  a la subfinestra i altre cop a la barra.
+- **Amplada:** la mateixa preferència `folder_pane_width` i el mateix separador
+  que al correu, al Calendari i a Persones, en px. Com al Calendari, el mòdul no té
+  una llista i una fitxa de mides fixes, sinó una sola columna de tasques que s'adapta, de manera que no
+  demana cap base i la subfinestra es pinta sempre a l'amplada triada (de 200 a
+  400 px); les tasques ocupen la resta, amb les capçaleres que passen a una línia
+  nova si no hi caben.
+- **Per sota de 1025 px** la subfinestra no es mostra i es conserven les
+  pestanyes d'abans, amb «Llista nova», «Llista de tasques CalDAV…», «Afegeix una llista», «Canvia el nom de la llista»
+  i «Suprimeix la llista», com va decidir el propietari per al Calendari i
+  Persones. Mai no són a dos llocs alhora.
+- **Proves:** `frontend/src/components/tasks/TasksFolderPane.test.tsx` (la
+  subfinestra al costat del mòdul i amb el seu nom, diferent del de `<main>` en
+  tots els catàlegs; les llistes amb el recompte, la indicació i el nom accessible;
+  triar, crear, canviar el nom i suprimir; el diàleg CalDAV; «Afegeix una llista» i
+  els avisos que es queden al mòdul; l'amplada compartida amb el correu; les
+  pestanyes a 1024 px i el pas d'un lloc a l'altre) i
+  `frontend/e2e/startup.e2e.ts` («#329»: les tasques a 1025, 1100 i 1440 px amb la
+  subfinestra a 200, 260 i 400 px, sense desplaçament horitzontal; les pestanyes a
+  1024 px; triar, canviar el nom, suprimir i crear una llista; l'amplada desada des
+  de Tasques i des del correu amb el teclat, el punter i un reinici; l'àrab, amb axe;
+  el 200 % a 1440 i 1025 px). El recorregut d'F6 de #306 hi afegeix Tasques.

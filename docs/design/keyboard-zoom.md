@@ -49,7 +49,9 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
     columna de 12 rem d'abans, i els dies del calendari petit s'encongeixen fins
     a cabre-hi. A Persones (#326), a partir de 1025 px els grups són a la
     subfinestra, i la columna de la llista és de 288 px, no de 18 rem, perquè al
-    200 % la persona no es quedi sense lloc;
+    200 % la persona no es quedi sense lloc. A Tasques (#329), a partir de 1025 px
+    les llistes són a la subfinestra, i les tasques ocupen tot l'espai que la
+    barra vertical i la subfinestra deixen;
   - el llindar de la cerca a la conversa (900 px), que va coordinat amb la
     barra mòbil i amb un `matchMedia`.
 
