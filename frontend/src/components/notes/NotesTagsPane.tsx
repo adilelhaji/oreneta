@@ -1,6 +1,6 @@
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
-import { handleGroupArrowKeys } from '../../lib/direction'
+import { elementDirection, groupIndexForKey } from '../../lib/direction'
 import { clsx } from '../../lib/utils'
 import { notes$ } from '../../states/notes'
 
@@ -41,9 +41,22 @@ export function NotesTagsPane() {
       // Up and Down move between the rows in reading order and choose them, as
       // the arrows did in the other modules' panes (ADR-0061); Home and End go
       // to the ends. The keys are taken here: let through, the window's list
-      // navigation would step the mail thread list as well.
+      // navigation would step the mail thread list as well. An arrow chooses
+      // the row it lands on rather than clicking it, since a click on the tag
+      // that is already chosen clears it.
       onKeyDown={(event) => {
-        if (handleGroupArrowKeys(event, '[data-tag-row]', 'vertical')) event.stopPropagation()
+        if (event.altKey || event.ctrlKey || event.metaKey) return
+        const rows = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[data-tag-row]')]
+        const current =
+          event.target instanceof Element ? event.target.closest<HTMLButtonElement>('[data-tag-row]') : null
+        const index = current ? rows.indexOf(current) : -1
+        const next = groupIndexForKey(event.key, index, rows.length, elementDirection(event.currentTarget), 'vertical')
+        if (next === null) return
+        event.preventDefault()
+        event.stopPropagation()
+        rows[next].focus()
+        // Focus that was not on a row yet only arrives; it picks nothing.
+        if (index >= 0) notes$.tag.set(rows[next].dataset.tagRow ?? '')
       }}
     >
       <li>

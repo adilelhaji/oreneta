@@ -70,7 +70,12 @@ export function parseTags(text: string): string[] {
   return out
 }
 
+// Each load's reply may come back after a later one's (the core answers each
+// request on its own task); only the latest load may fill the list.
+let loadSeq = 0
+
 export async function loadNotes() {
+  const seq = ++loadSeq
   try {
     // The trash is not filtered by tag (#335): the tags are not offered there,
     // so a tag chosen before is kept for the way back and not applied.
@@ -80,9 +85,18 @@ export async function loadNotes() {
       tag: trash ? '' : notes$.tag.peek(),
       trash,
     })
+    if (seq !== loadSeq) return
+    const tags = res?.tags ?? []
     notes$.items.set(res?.notes ?? [])
-    notes$.tags.set(res?.tags ?? [])
+    notes$.tags.set(tags)
+    // A chosen tag that no note carries any more (its last note was edited or
+    // trashed) would leave the list empty with no row to clear it from: drop
+    // it, which loads every note again. The tags are counted over all notes,
+    // whatever the search, so this only happens when the tag is really gone.
+    const chosen = notes$.tag.peek()
+    if (!trash && chosen && !tags.some((entry) => entry.tag === chosen)) notes$.tag.set('')
   } catch {
+    if (seq !== loadSeq) return
     showToast(t('notes.couldNotLoad', { defaultValue: 'Could not load notes' }), 'error')
   } finally {
     notes$.loaded.set(true)

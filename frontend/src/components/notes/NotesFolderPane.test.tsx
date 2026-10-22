@@ -5,7 +5,7 @@ mock.module('../../boot', () => ({ boot: async () => {} }))
 
 const { default: i18n } = await import('../../lib/i18n')
 const { settings$ } = await import('../../states/settings')
-const { notes$ } = await import('../../states/notes')
+const { loadNotes, notes$ } = await import('../../states/notes')
 const { ui$ } = await import('../../states/ui')
 const { AppHotkeys } = await import('../dialog/AppHotkeys')
 const { mail$ } = await import('../../states/mail')
@@ -187,6 +187,65 @@ describe('Notes in the common folder pane (ADR-0068 §4, #335)', () => {
     expect(notes$.tag.peek()).toBe('')
   })
 
+  it('keeps the chosen tag when an arrow lands on it: only a press clears it', async () => {
+    const screen = render(<NotesView />)
+    await ready(screen)
+    const nav = within(pane(screen))
+    const ideas = nav.getByRole('button', { name: '#ideas (1)' })
+    fireEvent.click(ideas)
+    expect(notes$.tag.peek()).toBe('ideas')
+    // From "All notes" (where F6 lands) down to the chosen row and on to the end.
+    const all = nav.getByTitle('All notes')
+    all.focus()
+    fireEvent.keyDown(all, { key: 'End' })
+    expect(document.activeElement).toBe(ideas)
+    expect(notes$.tag.peek()).toBe('ideas')
+    fireEvent.keyDown(ideas, { key: 'End' })
+    expect(notes$.tag.peek()).toBe('ideas')
+    fireEvent.keyDown(ideas, { key: 'ArrowUp' })
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(ideas)
+    expect(notes$.tag.peek()).toBe('ideas')
+    expect(ideas.getAttribute('aria-current')).toBe('true')
+  })
+
+  it('drops a chosen tag that no note carries any more', async () => {
+    const screen = render(<NotesView />)
+    await ready(screen)
+    fireEvent.click(within(pane(screen)).getByRole('button', { name: '#cooking (1)' }))
+    await waitFor(() => expect(shown(screen)).toEqual(['Pasta']))
+    // Its last note goes to the trash: the core stops listing the tag.
+    const gone = tagCounts.findIndex((entry) => entry.tag === 'cooking')
+    const [cooking] = tagCounts.splice(gone, 1)
+    try {
+      await act(() => loadNotes())
+      expect(notes$.tag.peek()).toBe('')
+      await waitFor(() => expect(shown(screen)).toHaveLength(3))
+      expect(within(pane(screen)).getByTitle('All notes').getAttribute('aria-current')).toBe('true')
+    } finally {
+      tagCounts.splice(gone, 0, cooking)
+    }
+  })
+
+  it('fills the list from the latest load only, whatever order the replies come in', async () => {
+    const replies: ((value: unknown) => void)[] = []
+    ;(window as any).go.main.App.Invoke = (command: string, payload: any) =>
+      command === 'notes.list'
+        ? new Promise((resolve) =>
+            replies.push(() => resolve({ notes: [summary(payload.tag, payload.tag, [])], tags: tagCounts })),
+          )
+        : Promise.resolve({ ok: true })
+    notes$.tag.set('travel')
+    const first = loadNotes()
+    notes$.tag.set('ideas')
+    const second = loadNotes()
+    replies[1](undefined)
+    await second
+    replies[0](undefined)
+    await first
+    expect(notes$.items.peek().map((note) => note.id)).toEqual(['ideas'])
+  })
+
   it('takes the arrow keys: the mail thread list behind does not step with them', async () => {
     const thread = (id: string) => ({ thread_id: id, id }) as never
     mail$.threads.set([thread('t1'), thread('t2')])
@@ -277,6 +336,7 @@ describe('the name of Notes\'s "folders" region (ADR-0068 §1, #335)', () => {
       'notes.editorLabel',
       'notes.tags',
       'messaging.title',
+      'messaging.conversations',
       'attachmentsView.title',
     ]
     const clashes = supportedI18nLanguages.flatMap((language) => {
