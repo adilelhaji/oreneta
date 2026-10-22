@@ -186,7 +186,7 @@ El 2026-10-22 (#335, pas 2 d'ADR-0068, `docs/design/mail-navigation.md`) les eti
 (NOTE-01), que eren botons sobre la llista de notes, van passar a ser la subfinestra de carpetes
 comuna a partir de 1025 px: «Totes les notes» i cada etiqueta amb el mateix ordre i els mateixos
 recomptes, triar-ne una filtra la llista i tornar-la a triar treu el filtre. A la paperera no
-s'ofereixen etiquetes i la subfinestra ho diu. Fa servir l'amplada del correu, del Calendari, de
+s'ofereixen etiquetes i la subfinestra ho diu. La subfinestra fa servir l'amplada del correu, del Calendari, de
 Persones i de Tasques (`folder_pane_width`, en px). És la regió d'F6 «Etiquetes de notes», que en
 cap idioma no coincideix amb la de `<main>` ni amb les altres regions. Per sota de 1025 px es
 conserven els botons d'abans. Les proves automàtiques de notes, de límits, de dreta a esquerra,

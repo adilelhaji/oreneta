@@ -419,10 +419,10 @@ carpetes comuna (ADR-0068 §4, fila de Notes).
 - **Cos:** «Totes les notes» i cada etiqueta amb quantes notes té, en el mateix
   ordre i amb els mateixos recomptes que els botons d'abans (els que respon el
   nucli). «Totes les notes» (`notes.allNotes`) treu el filtre. Triar una etiqueta
-  posa `notes$.tag`, i triar-ne la que ja és triada el treu, com el botó. La fila
-  triada té `aria-current="true"`. El nom que no hi cap acaba en «…»; la indicació
-  el mostra sencer amb el recompte, per exemple «#viatge (2)» (`notes.tagOption`),
-  i és també el nom accessible del botó. La tria es manté en passar de 1024 a
+  posa `notes$.tag`, i tornar a triar l'etiqueta ja triada treu el filtre, com el
+  botó. La fila triada té `aria-current="true"`. El nom que no hi cap acaba en
+  «…»; la indicació el mostra sencer amb el recompte, per exemple «#viatge (2)»
+  (`notes.tagOption`), i és el nom accessible del botó. La tria es manté en passar de 1024 a
   1025 px i a l'inrevés.
 - **Teclat:** com a Tasques, les files es mouen amb Amunt, Avall, Inici i Final
   (`handleGroupArrowKeys`, orientació vertical, ADR-0061), trien l'etiqueta en

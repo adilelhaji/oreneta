@@ -31,7 +31,7 @@ mòdul.
 | Subfinestra de carpetes del Calendari (`FolderPane`, des de #323); per sota de 1025 px, la columna d'abans | `<nav>` | «Calendaris» | `folders` |
 | Subfinestra de carpetes de Persones (`FolderPane`, des de #326): els grups; per sota de 1025 px, el filtre de grups d'abans, sota la capçalera de la llista | `<nav>` | «Grups de contactes» | `folders` |
 | Subfinestra de carpetes de Tasques (`FolderPane`, des de #329): les llistes; per sota de 1025 px, les pestanyes d'abans, sota la capçalera | `<nav>` | «Llistes de tasques» | `folders` |
-| Subfinestra de carpetes de Notes (`FolderPane`, des de #335): les etiquetes; per sota de 1025 px, les etiquetes d'abans, sobre la llista de notes | `<nav>` | «Etiquetes de notes» | `folders` |
+| Subfinestra de carpetes de Notes (`FolderPane`, des de #335): les etiquetes; per sota de 1025 px, els botons d'etiqueta d'abans, sobre la llista de notes | `<nav>` | «Etiquetes de notes» | `folders` |
 | Columna esquerra de Xat | la d'avui | la d'avui | `folders` |
 | Mòdul | `<main>` | el del mòdul: «Correu», «Calendari», «Persones», «Tasques», «Notes», «Xat», «Adjunts» | — |
 | Llista de converses o tauler; als altres mòduls, el mòdul sencer | la d'avui | — | `content` |
@@ -57,9 +57,9 @@ mòdul.
   subfinestra de carpetes comuna va substituir «Comptes i carpetes» al correu,
   amb el mateix nom i la mateixa regió, i a partir de 1025 px també la columna
   de calendaris del Calendari (#323), els grups de Persones (#326), les llistes
-  de Tasques (#329) i les etiquetes de Notes (#335). Les proves que hi arriben amb `main > aside` canvien al
-  pas 4 (ADR-0068 §8), quan la barra passa a ser el `<nav>` «Mòduls»
-  d'ADR-0068 §1.
+  de Tasques (#329) i les etiquetes de Notes (#335). Les proves que hi arriben
+  amb `main > aside` canvien al pas 4 (ADR-0068 §8), quan la barra passa a ser
+  el `<nav>` «Mòduls» d'ADR-0068 §1.
 - La barra vertical té nom perquè no hi hagi dues regions complementàries sense
   nom quan la barra lateral de detalls és oberta.
 - Fins al pas 2, la columna de Notes té el mateix nom que `<main>` («Notes»).
