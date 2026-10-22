@@ -11,6 +11,13 @@ import { FolderPaneResizer } from '../resizer/PaneResizers'
 // below its own minimum at all (ADR-0068 §7, ADR-0059).
 const GIVES_WAY_FIRST = 1000
 
+/**
+ * The narrowest window, in CSS px, that draws the pane: the `min-[1025px]`
+ * below. A module that keeps its own column at 1024 px and below (Calendar)
+ * reads it to put its folders in one place or the other.
+ */
+export const FOLDER_PANE_MIN_WINDOW = 1025
+
 interface FolderPaneProps {
   /** Shown in the 40 px title row, and the pane's accessible name. */
   title: string

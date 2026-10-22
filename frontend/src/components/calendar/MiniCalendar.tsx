@@ -17,7 +17,11 @@ import type { CalendarDrop } from '../../states/calendarMove'
 /// A month at a glance beside the calendar (#266): a day opens it in the view
 /// on screen, and an event dragged onto a day moves there keeping its time.
 /// It follows the day the calendar is on, and can be paged on its own.
-export function MiniCalendar() {
+///
+/// From 1025 px it is the footer of the common folder pane, which draws the
+/// divider above it (`inFooter`); below that, it heads the column beside the
+/// views and draws its own divider under it (ADR-0068 §4).
+export function MiniCalendar({ inFooter = false }: { inFooter?: boolean }) {
   const { t } = useTranslation()
   const anchorMs = useValue(calendar$.anchor)
   const view = useValue(calendar$.view)
@@ -57,7 +61,7 @@ export function MiniCalendar() {
     <nav
       aria-label={t('calendar.miniCalendar', { defaultValue: 'Month at a glance' })}
       data-mini-calendar
-      className="hidden shrink-0 border-b border-border px-2 pb-2 pt-3 min-[769px]:block"
+      className={`hidden shrink-0 px-2 pb-2 pt-3 min-[769px]:block ${inFooter ? '' : 'border-b border-border'}`}
     >
       <div className="mb-1 flex items-center gap-1 px-1">
         <p className="min-w-0 flex-1 truncate text-caption font-semibold text-primary">
@@ -90,7 +94,12 @@ export function MiniCalendar() {
           <MiniDay
             key={date.getTime()}
             date={date}
-            label={date.toLocaleDateString(language, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            label={date.toLocaleDateString(language, {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            })}
             inMonth={date.getMonth() === shown.getMonth()}
             today={date.getTime() === todayMs}
             selected={date.getTime() === startOfDay(anchor).getTime()}
@@ -128,7 +137,10 @@ function MiniDay({
       aria-current={today ? 'date' : undefined}
       aria-pressed={selected}
       onClick={() => onOpen(date)}
-      className={`mx-auto flex h-6 w-6 items-center justify-center rounded-full text-2xs tabular-nums transition-colors cursor-pointer ${
+      // At most 1.5 rem, as before, and no wider than its seventh of the
+      // month: the folder pane is in px, so at the app's 200 % the days
+      // shrink to fit it instead of running past its edge (ADR-0068 §7).
+      className={`mx-auto flex aspect-square w-full max-w-6 items-center justify-center rounded-full text-2xs tabular-nums transition-colors cursor-pointer ${
         isOver
           ? 'bg-accent text-on-accent ring-2 ring-accent/40'
           : today

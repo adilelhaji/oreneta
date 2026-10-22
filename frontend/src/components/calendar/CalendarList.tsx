@@ -21,6 +21,10 @@ import {
 ///
 /// Grouped by account, because that is what decides where a calendar lives and
 /// how it syncs.
+///
+/// It is the body of the calendar's "folders" region, which names it: the
+/// common folder pane from 1025 px, the column beside the views below that
+/// (CalendarView, ADR-0068 §1 and §4). So it is not a landmark of its own.
 export function CalendarList() {
   const { t } = useTranslation()
   const calendars = useValue(calendar$.calendars)
@@ -40,13 +44,14 @@ export function CalendarList() {
   const key = (calendar: Calendar) => `${calendar.accountId}:${calendar.id}`
 
   return (
-    <aside
-      aria-label={t('calendar.title')}
-      className="flex max-h-40 w-full min-h-0 flex-col gap-3 overflow-y-auto border-b border-border px-3 py-3 min-[769px]:max-h-none min-[769px]:flex-1 min-[769px]:border-b-0"
-    >
+    <div className="flex max-h-40 w-full min-h-0 flex-col gap-3 overflow-y-auto border-b border-border px-3 py-3 min-[769px]:max-h-none min-[769px]:flex-1 min-[769px]:border-b-0">
       {groups.map(({ account, calendars }) => (
         <div key={account.id}>
-          <p className="mb-1.5 truncate px-1 text-2xs font-semibold uppercase tracking-wide text-secondary">
+          {/* It can end in "…" in a narrow pane: the tooltip has it whole (ADR-0068 §4). */}
+          <p
+            title={account.email}
+            className="mb-1.5 truncate px-1 text-2xs font-semibold uppercase tracking-wide text-secondary"
+          >
             {account.email}
           </p>
           <ul className="flex flex-col">
@@ -74,7 +79,14 @@ export function CalendarList() {
                     <button
                       type="button"
                       onClick={() => setPicking(open ? null : key(calendar))}
-                      title={t('calendar.color', { defaultValue: 'Colour' })}
+                      // The name can end in "…" in a narrow pane: the tooltip
+                      // has it whole, and what the button does (ADR-0068 §4).
+                      // Its accessible name stays the calendar's name.
+                      title={t('calendar.nameAndColor', {
+                        name: calendar.name,
+                        action: t('calendar.color', { defaultValue: 'Colour' }),
+                        defaultValue: '{name} — {action}',
+                      })}
                       aria-haspopup="menu"
                       aria-expanded={open}
                       className={`min-w-0 flex-1 truncate text-start text-xs transition-colors cursor-pointer ${
@@ -124,6 +136,6 @@ export function CalendarList() {
           </ul>
         </div>
       ))}
-    </aside>
+    </div>
   )
 }

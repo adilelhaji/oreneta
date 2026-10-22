@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { FolderPane } from './FolderPane'
+import { FOLDER_PANE_MIN_WINDOW, FolderPane } from './FolderPane'
 import { hydrateSettings, settings$ } from '../../states/settings'
 
 let writes: { key: string; value: unknown }[] = []
@@ -71,6 +71,12 @@ describe('common folder pane (ADR-0068 §4, #317)', () => {
     expect(nav.contains(screen.getByRole('button', { name: 'Inbox' }))).toBe(true)
     // Not drawn at 1024 px and below, where the list's folder switcher stands in.
     expect(nav.className.split(' ')).toEqual(expect.arrayContaining(['hidden', 'min-[1025px]:flex']))
+  })
+
+  it('draws itself from the window width it exports, which Calendar reads (#323)', () => {
+    const screen = render(<Pane />)
+    expect(FOLDER_PANE_MIN_WINDOW).toBe(1025)
+    expect(pane(screen).className.split(' ')).toContain(`min-[${FOLDER_PANE_MIN_WINDOW}px]:flex`)
   })
 
   it('keeps an optional footer, and the place for the module switcher at the very foot', () => {

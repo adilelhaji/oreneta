@@ -24,10 +24,14 @@ Les dreceres es descriuen al lector de pantalla (`calendar.timeSlotHint`,
 l'aplicació, que només recull les globals.
 
 El calendari mensual petit (`MiniCalendar.tsx`) és nou: no n'hi havia cap a
-l'escriptori. És a la columna lateral, damunt de la llista de calendaris, i
-només es mostra a partir de 769 px d'amplada. Un clic en un dia obre aquell dia a
-la visualització activa (des de l'agenda, a la de dia); els botons «Mes anterior»
-i «Mes següent» en canvien el mes sense moure el calendari.
+l'escriptori. Des de #323, a partir de 1025 px és al peu de la subfinestra de
+carpetes comuna, sota la llista de calendaris (ADR-0068 §4,
+[subfinestra de carpetes](mail-navigation.md#calendari-323)); entre 769 i 1024 px
+continua a la columna lateral, damunt de la llista, i per sota de 769 px no es
+mostra. Un clic en un dia obre aquell dia a la visualització activa (des de
+l'agenda, a la de dia); els botons «Mes anterior» i «Mes següent» en canvien el
+mes sense moure el calendari. Al 200 % de l'aplicació, a la subfinestra, que és
+en px, els dies s'encongeixen fins a cabre-hi.
 
 ## Decisions
 
@@ -116,7 +120,8 @@ i «Mes següent» en canvien el mes sense moure el calendari.
   per franja arrossegada, Esc, menú de franja i franja de teclat.
 - `e2e/startup.e2e.ts` («calendar drag, drop and create»), amb arrossegaments
   reals del punter a Chromium: moure, canviar l'inici i el final, Esc, deixar-lo
-  anar al calendari petit, rebuig de només lectura, pregunta de la sèrie, un
+  anar al calendari petit (a 1440 px, al peu de la subfinestra de carpetes,
+  #323), rebuig de només lectura, pregunta de la sèrie, un
   rebuig de `calendar.update` simulat com un conflicte, crear per franja, pel
   menú (també de tot el dia) i amb la franja de teclat, i el moviment amb
   teclat.

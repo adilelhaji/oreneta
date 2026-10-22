@@ -128,6 +128,14 @@
           {
             "sha": "846cbc5f994dda622376372f89de3bc00daba97b",
             "result": "frontend/src/components/shell/FolderPane.test.tsx"
+          },
+          {
+            "sha": "720cf68512151772097ad0640745b4153084e0f8",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "720cf68512151772097ad0640745b4153084e0f8",
+            "result": "frontend/src/components/calendar/CalendarFolderPane.test.tsx"
           }
         ],
         "native": [],
@@ -168,6 +176,10 @@
           },
           {
             "sha": "846cbc5f994dda622376372f89de3bc00daba97b",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "720cf68512151772097ad0640745b4153084e0f8",
             "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
@@ -1046,6 +1058,14 @@
           {
             "sha": "809d3404f1d97f1fa57f3936c596aa547ba0a443",
             "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "720cf68512151772097ad0640745b4153084e0f8",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "720cf68512151772097ad0640745b4153084e0f8",
+            "result": "frontend/src/components/calendar/CalendarFolderPane.test.tsx"
           }
         ],
         "native": [],
@@ -1577,6 +1597,10 @@
           {
             "sha": "846cbc5f994dda622376372f89de3bc00daba97b",
             "result": "frontend/src/components/shell/FolderPane.test.tsx"
+          },
+          {
+            "sha": "720cf68512151772097ad0640745b4153084e0f8",
+            "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
         "native": [],

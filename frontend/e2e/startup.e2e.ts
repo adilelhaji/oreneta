@@ -3381,6 +3381,8 @@ test.describe('calendar drag, drop and create', () => {
       const now = new Date()
       return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2).getTime()
     })
+    // At 1440 px the month at a glance is the folder pane's footer (#323).
+    await expect(page.getByRole('navigation', { name: 'Calendars', exact: true }).locator(`[data-mini-day="${target}"]`)).toBeVisible()
     await drag(page, await centre(planning), await centre(page.locator(`[data-mini-day="${target}"]`)))
     await expect.poll(async () => (await updates(page)).length).toBe(4)
     sent = (await updates(page))[3]
@@ -4647,8 +4649,8 @@ for (const language of ['en', 'ca', 'ar']) {
     const calendarButton = page.getByTitle(catalog['calendar.title'], { exact: true })
     await calendarButton.click()
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-    // A module's own left column is a region inside the module: from the
-    // rail, F6 goes to the module, then its column, then back to the rail.
+    // Calendar's calendars are the folder pane (#323), beside the module:
+    // from the rail, F6 goes to the module, then the pane, then back to the rail.
     await calendarButton.focus()
     expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'folders', 'modules'])
     await audit('calendar', catalog['calendar.title'])
@@ -4798,3 +4800,307 @@ test('in Arabic the folder pane sits between the rail and the list, and its sepa
   await expect(handle).toHaveAttribute('aria-valuenow', '212')
   expect(errors).toEqual([])
 })
+
+// #323: Calendar's calendars in the common folder pane (ADR-0068 §4): the
+// list is its body and the month at a glance its footer, at the one width
+// every module shares. At 1024 px and below the pane is not drawn, and they
+// keep their column beside the views.
+async function openCalendarPane(page: Page, options: SetupOptions = {}, catalog = enCatalog) {
+  const errors = await prepareStartup(page, true, { navigation: true, ...options })
+  await page.addInitScript(() => {
+    const replies = (window as any).startupProbe.replies
+    replies['calendar.list'] = {
+      calendars: [
+        { id: 'local-team', name: 'Team', is_default: true, enabled: true, kind: 'local', read_only: false, synced_at: 0 },
+        { id: 'holidays', name: 'Holidays', is_default: false, enabled: true, kind: 'subscribed', read_only: true, synced_at: 0 },
+      ],
+    }
+    replies['calendar.events'] = { events: [] }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await page.getByTitle(catalog['calendar.title'], { exact: true }).click()
+  await expect(page.getByRole('main', { name: catalog['calendar.title'], exact: true })).toBeVisible()
+  return errors
+}
+
+const boxOf = async (locator: ReturnType<Page['locator']>) => (await locator.boundingBox())!
+
+// Every day of the month at a glance, and every calendar row, inside the pane.
+async function insidePane(page: Page, pane: ReturnType<Page['locator']>) {
+  const box = await boxOf(pane)
+  const outside = await page.evaluate(
+    ({ left, right }) =>
+      [...document.querySelectorAll<HTMLElement>('[data-folder-pane] button')]
+        .map((element) => ({ label: element.getAttribute('aria-label') ?? element.textContent, box: element.getBoundingClientRect() }))
+        .filter(({ box }) => box.width > 0 && (box.left < left - 1 || box.right > right + 1))
+        .map(({ label }) => label),
+    { left: box.x, right: box.x + box.width },
+  )
+  expect(outside).toEqual([])
+}
+
+for (const [width, paneWidth] of [
+  [1025, 200],
+  [1025, 260],
+  [1025, 400],
+  [1100, 200],
+  [1100, 260],
+  [1440, 200],
+  [1440, 260],
+] as const) {
+  test(`Calendar's folder pane leaves the agenda, day, week and month whole at ${width}px, ${paneWidth}px wide (#323)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const errors = await openCalendarPane(page, { preferences: { folder_pane_width: paneWidth } })
+    const pane = page.getByRole('navigation', { name: 'Calendars', exact: true })
+    const content = page.locator('main > [data-region="content"]')
+    await expect(pane).toHaveAttribute('data-region', 'folders')
+    await expect(pane.getByRole('heading', { level: 2, name: 'Calendars' })).toBeVisible()
+    // The list is its body and the month at a glance its footer.
+    await expect(pane.getByRole('button', { name: 'Team', exact: true }).first()).toBeVisible()
+    const month = pane.getByRole('navigation', { name: 'Month at a glance' })
+    await expect(month).toBeVisible()
+    expect((await boxOf(month)).y).toBeGreaterThan((await boxOf(pane.getByRole('button', { name: 'Holidays', exact: true }).first())).y)
+    // Right after the rail, at the shared width, and the module right after it.
+    const rail = await boxOf(page.locator('main > aside').first())
+    const paneBox = await boxOf(pane)
+    expect(Math.abs(paneBox.x - (rail.x + rail.width))).toBeLessThanOrEqual(1)
+    expect(Math.abs(paneBox.width - paneWidth)).toBeLessThanOrEqual(1)
+    await expect(pane.getByRole('separator', { name: 'Resize folder pane' })).toHaveAttribute('aria-valuenow', String(paneWidth))
+    const contentBox = await boxOf(content)
+    expect(Math.abs(contentBox.x - (paneBox.x + paneBox.width))).toBeLessThanOrEqual(1)
+    expect(contentBox.x + contentBox.width).toBeLessThanOrEqual(width + 1)
+    // Today's column is gone from beside the views.
+    await expect(content.locator('[data-region="folders"]')).toHaveCount(0)
+
+    for (const view of ['Agenda', 'Day', 'Week', 'Month']) {
+      await page.getByRole('button', { name: view, exact: true }).click()
+      await expect(page.getByRole('button', { name: view, exact: true })).toHaveAttribute('aria-pressed', 'true')
+      await settled(page)
+      await ltrInView(page, `${view.toLowerCase()} at ${width}px, folders ${paneWidth}px`)
+      // Every control and day of the view inside the module, none under the pane.
+      const outside = await content.evaluate((region) => {
+        const { left, right } = region.getBoundingClientRect()
+        return [...region.querySelectorAll<HTMLElement>('button, [data-day-column]')]
+          .map((element) => ({ element, box: element.getBoundingClientRect() }))
+          .filter(({ box }) => box.width > 0 && (box.left < left - 1 || box.right > right + 1))
+          .map(({ element }) => element.getAttribute('aria-label') ?? element.textContent?.trim().slice(0, 40))
+      })
+      expect(outside, view).toEqual([])
+      const columns = ({ Agenda: 0, Day: 1, Week: 7 } as Record<string, number>)[view]
+      if (columns !== undefined) await expect(page.locator('[data-day-column]')).toHaveCount(columns)
+      await insidePane(page, pane)
+    }
+    expect(errors).toEqual([])
+  })
+}
+
+test('at 1024px Calendar keeps its column beside the views, and draws no folder pane (#323)', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 900 })
+  const errors = await openCalendarPane(page)
+  await expect(page.locator('[data-folder-pane]')).toHaveCount(0)
+  await expect(page.getByRole('separator', { name: 'Resize folder pane' })).toHaveCount(0)
+  const column = page.getByRole('navigation', { name: 'Calendars', exact: true })
+  await expect(column).toHaveAttribute('data-region', 'folders')
+  // Inside the module, under its header, and 12 rem wide as before.
+  await expect(page.locator('main > [data-region="content"] [data-region="folders"]')).toHaveCount(1)
+  expect(Math.round((await boxOf(column)).width)).toBe(192)
+  const month = column.getByRole('navigation', { name: 'Month at a glance' })
+  await expect(month).toBeVisible()
+  expect((await boxOf(month)).y).toBeLessThan((await boxOf(column.getByRole('button', { name: 'Team', exact: true }).first())).y)
+  await ltrInView(page, 'calendar at 1024px')
+  expect(errors).toEqual([])
+})
+
+test('the folder pane resized in Calendar is the width mail draws, and the reverse (#323)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await openCalendarPane(page)
+  const calendars = page.getByRole('navigation', { name: 'Calendars', exact: true })
+  const mail = page.getByRole('navigation', { name: 'Accounts and folders', exact: true })
+  const handleIn = (pane: ReturnType<Page['locator']>) => pane.getByRole('separator', { name: 'Resize folder pane' })
+  const drawn = async (pane: ReturnType<Page['locator']>) => Math.round((await boxOf(pane)).width)
+  const stored = () => page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}').folder_pane_width)
+  const calendarButton = page.getByTitle('Calendar', { exact: true })
+  await expect(handleIn(calendars)).toHaveAttribute('aria-valuenow', '260')
+
+  // The keyboard in Calendar: the widest it goes, kept for mail.
+  await handleIn(calendars).focus()
+  await page.keyboard.press('End')
+  await expect(handleIn(calendars)).toHaveAttribute('aria-valuenow', '400')
+  expect(await drawn(calendars)).toBe(400)
+  await expect.poll(stored).toBe(400)
+  await calendarButton.click()
+  await expect(mail).toBeVisible()
+  await expect(handleIn(mail)).toHaveAttribute('aria-valuenow', '400')
+  expect(await drawn(mail)).toBe(400)
+
+  // Narrowed in mail, Calendar's is as narrow.
+  await handleIn(mail).focus()
+  await page.keyboard.press('Home')
+  await expect.poll(stored).toBe(200)
+  await calendarButton.click()
+  await expect(handleIn(calendars)).toHaveAttribute('aria-valuenow', '200')
+  expect(await drawn(calendars)).toBe(200)
+
+  // The pointer in Calendar: 60 px towards the end of the line.
+  const grip = await boxOf(handleIn(calendars))
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + 300)
+  await page.mouse.down()
+  await page.mouse.move(grip.x + grip.width / 2 + 60, grip.y + 300, { steps: 4 })
+  await page.mouse.up()
+  const dragged = Number(await handleIn(calendars).getAttribute('aria-valuenow'))
+  expect(Math.abs(dragged - 260)).toBeLessThanOrEqual(2)
+  expect(Math.abs((await boxOf(calendars)).width - dragged)).toBeLessThanOrEqual(1)
+  await expect.poll(stored).toBe(dragged)
+
+  // Kept across a restart, in both modules.
+  await page.reload()
+  await expect(handleIn(mail)).toHaveAttribute('aria-valuenow', String(dragged))
+  await calendarButton.click()
+  await expect(handleIn(calendars)).toHaveAttribute('aria-valuenow', String(dragged))
+  expect(errors).toEqual([])
+})
+
+test('in Arabic Calendar\'s folder pane sits between the rail and the views, and its separator follows the reading (#323)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await openCalendarPane(page, { language: 'ar' }, arCatalog)
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+  const pane = page.getByRole('navigation', { name: arCatalog['calendar.calendars'], exact: true })
+  await expect(pane).toBeVisible()
+  await expect(pane.getByRole('navigation', { name: arCatalog['calendar.miniCalendar'], exact: true })).toBeVisible()
+  const railBox = await boxOf(page.locator('main > aside').first())
+  const paneBox = await boxOf(pane)
+  const contentBox = await boxOf(page.locator('main > [data-region="content"]'))
+  expect(Math.abs(paneBox.x + paneBox.width - railBox.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(contentBox.x + contentBox.width - paneBox.x)).toBeLessThanOrEqual(1)
+  expect(contentBox.x).toBeGreaterThanOrEqual(-1)
+  // The separator is on the pane's end edge, on the left: ArrowLeft widens it,
+  // and the pane grows to the left with its start edge against the rail.
+  const handle = pane.getByRole('separator', { name: arCatalog['layout.resizeFolderPane'], exact: true })
+  const handleBox = await boxOf(handle)
+  expect(Math.abs(handleBox.x + handleBox.width / 2 - paneBox.x)).toBeLessThanOrEqual(1)
+  await handle.focus()
+  await page.keyboard.press('ArrowLeft')
+  await expect(handle).toHaveAttribute('aria-valuenow', '276')
+  const grown = await boxOf(pane)
+  expect(Math.round(grown.width)).toBe(276)
+  expect(Math.round(grown.x + grown.width)).toBe(Math.round(paneBox.x + paneBox.width))
+  await page.keyboard.press('Shift+ArrowRight')
+  await expect(handle).toHaveAttribute('aria-valuenow', '212')
+  await insidePane(page, pane)
+  await rtlInView(page, 'calendar folder pane')
+  // The #226 audits in Arabic run at 600 and 1024 px, where the pane is not
+  // drawn: this one reads it, with nothing critical or serious.
+  await settled(page)
+  const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+  const blocking = results.violations
+    .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+    .map((violation) => `${violation.id} (${violation.impact}) on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`)
+  expect(blocking).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// At the app's 200 % the pane keeps its px width (ADR-0068 §7): its text
+// grows, and the month at a glance shrinks its days to fit it.
+for (const width of [1440, 1025]) {
+  test(`Calendar's folder pane stays in px at the app's 200 %, everything in it inside it: ${width}px (#323)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 })
+    const errors = await openCalendarPane(page)
+    const pane = page.getByRole('navigation', { name: 'Calendars', exact: true })
+    await expect(pane).toBeVisible()
+    const before = Math.round((await boxOf(pane)).width)
+    expect(before).toBe(260)
+    const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+    for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
+    await expect(pane.getByRole('heading', { level: 2, name: 'Calendars' })).toBeVisible()
+    expect(Math.round((await boxOf(pane)).width)).toBe(before)
+    for (const view of ['Day', 'Week', 'Month']) {
+      await page.getByRole('button', { name: view, exact: true }).click()
+      await settled(page)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      // At 1025 px the week's seven days at 200 % need more than the module's
+      // 645 px, as they needed more than the 521 px the 12 rem column left
+      // them on c62e11ca: its last days are clipped, not scrolled, there and
+      // then. That is the week view's own, not the pane's.
+      if (width === 1440 || view !== 'Week') await ltrInView(page, `${view.toLowerCase()} at 200 %, ${width}px`)
+      await insidePane(page, pane)
+    }
+    // Each day of the month at a glance is a whole circle, no wider than its seventh.
+    const days = await pane.locator('[data-mini-day]').evaluateAll((elements) =>
+      elements.map((element) => {
+        const box = element.getBoundingClientRect()
+        return Math.abs(box.width - box.height) <= 1
+      }),
+    )
+    expect(days.length).toBe(42)
+    expect(days.every(Boolean)).toBe(true)
+    await page.keyboard.press(`${mod}+Digit0`)
+    expect(Math.round((await boxOf(pane)).width)).toBe(before)
+    expect(errors).toEqual([])
+  })
+}
+
+// What the column did, the pane does: a tick shows or hides a calendar, and
+// its name opens the colours. In the pane, the colour menu of the last
+// calendar opens whole, over the list's room, without scrolling it. At
+// 1024 px the column is as before, where the menu runs a few px past the
+// 12 rem column and its last swatch is cut, as on c62e11ca.
+for (const width of [1440, 1024]) {
+  test(`Calendar's calendars show, hide and change colour in ${width > 1024 ? 'the folder pane' : 'the column'} (#323)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const errors = await openCalendarPane(page)
+    await page.evaluate(() => {
+      const replies = (window as any).startupProbe.replies
+      replies['calendar.setEnabled'] = { ok: true }
+      replies['calendar.setColor'] = { ok: true }
+    })
+    const region = page.getByRole('navigation', { name: 'Calendars', exact: true })
+    await expect(page.locator('[data-folder-pane]')).toHaveCount(width > 1024 ? 1 : 0)
+    const requests = (command: string) =>
+      page.evaluate(
+        (name) => (window as any).startupProbe.requests.filter((request: any) => request.command === name).map((request: any) => request.payload),
+        command,
+      )
+    // The last calendar of the last account: its tick hides it. (The days of
+    // the month at a glance are pressed buttons too, not in the list.)
+    const ticks = region.locator('li button[aria-pressed]')
+    const last = ticks.last()
+    await expect(last).toHaveAttribute('aria-pressed', 'true')
+    await last.click()
+    await expect(last).toHaveAttribute('aria-pressed', 'false')
+    expect((await requests('calendar.setEnabled')).at(-1)).toMatchObject({ calendar_id: 'holidays', enabled: false })
+
+    // Its name opens the colours.
+    await region.getByTitle('Holidays — Colour', { exact: true }).last().click()
+    const menu = region.getByRole('menu', { name: 'Colour' })
+    await expect(menu).toBeVisible()
+    if (width > 1024) {
+      // Whole and inside the pane, and the list does not scroll.
+      const menuBox = await boxOf(menu)
+      const regionBox = await boxOf(region)
+      expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(regionBox.y + regionBox.height + 1)
+      expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(regionBox.x + regionBox.width + 1)
+      const scrolled = await menu.evaluate((element) => {
+        const list = element.closest('ul')!.parentElement!.parentElement!
+        return { top: list.scrollTop, overflows: list.scrollHeight > list.clientHeight + 1 }
+      })
+      expect(scrolled).toEqual({ top: 0, overflows: false })
+      for (const item of await menu.getByRole('menuitemradio').all()) await expect(item).toBeInViewport({ ratio: 1 })
+    }
+    const swatch = menu.locator('[role="menuitemradio"][aria-checked="false"]').first()
+    const colour = await swatch.getAttribute('aria-label')
+    await swatch.click()
+    await expect(menu).toHaveCount(0)
+    expect((await requests('calendar.setColor')).at(-1)).toMatchObject({ calendar_id: 'holidays', color: colour })
+    expect(errors).toEqual([])
+  })
+}
