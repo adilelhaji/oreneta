@@ -37,7 +37,7 @@ function focused(): boolean {
  * happens (`focusin`), and read again after each press of the pointer, which
  * may have moved it with no focusin. Focus that falls to <body> by itself (a
  * control the app removes) is not noticed: the next crossing then puts it on
- * the pane's counterpart, which is still better than <body>. After the render of the other layout
+ * the first control of the region that stands in, still better than <body>. After the render of the other layout
  * the control with the same key takes the focus; with none, the first focusable
  * thing of the region that stands in its place (the pane going wide, the
  * `data-focus-return` container going narrow). Focus that survived the switch
@@ -63,10 +63,13 @@ export function useFolderPaneFocus(inPane: boolean) {
       })
     }
     document.addEventListener('focusin', entered, true)
-    document.addEventListener('pointerdown', pressed, true)
+    // A touch moves the focus only after the finger lifts (the compatibility
+    // mousedown), so the end of a press is read as well.
+    const ends = ['pointerdown', 'pointerup', 'pointercancel'] as const
+    for (const name of ends) document.addEventListener(name, pressed, true)
     return () => {
       document.removeEventListener('focusin', entered, true)
-      document.removeEventListener('pointerdown', pressed, true)
+      for (const name of ends) document.removeEventListener(name, pressed, true)
       clearTimeout(afterPress)
     }
   }, [])

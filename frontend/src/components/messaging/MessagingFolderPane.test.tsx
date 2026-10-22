@@ -420,6 +420,34 @@ describe('Chat keeps the focus across 1025 px (#341)', () => {
     expect((twin as HTMLInputElement).value).toBe('team@rooms.chat.test')
   })
 
+  it('keeps an unsaved status and its Save button across the line, not falling to the account selector', async () => {
+    const screen = render(<MessagingView />)
+    await ready(screen)
+    fireEvent.change(within(pane(screen)).getByRole('textbox', { name: 'Status message' }), {
+      target: { value: 'In a meeting' },
+    })
+    within(pane(screen)).getByRole('button', { name: 'Save' }).focus()
+    await narrowWindow()
+    const column = screen.container.querySelector<HTMLElement>('[data-region="folders"]')!
+    expect(document.activeElement).toBe(within(column).getByRole('button', { name: 'Save' }))
+    expect((within(column).getByRole('textbox', { name: 'Status message' }) as HTMLInputElement).value).toBe(
+      'In a meeting',
+    )
+  })
+
+  it('keeps the permission list open and the focus on its Stop button across the line', async () => {
+    const screen = render(<MessagingView />)
+    await ready(screen)
+    await act(async () => statusPermissions$.set({ allowed: ['x@chat.test'], more: false }))
+    fireEvent.click(within(pane(screen)).getByRole('button', { name: 'Who can see your status (1)' }))
+    within(pane(screen)).getByRole('button', { name: 'Stop sharing your status with x@chat.test' }).focus()
+    await narrowWindow()
+    const column = screen.container.querySelector<HTMLElement>('[data-region="folders"]')!
+    expect(document.activeElement).toBe(
+      within(column).getByRole('button', { name: 'Stop sharing your status with x@chat.test' }),
+    )
+  })
+
   it('leaves the focus alone when it was in the conversation side', async () => {
     const screen = render(<MessagingView />)
     await ready(screen)

@@ -97,6 +97,21 @@ export function MessagingView() {
   const [active, setActive] = useState(0)
   const [closedAt, setClosedAt] = useState<number | null>(null)
   const [showPeople, setShowPeople] = useState(false)
+  // The column's own status and status permissions remount when the window
+  // crosses 1025 px (they move between the pane and the column), so what the
+  // person was doing in them lives here: an unsaved status, the permission
+  // list left open, the stops asked for (#341).
+  const [ownDraft, setOwnDraft] = useState<OwnDraft | null>(null)
+  const [permissionsOpen, setPermissionsOpen] = useState(false)
+  const [stopping, setStopping] = useState<string[]>([])
+  const allowed = useValue(statusPermissions$.allowed)
+  // A new word from the server offers the stop buttons again.
+  useEffect(() => setStopping([]), [allowed])
+  useEffect(() => {
+    setOwnDraft(null)
+    setPermissionsOpen(false)
+    setStopping([])
+  }, [account])
   // From 1025 px the conversations column is the common folder pane (ADR-0068 §4, #337).
   const inPane = useWideWindow(FOLDER_PANE_MIN_WINDOW)
   useFolderPaneFocus(inPane)
@@ -248,9 +263,17 @@ export function MessagingView() {
   )
   const columnBody = (
     <>
-      <OwnStatus key={`own-${account}`} />
+      <OwnStatus key={`own-${account}`} draft={ownDraft} setDraft={setOwnDraft} />
       <StatusRequests />
-      {online && <StatusPermissions key={`permissions-${account}`} />}
+      {online && (
+        <StatusPermissions
+          key={`permissions-${account}`}
+          open={permissionsOpen}
+          setOpen={setPermissionsOpen}
+          stopping={stopping}
+          setStopping={setStopping}
+        />
+      )}
       <form
         className="flex gap-1.5 border-b border-border px-3 py-2"
         onSubmit={(e) => {
@@ -796,11 +819,12 @@ function PresenceDot({ show }: { show?: string }) {
   return <span aria-hidden="true" className={`inline-block size-2 shrink-0 rounded-full ${color}`} />
 }
 
+type OwnDraft = { show: OwnShow; status: string }
+
 /** The person's own status for the open account, and its text. */
-function OwnStatus() {
+function OwnStatus({ draft, setDraft }: { draft: OwnDraft | null; setDraft: (draft: OwnDraft | null) => void }) {
   const { t } = useTranslation()
   const own = useValue(chatPresence$.own)
-  const [draft, setDraft] = useState<{ show: OwnShow; status: string } | null>(null)
   const shown = draft ?? { show: own.show, status: own.status }
   const canHide = own.invisible_supported === true
   const save = async () => {
@@ -935,15 +959,21 @@ function StatusRequests() {
  * (ADR-0064), and stopping it, only on a click and after confirming. Unknown
  * until the server has said; never shown as "nobody" before that.
  */
-function StatusPermissions() {
+function StatusPermissions({
+  open,
+  setOpen,
+  stopping,
+  setStopping,
+}: {
+  open: boolean
+  setOpen: (open: boolean) => void
+  /** Asked to stop; the list changes when the server says so. A new word from the server, or half a minute without one, offers the button again. */
+  stopping: string[]
+  setStopping: (update: (list: string[]) => string[]) => void
+}) {
   const { t } = useTranslation()
   const allowed = useValue(statusPermissions$.allowed)
   const more = useValue(statusPermissions$.more)
-  const [open, setOpen] = useState(false)
-  // Asked to stop; the list changes when the server says so. A new word
-  // from the server, or half a minute without one, offers the button again.
-  const [stopping, setStopping] = useState<string[]>([])
-  useEffect(() => setStopping([]), [allowed])
   const title = t('messaging.permissions.title', { defaultValue: 'Who can see your status' })
   const stop = async (jid: string) => {
     const ok = await confirmAction({
