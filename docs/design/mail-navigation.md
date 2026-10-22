@@ -113,7 +113,8 @@ Data: 2026-10-17. Fila SET-07 (#87) de la paritat amb eM Client 10.4.
 Data: 2026-10-21. Pas 2 de l'ordre de migració
 d'[ADR-0068](../adr/0068-marc-comu-de-l-aplicacio.md) (§4, §7 i §9), primer al
 correu; els altres mòduls hi entren després, un per PR. El Calendari hi va entrar
-el 2026-10-22 ([més avall](#calendari-323)).
+el 2026-10-22 ([més avall](#calendari-323)), i Persones el mateix dia
+([més avall](#persones-326)).
 
 - **Què és:** un sol component, `frontend/src/components/shell/FolderPane.tsx`,
   amb una fila de títol de 40 px al 100 % (2,5 rem, de manera que creix amb el
@@ -244,3 +245,72 @@ Calendari passa a ser la subfinestra de carpetes comuna, amb el mateix contingut
   calendari petit comprova, a més, que a 1440 px el dia és a la subfinestra, i
   el recorregut d'F6 de #306 és el mateix (el mòdul, la subfinestra i la barra
   vertical).
+
+### Persones (#326)
+
+Data: 2026-10-22. El tercer mòdul del pas 2: els grups de l'agenda de contactes
+passen a ser la subfinestra de carpetes comuna, amb el mateix contingut
+(ADR-0068 §4, fila de Persones: «Llibretes i grups»).
+
+- **Cos:** «Tots els contactes» i cada grup, amb quantes persones té, i a dalt
+  les accions que la fila del filtre ja tenia: «Grup nou» (que obre
+  `GroupDialog`), i, amb un grup triat, «Escriu a tothom de {nom}» (inactiu si cap
+  membre no té adreça), «Canvia el nom del grup» i «Suprimeix el grup»; aquestes
+  dues només per als grups que la llibreta pot escriure (locals, CardDAV i
+  d'Exchange), com abans. Triar un grup filtra la llista, com el desplegable
+  d'abans, i el filtre es manté en passar de 1024 a 1025 px i a l'inrevés. Els
+  grups d'Exchange i la confirmació de suprimir-los («s'eliminarà de l'agenda al
+  servidor») no canvien. El nom d'un grup que no hi cap acaba en «…» i la
+  indicació el mostra sencer amb el recompte, per exemple «Escalada (2)»
+  (`people.groupOption`, que ja existia); el nom accessible del botó és el nom del
+  grup i el seu recompte. Persones no té arrossegar i deixar anar ni menús
+  contextuals a la columna, de manera que no se n'ha hagut de moure cap.
+- **Què queda a la llista:** la capçalera (títol, importar, exportar, «Contacte
+  nou», cerca i l'avís de possibles duplicats) i la llista de persones continuen
+  al mòdul, a la columna de 18 rem d'abans, i els detalls de la persona al seu
+  costat. És el que l'ADR anomena la llista, no les carpetes.
+- **Regió i nom:** la subfinestra és la regió «carpetes» d'F6 de Persones i es diu
+  «Llibretes i grups» (`people.booksAndGroups`), una cadena pròpia de l'escriptori
+  i diferent de `<main>` («Persones») i de «Grups» (el títol d'una secció de la
+  fitxa) en els 20 catàlegs, com comprova una prova. Abans, la regió «carpetes» era
+  la columna de la llista, una `<section>` sense nom: ara és la subfinestra, que és
+  a `<main>`, just després de la barra vertical i abans del mòdul, i la llista és
+  només el contingut. F6 va de la barra vertical al mòdul, a la subfinestra i
+  altre cop a la barra.
+- **Amplada:** la mateixa preferència `folder_pane_width` i el mateix separador
+  que al correu i al Calendari: redimensionar-la a Persones la canvia a tots dos, i a
+  l'inrevés, en px. Al costat de la subfinestra, la columna de la llista fa
+  288 px (18 rem al 100 %) i no creix amb el zoom de l'aplicació, i la fila del
+  títol i les accions de la capçalera passa a línia nova si no hi caben: sense això,
+  al 200 % a 1025 px, la fitxa de la persona es quedava en 129 px. Per sota de
+  1025 px la columna segueix sent de 18 rem.
+- **Espai a 1025 px:** amb la barra vertical de 60 px i la llista de 288 px, la
+  fitxa de la persona té 477 px amb la subfinestra al mínim (200 px), 417 px amb
+  la de per defecte (260 px) i 277 px amb la màxima (400 px). Cap control no
+  surt del mòdul i no hi ha desplaçament horitzontal; la subfinestra no cedeix,
+  perquè la fitxa té l'amplada que queda. Al 200 % de l'aplicació a 1025 px, amb
+  la subfinestra per defecte, la fitxa en té 417.
+- **Per sota de 1025 px** la subfinestra no es mostra. Com decidí el propietari
+  per al Calendari, es conserva la disposició d'abans: el filtre de grups
+  (desplegable «Mostra el grup» i les mateixes quatre accions) sota la capçalera de
+  la llista. Mai no són a dos llocs alhora.
+- **Pregunta pendent per al propietari:** ADR-0068 diu «Llibretes i grups», però
+  Persones no té cap selecció de llibreta: només filtra per grup, i les llibretes
+  (la local, CardDAV, Google, les carpetes d'Exchange) només es veuen a la
+  configuració i com a origen de cada persona. Per no inventar-ne el comportament,
+  la subfinestra té només els grups, com la fila d'abans. Cal decidir si hi ha de
+  sortir també les llibretes (i, si és així, si triar-ne una filtra la llista, si
+  els grups s'agrupen per llibreta i què fa «Contacte nou» amb una llibreta
+  triada) o si el títol ha de ser «Grups».
+- **Proves:** `frontend/src/components/people/PeopleFolderPane.test.tsx` (la
+  subfinestra al costat del mòdul i amb el seu nom, diferent del de `<main>` en
+  tots els catàlegs; els grups amb el recompte i la indicació; triar, crear,
+  canviar el nom, escriure i suprimir; un grup que no es pot escriure; l'amplada
+  compartida amb el correu; el filtre a 1024 px i el pas d'un lloc a l'altre) i
+  `frontend/e2e/startup.e2e.ts` («#326»: la llista i la persona a 1025, 1100 i
+  1440 px amb la subfinestra a 200, 260 i 400 px, sense desplaçament horitzontal;
+  el filtre a 1024 px; triar, crear i canviar el nom d'un grup; l'amplada desada
+  des de Persones i des del correu amb el teclat, el punter i un reinici; l'àrab,
+  amb axe; el 200 % a 1440 i 1025 px). El recorregut d'F6 de #306 hi afegeix
+  Persones, i la prova de SET-19 (grups i noms de contacte) tria el grup a la
+  subfinestra a 1440 px, perquè el desplegable només és per sota de 1025 px.

@@ -136,6 +136,14 @@
           {
             "sha": "720cf68512151772097ad0640745b4153084e0f8",
             "result": "frontend/src/components/calendar/CalendarFolderPane.test.tsx"
+          },
+          {
+            "sha": "3e809cd30102d6714fcf0e28c3b0ec41e0f0d943",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "3e809cd30102d6714fcf0e28c3b0ec41e0f0d943",
+            "result": "frontend/src/components/people/PeopleFolderPane.test.tsx"
           }
         ],
         "native": [],
@@ -180,6 +188,10 @@
           },
           {
             "sha": "720cf68512151772097ad0640745b4153084e0f8",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "3e809cd30102d6714fcf0e28c3b0ec41e0f0d943",
             "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
@@ -1135,6 +1147,14 @@
           {
             "sha": "4a27ae2bf901015f9d8e73ed214153ef6d1fb99c",
             "result": "frontend/src/components/people/ExchangeContacts.test.tsx"
+          },
+          {
+            "sha": "3e809cd30102d6714fcf0e28c3b0ec41e0f0d943",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "3e809cd30102d6714fcf0e28c3b0ec41e0f0d943",
+            "result": "frontend/src/components/people/PeopleFolderPane.test.tsx"
           }
         ],
         "native": [],
@@ -1600,6 +1620,10 @@
           },
           {
             "sha": "720cf68512151772097ad0640745b4153084e0f8",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "3e809cd30102d6714fcf0e28c3b0ec41e0f0d943",
             "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
