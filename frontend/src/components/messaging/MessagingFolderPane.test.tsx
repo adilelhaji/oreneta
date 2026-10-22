@@ -439,13 +439,37 @@ describe('Chat keeps the focus across 1025 px (#341)', () => {
     const screen = render(<MessagingView />)
     await ready(screen)
     await act(async () => statusPermissions$.set({ allowed: ['x@chat.test'], more: false }))
-    fireEvent.click(within(pane(screen)).getByRole('button', { name: 'Who can see your status (1)' }))
+    fireEvent.click(within(pane(screen)).getByRole('button', { name: /^Who can see your status/ }))
     within(pane(screen)).getByRole('button', { name: 'Stop sharing your status with x@chat.test' }).focus()
     await narrowWindow()
     const column = screen.container.querySelector<HTMLElement>('[data-region="folders"]')!
     expect(document.activeElement).toBe(
       within(column).getByRole('button', { name: 'Stop sharing your status with x@chat.test' }),
     )
+  })
+
+  it("forgets an account's unsaved status and open permission list on switching account", async () => {
+    const screen = render(<MessagingView />)
+    await ready(screen)
+    await act(async () => statusPermissions$.set({ allowed: ['x@chat.test'], more: false }))
+    fireEvent.change(within(pane(screen)).getByRole('textbox', { name: 'Status message' }), {
+      target: { value: 'In a meeting' },
+    })
+    fireEvent.click(within(pane(screen)).getByRole('button', { name: /^Who can see your status/ }))
+    await act(async () => {
+      fireEvent.change(within(pane(screen)).getByRole('combobox', { name: 'Chat account' }), {
+        target: { value: 'c2' },
+      })
+    })
+    await act(async () => {
+      fireEvent.change(within(pane(screen)).getByRole('combobox', { name: 'Chat account' }), {
+        target: { value: 'c1' },
+      })
+    })
+    expect((within(pane(screen)).getByRole('textbox', { name: 'Status message' }) as HTMLInputElement).value).not.toBe(
+      'In a meeting',
+    )
+    expect(within(pane(screen)).queryByRole('button', { name: 'Stop sharing your status with x@chat.test' })).toBeNull()
   })
 
   it('leaves the focus alone when it was in the conversation side', async () => {

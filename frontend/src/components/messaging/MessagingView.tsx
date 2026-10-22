@@ -101,7 +101,9 @@ export function MessagingView() {
   // crosses 1025 px (they move between the pane and the column), so what the
   // person was doing in them lives here: an unsaved status, the permission
   // list left open, the stops asked for (#341).
-  const [ownDraft, setOwnDraft] = useState<OwnDraft | null>(null)
+  // The draft is kept with its account: a Save that ends after a switch
+  // clears only its own account's draft, never the next one's.
+  const [ownDraft, setOwnDraft] = useState<{ account: string; draft: OwnDraft } | null>(null)
   const [permissionsOpen, setPermissionsOpen] = useState(false)
   const [stopping, setStopping] = useState<string[]>([])
   const allowed = useValue(statusPermissions$.allowed)
@@ -263,7 +265,13 @@ export function MessagingView() {
   )
   const columnBody = (
     <>
-      <OwnStatus key={`own-${account}`} draft={ownDraft} setDraft={setOwnDraft} />
+      <OwnStatus
+        key={`own-${account}`}
+        draft={ownDraft?.account === account ? ownDraft.draft : null}
+        setDraft={(draft) =>
+          setOwnDraft((kept) => (draft ? { account, draft } : kept?.account === account ? null : kept))
+        }
+      />
       <StatusRequests />
       {online && (
         <StatusPermissions

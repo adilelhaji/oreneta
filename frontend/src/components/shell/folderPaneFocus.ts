@@ -63,9 +63,9 @@ export function useFolderPaneFocus(inPane: boolean) {
       })
     }
     document.addEventListener('focusin', entered, true)
-    // A touch moves the focus only after the finger lifts (the compatibility
-    // mousedown), so the end of a press is read as well.
-    const ends = ['pointerdown', 'pointerup', 'pointercancel'] as const
+    // A touch moves the focus only after the finger lifts, with the
+    // compatibility mousedown, so that and the end of a press are read too.
+    const ends = ['pointerdown', 'pointerup', 'pointercancel', 'mousedown'] as const
     for (const name of ends) document.addEventListener(name, pressed, true)
     return () => {
       document.removeEventListener('focusin', entered, true)
