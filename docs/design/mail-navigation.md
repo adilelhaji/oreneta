@@ -112,7 +112,8 @@ Data: 2026-10-17. Fila SET-07 (#87) de la paritat amb eM Client 10.4.
 
 Data: 2026-10-21. Pas 2 de l'ordre de migració
 d'[ADR-0068](../adr/0068-marc-comu-de-l-aplicacio.md) (§4, §7 i §9), primer al
-correu; els altres mòduls hi entren després, un per PR.
+correu; els altres mòduls hi entren després, un per PR. El Calendari hi va entrar
+el 2026-10-22 ([més avall](#calendari-323)).
 
 - **Què és:** un sol component, `frontend/src/components/shell/FolderPane.tsx`,
   amb una fila de títol de 40 px al 100 % (2,5 rem, de manera que creix amb el
@@ -165,3 +166,68 @@ correu; els altres mòduls hi entren després, un per PR.
   la subfinestra i les indicacions dels noms) i `frontend/e2e/startup.e2e.ts`
   («#317»: teclat, punter, reinici i zoom del 200 % a 1440 px; qui cedeix a
   1025, 1100, 1200 i 1440 px; àrab).
+
+### Calendari (#323)
+
+Data: 2026-10-22. El segon mòdul del pas 2: la columna de calendaris del
+Calendari passa a ser la subfinestra de carpetes comuna, amb el mateix contingut
+(ADR-0068 §4, fila del Calendari).
+
+- **Cos i peu:** el cos és la llista de calendaris de `CalendarList.tsx`,
+  agrupats per compte: la casella de color que els mostra o els amaga, el nom,
+  que obre el menú de colors, i el cadenat dels que són només de lectura, com les
+  subscripcions. Al peu hi ha el calendari mensual petit (`MiniCalendar.tsx`, el
+  minicalendari d'ADR-0068 §4): un dia obre aquell dia a la visualització
+  activa, «Mes anterior» i «Mes següent» en canvien el mes, i s'hi pot deixar
+  anar un esdeveniment de la graella (#266). Abans el calendari petit era a dalt
+  de la columna; l'ADR el posa al peu.
+- **Regió i nom:** la subfinestra és la regió «carpetes» d'F6 del Calendari i es
+  diu «Calendaris», com demana ADR-0068 §1; es fa servir la cadena
+  `mobile.calendar.calendars`, que ja és a tots els catàlegs. Abans, la llista
+  era un `<aside>` «Calendari», amb el mateix nom que `<main>`; ara és el cos de
+  la subfinestra i no és una regió pròpia. La subfinestra és dins de `<main>`,
+  just després de la barra vertical i abans del mòdul. La capçalera del
+  calendari (període, navegació, visualitzacions i «Esdeveniment nou») queda a la
+  regió del contingut, al costat.
+- **La llista omple el cos de la subfinestra**, com omplia la columna: el menú de
+  colors de l'últim calendari s'obre en aquest espai i no fa desplaçar la llista.
+- **Amplada:** la mateixa preferència `folder_pane_width` i el mateix separador
+  que al correu: redimensionar-la al Calendari la canvia al correu, i a
+  l'inrevés. Abans la columna feia 12 rem (192 px al 100 %) i creixia amb el zoom
+  de l'aplicació; ara és en px, i al 200 % hi creix el text, no la subfinestra.
+  Perquè el calendari petit hi càpiga, cada dia ocupa com a màxim la setena part
+  de l'amplada, sense passar dels 1,5 rem d'abans; al 100 % es veu igual. Una
+  adreça de compte que no hi cap acaba en «…» i la indicació la mostra sencera.
+- **Espai a 1025 px:** les visualitzacions no tenen amplada mínima, de manera
+  que la subfinestra no ha de cedir. Amb la barra vertical de 60 px, al mòdul li
+  queden 765 px amb la subfinestra al mínim (200 px), 705 px amb la de per
+  defecte (260 px) i 565 px amb la màxima (400 px). El dia, la setmana i el mes
+  hi caben sense desplaçament horitzontal.
+- **Per sota de 1025 px** la subfinestra no es mostra, i ADR-0068 no diu on van
+  llavors els calendaris (al correu hi ha el selector «Canvia de carpeta»).
+  Mentre el propietari no ho decideixi, es conserva la columna d'abans dins del
+  mòdul, sota la capçalera, amb el mateix contingut i el mateix ordre: entre 769
+  i 1024 px, de 12 rem, amb el calendari petit a dalt i la llista a sota; per
+  sota de 769 px, només la llista, a sobre de les visualitzacions. És la mateixa
+  regió «carpetes», ara també amb el nom «Calendaris». En passar de 1024 a
+  1025 px, o a l'inrevés, els calendaris canvien de lloc, i mai no són als dos
+  llocs alhora.
+- **Del Calendari d'abans, encara pendent:** al 200 % de l'aplicació a 1024 i
+  1025 px la setmana no hi cap i se'n tallen els últims dies (a c62e11ca, de
+  dimecres a dissabte; ara, de dijous a dissabte). Amb la subfinestra al mínim,
+  el menú de colors sobresurt uns 5 px de la llista i se'n talla una mica
+  l'últim color (a la columna de 12 rem, uns 13 px). Cap dels dos no ve de la
+  subfinestra.
+- **Proves:** `frontend/src/components/calendar/CalendarFolderPane.test.tsx` (la
+  subfinestra al costat del mòdul i amb el seu nom, la llista amb els mateixos
+  controls, el calendari petit al peu, l'amplada compartida amb el correu, la
+  columna a 1024 px i el pas d'un lloc a l'altre) i `frontend/e2e/startup.e2e.ts`
+  («#323»: dia, setmana i mes a 1025, 1100 i 1440 px amb la subfinestra a 200,
+  260 i 400 px; la columna a 1024 px; mostrar, amagar i canviar el color d'un
+  calendari a la subfinestra, amb el menú de colors sencer, i a la columna;
+  l'amplada desada des del Calendari i des del correu amb el teclat, el punter i
+  un reinici; l'àrab, amb axe; el 200 % a 1440 i 1025 px). Les proves del
+  calendari que ja hi havia no canvien d'expectativa: la d'arrossegar fins al
+  calendari petit comprova, a més, que a 1440 px el dia és a la subfinestra, i
+  el recorregut d'F6 de #306 és el mateix (el mòdul, la subfinestra i la barra
+  vertical).
