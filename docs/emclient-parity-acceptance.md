@@ -141,15 +141,15 @@ amagar-los, el color i el cadenat dels de només lectura), i al peu, el calendar
 petit, on un dia obre aquell dia i s'hi pot deixar anar un esdeveniment (#266). Fa servir
 l'amplada del correu (`folder_pane_width`, en px): redimensionar-la en un mòdul la canvia a
 l'altre, i al 200 % de l'aplicació la subfinestra no creix i els dies del calendari petit
-s'encongeixen fins a cabre-hi. És la mateixa regió d'F6, ara amb el nom «Calendaris» (abans,
-la llista era una regió «Calendari», amb el mateix nom que `<main>`). Per sota de 1025 px,
-on la subfinestra no es mostra, es conserva la columna d'abans fins que el propietari
-decideixi on van els calendaris. Les proves automàtiques de límits, de dreta a esquerra, de
-zoom, de regions, d'axe i d'arrossegament del calendari es mantenen, i se n'hi afegeixen de
-noves: el dia, la setmana i el mes a 1025, 1100 i 1440 px sense desplaçament horitzontal,
-l'amplada compartida amb el correu, la llista i el menú de colors a la subfinestra, l'àrab i
-el 200 %. Cap fila no canvia d'estat (S01-04, S01-05, SET-18, SET-27): l'evidència nativa de
-Windows continua pendent.
+s'encongeixen fins a cabre-hi. És la mateixa regió d'F6, ara amb el nom «Calendaris», que en
+cap idioma no coincideix amb el de `<main>` (abans, la llista era una regió «Calendari», amb
+el mateix nom que `<main>`). Per sota de 1025 px, on la subfinestra no es mostra, es conserva
+la columna d'abans fins a la peça 14, com va decidir el propietari el 2026-10-22. Les proves
+automàtiques de límits, de dreta a esquerra, de zoom, de regions, d'axe i d'arrossegament del
+calendari es mantenen, i se n'hi afegeixen de noves: l'agenda, el dia, la setmana i el mes a
+1025, 1100 i 1440 px sense desplaçament horitzontal, l'amplada compartida amb el correu, la
+llista i el menú de colors a la subfinestra, l'àrab i el 200 %. Cap fila no canvia d'estat
+(S01-04, S01-05, SET-18, SET-27): l'evidència nativa de Windows continua pendent.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per

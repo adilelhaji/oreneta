@@ -182,11 +182,16 @@ Calendari passa a ser la subfinestra de carpetes comuna, amb el mateix contingut
   anar un esdeveniment de la graella (#266). Abans el calendari petit era a dalt
   de la columna; l'ADR el posa al peu.
 - **Regió i nom:** la subfinestra és la regió «carpetes» d'F6 del Calendari i es
-  diu «Calendaris», com demana ADR-0068 §1; es fa servir la cadena
-  `mobile.calendar.calendars`, que ja és a tots els catàlegs. Abans, la llista
-  era un `<aside>` «Calendari», amb el mateix nom que `<main>`; ara és el cos de
-  la subfinestra i no és una regió pròpia. La subfinestra és dins de `<main>`,
-  just després de la barra vertical i abans del mòdul. La capçalera del
+  diu «Calendaris», com demana ADR-0068 §1, amb una cadena pròpia de
+  l'escriptori, `calendar.calendars` (decisió del propietari del 2026-10-22). En
+  alemany, japonès, coreà, vietnamita i xinès, el plural de «calendari» és la
+  mateixa paraula que el nom de `<main>` (`calendar.title`), i ADR-0068 §1 no
+  deixa que dues regions comparteixin nom: allà la subfinestra es diu, per
+  exemple, «Kalenderliste» o «カレンダー一覧», i una prova comprova en tots els
+  catàlegs que no coincideix ni amb `<main>` ni amb el calendari petit. Abans, la
+  llista era un `<aside>` «Calendari», amb el mateix nom que `<main>`; ara és el
+  cos de la subfinestra i no és una regió pròpia. La subfinestra és dins de
+  `<main>`, just després de la barra vertical i abans del mòdul. La capçalera del
   calendari (període, navegació, visualitzacions i «Esdeveniment nou») queda a la
   regió del contingut, al costat.
 - **La llista omple el cos de la subfinestra**, com omplia la columna: el menú de
@@ -198,35 +203,43 @@ Calendari passa a ser la subfinestra de carpetes comuna, amb el mateix contingut
   Perquè el calendari petit hi càpiga, cada dia ocupa com a màxim la setena part
   de l'amplada, sense passar dels 1,5 rem d'abans; al 100 % es veu igual. Una
   adreça de compte que no hi cap acaba en «…» i la indicació la mostra sencera.
+  El nom d'un calendari, també: la indicació del botó del nom, que obre el menú
+  de colors, diu el nom sencer i l'acció, per exemple «Feina — Color»
+  (`calendar.nameAndColor`, decisió del propietari del 2026-10-22), i el nom
+  accessible del botó continua sent el del calendari.
 - **Espai a 1025 px:** les visualitzacions no tenen amplada mínima, de manera
   que la subfinestra no ha de cedir. Amb la barra vertical de 60 px, al mòdul li
   queden 765 px amb la subfinestra al mínim (200 px), 705 px amb la de per
   defecte (260 px) i 565 px amb la màxima (400 px). El dia, la setmana i el mes
   hi caben sense desplaçament horitzontal.
 - **Per sota de 1025 px** la subfinestra no es mostra, i ADR-0068 no diu on van
-  llavors els calendaris (al correu hi ha el selector «Canvia de carpeta»).
-  Mentre el propietari no ho decideixi, es conserva la columna d'abans dins del
-  mòdul, sota la capçalera, amb el mateix contingut i el mateix ordre: entre 769
-  i 1024 px, de 12 rem, amb el calendari petit a dalt i la llista a sota; per
-  sota de 769 px, només la llista, a sobre de les visualitzacions. És la mateixa
-  regió «carpetes», ara també amb el nom «Calendaris». En passar de 1024 a
-  1025 px, o a l'inrevés, els calendaris canvien de lloc, i mai no són als dos
-  llocs alhora.
-- **Del Calendari d'abans, encara pendent:** al 200 % de l'aplicació a 1024 i
-  1025 px la setmana no hi cap i se'n tallen els últims dies (a c62e11ca, de
-  dimecres a dissabte; ara, de dijous a dissabte). Amb la subfinestra al mínim,
-  el menú de colors sobresurt uns 5 px de la llista i se'n talla una mica
+  llavors els calendaris (al correu hi ha el selector «Canvia de carpeta»). El
+  propietari va decidir el 2026-10-22 que, fins a la peça 14, s'hi conservi la
+  columna d'abans dins del mòdul, sota la capçalera, amb el mateix contingut i el
+  mateix ordre: entre 769 i 1024 px, de 12 rem, amb el calendari petit a dalt i
+  la llista a sota; per sota de 769 px, només la llista, a sobre de les
+  visualitzacions. És la mateixa regió «carpetes», ara també amb el nom
+  «Calendaris». En passar de 1024 a 1025 px, o a l'inrevés, els calendaris
+  canvien de lloc, i mai no són als dos llocs alhora.
+- **Ja existia al Calendari i continua pendent:** al 200 % de l'aplicació a
+  1024 i 1025 px la setmana no hi cap i se'n tallen els últims dies (a c62e11ca,
+  de dimecres a dissabte; ara, de dijous a dissabte). Amb la subfinestra al
+  mínim, el menú de colors sobresurt uns 5 px de la llista i se'n talla una mica
   l'últim color (a la columna de 12 rem, uns 13 px). Cap dels dos no ve de la
   subfinestra.
 - **Proves:** `frontend/src/components/calendar/CalendarFolderPane.test.tsx` (la
-  subfinestra al costat del mòdul i amb el seu nom, la llista amb els mateixos
-  controls, el calendari petit al peu, l'amplada compartida amb el correu, la
-  columna a 1024 px i el pas d'un lloc a l'altre) i `frontend/e2e/startup.e2e.ts`
-  («#323»: dia, setmana i mes a 1025, 1100 i 1440 px amb la subfinestra a 200,
-  260 i 400 px; la columna a 1024 px; mostrar, amagar i canviar el color d'un
-  calendari a la subfinestra, amb el menú de colors sencer, i a la columna;
-  l'amplada desada des del Calendari i des del correu amb el teclat, el punter i
-  un reinici; l'àrab, amb axe; el 200 % a 1440 i 1025 px). Les proves del
+  subfinestra al costat del mòdul i amb el seu nom, diferent del de `<main>` en
+  tots els catàlegs; la llista amb els mateixos controls i la indicació del nom;
+  el calendari petit al peu; l'amplada compartida amb el correu; la columna a
+  1024 px i el pas d'un lloc a l'altre),
+  `frontend/src/components/shell/FolderPane.test.tsx` (l'amplada de finestra a
+  partir de la qual es pinta la subfinestra, la mateixa que llegeix el
+  Calendari) i `frontend/e2e/startup.e2e.ts` («#323»: agenda, dia, setmana i mes
+  a 1025, 1100 i 1440 px amb la subfinestra a 200, 260 i 400 px; la columna a
+  1024 px; mostrar, amagar i canviar el color d'un calendari a la subfinestra,
+  amb el menú de colors sencer, i a la columna; l'amplada desada des del
+  Calendari i des del correu amb el teclat, el punter i un reinici; l'àrab, amb
+  axe; el 200 % a 1440 i 1025 px). Les proves del
   calendari que ja hi havia no canvien d'expectativa: la d'arrossegar fins al
   calendari petit comprova, a més, que a 1440 px el dia és a la subfinestra, i
   el recorregut d'F6 de #306 és el mateix (el mòdul, la subfinestra i la barra
