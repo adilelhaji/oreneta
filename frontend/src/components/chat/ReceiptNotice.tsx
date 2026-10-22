@@ -86,7 +86,7 @@ export function ReceiptNotice({ message }: { message: Message }) {
       aria-label={t('receipts.requestedLabel', { defaultValue: 'Read receipt requested' })}
       className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-control-sm border border-border/60 bg-black/[0.02] px-3 py-2 text-caption text-secondary dark:bg-white/[0.02]"
     >
-      <MailCheck size={14} strokeWidth={1.75} aria-hidden="true" className="text-accent" />
+      <MailCheck size={14} strokeWidth={1.75} aria-hidden="true" className="text-accent-fg" />
       <span className="min-w-0 flex-1">
         {t('receipts.asked', { defaultValue: 'The sender asked to be told when you read this.' })}
         {caution && <span className="block">{caution}</span>}
@@ -95,7 +95,7 @@ export function ReceiptNotice({ message }: { message: Message }) {
         type="button"
         disabled={busy}
         onClick={() => void answer(true)}
-        className="font-semibold text-accent underline cursor-pointer disabled:opacity-50"
+        className="font-semibold text-accent-fg underline cursor-pointer disabled:opacity-50"
       >
         {t('receipts.send', { defaultValue: 'Send receipt' })}
       </button>

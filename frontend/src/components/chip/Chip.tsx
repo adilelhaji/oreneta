@@ -69,7 +69,7 @@ export function Chip({
           (tone === 'danger'
             ? 'border-danger/40 bg-danger-soft text-danger'
             : tone === 'accent' || selected
-              ? 'border-accent/30 bg-accent/12 text-accent'
+              ? 'border-accent/30 bg-accent/12 text-accent-fg'
               : 'border-border bg-raised text-secondary'),
         wholeChipButton && 'cursor-pointer transition-colors hover:border-accent/40 hover:text-primary',
         onClick && selected && 'ring-1 ring-accent',

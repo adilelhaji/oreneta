@@ -414,7 +414,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
                 // whether this search can do more than words.
                 title={isRSSAccount ? undefined : t('search.operatorsHint')}
                 className={clsx(
-                  'w-full rounded-control bg-hover py-2 ps-8 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent focus:border-transparent transition-all duration-120',
+                  'w-full rounded-control bg-hover py-2 ps-8 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent-fg focus:bg-chats border border-transparent focus:border-transparent transition-all duration-120',
                   // The right padding only has to clear the clear button while there is one.
                   query ? 'pe-8' : 'pe-3',
                 )}

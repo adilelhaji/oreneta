@@ -86,7 +86,7 @@ export function AwaitingDialog() {
                   {item.subject || t('awaiting.noSubject', { defaultValue: '(no subject)' })}
                 </p>
                 <span
-                  className={`text-2xs font-semibold ${item.status === 'answered' ? 'text-accent' : item.overdue ? 'text-danger' : 'text-secondary'}`}
+                  className={`text-2xs font-semibold ${item.status === 'answered' ? 'text-accent-fg' : item.overdue ? 'text-danger' : 'text-secondary'}`}
                 >
                   {status(item)}
                 </span>

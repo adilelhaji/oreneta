@@ -74,7 +74,7 @@ export function MessageContextMenu({
       {state.linkUrl ? (
         <>
           <MenuItem
-            icon={<ExternalLink size={14} className="text-accent" strokeWidth={1.75} />}
+            icon={<ExternalLink size={14} className="text-accent-fg" strokeWidth={1.75} />}
             label={t('chat.actions.openLink')}
             onClick={() => {
               openExternal(state.linkUrl!)
@@ -82,7 +82,7 @@ export function MessageContextMenu({
             }}
           />
           <MenuItem
-            icon={<Link2 size={14} className="text-accent" strokeWidth={1.75} />}
+            icon={<Link2 size={14} className="text-accent-fg" strokeWidth={1.75} />}
             label={t('chat.actions.copyLinkAddress')}
             onClick={() => {
               navigator.clipboard?.writeText(state.linkUrl!).catch(() => undefined)
@@ -96,9 +96,9 @@ export function MessageContextMenu({
             <MenuItem
               icon={
                 isDraft ? (
-                  <SquarePen size={14} className="text-accent" strokeWidth={1.75} />
+                  <SquarePen size={14} className="text-accent-fg" strokeWidth={1.75} />
                 ) : (
-                  <ExternalLink size={14} className="text-accent" strokeWidth={1.75} />
+                  <ExternalLink size={14} className="text-accent-fg" strokeWidth={1.75} />
                 )
               }
               label={isDraft ? t('chat.actions.openDraft') : t('threads.actions.openInNewTab')}
@@ -115,7 +115,7 @@ export function MessageContextMenu({
           )}
           {onSelectMessage && (
             <MenuItem
-              icon={<CheckSquare size={14} className="text-accent" strokeWidth={1.75} />}
+              icon={<CheckSquare size={14} className="text-accent-fg" strokeWidth={1.75} />}
               label={t('buttons.select', { defaultValue: 'Select' })}
               onClick={() => {
                 onSelectMessage(state.message)
@@ -126,9 +126,9 @@ export function MessageContextMenu({
           <MenuItem
             icon={
               state.message.unread ? (
-                <MailOpen size={14} className="text-accent" strokeWidth={1.75} />
+                <MailOpen size={14} className="text-accent-fg" strokeWidth={1.75} />
               ) : (
-                <Mail size={14} className="text-accent" strokeWidth={1.75} />
+                <Mail size={14} className="text-accent-fg" strokeWidth={1.75} />
               )
             }
             label={state.message.unread ? t('threads.actions.markAsRead') : t('threads.actions.markAsUnread')}
@@ -143,7 +143,7 @@ export function MessageContextMenu({
             icon={
               <Star
                 size={14}
-                className={state.message.starred ? 'fill-warning text-warning' : 'text-accent'}
+                className={state.message.starred ? 'fill-warning text-warning' : 'text-accent-fg'}
                 strokeWidth={1.75}
               />
             }
@@ -157,7 +157,7 @@ export function MessageContextMenu({
           />
           {!isDraft && !isRSS && !headerOnly && (
             <MenuItem
-              icon={<Forward size={14} className="text-accent" strokeWidth={1.75} />}
+              icon={<Forward size={14} className="text-accent-fg" strokeWidth={1.75} />}
               label={t('chat.actions.forward')}
               disabled={sendingBlocked}
               onClick={() => {
@@ -169,7 +169,7 @@ export function MessageContextMenu({
           )}
           {!isDraft && !isRSS && !headerOnly && (
             <MenuItem
-              icon={<Copy size={14} className="text-accent" strokeWidth={1.75} />}
+              icon={<Copy size={14} className="text-accent-fg" strokeWidth={1.75} />}
               label={t('chat.actions.editAsNewMessage')}
               disabled={sendingBlocked}
               onClick={() => {
@@ -181,7 +181,7 @@ export function MessageContextMenu({
           )}
           {!headerOnly && (
             <MenuItem
-              icon={<Languages size={14} className="text-accent" strokeWidth={1.75} />}
+              icon={<Languages size={14} className="text-accent-fg" strokeWidth={1.75} />}
               label={t('translation.menu', { defaultValue: 'Translate…' })}
               onClick={() => {
                 const message = state.message
@@ -193,7 +193,7 @@ export function MessageContextMenu({
           {/* Fixed-width HTML only; a plain-text body always wraps (ADR-0046). */}
           {!headerOnly && !!state.message.body_html && (
             <MenuItem
-              icon={<Shrink size={14} className="text-accent" strokeWidth={1.75} />}
+              icon={<Shrink size={14} className="text-accent-fg" strokeWidth={1.75} />}
               label={
                 fitWidth
                   ? t('reader.fit.original', { defaultValue: 'Show at original size' })
@@ -210,7 +210,7 @@ export function MessageContextMenu({
               choices (ADR-0060); needs the body, so not from a header row. */}
           {!headerOnly && (
             <MenuItem
-              icon={<Printer size={14} className="text-accent" strokeWidth={1.75} />}
+              icon={<Printer size={14} className="text-accent-fg" strokeWidth={1.75} />}
               label={t('print.message')}
               onClick={() => {
                 const message = state.message
@@ -221,7 +221,7 @@ export function MessageContextMenu({
           )}
           {!isDraft && !isRSS && (
             <MenuItem
-              icon={<Download size={14} className="text-accent" strokeWidth={1.75} />}
+              icon={<Download size={14} className="text-accent-fg" strokeWidth={1.75} />}
               label={t('chat.actions.saveAsEml')}
               disabled={readOnly}
               onClick={() => {

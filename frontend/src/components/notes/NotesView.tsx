@@ -80,7 +80,7 @@ export function NotesView() {
           )}
         >
           <div className="flex flex-col gap-2 border-b border-border p-3">
-            <div className="flex items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-1.5 focus-within:border-accent">
+            <div className="flex items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-1.5 focus-within:border-accent-fg">
               <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
               <input
                 value={search}
@@ -145,7 +145,7 @@ export function NotesView() {
                           <Pin
                             size={12}
                             strokeWidth={2}
-                            className="shrink-0 text-accent"
+                            className="shrink-0 text-accent-fg"
                             aria-label={t('notes.pinned', { defaultValue: 'Pinned' })}
                           />
                         )}

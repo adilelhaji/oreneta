@@ -55,7 +55,7 @@ function fromDateTimeInput(value: string): number | null {
 
 const labelClass = 'text-caption font-bold uppercase tracking-wide text-secondary'
 const selectClass =
-  'w-full rounded-control-sm border border-border bg-app px-3 py-2 text-sm text-primary outline-none focus:border-accent disabled:opacity-60'
+  'w-full rounded-control-sm border border-border bg-app px-3 py-2 text-sm text-primary outline-none focus:border-accent-fg disabled:opacity-60'
 
 /**
  * Turns a conversation into a task, writes a standalone task (ADR-0013), or
@@ -428,7 +428,7 @@ export function TaskDialog() {
             onChange={(event) => setNote(event.target.value)}
             placeholder={t('tasks.notePlaceholder')}
             disabled={locked}
-            className="w-full resize-none rounded-control-sm border border-border bg-app px-3 py-2 text-sm text-primary placeholder-secondary outline-none focus:border-accent disabled:opacity-60"
+            className="w-full resize-none rounded-control-sm border border-border bg-app px-3 py-2 text-sm text-primary placeholder-secondary outline-none focus:border-accent-fg disabled:opacity-60"
           />
         </div>
       </form>

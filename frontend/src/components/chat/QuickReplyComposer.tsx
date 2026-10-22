@@ -29,7 +29,7 @@ export function QuickReplyComposer() {
 
   return (
     <footer className="p-3.5 bg-header border-t border-border z-10 flex flex-col items-center justify-center">
-      <div className="flex flex-col gap-2 w-full bg-hover p-2 rounded-panel border border-border/50 shadow-sm focus-within:ring-1 focus-within:ring-accent focus-within:bg-chats transition-all duration-120">
+      <div className="flex flex-col gap-2 w-full bg-hover p-2 rounded-panel border border-border/50 shadow-sm focus-within:ring-1 focus-within:ring-accent-fg focus-within:bg-chats transition-all duration-120">
         <QuickReplyFrom />
         <QuickReplyAttachments attachments={composerAttachments} />
 

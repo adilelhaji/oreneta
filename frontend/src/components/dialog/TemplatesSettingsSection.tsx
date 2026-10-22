@@ -171,7 +171,7 @@ export function TemplatesSettingsSection() {
           <button
             type="button"
             onClick={() => setDrafts([...list, newTemplate()])}
-            className="flex items-center gap-1.5 rounded-control px-3 py-1.5 text-caption font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer"
+            className="flex items-center gap-1.5 rounded-control px-3 py-1.5 text-caption font-semibold text-accent-fg transition-colors hover:bg-accent/10 cursor-pointer"
           >
             <Plus size={14} strokeWidth={1.75} /> {t('templates.add')}
           </button>

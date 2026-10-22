@@ -53,7 +53,7 @@ export function TrackerNotice({ message }: { message: Message }) {
       <p className="mb-2 flex flex-wrap items-center gap-1.5 text-caption text-secondary">
         <ShieldOff size={14} strokeWidth={1.75} aria-hidden="true" />
         {t('trackers.allowed', { defaultValue: 'Trackers are allowed in this message.' })}
-        <button type="button" onClick={() => void change(false)} className="text-accent underline cursor-pointer">
+        <button type="button" onClick={() => void change(false)} className="text-accent-fg underline cursor-pointer">
           {t('trackers.blockAgain', { defaultValue: 'Block them again' })}
         </button>
       </p>
@@ -63,7 +63,7 @@ export function TrackerNotice({ message }: { message: Message }) {
   return (
     <div className="mb-2 text-caption text-secondary">
       <p className="flex flex-wrap items-center gap-1.5">
-        <ShieldCheck size={14} strokeWidth={1.75} aria-hidden="true" className="text-accent" />
+        <ShieldCheck size={14} strokeWidth={1.75} aria-hidden="true" className="text-accent-fg" />
         {t('trackers.blocked', {
           count: blocked.length,
           defaultValue: '{count, plural, one {# tracker} other {# trackers}} blocked',
@@ -72,12 +72,12 @@ export function TrackerNotice({ message }: { message: Message }) {
           type="button"
           aria-expanded={open}
           onClick={() => setOpen((was) => !was)}
-          className="text-accent underline cursor-pointer"
+          className="text-accent-fg underline cursor-pointer"
         >
           {open ? t('trackers.hide', { defaultValue: 'Hide' }) : t('trackers.which', { defaultValue: 'Which' })}
         </button>
         {message.message_id && (
-          <button type="button" onClick={() => void change(true)} className="text-accent underline cursor-pointer">
+          <button type="button" onClick={() => void change(true)} className="text-accent-fg underline cursor-pointer">
             {t('trackers.allow', { defaultValue: 'Load them for this message' })}
           </button>
         )}

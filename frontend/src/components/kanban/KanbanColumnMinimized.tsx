@@ -146,7 +146,7 @@ export function KanbanColumnMinimized({
           {columnUnreadCount}
         </div>
       )}
-      {searchActive && loading && <Loader2 size={14} className="animate-spin text-accent" strokeWidth={1.75} />}
+      {searchActive && loading && <Loader2 size={14} className="animate-spin text-accent-fg" strokeWidth={1.75} />}
     </section>
   )
 }

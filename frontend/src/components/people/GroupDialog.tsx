@@ -82,7 +82,7 @@ export function GroupDialog() {
             <select
               value={editing.book}
               onChange={(e) => people$.groupEditing.set({ ...editing, book: e.target.value, members: [] })}
-              className="w-full rounded-control-sm border border-border bg-app px-3 py-2 text-sm text-primary outline-none focus:border-accent"
+              className="w-full rounded-control-sm border border-border bg-app px-3 py-2 text-sm text-primary outline-none focus:border-accent-fg"
             >
               <option value="">{t('people.thisComputer', { defaultValue: 'This computer' })}</option>
               {books.map((book) => (

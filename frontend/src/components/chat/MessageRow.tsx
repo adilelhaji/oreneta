@@ -103,7 +103,7 @@ export function MessageRow({
             event.stopPropagation()
             undoSend(message.id)
           }}
-          className="flex items-center gap-0.5 text-accent hover:opacity-80 cursor-pointer"
+          className="flex items-center gap-0.5 text-accent-fg hover:opacity-80 cursor-pointer"
         >
           <Undo2 size={14} strokeWidth={1.75} />
           <span className="text-2xs font-semibold">{t('chat.undoSend', { defaultValue: 'Undo' })}</span>
@@ -141,7 +141,7 @@ export function MessageRow({
     ) : null
 
   const draftBadge = isDraft ? (
-    <span className="rounded-full border border-accent/35 bg-accent/10 px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide text-accent">
+    <span className="rounded-full border border-accent/35 bg-accent/10 px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide text-accent-fg">
       {t('chat.draft')}
     </span>
   ) : null

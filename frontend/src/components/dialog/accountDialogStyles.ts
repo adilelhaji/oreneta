@@ -18,7 +18,7 @@ export function dialogClasses(isSetup: boolean): DialogClasses {
       ? 'flex flex-col gap-5 overflow-y-auto px-0.5 py-0.5'
       : 'flex flex-col gap-3.5 max-h-[300px] overflow-y-auto px-1 py-0.5',
     inputClass: isSetup
-      ? 'w-full rounded-control border border-border bg-chats px-4 py-3.5 text-title text-primary outline-none transition-all placeholder:text-secondary focus:border-accent focus:ring-3 focus:ring-accent/10'
+      ? 'w-full rounded-control border border-border bg-chats px-4 py-3.5 text-title text-primary outline-none transition-all placeholder:text-secondary focus:border-accent-fg focus:ring-3 focus:ring-accent/10'
       : undefined,
     fieldLabelClass: isSetup ? 'text-ui font-semibold text-secondary' : undefined,
     serverGridClass: isSetup

@@ -18,7 +18,7 @@ export function ConversationSubject({
         onClick={onCopy}
         // The subject's own direction, aligned with the interface (ADR-0061).
         dir="auto"
-        className="block max-w-full truncate rounded-sm text-title font-bold leading-snug tracking-wide text-primary outline-none transition-colors cursor-copy hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/40"
+        className="block max-w-full truncate rounded-sm text-title font-bold leading-snug tracking-wide text-primary outline-none transition-colors cursor-copy hover:text-accent-fg focus-visible:ring-2 focus-visible:ring-accent/40"
         aria-label={copyLabel}
         aria-describedby={tooltipId}
       >

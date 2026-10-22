@@ -106,7 +106,7 @@ export function AttachmentsView() {
         </span>
       </header>
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-header px-4 py-2">
-        <div className="flex min-w-40 flex-1 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-1.5 focus-within:border-accent">
+        <div className="flex min-w-40 flex-1 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-1.5 focus-within:border-accent-fg">
           <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
           <input
             value={filter.name}
@@ -121,7 +121,7 @@ export function AttachmentsView() {
           onChange={(event) => attachmentList$.filter.sender.set(event.target.value)}
           placeholder={t('attachmentsView.sender', { defaultValue: 'From' })}
           aria-label={t('attachmentsView.sender', { defaultValue: 'From' })}
-          className="w-40 rounded-control border border-border bg-chats px-2.5 py-1.5 text-caption text-primary placeholder-secondary outline-none focus:border-accent"
+          className="w-40 rounded-control border border-border bg-chats px-2.5 py-1.5 text-caption text-primary placeholder-secondary outline-none focus:border-accent-fg"
         />
         <select
           value={filter.kind}

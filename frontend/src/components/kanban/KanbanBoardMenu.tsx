@@ -23,7 +23,7 @@ export function FilterSwitch({ value, onChange }: { value: FilterMode; onChange:
         <button
           key={mode}
           className={`flex h-7 items-center gap-1.5 rounded-control-sm px-3 text-xs font-semibold cursor-pointer transition-all duration-200 ${
-            value === mode ? 'bg-chats text-accent shadow-sm' : 'text-secondary hover:bg-hover hover:text-primary'
+            value === mode ? 'bg-chats text-accent-fg shadow-sm' : 'text-secondary hover:bg-hover hover:text-primary'
           }`}
           onClick={() => onChange(mode)}
           title={t('kanban.actions.showFilterInAllColumns', { filter: label.toLowerCase() })}

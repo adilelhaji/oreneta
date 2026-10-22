@@ -114,7 +114,7 @@ export function ThemeEditorDialog({
                 type="button"
                 onClick={() => setAppearance(mode)}
                 className={`rounded-md px-2.5 py-1 text-caption font-bold capitalize transition-colors cursor-pointer ${
-                  input.appearance === mode ? 'bg-chats text-accent shadow-sm' : 'text-secondary hover:text-primary'
+                  input.appearance === mode ? 'bg-chats text-accent-fg shadow-sm' : 'text-secondary hover:text-primary'
                 }`}
               >
                 {mode}
@@ -207,7 +207,7 @@ function ThemePreview({ tokens }: { tokens: ReturnType<typeof deriveThemeTokens>
         </div>
         <div className="w-28 shrink-0 border-e border-border bg-chats p-1.5 flex flex-col gap-1">
           <div className="rounded-control-sm bg-accent/15 px-1.5 py-1">
-            <div className="text-2xs font-bold text-accent">Alice</div>
+            <div className="text-2xs font-bold text-accent-fg">Alice</div>
             <div className="text-[0.4375rem] text-secondary truncate">See you tomorrow!</div>
           </div>
           <div className="px-1.5 py-1">

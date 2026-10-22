@@ -34,7 +34,7 @@ export function EventContextMenu({ state, onClose }: { state: EventContextMenuSt
       className="fixed z-[61] min-w-[160px] rounded-control border border-border bg-chats p-1 shadow-overlay"
     >
       <MenuItem
-        icon={<SquarePen size={14} className="text-accent" strokeWidth={1.75} />}
+        icon={<SquarePen size={14} className="text-accent-fg" strokeWidth={1.75} />}
         label={t('calendar.editEvent', { defaultValue: 'Edit event' })}
         disabled={readOnly}
         onClick={() => {

@@ -67,7 +67,7 @@ export function GrammarPopover({
               key={index}
               type="button"
               onClick={() => apply(suggestion)}
-              className="rounded-control-sm bg-accent/12 px-2 py-1 font-semibold text-accent hover:bg-accent/20 cursor-pointer"
+              className="rounded-control-sm bg-accent/12 px-2 py-1 font-semibold text-accent-fg hover:bg-accent/20 cursor-pointer"
             >
               {suggestion === '' ? t('grammar.remove', { defaultValue: 'Remove it' }) : suggestion}
             </button>

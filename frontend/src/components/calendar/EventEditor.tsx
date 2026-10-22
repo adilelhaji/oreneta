@@ -192,7 +192,7 @@ export function EventEditor() {
                   <button
                     type="button"
                     onClick={() => set({ add_meeting: 'none' })}
-                    className="text-accent underline cursor-pointer"
+                    className="text-accent-fg underline cursor-pointer"
                   >
                     {t('calendar.meetingRemove', { defaultValue: 'Remove it' })}
                   </button>
@@ -384,7 +384,7 @@ export function EventEditor() {
 }
 
 const inputClass =
-  'w-full rounded-control border border-border bg-raised px-3 py-2 text-xs text-primary outline-none transition-all focus:border-transparent focus:bg-chats focus:ring-1 focus:ring-accent'
+  'w-full rounded-control border border-border bg-raised px-3 py-2 text-xs text-primary outline-none transition-all focus:border-transparent focus:bg-chats focus:ring-1 focus:ring-accent-fg'
 
 /// The usual ladder of reminder times, in minutes before the start.
 const REMINDER_CHOICES = [0, 5, 10, 15, 30, 60, 120, 24 * 60, 2 * 24 * 60, 7 * 24 * 60]
@@ -474,7 +474,7 @@ export function DateAndTime({
           and framing them apart made the time look wider than the date it
           belongs to. */}
       {!allDay && (
-        <div className="flex shrink-0 items-center rounded-control border border-border bg-raised px-2 focus-within:border-transparent focus-within:bg-chats focus-within:ring-1 focus-within:ring-accent">
+        <div className="flex shrink-0 items-center rounded-control border border-border bg-raised px-2 focus-within:border-transparent focus-within:bg-chats focus-within:ring-1 focus-within:ring-accent-fg">
           <select
             value={date.getHours()}
             onChange={(e) => setClock(Number(e.target.value), date.getMinutes())}

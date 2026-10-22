@@ -62,7 +62,7 @@ export function CategoryTabs() {
               onClick={() => showCategory(tab.id)}
               className={clsx(
                 'flex shrink-0 items-center gap-1.5 rounded-control-sm px-2 py-1 text-caption font-semibold transition-colors cursor-pointer',
-                on ? 'bg-accent/12 text-accent' : 'text-secondary hover:bg-hover hover:text-primary',
+                on ? 'bg-accent/12 text-accent-fg' : 'text-secondary hover:bg-hover hover:text-primary',
               )}
             >
               {tab.colour && (

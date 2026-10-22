@@ -41,7 +41,7 @@ export function DesignCatalogue() {
         subtitle={
           <button
             type="button"
-            className="inline-flex items-center gap-1 rounded-control-sm text-accent underline underline-offset-2 cursor-pointer"
+            className="inline-flex items-center gap-1 rounded-control-sm text-accent-fg underline underline-offset-2 cursor-pointer"
             onClick={() => openExternal('https://github.com/adilelhaji/oreneta/blob/main/docs/design/art-direction.md')}
           >
             Art direction <ExternalLink size={14} strokeWidth={1.75} aria-hidden="true" />
