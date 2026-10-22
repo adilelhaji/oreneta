@@ -1733,6 +1733,7 @@
   "attachmentsView.coverage": "Listed from the mail downloaded to this computer. {missing} of {messages} messages have not been downloaded yet, so their attachments are not here.",
   "attachmentsView.emptyText": "File contents are not searched — only names, senders and dates.",
   "attachmentsView.emptyTitle": "No attachments found",
+  "attachmentsView.filters": "Attachment filters",
   "attachmentsView.isLink": "A link to a file kept elsewhere; open the message to follow it.",
   "attachmentsView.kindAll": "All types",
   "attachmentsView.lastMonth": "Last 30 days",

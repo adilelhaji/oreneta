@@ -1733,6 +1733,7 @@
   "attachmentsView.coverage": "Listados a partir do correio transferido para este computador. {missing} de {messages} mensagens ainda não foram transferidas, por isso os seus anexos não estão aqui.",
   "attachmentsView.emptyText": "O conteúdo dos ficheiros não é pesquisado — apenas nomes, remetentes e datas.",
   "attachmentsView.emptyTitle": "Nenhum anexo encontrado",
+  "attachmentsView.filters": "Filtros de anexos",
   "attachmentsView.isLink": "Uma ligação para um ficheiro guardado noutro sítio; abra a mensagem para a seguir.",
   "attachmentsView.kindAll": "Todos os tipos",
   "attachmentsView.lastMonth": "Últimos 30 dias",

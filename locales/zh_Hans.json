@@ -1733,6 +1733,7 @@
   "attachmentsView.coverage": "根据已下载到这台电脑的邮件列出。{messages} 封邮件中有 {missing} 封尚未下载，因此其附件不在这里。",
   "attachmentsView.emptyText": "不会搜索文件内容，只搜索名称、发件人和日期。",
   "attachmentsView.emptyTitle": "未找到附件",
+  "attachmentsView.filters": "附件筛选器",
   "attachmentsView.isLink": "指向其他位置文件的链接；打开邮件即可访问。",
   "attachmentsView.kindAll": "所有类型",
   "attachmentsView.lastMonth": "最近 30 天",

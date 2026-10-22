@@ -1733,6 +1733,7 @@
   "attachmentsView.coverage": "مأخوذة من البريد المنزَّل إلى هذا الحاسوب. لم تُنزَّل بعد {missing} من أصل {messages} رسالة، لذا لا تظهر مرفقاتها هنا.",
   "attachmentsView.emptyText": "لا يُبحث في محتوى الملفات — فقط في الأسماء والمرسلين والتواريخ.",
   "attachmentsView.emptyTitle": "لم يُعثر على مرفقات",
+  "attachmentsView.filters": "عوامل تصفية المرفقات",
   "attachmentsView.isLink": "رابط إلى ملف محفوظ في مكان آخر؛ افتح الرسالة لاتّباعه.",
   "attachmentsView.kindAll": "كل الأنواع",
   "attachmentsView.lastMonth": "آخر 30 يومًا",

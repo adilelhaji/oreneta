@@ -1733,6 +1733,7 @@
   "attachmentsView.coverage": "Aufgelistet aus den auf diesen Computer heruntergeladenen E-Mails. {missing} von {messages} Nachrichten sind noch nicht heruntergeladen, daher fehlen ihre Anhänge hier.",
   "attachmentsView.emptyText": "Dateiinhalte werden nicht durchsucht – nur Namen, Absender und Daten.",
   "attachmentsView.emptyTitle": "Keine Anhänge gefunden",
+  "attachmentsView.filters": "Anhang-Filter",
   "attachmentsView.isLink": "Ein Link zu einer anderswo gespeicherten Datei; öffnen Sie die Nachricht, um ihm zu folgen.",
   "attachmentsView.kindAll": "Alle Typen",
   "attachmentsView.lastMonth": "Letzte 30 Tage",
