@@ -4683,7 +4683,28 @@ for (const language of ['en', 'ca', 'ar']) {
     await page.getByTitle(catalog['messaging.title'], { exact: true }).focus()
     expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'folders', 'modules'])
 
-    await page.getByTitle(catalog['attachmentsView.title'], { exact: true }).click()
+    // A file in the list: its "open the message" button is what F6 reaches in
+    // the content, now that the filters have moved to the pane.
+    await page.evaluate(() => {
+      ;(window as any).startupProbe.replies['attachments.list'] = {
+        items: [
+          {
+            account: 'synthetic-account', folder: 'INBOX', uid: 2, thread_key: 'k', thread_id: 'synthetic-account#INBOX#2',
+            subject: 'Quarterly numbers', from_name: 'Synthetic Sender', from_addr: 'sender@example.test', date: 1760000000,
+            index: 0, filename: 'report.pdf', mime: 'application/pdf', size: 90000, key: null, kind: 'pdf', unavailable: '',
+          },
+        ],
+        total: 1,
+        coverage: { messages: 10, downloaded: 7 },
+      }
+    })
+    const attachmentsButton = page.getByTitle(catalog['attachmentsView.title'], { exact: true })
+    await attachmentsButton.click()
+    await expect(page.getByText('report.pdf')).toBeVisible()
+    // The filters are the folder pane (#339), beside the module: from the
+    // rail, F6 goes to the module, then the pane, then back to the rail.
+    await attachmentsButton.focus()
+    expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'folders', 'modules'])
     await audit('attachments', catalog['attachmentsView.title'])
 
     expect(found).toEqual([])
@@ -6108,6 +6129,229 @@ test("in Arabic Chat's folder pane sits between the rail and the conversation, a
   await expect(page.getByText('Hello Ana')).toBeVisible()
   await insidePane(page, pane)
   await rtlInView(page, 'chat folder pane')
+  await settled(page)
+  const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+  const blocking = results.violations
+    .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+    .map(
+      (violation) =>
+        `${violation.id} (${violation.impact}) on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`,
+    )
+  expect(blocking).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// #339: the attachment filters in the common folder pane (ADR-0068 §4), at the
+// one width every module shares. The list stays beside it and keeps 360 px.
+// At 1024 px and below the pane is not drawn, and the filter bar stays under
+// the header.
+async function openAttachmentsPane(page: Page, options: SetupOptions = {}, catalog = enCatalog) {
+  const errors = await prepareStartup(page, true, {
+    navigation: true,
+    // Long enough to push the account filter past a 200 px pane, were it free to.
+    existingEmail: 'an-account-with-a-very-long-address-for-the-pane@example.test',
+    ...options,
+  })
+  await page.addInitScript(() => {
+    ;(window as any).startupProbe.replies['attachments.list'] = {
+      items: [
+        {
+          account: 'synthetic-account', folder: 'INBOX', uid: 2, thread_key: 'k', thread_id: 'synthetic-account#INBOX#2',
+          subject: 'Quarterly numbers', from_name: 'Synthetic Sender', from_addr: 'sender@example.test', date: 1760000000,
+          index: 0, filename: 'report.pdf', mime: 'application/pdf', size: 90000, key: null, kind: 'pdf', unavailable: '',
+        },
+      ],
+      total: 1,
+      coverage: { messages: 10, downloaded: 7 },
+    }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await page.getByTitle(catalog['attachmentsView.title'], { exact: true }).click()
+  await expect(page.getByRole('main', { name: catalog['attachmentsView.title'], exact: true })).toBeVisible()
+  await expect(page.getByText('report.pdf')).toBeVisible()
+  return errors
+}
+
+for (const [width, paneWidth] of [
+  [1025, 200],
+  [1025, 260],
+  [1025, 400],
+  [1100, 200],
+  [1100, 260],
+  [1440, 200],
+  [1440, 260],
+] as const) {
+  test(`Attachments's folder pane leaves the list whole at ${width}px, ${paneWidth}px wide (#339)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const errors = await openAttachmentsPane(page, { preferences: { folder_pane_width: paneWidth } })
+    const pane = page.getByRole('navigation', { name: 'Attachment filters', exact: true })
+    const content = page.locator('main > [data-region="content"]')
+    await expect(pane).toHaveAttribute('data-region', 'folders')
+    await expect(pane.getByRole('heading', { level: 2, name: 'Attachment filters' })).toBeVisible()
+    const controls = [
+      pane.getByRole('textbox', { name: 'File name' }),
+      pane.getByRole('textbox', { name: 'From' }),
+      pane.getByRole('combobox', { name: 'Type' }),
+      pane.getByRole('combobox', { name: 'When' }),
+      pane.getByRole('combobox', { name: 'Account' }),
+    ]
+    for (const control of controls) await expect(control).toBeVisible()
+    for (const label of ['File name', 'From', 'Type', 'When', 'Account'])
+      await expect(pane.locator('label', { hasText: new RegExp(`^${label}$`) })).toBeVisible()
+    // Right after the rail, at the shared width, and the list right after it.
+    const rail = await boxOf(page.locator('main > aside').first())
+    const paneBox = await boxOf(pane)
+    expect(Math.abs(paneBox.x - (rail.x + rail.width))).toBeLessThanOrEqual(1)
+    expect(Math.abs(paneBox.width - Math.min(paneWidth, width - 60 - 360))).toBeLessThanOrEqual(1)
+    const contentBox = await boxOf(content)
+    expect(Math.abs(contentBox.x - (paneBox.x + paneBox.width))).toBeLessThanOrEqual(1)
+    expect(contentBox.x + contentBox.width).toBeLessThanOrEqual(width + 1)
+    expect(contentBox.width).toBeGreaterThanOrEqual(359)
+    // The bar is gone from the module, and the pane is the only region.
+    await expect(page.locator('[data-region="folders"]')).toHaveCount(1)
+    await expect(content.locator('[data-region="folders"]')).toHaveCount(0)
+    await expect(content.getByLabel('File name')).toHaveCount(0)
+    await settled(page)
+    await ltrInView(page, `attachments at ${width}px, folders ${paneWidth}px`)
+    const outside = await content.evaluate((region) => {
+      const { left, right } = region.getBoundingClientRect()
+      return [...region.querySelectorAll<HTMLElement>('button, input, select')]
+        .map((element) => ({ element, box: element.getBoundingClientRect() }))
+        .filter(({ box }) => box.width > 0 && (box.left < left - 1 || box.right > right + 1))
+        .map(({ element }) => element.getAttribute('aria-label') ?? element.textContent?.trim().slice(0, 40))
+    })
+    expect(outside).toEqual([])
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    // Nothing in the pane's body scrolls sideways, and every control lies
+    // inside the pane: the long account address gives way.
+    const body = await page.evaluate(() => {
+      const scroller = document.querySelector<HTMLElement>('[data-folder-pane] > div:nth-child(2)')!
+      return { scroll: scroller.scrollWidth, client: scroller.clientWidth }
+    })
+    expect(body.scroll).toBeLessThanOrEqual(body.client + 1)
+    const drawn = await boxOf(pane)
+    for (const control of controls) {
+      const box = await boxOf(control)
+      expect(box.x).toBeGreaterThanOrEqual(drawn.x - 1)
+      expect(box.x + box.width).toBeLessThanOrEqual(drawn.x + drawn.width + 1)
+    }
+    expect(errors).toEqual([])
+  })
+}
+
+test('at 1024px Attachments keeps its filter bar under the header, and draws no folder pane (#339)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 900 })
+  const errors = await openAttachmentsPane(page)
+  await expect(page.locator('[data-folder-pane]')).toHaveCount(0)
+  await expect(page.getByRole('separator', { name: 'Resize folder pane' })).toHaveCount(0)
+  await expect(page.getByRole('navigation', { name: 'Attachment filters' })).toHaveCount(0)
+  await expect(page.locator('[data-region="folders"]')).toHaveCount(0)
+  const content = page.locator('main > [data-region="content"]')
+  await expect(content.getByRole('textbox', { name: 'File name' })).toBeVisible()
+  await expect(content.getByRole('textbox', { name: 'From' })).toBeVisible()
+  await expect(content.getByRole('combobox', { name: 'Type' })).toBeVisible()
+  await expect(content.getByRole('combobox', { name: 'When' })).toBeVisible()
+  await expect(content.getByRole('combobox', { name: 'Account' })).toBeVisible()
+  // No visible labels: the bar names its controls with aria-label only.
+  await expect(content.locator('label')).toHaveCount(0)
+  // The bar sits under the header and over the list, and it holds its controls.
+  const bar = await boxOf(content.getByRole('textbox', { name: 'From' }).locator('..'))
+  const header = await boxOf(content.locator('header'))
+  expect(bar.y).toBeGreaterThanOrEqual(header.y + header.height - 1)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await ltrInView(page, 'attachments at 1024px')
+  expect(errors).toEqual([])
+})
+
+test('Attachments filters from the pane and keeps the values and the list across 1025px (#339)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const errors = await openAttachmentsPane(page)
+  const pane = page.getByRole('navigation', { name: 'Attachment filters', exact: true })
+  const asked = () =>
+    page.evaluate(() =>
+      (window as any).startupProbe.requests
+        .filter((item: any) => item.command === 'attachments.list')
+        .map((item: any) => item.payload),
+    )
+  await pane.getByRole('combobox', { name: 'Type' }).selectOption('pdf')
+  await pane.getByRole('textbox', { name: 'File name' }).fill('report')
+  await pane.getByRole('textbox', { name: 'From' }).fill('sender')
+  await expect.poll(async () => (await asked()).at(-1)).toMatchObject({ kind: 'pdf', name: 'report', sender: 'sender' })
+  await pane.getByRole('combobox', { name: 'Account' }).selectOption('second-account')
+  await expect.poll(async () => (await asked()).at(-1)).toMatchObject({ account: 'second-account', kind: 'pdf' })
+  // Mark the list's row: a rebuilt list would lose the mark.
+  await page.getByText('report.pdf').evaluate((element) => ((element as any).keptAcross = true))
+  const requests = (await asked()).length
+
+  await page.setViewportSize({ width: 1024, height: 900 })
+  await expect(page.locator('[data-folder-pane]')).toHaveCount(0)
+  const content = page.locator('main > [data-region="content"]')
+  await expect(content.getByRole('combobox', { name: 'Type' })).toHaveValue('pdf')
+  await expect(content.getByRole('textbox', { name: 'File name' })).toHaveValue('report')
+  await expect(content.getByRole('textbox', { name: 'From' })).toHaveValue('sender')
+  await expect(content.getByRole('combobox', { name: 'Account' })).toHaveValue('second-account')
+  expect(await page.getByText('report.pdf').evaluate((element) => (element as any).keptAcross)).toBe(true)
+
+  await page.setViewportSize({ width: 1025, height: 900 })
+  await expect(pane.getByRole('combobox', { name: 'Type' })).toHaveValue('pdf')
+  await expect(pane.getByRole('textbox', { name: 'File name' })).toHaveValue('report')
+  await expect(pane.getByRole('textbox', { name: 'From' })).toHaveValue('sender')
+  await expect(pane.getByRole('combobox', { name: 'Account' })).toHaveValue('second-account')
+  expect(await page.getByText('report.pdf').evaluate((element) => (element as any).keptAcross)).toBe(true)
+  // Crossing the width asked the core for nothing.
+  await settled(page)
+  expect((await asked()).length).toBe(requests)
+  expect(errors).toEqual([])
+})
+
+test('the folder pane resized in Attachments is the width mail draws, and the reverse (#339)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await openAttachmentsPane(page)
+  const attachments = page.getByRole('navigation', { name: 'Attachment filters', exact: true })
+  const mail = page.getByRole('navigation', { name: 'Accounts and folders', exact: true })
+  const handleIn = (pane: ReturnType<Page['locator']>) => pane.getByRole('separator', { name: 'Resize folder pane' })
+  const drawn = async (pane: ReturnType<Page['locator']>) => Math.round((await boxOf(pane)).width)
+  const stored = () =>
+    page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}').folder_pane_width)
+  const attachmentsButton = page.getByTitle('Attachments', { exact: true })
+  await expect(handleIn(attachments)).toHaveAttribute('aria-valuenow', '260')
+  await handleIn(attachments).focus()
+  await page.keyboard.press('End')
+  await expect(handleIn(attachments)).toHaveAttribute('aria-valuenow', '400')
+  expect(await drawn(attachments)).toBe(400)
+  await expect.poll(stored).toBe(400)
+  await attachmentsButton.click()
+  await expect(handleIn(mail)).toHaveAttribute('aria-valuenow', '400')
+  await handleIn(mail).focus()
+  await page.keyboard.press('Home')
+  await expect.poll(stored).toBe(200)
+  await attachmentsButton.click()
+  await expect(handleIn(attachments)).toHaveAttribute('aria-valuenow', '200')
+  expect(await drawn(attachments)).toBe(200)
+  expect(errors).toEqual([])
+})
+
+test("in Arabic Attachments's folder pane sits between the rail and the list, and its separator follows the reading (#339)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await openAttachmentsPane(page, { language: 'ar' }, arCatalog)
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+  const pane = page.getByRole('navigation', { name: arCatalog['attachmentsView.filters'], exact: true })
+  await expect(pane).toBeVisible()
+  const railBox = await boxOf(page.locator('main > aside').first())
+  const paneBox = await boxOf(pane)
+  const contentBox = await boxOf(page.locator('main > [data-region="content"]'))
+  expect(Math.abs(paneBox.x + paneBox.width - railBox.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(contentBox.x + contentBox.width - paneBox.x)).toBeLessThanOrEqual(1)
+  expect(contentBox.x).toBeGreaterThanOrEqual(-1)
+  await expect(pane.getByRole('textbox', { name: arCatalog['attachmentsView.searchName'] })).toBeVisible()
+  await rtlInView(page, 'attachments folder pane')
   await settled(page)
   const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
   const blocking = results.violations
