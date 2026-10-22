@@ -154,8 +154,8 @@ export function TasksView() {
     if (name?.trim()) await renameTaskList(current.id, name)
   }
 
-  const removeList = async () => {
-    if (!current) return
+  const removeList = async (): Promise<boolean> => {
+    if (!current) return false
     // A list of an account does not come back on its own, and is added
     // again from «Afegeix una llista»; only a CalDAV one has a password of
     // its own to say goes with it (ADR-0070, §5).
@@ -189,6 +189,7 @@ export function TasksView() {
       tone: 'danger',
     })
     if (confirmed) await deleteTaskList(current.id)
+    return confirmed
   }
 
   const open = (task: Task) => {
@@ -226,7 +227,7 @@ export function TasksView() {
         <FolderPane title={t('tasks.taskLists', { defaultValue: 'Task lists' })}>
           <TaskListsPane
             onRename={() => void renameList()}
-            onDelete={() => void removeList()}
+            onDelete={removeList}
             onAddCalDav={() => setAddingCalDav(true)}
           />
         </FolderPane>

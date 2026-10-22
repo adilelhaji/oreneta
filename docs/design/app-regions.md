@@ -56,9 +56,9 @@ mòdul.
   subfinestra de carpetes comuna va substituir «Comptes i carpetes» al correu,
   amb el mateix nom i la mateixa regió, i a partir de 1025 px també la columna
   de calendaris del Calendari (#323), els grups de Persones (#326) i les llistes
-  de Tasques (#329). Les proves
-  que hi arriben amb `main > aside` canvien al pas 4 (ADR-0068 §8), quan la
-  barra passa a ser el `<nav>` «Mòduls» d'ADR-0068 §1.
+  de Tasques (#329). Les proves que hi arriben amb `main > aside` canvien al
+  pas 4 (ADR-0068 §8), quan la barra passa a ser el `<nav>` «Mòduls»
+  d'ADR-0068 §1.
 - La barra vertical té nom perquè no hi hagi dues regions complementàries sense
   nom quan la barra lateral de detalls és oberta.
 - Fins al pas 2, la columna de Notes té el mateix nom que `<main>` («Notes»).
@@ -67,9 +67,10 @@ mòdul.
   `<main>`, es diu «Calendaris» des de #323. La de Persones no era cap punt de
   referència (una `<section>` sense nom, només la regió `folders`): la
   subfinestra de #326 es diu «Grups de contactes», diferent de `<main>`
-  («Persones») i de «Grups» en tots els catàlegs, per decisió del propietari. Tasques no tenia cap regió «carpetes» (les
-  pestanyes eren dins del mòdul): la subfinestra de #329 es diu «Llistes de
-  tasques», diferent de `<main>` («Tasques») en els 20 catàlegs.
+  («Persones») i de «Grups» en tots els catàlegs, per decisió del propietari.
+  Tasques no tenia cap regió «carpetes» (les pestanyes eren dins del mòdul): la
+  subfinestra de #329 es diu «Llistes de tasques», diferent de `<main>`
+  («Tasques») en els 20 catàlegs, per decisió del propietari.
 - L'avís d'actualització és una regió que té per nom el mateix text de l'avís,
   perquè no quedi contingut fora de cap regió. Encara no té cap prova
   automàtica: les proves arrenquen sense cap actualització disponible.

@@ -175,8 +175,10 @@ export function AddAccountListMenu({ entries, inline = false }: { entries: Accou
     }
   }
 
+  // In the folder pane the menu is a block in the flow; beside the tabs, an inline popup anchor.
+  const Wrapper = inline ? 'div' : 'span'
   return (
-    <span className={inline ? 'block' : 'relative'}>
+    <Wrapper className={inline ? undefined : 'relative'}>
       <button
         type="button"
         aria-expanded={open}
@@ -245,6 +247,6 @@ export function AddAccountListMenu({ entries, inline = false }: { entries: Accou
           })}
         </ul>
       )}
-    </span>
+    </Wrapper>
   )
 }

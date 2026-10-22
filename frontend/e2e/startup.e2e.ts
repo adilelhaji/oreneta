@@ -5419,9 +5419,10 @@ async function openTasksPane(page: Page, options: SetupOptions = {}, catalog = e
     replies['tasks.list'] = {
       tasks: [task(1, 'Renew the contract', 'mail'), task(2, 'Fix the tap', 'list:home'), task(3, 'Water the plants', 'list:home'), task(4, 'Sync the phone', 'list:dav')],
     }
-    replies['tasks.createList'] = { id: 'list:new' }
-    replies['tasks.renameList'] = {}
-    replies['tasks.deleteList'] = {}
+    // As the core answers (meron-core/src/main.rs).
+    replies['tasks.createList'] = { ok: true, id: 'list:new' }
+    replies['tasks.renameList'] = { ok: true }
+    replies['tasks.deleteList'] = { ok: true }
     // A list kept on a server is synced when Tasks opens.
     replies['tasks.sync'] = { lists: [], accounts: [] }
   })
@@ -5548,6 +5549,35 @@ test("Tasks's lists choose, create, rename and delete from the folder pane (#329
   expect(errors).toEqual([])
 })
 
+test('a click on a list or on “Add a list” lands while the empty “New list” field is open (#329)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const errors = await openTasksPane(page)
+  const pane = page.getByRole('navigation', { name: 'Task lists', exact: true })
+  await pane.getByRole('button', { name: 'New list', exact: true }).click()
+  const field = pane.getByLabel('New list name')
+  await expect(field).toBeFocused()
+  // One click, with the field empty: the press blurs it, and nothing may move
+  // under the pointer before the click ends.
+  await pane.getByRole('button', { name: 'Home (2)', exact: true }).click()
+  await expect(pane.getByRole('button', { name: 'Home (2)', exact: true })).toHaveAttribute('aria-current', 'true')
+  await expect(page.getByText('Fix the tap')).toBeVisible()
+  await expect(field).toBeVisible()
+  // The same for “Add a list”, below the lists.
+  await pane.getByRole('button', { name: /Add a list/ }).click()
+  await expect(pane.getByRole('button', { name: /Add a list/ })).toHaveAttribute('aria-expanded', 'true')
+  await expect(pane.getByRole('button', { name: /Exchange tasks of/ })).toBeVisible()
+  // Escape cancels the field and the focus goes back to the button.
+  await field.focus()
+  await page.keyboard.press('Escape')
+  await expect(field).toHaveCount(0)
+  await expect(pane.getByRole('button', { name: 'New list', exact: true })).toBeFocused()
+  // Down moves to the next list and chooses it, as the tabs' arrows did.
+  await pane.getByRole('button', { name: 'Home (2)', exact: true }).focus()
+  await page.keyboard.press('ArrowDown')
+  await expect(pane.getByTitle('A CalDAV list on a server with a very long name (1)')).toHaveAttribute('aria-current', 'true')
+  expect(errors).toEqual([])
+})
+
 test('the folder pane resized in Tasks is the width mail draws, and the reverse (#329)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   const errors = await openTasksPane(page)
@@ -5634,16 +5664,20 @@ test("in Arabic Tasks's folder pane sits between the rail and the tasks, and its
 })
 
 // At the app's 200 % the pane keeps its px width (ADR-0068 §7): its text grows.
-for (const width of [1440, 1025]) {
-  test(`Tasks's folder pane stays in px at the app's 200 %, everything in it inside it: ${width}px (#329)`, async ({
+for (const [width, paneWidth] of [
+  [1440, 260],
+  [1025, 260],
+  [1025, 400],
+] as const) {
+  test(`Tasks's folder pane stays in px at the app's 200 %, everything in it inside it: ${width}px, ${paneWidth}px wide (#329)`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 1000 })
-    const errors = await openTasksPane(page)
+    const errors = await openTasksPane(page, { preferences: { folder_pane_width: paneWidth } })
     const pane = page.getByRole('navigation', { name: 'Task lists', exact: true })
     await expect(pane).toBeVisible()
     const before = Math.round((await boxOf(pane)).width)
-    expect(before).toBe(260)
+    expect(before).toBe(paneWidth)
     const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
     for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
     expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
@@ -5656,7 +5690,7 @@ for (const width of [1440, 1025]) {
     expect(zoomed).toBeLessThanOrEqual(before)
     await settled(page)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-    await ltrInView(page, `tasks at 200 %, ${width}px`)
+    await ltrInView(page, `tasks at 200 %, ${width}px, folders ${paneWidth}px`)
     await insidePane(page, pane)
     await page.keyboard.press(`${mod}+Digit0`)
     expect(Math.round((await boxOf(pane)).width)).toBe(before)

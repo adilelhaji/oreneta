@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Pencil, Plus, Server, Trash2 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
+import { handleGroupArrowKeys } from '../../lib/direction'
 import { clsx } from '../../lib/utils'
 import { MAIL_LIST, createTaskList, listName, tasks$ } from '../../states/tasks'
 import { IconButton } from '../button/IconButton'
@@ -25,7 +26,8 @@ export function TaskListsPane({
   onAddCalDav,
 }: {
   onRename: () => void
-  onDelete: () => void
+  /** Resolves to whether the list was deleted: the confirmation can be declined. */
+  onDelete: () => Promise<boolean>
   onAddCalDav: () => void
 }) {
   const { t } = useTranslation()
@@ -34,6 +36,18 @@ export function TaskListsPane({
   const accountLists = useValue(tasks$.accountLists)
   const [newList, setNewList] = useState<string | null>(null)
   const current = lists.find((list) => list.id === selectedList)
+  const newButton = useRef<HTMLButtonElement | null>(null)
+  const listRef = useRef<HTMLUListElement | null>(null)
+
+  // The row that held the focus is gone with the list it acted on: focus goes
+  // to "All", which is where the selection goes.
+  const deleteCurrent = async () => {
+    if (await onDelete()) listRef.current?.querySelector<HTMLElement>('[data-list-row="all"]')?.focus()
+  }
+  const closeNewList = () => {
+    setNewList(null)
+    newButton.current?.focus()
+  }
 
   const entries = [
     { id: 'all', label: t('tasks.allLists', { defaultValue: 'All' }), open: -1 },
@@ -50,6 +64,7 @@ export function TaskListsPane({
     <div className="flex flex-col gap-1 px-3 py-2">
       <div className="flex flex-wrap items-center gap-1">
         <IconButton
+          ref={newButton}
           icon={Plus}
           iconSize={14}
           size="sm"
@@ -77,30 +92,18 @@ export function TaskListsPane({
               iconSize={14}
               size="sm"
               label={t('tasks.deleteListNamed', { name: listName(current), defaultValue: 'Delete {name}' })}
-              onClick={onDelete}
+              onClick={() => void deleteCurrent()}
             />
           </>
         )}
       </div>
-      {newList !== null && (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (newList.trim()) void createTaskList(newList)
-            setNewList(null)
-          }}
-        >
-          <input
-            autoFocus
-            value={newList}
-            aria-label={t('tasks.newListName', { defaultValue: 'New list name' })}
-            onChange={(event) => setNewList(event.target.value)}
-            onBlur={() => !newList.trim() && setNewList(null)}
-            className="w-full min-w-0 rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent-fg"
-          />
-        </form>
-      )}
-      <ul className="flex flex-col">
+      <ul
+        ref={listRef}
+        className="flex flex-col"
+        // Up and Down move between the lists in reading order, as the arrows
+        // moved between the tabs (ADR-0061); Home and End go to the ends.
+        onKeyDown={(event) => handleGroupArrowKeys(event, '[data-list-row]', 'vertical')}
+      >
         {entries.map((entry) => {
           const active = selectedList === entry.id
           const named =
@@ -111,6 +114,7 @@ export function TaskListsPane({
             <li key={entry.id}>
               <button
                 type="button"
+                data-list-row={entry.id}
                 aria-current={active ? 'true' : undefined}
                 // The name can end in "…" in a narrow pane: the tooltip has it
                 // whole, with its open tasks (ADR-0068 §4), and the accessible
@@ -137,6 +141,32 @@ export function TaskListsPane({
         })}
       </ul>
       <AddAccountListMenu entries={accountLists} inline />
+      {newList !== null && (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (newList.trim()) void createTaskList(newList)
+            closeNewList()
+          }}
+        >
+          <input
+            autoFocus
+            value={newList}
+            aria-label={t('tasks.newListName', { defaultValue: 'New list name' })}
+            onChange={(event) => setNewList(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                event.stopPropagation()
+                closeNewList()
+              }
+            }}
+            // The field stays until Enter or Escape: closing it on blur moved
+            // the rows under the pointer before the click on one of them ended.
+            className="w-full min-w-0 rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent-fg"
+          />
+        </form>
+      )}
     </div>
   )
 }
