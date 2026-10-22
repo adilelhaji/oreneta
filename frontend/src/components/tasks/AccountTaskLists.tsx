@@ -151,7 +151,7 @@ export function AccountListNotices({
  * request. Shown only when there is one. A CalDAV one with no calendar of
  * the same server and user to sign in with asks for the password.
  */
-export function AddAccountListMenu({ entries }: { entries: AccountTaskList[] }) {
+export function AddAccountListMenu({ entries, inline = false }: { entries: AccountTaskList[]; inline?: boolean }) {
   const { t } = useTranslation()
   const accountName = useAccountName()
   const declined = declinedAccountLists(entries)
@@ -175,18 +175,31 @@ export function AddAccountListMenu({ entries }: { entries: AccountTaskList[] }) 
     }
   }
 
+  // In the folder pane the menu is a block in the flow; beside the tabs, an inline popup anchor.
+  const Wrapper = inline ? 'div' : 'span'
   return (
-    <span className="relative">
+    <Wrapper className={inline ? undefined : 'relative'}>
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer"
+        className={
+          inline
+            ? 'w-full rounded-control-sm px-2 py-1.5 text-start text-ui text-secondary hover:bg-hover cursor-pointer'
+            : 'rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer'
+        }
       >
         + {t('tasks.addList', { defaultValue: 'Add a list' })}
       </button>
       {open && (
-        <ul className="absolute start-0 top-full z-20 mt-1 flex min-w-64 flex-col gap-1 rounded-panel border border-border bg-chats p-2 shadow-md">
+        <ul
+          className={
+            inline
+              ? // In the folder pane the list opens in the flow: a popup would be cut by the pane's edge.
+                'mt-1 flex flex-col gap-1 rounded-panel border border-border bg-chats p-2'
+              : 'absolute start-0 top-full z-20 mt-1 flex min-w-64 flex-col gap-1 rounded-panel border border-border bg-chats p-2 shadow-md'
+          }
+        >
           {declined.map((entry) => {
             const account = accountName(entry.account)
             const label =
@@ -234,6 +247,6 @@ export function AddAccountListMenu({ entries }: { entries: AccountTaskList[] }) 
           })}
         </ul>
       )}
-    </span>
+    </Wrapper>
   )
 }

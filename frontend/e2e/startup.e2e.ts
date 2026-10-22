@@ -4647,8 +4647,13 @@ for (const language of ['en', 'ca', 'ar']) {
     expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'folders', 'modules'])
     await audit('people', catalog['people.title'])
 
-    await page.getByTitle(catalog['tasks.title'], { exact: true }).click()
+    const tasksButton = page.getByTitle(catalog['tasks.title'], { exact: true })
+    await tasksButton.click()
     await expect(page.getByText('Review the figures')).toBeVisible()
+    // The lists are the folder pane (#329), beside the module: from the rail,
+    // F6 goes to the module, then the pane, then back to the rail.
+    await tasksButton.focus()
+    expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'folders', 'modules'])
     await audit('tasks', catalog['tasks.title'])
 
     await page.getByTitle(catalog['notes.title'], { exact: true }).click()
@@ -5396,6 +5401,311 @@ for (const width of [1440, 1025]) {
     await expect(page.getByRole('heading', { name: 'Ada Lovelace' })).toBeVisible()
     await settled(page)
     await ltrInView(page, `a person at 200 %, ${width}px`)
+    await insidePane(page, pane)
+    await page.keyboard.press(`${mod}+Digit0`)
+    expect(Math.round((await boxOf(pane)).width)).toBe(before)
+    expect(errors).toEqual([])
+  })
+}
+
+// #329: the task lists in the common folder pane (ADR-0068 §4), at the one
+// width every module shares. The tasks stay beside it and take all the room it
+// leaves. At 1024 px and below the pane is not drawn, and the lists keep their
+// tabs in the row under the header.
+async function openTasksPane(page: Page, options: SetupOptions = {}, catalog = enCatalog) {
+  const errors = await prepareStartup(page, true, { navigation: true, ...options })
+  await page.addInitScript(() => {
+    const replies = (window as any).startupProbe.replies
+    const task = (id: number, title: string, list: string) => ({
+      id, thread_id: '', account_id: '', folder_id: '', note: 'A note that is long enough to wrap in a narrow window', due_at: null,
+      completed_at: null, created_at: 0, subject: '', from_name: '', from_addr: '', linked: false, list_id: list,
+      title, priority: 1, reminder_at: null, revision: 1,
+    })
+    replies['tasks.lists'] = {
+      lists: [
+        { id: 'mail', name: '', position: 0, open: 1 },
+        { id: 'list:home', name: 'Home', position: 1, open: 2 },
+        { id: 'list:dav', name: 'A CalDAV list on a server with a very long name', position: 2, open: 1, remote_url: 'https://dav.example.test/ana/tasks/', synced_at: 1760000000, last_error: '', conflicts: 0 },
+      ],
+      account_lists: [
+        { account: 'synthetic-account', source: 'ews', state: 'declined', list_id: '', adopted: false, notified: true, last_error: '', kind: 'ews', url: '' },
+      ],
+    }
+    replies['tasks.list'] = {
+      tasks: [task(1, 'Renew the contract', 'mail'), task(2, 'Fix the tap', 'list:home'), task(3, 'Water the plants', 'list:home'), task(4, 'Sync the phone', 'list:dav')],
+    }
+    // As the core answers (meron-core/src/main.rs).
+    replies['tasks.createList'] = { ok: true, id: 'list:new' }
+    replies['tasks.renameList'] = { ok: true }
+    replies['tasks.deleteList'] = { ok: true }
+    // A list kept on a server is synced when Tasks opens.
+    replies['tasks.sync'] = { lists: [], accounts: [] }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await page.getByTitle(catalog['tasks.title'], { exact: true }).click()
+  await expect(page.getByRole('main', { name: catalog['tasks.title'], exact: true })).toBeVisible()
+  return errors
+}
+
+for (const [width, paneWidth] of [
+  [1025, 200],
+  [1025, 260],
+  [1025, 400],
+  [1100, 200],
+  [1100, 260],
+  [1440, 200],
+  [1440, 260],
+] as const) {
+  test(`Tasks's folder pane leaves the tasks whole at ${width}px, ${paneWidth}px wide (#329)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const errors = await openTasksPane(page, { preferences: { folder_pane_width: paneWidth } })
+    const pane = page.getByRole('navigation', { name: 'Task lists', exact: true })
+    const content = page.locator('main > [data-region="content"]')
+    await expect(pane).toHaveAttribute('data-region', 'folders')
+    await expect(pane.getByRole('heading', { level: 2, name: 'Task lists' })).toBeVisible()
+    await expect(pane.getByRole('button', { name: 'All', exact: true })).toBeVisible()
+    await expect(pane.getByRole('button', { name: 'Mail follow-up (1)', exact: true })).toBeVisible()
+    await expect(pane.getByRole('button', { name: 'Home (2)', exact: true })).toBeVisible()
+    await expect(pane.getByRole('button', { name: 'New list', exact: true })).toBeVisible()
+    await expect(pane.getByRole('button', { name: /Add a list/ })).toBeVisible()
+    // Right after the rail, at the shared width, and the module right after it.
+    const rail = await boxOf(page.locator('main > aside').first())
+    const paneBox = await boxOf(pane)
+    expect(Math.abs(paneBox.x - (rail.x + rail.width))).toBeLessThanOrEqual(1)
+    expect(Math.abs(paneBox.width - paneWidth)).toBeLessThanOrEqual(1)
+    await expect(pane.getByRole('separator', { name: 'Resize folder pane' })).toHaveAttribute('aria-valuenow', String(paneWidth))
+    const contentBox = await boxOf(content)
+    expect(Math.abs(contentBox.x - (paneBox.x + paneBox.width))).toBeLessThanOrEqual(1)
+    expect(contentBox.x + contentBox.width).toBeLessThanOrEqual(width + 1)
+    // The tasks take all the room the rail and the pane leave.
+    expect(contentBox.width).toBeGreaterThanOrEqual(width - 60 - paneWidth - 2)
+    // The tabs are gone from beside the tasks.
+    await expect(content.locator('[data-region="folders"]')).toHaveCount(0)
+    await expect(page.getByRole('tablist')).toHaveCount(0)
+
+    await expect(content.getByText('Renew the contract')).toBeVisible()
+    await pane.getByRole('button', { name: 'Home (2)', exact: true }).click()
+    await expect(content.getByText('Fix the tap')).toBeVisible()
+    await expect(content.getByText('Renew the contract')).toHaveCount(0)
+    await settled(page)
+    await ltrInView(page, `tasks at ${width}px, folders ${paneWidth}px`)
+    const outside = await content.evaluate((region) => {
+      const { left, right } = region.getBoundingClientRect()
+      return [...region.querySelectorAll<HTMLElement>('button, input, h1')]
+        .map((element) => ({ element, box: element.getBoundingClientRect() }))
+        .filter(({ box }) => box.width > 0 && (box.left < left - 1 || box.right > right + 1))
+        .map(({ element }) => element.getAttribute('aria-label') ?? element.textContent?.trim().slice(0, 40))
+    })
+    expect(outside).toEqual([])
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await insidePane(page, pane)
+    expect(errors).toEqual([])
+  })
+}
+
+test('at 1024px Tasks keeps its lists as tabs under the header, and draws no folder pane (#329)', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 900 })
+  const errors = await openTasksPane(page)
+  await expect(page.locator('[data-folder-pane]')).toHaveCount(0)
+  await expect(page.getByRole('separator', { name: 'Resize folder pane' })).toHaveCount(0)
+  await expect(page.getByRole('navigation', { name: 'Task lists' })).toHaveCount(0)
+  const tabs = page.getByRole('tablist', { name: 'Lists' })
+  await expect(tabs.getByRole('tab')).toHaveCount(4)
+  await tabs.getByRole('tab', { name: /Home/ }).click()
+  await expect(tabs.getByRole('tab', { name: /Home/ })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByText('Fix the tap')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Rename list', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Delete list', exact: true })).toBeVisible()
+  await ltrInView(page, 'tasks at 1024px')
+  expect(errors).toEqual([])
+})
+
+test("Tasks's lists choose, create, rename and delete from the folder pane (#329)", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const errors = await openTasksPane(page)
+  const pane = page.getByRole('navigation', { name: 'Task lists', exact: true })
+  const requests = (command: string) =>
+    page.evaluate(
+      (name) => (window as any).startupProbe.requests.filter((request: any) => request.command === name).map((request: any) => request.payload),
+      command,
+    )
+  // The long name is cut with "…" and whole in its tooltip, with its count.
+  const long = pane.getByTitle('A CalDAV list on a server with a very long name (1)')
+  await expect(long).toBeVisible()
+  await long.click()
+  await expect(long).toHaveAttribute('aria-current', 'true')
+  await expect(page.getByText('Sync the phone')).toBeVisible()
+  // A list kept on a server says where, above the tasks.
+  await expect(page.getByText(/Kept on dav\.example\.test/)).toBeVisible()
+
+  await pane.getByRole('button', { name: 'Home (2)', exact: true }).click()
+  await expect(pane.getByRole('button', { name: 'Home (2)', exact: true })).toHaveAttribute('aria-current', 'true')
+  page.once('dialog', (dialog) => void dialog.accept('Household'))
+  await pane.getByRole('button', { name: 'Rename Home', exact: true }).click()
+  await expect.poll(async () => (await requests('tasks.renameList')).at(-1)).toEqual({ id: 'list:home', name: 'Household' })
+
+  // Deleting asks first, naming the list, and leaves "All" on show.
+  await pane.getByRole('button', { name: 'Delete Home', exact: true }).click()
+  const confirm = page.getByRole('alertdialog').or(page.getByRole('dialog'))
+  await expect(confirm.getByText('Home and every task in it will be deleted.')).toBeVisible()
+  await confirm.getByRole('button', { name: 'Delete', exact: true }).click()
+  await expect.poll(async () => (await requests('tasks.deleteList')).at(-1)).toEqual({ id: 'list:home' })
+  await expect(pane.getByRole('button', { name: 'All', exact: true })).toHaveAttribute('aria-current', 'true')
+
+  await pane.getByRole('button', { name: 'New list', exact: true }).click()
+  await pane.getByLabel('New list name').fill('Errands')
+  await page.keyboard.press('Enter')
+  await expect.poll(async () => (await requests('tasks.createList')).at(-1)).toEqual({ name: 'Errands' })
+
+  await pane.getByRole('button', { name: 'All', exact: true }).click()
+  await expect(pane.getByRole('button', { name: 'All', exact: true })).toHaveAttribute('aria-current', 'true')
+  await expect(pane.getByRole('button', { name: /^(Rename|Delete) / })).toHaveCount(0)
+  expect(errors).toEqual([])
+})
+
+test('a click on a list or on “Add a list” lands while the empty “New list” field is open (#329)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const errors = await openTasksPane(page)
+  const pane = page.getByRole('navigation', { name: 'Task lists', exact: true })
+  await pane.getByRole('button', { name: 'New list', exact: true }).click()
+  const field = pane.getByLabel('New list name')
+  await expect(field).toBeFocused()
+  // One click, with the field empty: the press blurs it, and nothing may move
+  // under the pointer before the click ends.
+  await pane.getByRole('button', { name: 'Home (2)', exact: true }).click()
+  await expect(pane.getByRole('button', { name: 'Home (2)', exact: true })).toHaveAttribute('aria-current', 'true')
+  await expect(page.getByText('Fix the tap')).toBeVisible()
+  await expect(field).toBeVisible()
+  // The same for “Add a list”, below the lists.
+  await pane.getByRole('button', { name: /Add a list/ }).click()
+  await expect(pane.getByRole('button', { name: /Add a list/ })).toHaveAttribute('aria-expanded', 'true')
+  await expect(pane.getByRole('button', { name: /Exchange tasks of/ })).toBeVisible()
+  // Escape cancels the field and the focus goes back to the button.
+  await field.focus()
+  await page.keyboard.press('Escape')
+  await expect(field).toHaveCount(0)
+  await expect(pane.getByRole('button', { name: 'New list', exact: true })).toBeFocused()
+  // Down moves to the next list and chooses it, as the tabs' arrows did.
+  await pane.getByRole('button', { name: 'Home (2)', exact: true }).focus()
+  await page.keyboard.press('ArrowDown')
+  await expect(pane.getByTitle('A CalDAV list on a server with a very long name (1)')).toHaveAttribute('aria-current', 'true')
+  expect(errors).toEqual([])
+})
+
+test('the folder pane resized in Tasks is the width mail draws, and the reverse (#329)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await openTasksPane(page)
+  const tasks = page.getByRole('navigation', { name: 'Task lists', exact: true })
+  const mail = page.getByRole('navigation', { name: 'Accounts and folders', exact: true })
+  const handleIn = (pane: ReturnType<Page['locator']>) => pane.getByRole('separator', { name: 'Resize folder pane' })
+  const drawn = async (pane: ReturnType<Page['locator']>) => Math.round((await boxOf(pane)).width)
+  const stored = () => page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}').folder_pane_width)
+  const tasksButton = page.getByTitle('Tasks', { exact: true })
+  await expect(handleIn(tasks)).toHaveAttribute('aria-valuenow', '260')
+
+  // The keyboard in Tasks: the widest it goes, kept for mail.
+  await handleIn(tasks).focus()
+  await page.keyboard.press('End')
+  await expect(handleIn(tasks)).toHaveAttribute('aria-valuenow', '400')
+  expect(await drawn(tasks)).toBe(400)
+  await expect.poll(stored).toBe(400)
+  await tasksButton.click()
+  await expect(mail).toBeVisible()
+  await expect(handleIn(mail)).toHaveAttribute('aria-valuenow', '400')
+  expect(await drawn(mail)).toBe(400)
+
+  // Narrowed in mail, Tasks's is as narrow.
+  await handleIn(mail).focus()
+  await page.keyboard.press('Home')
+  await expect.poll(stored).toBe(200)
+  await tasksButton.click()
+  await expect(handleIn(tasks)).toHaveAttribute('aria-valuenow', '200')
+  expect(await drawn(tasks)).toBe(200)
+
+  // The pointer in Tasks: 60 px towards the end of the line.
+  const grip = await boxOf(handleIn(tasks))
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + 300)
+  await page.mouse.down()
+  await page.mouse.move(grip.x + grip.width / 2 + 60, grip.y + 300, { steps: 4 })
+  await page.mouse.up()
+  const dragged = Number(await handleIn(tasks).getAttribute('aria-valuenow'))
+  expect(Math.abs(dragged - 260)).toBeLessThanOrEqual(2)
+  expect(Math.abs((await boxOf(tasks)).width - dragged)).toBeLessThanOrEqual(1)
+  await expect.poll(stored).toBe(dragged)
+
+  // Kept across a restart, in both modules.
+  await page.reload()
+  await expect(handleIn(mail)).toHaveAttribute('aria-valuenow', String(dragged))
+  await tasksButton.click()
+  await expect(handleIn(tasks)).toHaveAttribute('aria-valuenow', String(dragged))
+  expect(errors).toEqual([])
+})
+
+test("in Arabic Tasks's folder pane sits between the rail and the tasks, and its separator follows the reading (#329)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await openTasksPane(page, { language: 'ar' }, arCatalog)
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+  const pane = page.getByRole('navigation', { name: arCatalog['tasks.taskLists'], exact: true })
+  await expect(pane).toBeVisible()
+  const railBox = await boxOf(page.locator('main > aside').first())
+  const paneBox = await boxOf(pane)
+  const contentBox = await boxOf(page.locator('main > [data-region="content"]'))
+  expect(Math.abs(paneBox.x + paneBox.width - railBox.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(contentBox.x + contentBox.width - paneBox.x)).toBeLessThanOrEqual(1)
+  expect(contentBox.x).toBeGreaterThanOrEqual(-1)
+  const handle = pane.getByRole('separator', { name: arCatalog['layout.resizeFolderPane'], exact: true })
+  const handleBox = await boxOf(handle)
+  expect(Math.abs(handleBox.x + handleBox.width / 2 - paneBox.x)).toBeLessThanOrEqual(1)
+  await handle.focus()
+  await page.keyboard.press('ArrowLeft')
+  await expect(handle).toHaveAttribute('aria-valuenow', '276')
+  const grown = await boxOf(pane)
+  expect(Math.round(grown.width)).toBe(276)
+  expect(Math.round(grown.x + grown.width)).toBe(Math.round(paneBox.x + paneBox.width))
+  await page.keyboard.press('Shift+ArrowRight')
+  await expect(handle).toHaveAttribute('aria-valuenow', '212')
+  await insidePane(page, pane)
+  await rtlInView(page, 'tasks folder pane')
+  await settled(page)
+  const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+  const blocking = results.violations
+    .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+    .map((violation) => `${violation.id} (${violation.impact}) on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`)
+  expect(blocking).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// At the app's 200 % the pane keeps its px width (ADR-0068 §7): its text grows.
+for (const [width, paneWidth] of [
+  [1440, 260],
+  [1025, 260],
+  [1025, 400],
+] as const) {
+  test(`Tasks's folder pane stays in px at the app's 200 %, everything in it inside it: ${width}px, ${paneWidth}px wide (#329)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 })
+    const errors = await openTasksPane(page, { preferences: { folder_pane_width: paneWidth } })
+    const pane = page.getByRole('navigation', { name: 'Task lists', exact: true })
+    await expect(pane).toBeVisible()
+    const before = Math.round((await boxOf(pane)).width)
+    expect(before).toBe(paneWidth)
+    const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+    for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
+    await expect(pane.getByRole('heading', { level: 2, name: 'Task lists' })).toBeVisible()
+    // It does not grow with the zoom. At 1025 px the rail's rem width grows and
+    // the pane, which gives way first, may lose a few px.
+    const zoomed = Math.round((await boxOf(pane)).width)
+    if (width === 1440) expect(zoomed).toBe(before)
+    else expect(zoomed).toBeGreaterThanOrEqual(before - 10)
+    expect(zoomed).toBeLessThanOrEqual(before)
+    await settled(page)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await ltrInView(page, `tasks at 200 %, ${width}px, folders ${paneWidth}px`)
     await insidePane(page, pane)
     await page.keyboard.press(`${mod}+Digit0`)
     expect(Math.round((await boxOf(pane)).width)).toBe(before)

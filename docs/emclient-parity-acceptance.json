@@ -144,6 +144,14 @@
           {
             "sha": "3e809cd30102d6714fcf0e28c3b0ec41e0f0d943",
             "result": "frontend/src/components/people/PeopleFolderPane.test.tsx"
+          },
+          {
+            "sha": "5147dc16fc2e4e80bdf3b235caf5853aca63e3fc",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "5147dc16fc2e4e80bdf3b235caf5853aca63e3fc",
+            "result": "frontend/src/components/tasks/TasksFolderPane.test.tsx"
           }
         ],
         "native": [],
@@ -192,6 +200,10 @@
           },
           {
             "sha": "3e809cd30102d6714fcf0e28c3b0ec41e0f0d943",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "5147dc16fc2e4e80bdf3b235caf5853aca63e3fc",
             "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
@@ -1302,6 +1314,14 @@
           {
             "sha": "5b13b75003a439b59391d72b0faf54b0d323e013",
             "result": "integration_account_task_lists_test.go"
+          },
+          {
+            "sha": "5147dc16fc2e4e80bdf3b235caf5853aca63e3fc",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "5147dc16fc2e4e80bdf3b235caf5853aca63e3fc",
+            "result": "frontend/src/components/tasks/TasksFolderPane.test.tsx"
           }
         ],
         "native": [],
@@ -1624,6 +1644,10 @@
           },
           {
             "sha": "3e809cd30102d6714fcf0e28c3b0ec41e0f0d943",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "5147dc16fc2e4e80bdf3b235caf5853aca63e3fc",
             "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
