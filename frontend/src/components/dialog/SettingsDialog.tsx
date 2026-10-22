@@ -369,7 +369,7 @@ function NavItem({
       title={title}
       className={`flex min-h-9 items-center gap-2.5 rounded-control border px-3 py-2 text-xs font-semibold transition-colors cursor-pointer text-start ${
         active
-          ? 'bg-accent/10 border-accent/20 text-accent shadow-sm'
+          ? 'bg-accent/10 border-accent/20 text-accent-fg shadow-sm'
           : 'border-transparent text-secondary hover:text-primary hover:bg-hover/80'
       }`}
     >
@@ -401,7 +401,7 @@ function AccountGroup({
         <button
           onClick={onAdd}
           title={t('accounts.actions.addAccount')}
-          className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:text-accent hover:bg-accent/10 cursor-pointer transition-colors"
+          className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:text-accent-fg hover:bg-accent/10 cursor-pointer transition-colors"
         >
           <Plus size={14} strokeWidth={1.75} />
         </button>
@@ -603,7 +603,7 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
                 type="button"
                 onClick={() => setPropertiesFor(calendar.id)}
                 title={t('calendar.properties', { defaultValue: 'Calendar properties' })}
-                className="min-w-0 flex-1 text-start transition-colors hover:text-accent cursor-pointer"
+                className="min-w-0 flex-1 text-start transition-colors hover:text-accent-fg cursor-pointer"
               >
                 <span dir="auto" className="block truncate text-xs font-medium text-primary">{calendar.name}</span>
                 {/* When its contents last came from the server. A hidden
@@ -630,7 +630,7 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
             type="button"
             disabled={importing}
             onClick={() => void runImport()}
-            className="flex items-center gap-1.5 rounded-control px-2.5 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/10 disabled:opacity-50 disabled:cursor-default cursor-pointer"
+            className="flex items-center gap-1.5 rounded-control px-2.5 py-1.5 text-xs font-medium text-accent-fg transition-colors hover:bg-accent/10 disabled:opacity-50 disabled:cursor-default cursor-pointer"
           >
             <RefreshCw size={14} className={importing ? 'animate-spin' : ''} strokeWidth={1.75} />
             {t('calendar.importFromAccount', { defaultValue: "Import the account's calendars" })}
@@ -638,7 +638,7 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="flex items-center gap-1.5 rounded-control px-2.5 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/10 cursor-pointer"
+            className="flex items-center gap-1.5 rounded-control px-2.5 py-1.5 text-xs font-medium text-accent-fg transition-colors hover:bg-accent/10 cursor-pointer"
           >
             <Plus size={14} strokeWidth={1.75} />
             {t('calendar.addCalendar', { defaultValue: 'Add calendar' })}
@@ -664,7 +664,7 @@ function CalendarPropertiesDialog({ calendar, onClose }: { calendar: CalendarMod
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-primary">
-            <CalendarDays size={16} className="text-accent" strokeWidth={1.75} />
+            <CalendarDays size={16} className="text-accent-fg" strokeWidth={1.75} />
             {t('calendar.properties', { defaultValue: 'Calendar properties' })}
           </h2>
           <button
@@ -709,7 +709,7 @@ function AddAccountCalendarDialog({ accountId, onClose }: { accountId: string; o
         onClick={(event) => event.stopPropagation()}
       >
         <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-primary">
-          <CalendarDays size={16} className="text-accent" strokeWidth={1.75} />
+          <CalendarDays size={16} className="text-accent-fg" strokeWidth={1.75} />
           {t('calendar.addCalendar', { defaultValue: 'Add calendar' })}
         </h2>
         <label className="flex w-full flex-col gap-1.5">
@@ -723,7 +723,7 @@ function AddAccountCalendarDialog({ accountId, onClose }: { accountId: string; o
               if (event.key === 'Enter' && name.trim() && !busy) void submit()
             }}
             autoFocus
-            className="w-full rounded-control border border-border bg-raised px-3 py-2 text-xs text-primary outline-none transition-all focus:border-transparent focus:bg-chats focus:ring-1 focus:ring-accent"
+            className="w-full rounded-control border border-border bg-raised px-3 py-2 text-xs text-primary outline-none transition-all focus:border-transparent focus:bg-chats focus:ring-1 focus:ring-accent-fg"
           />
         </label>
         {error && <p className="mt-2 text-caption text-danger">{error}</p>}
@@ -770,7 +770,7 @@ function CalendarGroup({ activeKey, onSelect }: { activeKey: string; onSelect: (
         <button
           onClick={() => setAdding(true)}
           title={t('calendar.addCalendar', { defaultValue: 'Add calendar' })}
-          className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:text-accent hover:bg-accent/10 cursor-pointer transition-colors"
+          className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:text-accent-fg hover:bg-accent/10 cursor-pointer transition-colors"
         >
           <Plus size={14} strokeWidth={1.75} />
         </button>
@@ -835,7 +835,7 @@ function BoardGroup({
         <button
           onClick={() => onSelect(createKanbanBoard())}
           title={t('kanban.actions.addBoard')}
-          className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:text-accent hover:bg-accent/10 cursor-pointer transition-colors"
+          className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:text-accent-fg hover:bg-accent/10 cursor-pointer transition-colors"
         >
           <Plus size={14} strokeWidth={1.75} />
         </button>
@@ -848,7 +848,7 @@ function BoardGroup({
             {board.avatarUrl ? (
               <img src={board.avatarUrl} alt="" className="h-5 w-5 shrink-0 rounded-md object-cover" />
             ) : (
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent-fg">
                 <Columns3 size={14} strokeWidth={1.75} />
               </span>
             )}

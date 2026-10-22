@@ -151,7 +151,7 @@ export function ThreadTable({
                     title={fixedOrder ? t(sort ? 'table.fixedOrder' : 'table.snoozedOrder') : undefined}
                     className={clsx(
                       'flex min-h-8 w-full items-center gap-1 px-2 py-1.5 text-caption font-semibold transition-colors cursor-pointer hover:bg-hover',
-                      active ? 'text-accent' : 'text-secondary',
+                      active ? 'text-accent-fg' : 'text-secondary',
                     )}
                   >
                     <span className="min-w-0 truncate">{t(column.labelKey)}</span>
@@ -239,7 +239,7 @@ export function ThreadTable({
                         )}
                       />
                       {thread.priority && (
-                        <Sparkle size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-accent" />
+                        <Sparkle size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-accent-fg" />
                       )}
                       {thread.starred && (
                         <Star

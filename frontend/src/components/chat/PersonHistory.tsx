@@ -74,7 +74,7 @@ export function PersonHistory({
           {context.conversations.map((c) => (
             <li key={c.thread_id}>
               <button type="button" className={row} onClick={() => onOpenConversation(c.thread_id, c.folder)}>
-                <MessageSquare size={14} strokeWidth={1.75} className="shrink-0 text-accent" aria-hidden="true" />
+                <MessageSquare size={14} strokeWidth={1.75} className="shrink-0 text-accent-fg" aria-hidden="true" />
                 <span className="min-w-0 flex-1 truncate text-primary">
                   {c.subject || t('chat.noSubject', { defaultValue: '(no subject)' })}
                 </span>
@@ -95,7 +95,7 @@ export function PersonHistory({
           {context.events.map((e) => (
             <li key={`${e.calendar_id}:${e.event_id}`}>
               <button type="button" className={row} onClick={() => onOpenEvent(e.start)}>
-                <CalendarDays size={14} strokeWidth={1.75} className="shrink-0 text-accent" aria-hidden="true" />
+                <CalendarDays size={14} strokeWidth={1.75} className="shrink-0 text-accent-fg" aria-hidden="true" />
                 <span dir="auto" className="min-w-0 flex-1 truncate text-primary">{e.subject}</span>
                 <span className="shrink-0 text-secondary">{day(e.start)}</span>
               </button>
@@ -114,7 +114,7 @@ export function PersonHistory({
           {context.files.map((f, index) => (
             <li key={`${f.thread_id}:${f.filename}:${index}`}>
               <button type="button" className={row} onClick={() => onOpenConversation(f.thread_id, f.folder)}>
-                <File size={14} strokeWidth={1.75} className="shrink-0 text-accent" aria-hidden="true" />
+                <File size={14} strokeWidth={1.75} className="shrink-0 text-accent-fg" aria-hidden="true" />
                 <span dir="auto" className="min-w-0 flex-1 truncate text-primary">{f.filename}</span>
                 <span className="shrink-0 text-secondary">{formatFileSize(f.size)}</span>
               </button>

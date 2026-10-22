@@ -148,7 +148,7 @@ export function ProfilesGroup() {
               value={deleting.typed}
               aria-label={t('profiles.typeName', { defaultValue: 'Profile name to confirm' })}
               onChange={(event) => setDeleting({ ...deleting, typed: event.target.value })}
-              className="min-w-0 flex-1 rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent"
+              className="min-w-0 flex-1 rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent-fg"
             />
             <button type="submit" className={action} disabled={deleting.typed.trim() !== deleting.name}>
               {t('profiles.deleteEverything', { defaultValue: 'Delete with everything in it' })}
@@ -181,7 +181,7 @@ export function ProfilesGroup() {
             maxLength={60}
             aria-label={t('profiles.newName', { defaultValue: 'New profile name' })}
             onChange={(event) => setAdding(event.target.value)}
-            className="min-w-0 flex-1 rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent"
+            className="min-w-0 flex-1 rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent-fg"
           />
           <button type="submit" className={action}>
             {t('profiles.create', { defaultValue: 'Create' })}

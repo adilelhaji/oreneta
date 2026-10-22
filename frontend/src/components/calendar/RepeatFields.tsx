@@ -7,7 +7,7 @@ import { weekdayOrder } from '../../lib/calendarWeek'
 type T = ReturnType<typeof useTranslation>['t']
 
 const defaultInputClass =
-  'w-full rounded-control border border-border bg-raised px-3 py-2 text-xs text-primary outline-none transition-all focus:border-transparent focus:bg-chats focus:ring-1 focus:ring-accent'
+  'w-full rounded-control border border-border bg-raised px-3 py-2 text-xs text-primary outline-none transition-all focus:border-transparent focus:bg-chats focus:ring-1 focus:ring-accent-fg'
 
 /// How an event or a task repeats: the frequency, the days for a weekly rule,
 /// the day of a monthly one, and when it stops. One editor for both, so a

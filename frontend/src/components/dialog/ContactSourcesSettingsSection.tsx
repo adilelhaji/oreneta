@@ -198,7 +198,7 @@ export function ContactSourcesSettingsSection() {
               type="button"
               disabled={busy}
               onClick={() => readAccountBook(read, account.email)}
-              className="shrink-0 rounded-control px-3 py-1.5 text-caption font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer disabled:opacity-50"
+              className="shrink-0 rounded-control px-3 py-1.5 text-caption font-semibold text-accent-fg transition-colors hover:bg-accent/10 cursor-pointer disabled:opacity-50"
             >
               {label}
             </button>

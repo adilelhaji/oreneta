@@ -359,7 +359,7 @@ function KanbanColumnContent({
               )}
             </h3>
             {((searchActive && loading) || syncing) && (
-              <Loader2 size={14} className="shrink-0 animate-spin text-accent" strokeWidth={1.75} />
+              <Loader2 size={14} className="shrink-0 animate-spin text-accent-fg" strokeWidth={1.75} />
             )}
             {unreadCount > 0 && (
               <span className="h-4.5 min-w-4.5 px-1.5 flex items-center justify-center rounded-full bg-accent text-on-accent text-2xs font-bold leading-none shrink-0">

@@ -79,7 +79,7 @@ it('loads a stored row, defaulting fields it does not know', async () => {
   hydrateSettings({ reply_forward: { replyPosition: 'below', forwardMode: 'carrier-pigeon' } })
   expect(settings$.replyForward.get()).toEqual({ ...DEFAULT_REPLY_FORWARD_PREFS, replyPosition: 'below' })
   const screen = render(<RepliesForwardsGroup />)
-  expect(screen.getByRole('button', { name: 'Below the quote' }).className).toContain('text-accent')
+  expect(screen.getByRole('button', { name: 'Below the quote' }).className).toContain('text-accent-fg')
   // Hydration does not echo the value back to the store.
   expect(saves.filter((save) => save.key === 'reply_forward')).toEqual([])
 })

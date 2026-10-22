@@ -25,7 +25,7 @@ const WIDTHS: Record<DialogWidth, string> = {
 type DialogIconTone = 'accent' | 'danger'
 
 const ICON_TONES: Record<DialogIconTone, string> = {
-  accent: 'bg-accent/10 text-accent',
+  accent: 'bg-accent/10 text-accent-fg',
   danger: 'bg-danger-soft text-danger',
 }
 

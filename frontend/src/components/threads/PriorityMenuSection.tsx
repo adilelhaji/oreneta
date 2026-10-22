@@ -68,7 +68,7 @@ export function PriorityMenuSection({
           <Sparkle
             size={14}
             aria-hidden="true"
-            className={verdict.priority ? 'text-accent' : 'text-secondary'}
+            className={verdict.priority ? 'text-accent-fg' : 'text-secondary'}
             strokeWidth={1.75}
           />
           {verdict.priority ? t('priority.isPriority') : t('priority.notPriority')}

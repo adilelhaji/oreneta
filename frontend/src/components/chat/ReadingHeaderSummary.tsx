@@ -69,7 +69,7 @@ export function ReadingHeaderSummary({
       onContextMenu={onSenderMenu}
       aria-expanded={detailsOpen}
       aria-label={t('chat.conversationDetails')}
-      className="mt-0.5 flex min-w-0 max-w-full items-center gap-2 rounded-sm text-start outline-none transition-colors cursor-pointer hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/40"
+      className="mt-0.5 flex min-w-0 max-w-full items-center gap-2 rounded-sm text-start outline-none transition-colors cursor-pointer hover:text-accent-fg focus-visible:ring-2 focus-visible:ring-accent/40"
     >
       {/* Overlapping faces, oldest of the shown behind. Small enough to read
           as one object rather than as a row of controls. */}

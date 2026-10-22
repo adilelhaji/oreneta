@@ -69,7 +69,7 @@ export function ProtectionComposeControls({
         aria-pressed={sign}
         onClick={() => onSignChange(!sign)}
         className={`flex h-8 w-8 items-center justify-center rounded-control transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-30 ${
-          sign ? 'bg-active text-accent' : 'text-secondary hover:bg-hover'
+          sign ? 'bg-active text-accent-fg' : 'text-secondary hover:bg-hover'
         }`}
       >
         <ShieldCheck size={16} strokeWidth={1.75} />
@@ -81,7 +81,7 @@ export function ProtectionComposeControls({
         aria-pressed={encrypt}
         onClick={() => onEncryptChange(!encrypt)}
         className={`flex h-8 w-8 items-center justify-center rounded-control transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-30 ${
-          encrypt ? 'bg-active text-accent' : 'text-secondary hover:bg-hover'
+          encrypt ? 'bg-active text-accent-fg' : 'text-secondary hover:bg-hover'
         }`}
       >
         <KeyRound size={16} strokeWidth={1.75} />

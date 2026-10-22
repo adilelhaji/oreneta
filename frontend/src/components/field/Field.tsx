@@ -50,7 +50,7 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function T
         'min-w-0 border text-primary placeholder-secondary transition-colors disabled:cursor-not-allowed disabled:opacity-60',
         INPUT_SIZES[fieldSize],
         INPUT_SURFACES[surface],
-        invalid ? 'border-danger focus:border-danger' : 'border-input focus:border-accent',
+        invalid ? 'border-danger focus:border-danger' : 'border-input focus:border-accent-fg',
         className,
       )}
       {...rest}
@@ -74,7 +74,7 @@ export const SelectInput = forwardRef<HTMLSelectElement, SelectInputProps>(funct
       <select
         ref={ref}
         className={clsx(
-          'w-full min-w-0 appearance-none border border-input text-primary transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 focus:border-accent',
+          'w-full min-w-0 appearance-none border border-input text-primary transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 focus:border-accent-fg',
           INPUT_SIZES[fieldSize],
           INPUT_SURFACES[surface],
           'pe-8',
@@ -116,7 +116,7 @@ export function Field({
         placeholder={placeholder}
         className={`${
           inputClassName ??
-          'w-full text-xs py-2 px-3.5 rounded-control border border-input bg-raised text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'
+          'w-full text-xs py-2 px-3.5 rounded-control border border-input bg-raised text-primary placeholder-secondary focus:ring-1 focus:ring-accent-fg focus:border-transparent focus:bg-chats transition-all outline-none'
         } disabled:cursor-not-allowed disabled:opacity-60`}
       />
     </label>

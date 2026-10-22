@@ -59,7 +59,7 @@ export function AccountDialogGraph({ ctl }: { ctl: AccountDialogController }) {
         {label('signIn', 'Sign in with Microsoft Graph')}
       </button>
       {busy && (
-        <p role="status" aria-live="polite" className="text-caption text-accent">
+        <p role="status" aria-live="polite" className="text-caption text-accent-fg">
           {progress.state === 'authorizing'
             ? label('waiting', 'Complete sign-in in your browser.')
             : `${label('syncing', 'Preparing folders and Inbox…')} ${progress.pages ?? 0} ${label('pages', 'pages')}, ${progress.changes ?? 0} ${label('changes', 'changes')}`}

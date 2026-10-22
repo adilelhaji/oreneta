@@ -31,7 +31,7 @@ function BoardTile({ board, size, className = '' }: { board: KanbanBoard; size: 
   return (
     <div
       style={{ width: size, height: size }}
-      className={`flex shrink-0 items-center justify-center rounded-panel bg-accent/10 text-accent border border-accent/10 ${className}`}
+      className={`flex shrink-0 items-center justify-center rounded-panel bg-accent/10 text-accent-fg border border-accent/10 ${className}`}
     >
       <Columns3 size={Math.round(size * 0.45)} strokeWidth={1.75} />
     </div>

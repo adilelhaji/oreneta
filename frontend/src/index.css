@@ -110,7 +110,7 @@
 }
 .mail-navigation [aria-current] {
   background: var(--me-bg-active);
-  color: var(--me-accent);
+  color: var(--me-accent-fg);
   font-weight: 600;
 }
 .mail-navigation input {
@@ -240,7 +240,7 @@
   box-shadow: 0 0 0 2px var(--me-accent);
 }
 .mail-navigation [data-drop-target='ok'] {
-  outline: 2px dashed var(--me-accent);
+  outline: 2px dashed var(--me-accent-fg);
   outline-offset: -2px;
   border-radius: var(--radius-control-sm);
 }
@@ -335,6 +335,9 @@
   --color-accent: var(--me-accent);
   --color-accent-hover: var(--me-accent-hover);
   --color-on-accent: var(--me-accent-text);
+  /* The accent drawn as text, an icon or a focus ring: 4.5:1 on every surface
+     (#311). Use bg-accent / border-accent for fills. */
+  --color-accent-fg: var(--me-accent-fg);
   --color-success: var(--me-success);
   --color-success-soft: var(--me-success-soft);
   --color-warning: var(--me-warning);
@@ -438,6 +441,7 @@
    palettes. */
 :root {
   --me-accent-text: #ffffff;
+  --me-accent-fg: #2056dd;
   --me-info-soft: #e7eefb;
   --me-info: #2056dd;
   --me-danger-soft: #fce9ed;
@@ -478,6 +482,7 @@
 
 .dark {
   --me-accent-text: #101b2e;
+  --me-accent-fg: #7ea6ff;
   --me-info-soft: #203554;
   --me-info: #a0bdff;
   --me-danger-soft: #411e2a;
@@ -542,12 +547,20 @@ textarea {
    above removes the browser's ring for pointer focus; this puts a single,
    consistent one back for keyboard focus only, so a person tabbing through
    the app can always see where they are and a person clicking never sees a
-   ring they did not ask for. The ring is the solid accent (#287), not a
-   translucent mix, so its contrast does not depend on what lies under it. */
+   ring they did not ask for. The ring is the solid accent as text and ring
+   (#287, #311), not a translucent mix, so its contrast does not depend on
+   what lies under it. */
 :focus-visible {
-  outline: 2px solid var(--me-accent);
+  outline: 2px solid var(--me-accent-fg);
   outline-offset: 2px;
   border-radius: inherit;
+}
+/* The module rail is dark in every theme, and the accent as text is darkened
+   for light content surfaces, which would drop the ring under 3:1 there in
+   Mist, Dawn and Honey. The rail keeps the accent fill until piece 14
+   replaces it (#311). */
+[data-region='modules'] :focus-visible {
+  outline-color: var(--me-accent);
 }
 input:focus-visible,
 textarea:focus-visible,
@@ -601,7 +614,7 @@ textarea,
 /* The shared solid ring above marks keyboard focus; the box only takes the
    accent edge, without a translucent halo of its own. */
 .app-checkbox:focus-visible {
-  border-color: var(--me-accent);
+  border-color: var(--me-accent-fg);
 }
 
 .app-checkbox:checked,
@@ -1275,7 +1288,7 @@ textarea,
   color: var(--me-text-secondary);
 }
 .tiptap-body a {
-  color: var(--me-accent);
+  color: var(--me-accent-fg);
   text-decoration: underline;
 }
 .tiptap-body code {

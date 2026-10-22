@@ -144,7 +144,7 @@ export function CommandPalette() {
                     <span className="block">{command.label}</span>
                     <span className="block text-caption text-secondary">{command.hint}</span>
                   </span>
-                  {command.active && <Check size={14} className="shrink-0 text-accent" strokeWidth={1.75} />}
+                  {command.active && <Check size={14} className="shrink-0 text-accent-fg" strokeWidth={1.75} />}
                   {command.shortcut && (
                     <kbd className="shrink-0 rounded border border-border bg-app px-1.5 py-0.5 text-2xs font-medium text-secondary">
                       {formatShortcut(command.shortcut).join(isMac ? '' : '+')}

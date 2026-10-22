@@ -20,7 +20,7 @@ import { Button } from '../button/Button'
 import { Dialog } from '../dialog/Dialog'
 
 const field =
-  'w-full rounded-control-sm border border-border bg-app px-2 py-1.5 text-caption text-primary outline-none focus:border-accent'
+  'w-full rounded-control-sm border border-border bg-app px-2 py-1.5 text-caption text-primary outline-none focus:border-accent-fg'
 
 /**
  * A personalized mailing (#90, ADR-0026): one message per recipient, each
@@ -264,7 +264,7 @@ export function MergeDialog() {
                     <li key={b.id}>
                       <button
                         type="button"
-                        className="text-start text-accent underline"
+                        className="text-start text-accent-fg underline"
                         onClick={() => setWatching(b.id)}
                       >
                         {b.subject} —{' '}

@@ -88,7 +88,7 @@ export function PgpSettingsSection() {
                 key={key.fingerprint}
                 className="flex items-center gap-2 rounded-control border border-accent/30 bg-accent/[0.05] px-3 py-2"
               >
-                <KeyRound size={16} className="shrink-0 text-accent" strokeWidth={1.75} />
+                <KeyRound size={16} className="shrink-0 text-accent-fg" strokeWidth={1.75} />
                 <div className="min-w-0 flex-1">
                   <span className="block truncate text-ui font-semibold">
                     {key.userIds[0] || key.addresses[0] || t('crypto.unnamedKey')}

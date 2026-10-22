@@ -30,9 +30,13 @@ export function TranslationNotice({ message }: { message: Message }) {
   const names = { from: languageName(translation.from), to: languageName(translation.to) }
   const box =
     'mb-2 flex flex-wrap items-center gap-2 rounded-control-sm border border-border/50 px-2.5 py-2 text-caption'
-  const icon = <Languages size={14} strokeWidth={1.75} aria-hidden="true" className="text-accent" />
+  const icon = <Languages size={14} strokeWidth={1.75} aria-hidden="true" className="text-accent-fg" />
   const close = (
-    <button type="button" onClick={() => clearTranslation(message.id)} className="text-accent underline cursor-pointer">
+    <button
+      type="button"
+      onClick={() => clearTranslation(message.id)}
+      className="text-accent-fg underline cursor-pointer"
+    >
       {t('buttons.close')}
     </button>
   )
@@ -95,7 +99,7 @@ export function TranslationNotice({ message }: { message: Message }) {
         <button
           type="button"
           onClick={() => stopTranslating(message.id)}
-          className="text-accent underline cursor-pointer"
+          className="text-accent-fg underline cursor-pointer"
         >
           {t('translation.stop', { defaultValue: 'Stop' })}
         </button>
@@ -130,7 +134,7 @@ export function TranslationNotice({ message }: { message: Message }) {
       <button
         type="button"
         onClick={() => showTranslation(message.id, showingTranslation ? 'original' : 'translation')}
-        className="text-accent underline cursor-pointer"
+        className="text-accent-fg underline cursor-pointer"
       >
         {showingTranslation
           ? t('translation.showOriginal', { defaultValue: 'Show original' })

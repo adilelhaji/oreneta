@@ -223,7 +223,7 @@ export function AddAccountListMenu({ entries }: { entries: AccountTaskList[] }) 
                           value={password}
                           autoComplete="current-password"
                           onChange={(event) => setPassword(event.target.value)}
-                          className="min-w-0 flex-1 rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent"
+                          className="min-w-0 flex-1 rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent-fg"
                         />
                       </label>
                     )}

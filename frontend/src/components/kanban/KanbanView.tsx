@@ -216,7 +216,7 @@ export function KanbanView({ boardId }: { boardId: string }) {
               className="h-9 w-9 shrink-0 rounded-control object-cover border border-accent/10"
             />
           ) : (
-            <div className="flex h-9 w-9 items-center justify-center rounded-control bg-accent/10 text-accent shrink-0 border border-accent/10">
+            <div className="flex h-9 w-9 items-center justify-center rounded-control bg-accent/10 text-accent-fg shrink-0 border border-accent/10">
               <Columns3 size={16} strokeWidth={1.75} />
             </div>
           )}
@@ -341,7 +341,7 @@ export function KanbanView({ boardId }: { boardId: string }) {
             )}
             <button
               type="button"
-              className="group flex h-full w-11 shrink-0 cursor-pointer items-center justify-center rounded-control-sm border border-dashed border-border/80 bg-chats/45 text-secondary transition-colors hover:border-accent/50 hover:bg-chats/75 hover:text-accent focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30"
+              className="group flex h-full w-11 shrink-0 cursor-pointer items-center justify-center rounded-control-sm border border-dashed border-border/80 bg-chats/45 text-secondary transition-colors hover:border-accent/50 hover:bg-chats/75 hover:text-accent-fg focus-visible:border-accent-fg focus-visible:ring-2 focus-visible:ring-accent/30"
               title={t('kanban.actions.addColumn')}
               aria-label={t('kanban.actions.addColumn')}
               onClick={() => void openDialog()}

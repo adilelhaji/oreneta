@@ -90,7 +90,7 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
         <div className="relative flex items-center justify-between gap-2 mb-1.5">
           <div className="relative flex items-center gap-1 min-w-0">
             {!outgoing ? (
-              <span dir="auto" className="text-ui font-bold text-accent select-none truncate tracking-wide">
+              <span dir="auto" className="text-ui font-bold text-accent-fg select-none truncate tracking-wide">
                 {message.from_name || message.from_addr}
               </span>
             ) : (
@@ -122,7 +122,7 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
           </div>
           <div className="flex items-center gap-1 text-caption text-secondary/80 select-none shrink-0">
             {isDraft && (
-              <span className="rounded-full border border-accent/35 bg-accent/10 px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide text-accent">
+              <span className="rounded-full border border-accent/35 bg-accent/10 px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide text-accent-fg">
                 {t('chat.draft')}
               </span>
             )}
@@ -138,7 +138,7 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
                 <button
                   type="button"
                   onClick={() => undoSend(message.id)}
-                  className="flex items-center gap-0.5 text-accent hover:opacity-80 cursor-pointer"
+                  className="flex items-center gap-0.5 text-accent-fg hover:opacity-80 cursor-pointer"
                 >
                   <Undo2 size={14} strokeWidth={1.75} />
                   <span className="text-2xs font-semibold">{t('chat.undoSend', { defaultValue: 'Undo' })}</span>
@@ -169,7 +169,7 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
                   <span className="text-2xs font-semibold">{t('outgoing.title')}</span>
                 </button>
               ) : (
-                <Check size={14} className="text-accent opacity-90" strokeWidth={1.75} />
+                <Check size={14} className="text-accent-fg opacity-90" strokeWidth={1.75} />
               ))}
           </div>
           {/* Anchored to the bubble edge, not the chevron: an outgoing bubble

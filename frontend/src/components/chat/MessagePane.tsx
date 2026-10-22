@@ -243,7 +243,7 @@ export function MessagePane() {
           <span className="text-secondary/90 font-medium">{t('chat.branchNotice')}</span>
           <button
             onClick={() => ui$.selectedThread.set(activeThread.original_thread_id!)}
-            className="flex items-center gap-1 font-semibold text-accent hover:underline cursor-pointer"
+            className="flex items-center gap-1 font-semibold text-accent-fg hover:underline cursor-pointer"
           >
             <span>{t('chat.viewOriginalTopic')}</span>
             <ArrowRight size={14} strokeWidth={1.75} />

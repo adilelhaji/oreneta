@@ -193,7 +193,7 @@ export function MessagingView() {
       >
         <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
           <CompactNavigation />
-          <MessagesSquare size={16} strokeWidth={1.75} className="text-accent" aria-hidden="true" />
+          <MessagesSquare size={16} strokeWidth={1.75} className="text-accent-fg" aria-hidden="true" />
           {accounts.length > 1 ? (
             <select
               aria-label={t('messaging.account', { defaultValue: 'Chat account' })}
@@ -310,7 +310,7 @@ export function MessagingView() {
             <button
               type="button"
               onClick={() => startJoin()}
-              className="flex items-center gap-1.5 text-caption text-accent underline cursor-pointer"
+              className="flex items-center gap-1.5 text-caption text-accent-fg underline cursor-pointer"
             >
               <Users size={14} strokeWidth={1.75} aria-hidden="true" />
               {t('messaging.joinGroup', { defaultValue: 'Join a group' })}
@@ -339,7 +339,7 @@ export function MessagingView() {
                   <button
                     type="button"
                     onClick={() => startJoin(inv.room)}
-                    className="text-accent underline cursor-pointer"
+                    className="text-accent-fg underline cursor-pointer"
                   >
                     {t('messaging.joinInvited', { defaultValue: 'Join…' })}
                   </button>
@@ -432,12 +432,12 @@ export function MessagingView() {
               <button
                 type="button"
                 onClick={() => messaging$.conversation.set('')}
-                className="text-caption font-normal text-accent underline min-[769px]:hidden cursor-pointer"
+                className="text-caption font-normal text-accent-fg underline min-[769px]:hidden cursor-pointer"
               >
                 {t('messaging.back', { defaultValue: 'Conversations' })}
               </button>
-              {openRoom && <Users size={16} strokeWidth={1.75} className="text-accent" aria-hidden="true" />}
-              {privateWith && <Lock size={14} strokeWidth={1.75} className="text-accent" aria-hidden="true" />}
+              {openRoom && <Users size={16} strokeWidth={1.75} className="text-accent-fg" aria-hidden="true" />}
+              {privateWith && <Lock size={14} strokeWidth={1.75} className="text-accent-fg" aria-hidden="true" />}
               <span className="truncate">{privateWith ? privateWith.nick : conversation}</span>
               {privateWith && (
                 <span className="truncate text-caption font-normal text-secondary">
@@ -460,7 +460,7 @@ export function MessagingView() {
                     setShowPeople(!showPeople)
                     if (!showPeople) void loadOccupants().catch(() => {})
                   }}
-                  className="flex items-center gap-1 text-caption font-normal text-accent underline cursor-pointer"
+                  className="flex items-center gap-1 text-caption font-normal text-accent-fg underline cursor-pointer"
                 >
                   {t('messaging.people', { defaultValue: 'People in the group' })}
                   <span className="text-secondary">({occupants.length})</span>
@@ -509,7 +509,7 @@ export function MessagingView() {
                     : t('messaging.mute', { defaultValue: 'Mute notifications' })
                 }
                 className={`${openRoom ? '' : 'ms-auto '}flex min-h-7 shrink-0 items-center rounded-control-sm px-1.5 font-normal cursor-pointer hover:bg-hover ${
-                  muted ? 'text-accent' : 'text-secondary'
+                  muted ? 'text-accent-fg' : 'text-secondary'
                 }`}
               >
                 {muted ? (
@@ -540,7 +540,7 @@ export function MessagingView() {
                     <button
                       type="button"
                       onClick={() => void openPrivate(openRoom.room, o.nick)}
-                      className="ms-auto text-accent underline cursor-pointer"
+                      className="ms-auto text-accent-fg underline cursor-pointer"
                     >
                       {t('messaging.writePrivately', { nick: o.nick, defaultValue: 'Write privately to {nick}' })}
                     </button>
@@ -841,7 +841,7 @@ function StatusRequests() {
             {t('messaging.presence.request', { jid, defaultValue: '{jid} wants to see your status' })}
           </span>
           <span className="flex gap-2">
-            <button type="button" onClick={() => void answer(jid, true)} className="text-accent underline cursor-pointer">
+            <button type="button" onClick={() => void answer(jid, true)} className="text-accent-fg underline cursor-pointer">
               {t('messaging.presence.allow', { defaultValue: 'Allow' })}
             </button>
             <button
@@ -898,7 +898,7 @@ function StatusPermissions() {
         type="button"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className="text-caption text-accent underline cursor-pointer"
+        className="text-caption text-accent-fg underline cursor-pointer"
       >
         {title}
         {allowed && (
@@ -961,7 +961,7 @@ const STOP_WAIT_MS = 30_000
 /** A group's or the account's unread mentions: `@N`, or `@N+` for a lower bound. */
 function MentionBadge({ count, capped, label }: { count: number; capped?: boolean; label: string }) {
   return (
-    <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-accent/15 px-1.5 text-2xs font-semibold text-accent">
+    <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-accent/15 px-1.5 text-2xs font-semibold text-accent-fg">
       <AtSign size={10} strokeWidth={2} aria-hidden="true" />
       <span aria-hidden="true">
         {count}
@@ -996,7 +996,7 @@ function ContactStatus({ jid, show, status, online }: { jid: string; show?: stri
   return (
     <button
       type="button"
-      className="text-caption font-normal text-accent underline cursor-pointer"
+      className="text-caption font-normal text-accent-fg underline cursor-pointer"
       onClick={() =>
         void askToSeeStatus(jid)
           .then(() => setAsked(true))
@@ -1196,7 +1196,7 @@ function Bubble({ message, room }: { message: ChatMessage; room?: string }) {
             {message.sender}
           </button>
           {mention && (
-            <span className="flex items-center gap-0.5 font-semibold text-accent">
+            <span className="flex items-center gap-0.5 font-semibold text-accent-fg">
               <AtSign size={10} strokeWidth={2} aria-hidden="true" />
               {t('messaging.mention', { defaultValue: 'Mentions you' })}
             </span>
@@ -1227,7 +1227,7 @@ function Bubble({ message, room }: { message: ChatMessage; room?: string }) {
           <button
             type="button"
             onClick={() => void retryChat(message.id)}
-            className="text-accent underline cursor-pointer"
+            className="text-accent-fg underline cursor-pointer"
           >
             {t('messaging.retry', { defaultValue: 'Send again' })}
           </button>

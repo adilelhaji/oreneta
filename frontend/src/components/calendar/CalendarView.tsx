@@ -78,7 +78,7 @@ export function CalendarView() {
       {menu && <EventContextMenu state={menu} onClose={() => setMenu(null)} />}
       <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-header px-4 py-3">
         <CompactNavigation />
-        <CalendarDays size={20} className="shrink-0 text-accent" strokeWidth={1.75} />
+        <CalendarDays size={20} className="shrink-0 text-accent-fg" strokeWidth={1.75} />
         <h1 className="min-w-0 wrap-anywhere text-heading-sm font-bold text-primary">{periodLabel(view, anchor, t)}</h1>
         {loading && <RefreshCw size={14} className="shrink-0 animate-spin text-secondary" strokeWidth={1.75} />}
 
@@ -109,7 +109,7 @@ export function CalendarView() {
               title={t('calendar.workWeekHint', { defaultValue: 'Show only the working days of the week' })}
               className={`inline-flex min-h-8 items-center gap-1.5 rounded-control-sm px-2.5 py-1 text-caption font-medium transition-colors cursor-pointer ${
                 calendarPrefs.workWeekOnly
-                  ? 'bg-active text-accent ring-1 ring-accent/30'
+                  ? 'bg-active text-accent-fg ring-1 ring-accent/30'
                   : 'text-secondary hover:bg-hover hover:text-primary'
               }`}
             >
@@ -173,7 +173,7 @@ export function CalendarView() {
           <button
             type="button"
             onClick={() => void retrySync()}
-            className="shrink-0 rounded-control-sm px-2 py-1 text-caption font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer"
+            className="shrink-0 rounded-control-sm px-2 py-1 text-caption font-semibold text-accent-fg transition-colors hover:bg-accent/10 cursor-pointer"
           >
             {t('calendar.retry', { defaultValue: 'Try again' })}
           </button>

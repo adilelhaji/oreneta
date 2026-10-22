@@ -67,7 +67,7 @@ export function ComposerHeaderFields({
         />
         <button
           onClick={() => update({ showCcBcc: !draft.showCcBcc })}
-          className="shrink-0 text-caption font-semibold text-accent hover:underline cursor-pointer"
+          className="shrink-0 text-caption font-semibold text-accent-fg hover:underline cursor-pointer"
         >
           {draft.showCcBcc ? t('composer.actions.hideCcBcc') : t('composer.actions.ccBcc')}
         </button>

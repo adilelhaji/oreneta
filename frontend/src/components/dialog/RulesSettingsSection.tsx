@@ -364,7 +364,7 @@ function RunReport({ report, onClose }: { report: RuleRunReport; onClose: () => 
           ))}
         </ul>
       )}
-      <button type="button" onClick={onClose} className="mt-2 text-caption text-accent underline cursor-pointer">
+      <button type="button" onClick={onClose} className="mt-2 text-caption text-accent-fg underline cursor-pointer">
         {t('common.close')}
       </button>
     </Notice>

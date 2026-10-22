@@ -56,6 +56,12 @@ type SemanticThemeTokens = {
 type DerivedThemeTokens = {
   /** Outline of fields, selects and checkboxes (WCAG 1.4.11, 3:1). */
   borderInput: string
+  /**
+   * The accent drawn as text, an icon or a focus ring (not as a fill): the
+   * accent moved toward the text only as far as it needs to reach 4.5:1 on
+   * every surface (#311). Equal to the accent when it already does.
+   */
+  accentFg: string
 }
 
 export type ThemeTokens = BaseThemeTokens & SemanticThemeTokens & DerivedThemeTokens
@@ -101,6 +107,7 @@ export const TOKEN_CSS_VAR: Record<keyof ThemeTokens, string> = {
   infoSoft: '--me-info-soft',
   accentText: '--me-accent-text',
   borderInput: '--me-border-input',
+  accentFg: '--me-accent-fg',
   bgApp: '--me-bg-app',
   bgChat: '--me-bg-chat',
   bgChatOverlay: '--me-bg-chat-overlay',
@@ -195,8 +202,29 @@ function readableInputBorder(border: string, text: string, surfaces: string[]): 
   return text
 }
 
+/**
+ * Accent as text, icon and focus ring: the accent moved toward the text only
+ * as far as it needs to reach 4.5:1 (which also clears the ring's 3:1) on every
+ * surface, so its hue stays and the accent fill is never touched. The accent
+ * itself when it already passes or when no surface resolves (contrast unknown);
+ * the text when nothing short of it passes, which the editor names as an
+ * accent shortfall.
+ */
+function readableAccent(accent: string, text: string, surfaces: string[]): string {
+  if (surfaces.length === 0) return accent
+  for (let step = 0; step <= 100; step++) {
+    const candidate = step === 0 ? accent : mix(accent, text, step / 100)
+    if (surfaces.every((bg) => (contrastRatio(candidate, bg) ?? 0) >= READABLE_CONTRAST)) return candidate
+  }
+  return text
+}
+
 function derivedTokens(tokens: BaseThemeTokens): DerivedThemeTokens {
-  return { borderInput: readableInputBorder(tokens.border, tokens.textPrimary, themeSurfaces(tokens)) }
+  const surfaces = themeSurfaces(tokens)
+  return {
+    borderInput: readableInputBorder(tokens.border, tokens.textPrimary, surfaces),
+    accentFg: readableAccent(tokens.accent, tokens.textPrimary, surfaces),
+  }
 }
 
 /**
@@ -222,9 +250,10 @@ export type ContrastShortfall = { pair: 'text' | 'accent'; ratio: number }
 export function contrastShortfalls(tokens: ThemeTokens): ContrastShortfall[] {
   const worst = (fg: string, backgrounds: string[]) => Math.min(...backgrounds.map((bg) => contrastRatio(fg, bg) ?? 0))
   const text = worst(tokens.textPrimary, themeSurfaces(tokens))
-  // Accent is drawn as text on the selected folder, account and sort header,
-  // and the folder pane and headers sit on the frame tone (#287).
-  const accent = worst(tokens.accent, [tokens.bgApp, tokens.bgHeader, tokens.bgChats, tokens.bgActive])
+  // The accent as text and ring (#311) is drawn on the selected folder, account
+  // and sort header, and the folder pane and headers sit on the frame tone (#287).
+  // It is derived, so it falls short only when the palette leaves no room.
+  const accent = worst(tokens.accentFg, [tokens.bgApp, tokens.bgHeader, tokens.bgChats, tokens.bgActive])
   const shortfalls: ContrastShortfall[] = []
   if (text < READABLE_CONTRAST) shortfalls.push({ pair: 'text', ratio: text })
   if (accent < READABLE_CONTRAST) shortfalls.push({ pair: 'accent', ratio: accent })
@@ -286,6 +315,7 @@ export function deriveThemeTokens(input: CustomThemeInput): ThemeTokens {
     ...semanticTokens(appearance),
     accentText: accentTextFor(accent),
     borderInput: readableInputBorder(border, text, surfaces),
+    accentFg: readableAccent(accent, text, surfaces),
   }
 }
 
@@ -778,24 +808,23 @@ function sanitizeTokens(raw: unknown, appearance: Appearance): ThemeTokens | nul
   const obj = raw as Record<string, unknown>
   const out = {} as Record<keyof ThemeTokens, string>
   const saved = (key: keyof ThemeTokens) => (typeof obj[key] === 'string' ? (obj[key] as string) : '')
+  const surfaces = themeSurfaces({
+    bgApp: saved('bgApp'),
+    bgHeader: saved('bgHeader'),
+    bgChats: saved('bgChats'),
+    bgChat: saved('bgChat'),
+    bgRaised: saved('bgRaised'),
+    bgHover: saved('bgHover'),
+    bgActive: saved('bgActive'),
+  })
   const fallback = {
     ...semanticTokens(appearance),
     accentText: accentTextFor(saved('accent')),
-    // The field outline is derived from the saved colours themselves, so a
-    // palette saved before the slot existed keeps every colour it had.
-    borderInput: readableInputBorder(
-      saved('border'),
-      saved('textPrimary'),
-      themeSurfaces({
-        bgApp: saved('bgApp'),
-        bgHeader: saved('bgHeader'),
-        bgChats: saved('bgChats'),
-        bgChat: saved('bgChat'),
-        bgRaised: saved('bgRaised'),
-        bgHover: saved('bgHover'),
-        bgActive: saved('bgActive'),
-      }),
-    ),
+    // The field outline and the accent as text are derived from the saved
+    // colours themselves, so a palette saved before the slots existed keeps
+    // every colour it had.
+    borderInput: readableInputBorder(saved('border'), saved('textPrimary'), surfaces),
+    accentFg: readableAccent(saved('accent'), saved('textPrimary'), surfaces),
   }
   for (const key of THEME_TOKEN_KEYS) {
     // Preserve every saved palette value; fill only the newly added slots.

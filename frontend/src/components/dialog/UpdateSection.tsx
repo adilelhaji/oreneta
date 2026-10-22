@@ -57,7 +57,7 @@ export function UpdateSection() {
       {status.state === 'available' && (
         <div className="flex items-center justify-between gap-2">
           <span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-primary">
-            <Sparkles size={14} className="text-accent" strokeWidth={1.75} />
+            <Sparkles size={14} className="text-accent-fg" strokeWidth={1.75} />
             <span className="truncate">{t('updates.available', { version: status.latestVersion })}</span>
           </span>
           <Button variant="primary" size="sm" leftIcon={Download} onClick={() => void startUpdateDownload()}>
@@ -91,7 +91,7 @@ export function UpdateSection() {
               {status.error ? (
                 <AlertCircle size={14} className="shrink-0" strokeWidth={1.75} />
               ) : (
-                <Download size={14} className="text-accent" strokeWidth={1.75} />
+                <Download size={14} className="text-accent-fg" strokeWidth={1.75} />
               )}
               <span className="truncate">
                 {status.error ? t('updates.failed') : t('updates.ready', { version: status.latestVersion })}

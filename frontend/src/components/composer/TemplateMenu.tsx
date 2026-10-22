@@ -89,7 +89,7 @@ export function TemplateMenu({ onPick }: { onPick: (template: Template) => void 
                 event.preventDefault()
                 focusMenuEdge(menuRef.current, 'first')
               }}
-              className="mb-1 w-full rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent"
+              className="mb-1 w-full rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent-fg"
             />
           )}
           {stored.length > 0 && found.length === 0 && (

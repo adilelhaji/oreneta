@@ -23,7 +23,7 @@ export function AccountProviderRail({ mode, setMode }: { mode: SetupMode; setMod
               {p.icon(16)}
             </span>
             <span className="flex min-w-0 flex-col leading-tight">
-              <span className={`truncate text-xs font-bold ${active ? 'text-accent' : 'text-primary'}`}>
+              <span className={`truncate text-xs font-bold ${active ? 'text-accent-fg' : 'text-primary'}`}>
                 {p.label}
               </span>
               <span className="truncate text-2xs font-medium text-secondary">

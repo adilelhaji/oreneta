@@ -10,7 +10,7 @@ import { Dialog } from './Dialog'
 import logo from '../../assets/logo.png'
 
 const actionClass =
-  'inline-flex items-center justify-center gap-2 rounded-control px-4 py-2.5 text-ui font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50 disabled:cursor-not-allowed'
+  'inline-flex items-center justify-center gap-2 rounded-control px-4 py-2.5 text-ui font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-fg disabled:opacity-50 disabled:cursor-not-allowed'
 
 export function AccountSetupWizard({
   ctl,
@@ -78,7 +78,7 @@ export function AccountSetupWizard({
           <li
             key={label}
             aria-current={(step === 'email' ? index === 0 : index === 1) ? 'step' : undefined}
-            className="flex items-center gap-2 aria-[current=step]:text-accent aria-[current=step]:font-semibold"
+            className="flex items-center gap-2 aria-[current=step]:text-accent-fg aria-[current=step]:font-semibold"
           >
             <span className="flex h-6 w-6 items-center justify-center rounded-full border border-current">
               {index + 1}
@@ -117,7 +117,7 @@ export function AccountSetupWizard({
               aria-invalid={invalid}
               aria-describedby={`${emailId}-hint${invalid ? ` ${emailId}-error` : ''}`}
               placeholder={t('accounts.wizard.emailPlaceholder', { defaultValue: 'name@example.com' })}
-              className="w-full rounded-control border border-border bg-raised px-4 py-3 text-title text-primary outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+              className="w-full rounded-control border border-border bg-raised px-4 py-3 text-title text-primary outline-none focus:border-accent-fg focus:ring-2 focus:ring-accent/20"
             />
             <p id={`${emailId}-hint`} className="text-caption leading-relaxed text-secondary">
               {t('accounts.wizard.discoveryOnRequest', {
@@ -209,7 +209,7 @@ export function AccountSetupWizard({
           </fieldset>
           {feedback}
           {ctl.loading && (
-            <p role="status" className="text-caption text-accent">
+            <p role="status" className="text-caption text-accent-fg">
               {t('accounts.wizard.saving')}
             </p>
           )}

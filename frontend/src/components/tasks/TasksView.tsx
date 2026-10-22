@@ -285,7 +285,7 @@ export function TasksView() {
               aria-label={t('tasks.newListName', { defaultValue: 'New list name' })}
               onChange={(event) => setNewList(event.target.value)}
               onBlur={() => !newList.trim() && setNewList(null)}
-              className="w-36 rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent"
+              className="w-36 rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent-fg"
             />
           </form>
         )}
@@ -315,7 +315,7 @@ export function TasksView() {
             </button>
           </span>
         )}
-        <div className="flex min-w-40 flex-1 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-1.5 focus-within:border-accent min-[600px]:max-w-64 min-[600px]:flex-none">
+        <div className="flex min-w-40 flex-1 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-1.5 focus-within:border-accent-fg min-[600px]:max-w-64 min-[600px]:flex-none">
           <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
           <input
             value={search}

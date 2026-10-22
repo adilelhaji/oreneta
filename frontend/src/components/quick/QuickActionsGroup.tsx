@@ -94,7 +94,7 @@ export function QuickActionsGroup() {
             onChange={(e) => setEditing({ ...editing, name: e.target.value })}
             aria-label={t('quick.name', { defaultValue: 'Name' })}
             placeholder={t('quick.name', { defaultValue: 'Name' })}
-            className="rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent"
+            className="rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent-fg"
           />
           <ol className="flex flex-col gap-1.5">
             {editing.steps.map((step, index) => (
