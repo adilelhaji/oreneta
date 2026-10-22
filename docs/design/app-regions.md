@@ -29,7 +29,7 @@ mòdul.
 | Barra vertical | `<aside>` | «Mòduls» | `modules` |
 | Subfinestra de carpetes del correu (`FolderPane`, des de #317) | `<nav>` | el de la seva fila de títol: «Comptes i carpetes» | `folders` |
 | Subfinestra de carpetes del Calendari (`FolderPane`, des de #323); per sota de 1025 px, la columna d'abans | `<nav>` | «Calendaris» | `folders` |
-| Subfinestra de carpetes de Persones (`FolderPane`, des de #326): els grups; per sota de 1025 px, el filtre de grups d'abans, sota la capçalera de la llista | `<nav>` | «Llibretes i grups» | `folders` |
+| Subfinestra de carpetes de Persones (`FolderPane`, des de #326): els grups; per sota de 1025 px, el filtre de grups d'abans, sota la capçalera de la llista | `<nav>` | «Grups de contactes» | `folders` |
 | Columna esquerra de Notes i Xat | la d'avui | la d'avui | `folders` |
 | Mòdul | `<main>` | el del mòdul: «Correu», «Calendari», «Persones», «Tasques», «Notes», «Xat», «Adjunts» | — |
 | Llista de converses o tauler; als altres mòduls, el mòdul sencer | la d'avui | — | `content` |
@@ -54,15 +54,18 @@ mòdul.
   pinta abans que les carpetes, a la mateixa fila. Al pas 2 (#317) la
   subfinestra de carpetes comuna va substituir «Comptes i carpetes» al correu,
   amb el mateix nom i la mateixa regió, i a partir de 1025 px també la columna
-  de calendaris del Calendari (#323) i els grups de Persones (#326). Les proves que hi arriben amb
-  `main > aside` canvien al pas 4 (ADR-0068 §8), quan la barra passa a ser el
-  `<nav>` «Mòduls» d'ADR-0068 §1.
+  de calendaris del Calendari (#323) i els grups de Persones (#326). Les proves
+  que hi arriben amb `main > aside` canvien al pas 4 (ADR-0068 §8), quan la
+  barra passa a ser el `<nav>` «Mòduls» d'ADR-0068 §1.
 - La barra vertical té nom perquè no hi hagi dues regions complementàries sense
   nom quan la barra lateral de detalls és oberta.
 - Fins al pas 2, la columna de Notes té el mateix nom que `<main>` («Notes»).
   Són de rols diferents i axe no ho marca, però ADR-0068 §1 no ho permet: el pas
   2 li dona el nom «Etiquetes». La del Calendari, que es deia «Calendari» com
-  `<main>`, es diu «Calendaris» des de #323. La de Persones no era cap punt de referència (una `<section>` sense nom, només la regió `folders`): la subfinestra de #326 hi posa el nom «Llibretes i grups», diferent de `<main>` («Persones») en tots els catàlegs.
+  `<main>`, es diu «Calendaris» des de #323. La de Persones no era cap punt de
+  referència (una `<section>` sense nom, només la regió `folders`): la
+  subfinestra de #326 es diu «Grups de contactes», diferent de `<main>`
+  («Persones») i de «Grups» en tots els catàlegs, per decisió del propietari.
 - L'avís d'actualització és una regió que té per nom el mateix text de l'avís,
   perquè no quedi contingut fora de cap regió. Encara no té cap prova
   automàtica: les proves arrenquen sense cap actualització disponible.
