@@ -122,7 +122,7 @@ afterEach(() => {
 const written = (key: string) =>
   calls.filter((call) => call.command === 'app.prefsSet' && call.payload.key === key).map((call) => call.payload.value)
 
-const pane = (screen: ReturnType<typeof render>) => screen.getByRole('navigation', { name: 'Address books and groups' })
+const pane = (screen: ReturnType<typeof render>) => screen.getByRole('navigation', { name: 'Contact groups' })
 const content = (screen: ReturnType<typeof render>) =>
   screen.container.querySelector<HTMLElement>('[data-region="content"]')!
 const rows = (screen: ReturnType<typeof render>) =>
@@ -136,8 +136,8 @@ describe('People in the common folder pane (ADR-0068 §4, #326)', () => {
     const nav = pane(screen)
     expect(nav.dataset.region).toBe('folders')
     expect(nav.hasAttribute('data-folder-pane')).toBe(true)
-    expect(within(nav).getByRole('heading', { level: 2, name: 'Address books and groups' }).getAttribute('title')).toBe(
-      'Address books and groups',
+    expect(within(nav).getByRole('heading', { level: 2, name: 'Contact groups' }).getAttribute('title')).toBe(
+      'Contact groups',
     )
     // Beside the module, not inside it: the pane comes first, then the list.
     expect(content(screen).contains(nav)).toBe(false)
@@ -154,9 +154,9 @@ describe('People in the common folder pane (ADR-0068 §4, #326)', () => {
     const screen = render(<PeopleView />)
     const nav = within(pane(screen))
     const all = nav.getByRole('button', { name: 'All contacts' })
-    const group = nav.getByRole('button', { name: /^Climbing\s*2$/ })
-    expect(all.getAttribute('aria-pressed')).toBe('true')
-    expect(group.getAttribute('aria-pressed')).toBe('false')
+    const group = nav.getByRole('button', { name: 'Climbing (2)' })
+    expect(all.getAttribute('aria-current')).toBe('true')
+    expect(group.getAttribute('aria-current')).toBeNull()
     // A name that can end in "…" is whole in its tooltip, with its count.
     expect(group.getAttribute('title')).toBe('Climbing (2)')
     const long = nav.getByTitle(`${shared.name} (1)`)
@@ -165,8 +165,8 @@ describe('People in the common folder pane (ADR-0068 §4, #326)', () => {
 
     fireEvent.click(group)
     expect(people$.groupFilter.peek()).toBe(climbing.id)
-    expect(group.getAttribute('aria-pressed')).toBe('true')
-    expect(all.getAttribute('aria-pressed')).toBe('false')
+    expect(group.getAttribute('aria-current')).toBe('true')
+    expect(all.getAttribute('aria-current')).toBeNull()
 
     fireEvent.click(long)
     expect(rows(screen)).toEqual(['Zoe Adams'])
@@ -186,8 +186,7 @@ describe('People in the common folder pane (ADR-0068 §4, #326)', () => {
     const screen = render(<PeopleView />)
     const nav = within(pane(screen))
     // With none on show, only "New group".
-    expect(nav.queryByRole('button', { name: 'Rename group' })).toBeNull()
-    expect(nav.queryByRole('button', { name: 'Delete group' })).toBeNull()
+    expect(nav.queryByRole('button', { name: /^(Rename|Delete) / })).toBeNull()
     expect(nav.queryByRole('button', { name: /^Write to everyone/ })).toBeNull()
 
     fireEvent.click(nav.getByRole('button', { name: 'New group' }))
@@ -202,8 +201,11 @@ describe('People in the common folder pane (ADR-0068 §4, #326)', () => {
     })
     await waitFor(() => expect(people$.groupEditing.peek()).toBeNull())
 
-    fireEvent.click(nav.getByRole('button', { name: /^Climbing/ }))
-    fireEvent.click(nav.getByRole('button', { name: 'Rename group' }))
+    fireEvent.click(nav.getByRole('button', { name: 'Climbing (2)' }))
+    // Each action says which group it acts on, as its name and its tooltip.
+    const rename = nav.getByRole('button', { name: 'Rename Climbing' })
+    expect(rename.getAttribute('title')).toBe('Rename Climbing')
+    fireEvent.click(rename)
     expect(people$.groupEditing.peek()).toEqual({
       id: climbing.id,
       version: '4',
@@ -219,18 +221,49 @@ describe('People in the common folder pane (ADR-0068 §4, #326)', () => {
     fireEvent.click(write)
     expect(ui$.module.peek()).toBe('mail')
 
-    fireEvent.click(nav.getByRole('button', { name: 'Delete group' }))
+    const remove = nav.getByRole('button', { name: 'Delete Climbing' })
+    expect(remove.getAttribute('title')).toBe('Delete Climbing')
+    fireEvent.click(remove)
     await waitFor(() => expect(ui$.confirm.peek()).not.toBeNull())
     expect(ui$.confirm.peek()!.message).toBe('The group Climbing will be deleted. The people in it stay.')
     settleConfirm(false)
+    await waitFor(() => expect(ui$.confirm.peek()).toBeNull())
+    expect(calls.some((call) => call.command === 'people.groupDelete')).toBe(false)
+  })
+
+  it('deletes an Exchange group from the pane once confirmed, saying it goes from the server', async () => {
+    const distribution: ContactGroup = {
+      ...climbing,
+      id: 'group:exchange::ews-a:dl1',
+      source: 'exchange',
+      account: 'acct',
+      book: 'ews-a',
+      name: 'Team list',
+      version: 'ck1',
+    }
+    people$.groups.set([climbing, distribution])
+    const screen = render(<PeopleView />)
+    const nav = within(pane(screen))
+    fireEvent.click(nav.getByRole('button', { name: 'Team list (2)' }))
+    fireEvent.click(nav.getByRole('button', { name: 'Delete Team list' }))
+    await waitFor(() => expect(ui$.confirm.peek()).not.toBeNull())
+    expect(ui$.confirm.peek()!.message).toBe(
+      'The group Team list will be deleted from the address book on its server. The people in it stay.',
+    )
+    expect(calls.some((call) => call.command === 'people.groupDelete')).toBe(false)
+    settleConfirm(true)
+    await waitFor(() => expect(calls.some((call) => call.command === 'people.groupDelete')).toBe(true))
+    expect(calls.find((call) => call.command === 'people.groupDelete')!.payload).toEqual({
+      id: distribution.id,
+      version: 'ck1',
+    })
   })
 
   it('offers no rename or delete for a group it cannot write', () => {
     const screen = render(<PeopleView />)
     const nav = within(pane(screen))
     fireEvent.click(nav.getByTitle(`${shared.name} (1)`))
-    expect(nav.queryByRole('button', { name: 'Rename group' })).toBeNull()
-    expect(nav.queryByRole('button', { name: 'Delete group' })).toBeNull()
+    expect(nav.queryByRole('button', { name: /^(Rename|Delete) / })).toBeNull()
     expect(nav.getByRole('button', { name: `Write to everyone in ${shared.name}` })).toBeTruthy()
   })
 
@@ -281,7 +314,7 @@ describe('the name of People\'s "folders" region (ADR-0068 §1, #326)', () => {
       const catalog = messages[language]
       const heard = (s: string | undefined) =>
         (s ?? '').trim().normalize('NFC').toLocaleLowerCase(language.replace('_', '-'))
-      const name = catalog['people.booksAndGroups']
+      const name = catalog['people.contactGroups']
       if (!name?.trim()) return [`${language}: missing`]
       return [
         ...(heard(name) === heard(catalog['people.title']) ? [`${language}: same as <main>, "${name}"`] : []),
@@ -299,7 +332,7 @@ describe('People at 1024 px and below (#326)', () => {
     const screen = render(<PeopleView />)
     expect(screen.container.querySelector('[data-folder-pane]')).toBeNull()
     expect(screen.queryByRole('separator', { name: 'Resize folder pane' })).toBeNull()
-    expect(screen.queryByRole('navigation', { name: 'Address books and groups' })).toBeNull()
+    expect(screen.queryByRole('navigation', { name: 'Contact groups' })).toBeNull()
     const column = screen.container.querySelector<HTMLElement>('[data-region="folders"]')!
     expect(content(screen).contains(column)).toBe(true)
     const filter = within(column).getByLabelText('Show group') as HTMLSelectElement
@@ -321,7 +354,7 @@ describe('People at 1024 px and below (#326)', () => {
     expect(pane(screen).hasAttribute('data-folder-pane')).toBe(true)
     expect(screen.queryByLabelText('Show group')).toBeNull()
     expect(screen.container.querySelectorAll('[data-region="folders"]')).toHaveLength(1)
-    expect(within(pane(screen)).getByTitle(`${shared.name} (1)`).getAttribute('aria-pressed')).toBe('true')
+    expect(within(pane(screen)).getByTitle(`${shared.name} (1)`).getAttribute('aria-current')).toBe('true')
     expect(rows(screen)).toEqual(['Zoe Adams'])
     await act(async () => setWidth(1024))
     expect(screen.container.querySelector('[data-folder-pane]')).toBeNull()

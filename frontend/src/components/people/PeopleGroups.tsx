@@ -14,7 +14,8 @@ import { IconButton } from '../button/IconButton'
 ///
 /// What it does is what that row did: choosing sets `people$.groupFilter`,
 /// "New group" opens `GroupDialog`, and the others act on the group on show.
-/// Only the groups a book can write offer a rename and a delete.
+/// Only the groups a book can write offer a rename and a delete. The actions
+/// sit above the list, so each names the group it acts on.
 export function PeopleGroups({
   onWrite,
   onDelete,
@@ -26,6 +27,9 @@ export function PeopleGroups({
   const groups = useValue(people$.groups)
   const groupFilter = useValue(people$.groupFilter)
   const shown = groups.find((group) => group.id === groupFilter) ?? null
+
+  const option = (group: ContactGroup) =>
+    t('people.groupOption', { name: group.name, count: group.members.length, defaultValue: '{name} ({count})' })
 
   const row = (active: boolean) =>
     clsx(
@@ -59,7 +63,7 @@ export function PeopleGroups({
               icon={Pencil}
               iconSize={14}
               size="sm"
-              label={t('people.renameGroup', { defaultValue: 'Rename group' })}
+              label={t('people.renameGroupNamed', { name: shown.name, defaultValue: 'Rename {name}' })}
               onClick={() =>
                 people$.groupEditing.set({
                   id: shown.id,
@@ -74,7 +78,7 @@ export function PeopleGroups({
               icon={Trash2}
               iconSize={14}
               size="sm"
-              label={t('people.deleteGroup', { defaultValue: 'Delete group' })}
+              label={t('people.deleteGroupNamed', { name: shown.name, defaultValue: 'Delete {name}' })}
               onClick={() => onDelete(shown)}
             />
           </>
@@ -84,7 +88,7 @@ export function PeopleGroups({
         <li>
           <button
             type="button"
-            aria-pressed={!shown}
+            aria-current={!shown ? 'true' : undefined}
             onClick={() => people$.groupFilter.set('')}
             className={row(!shown)}
           >
@@ -97,15 +101,12 @@ export function PeopleGroups({
             <li key={group.id}>
               <button
                 type="button"
-                aria-pressed={active}
+                aria-current={active ? 'true' : undefined}
                 // The name can end in "…" in a narrow pane: the tooltip has it
-                // whole, with how many it holds (ADR-0068 §4). The accessible
-                // name stays the group's name and its count.
-                title={t('people.groupOption', {
-                  name: group.name,
-                  count: group.members.length,
-                  defaultValue: '{name} ({count})',
-                })}
+                // whole, with how many it holds (ADR-0068 §4), and the
+                // accessible name reads the same, as the filter's option did.
+                aria-label={option(group)}
+                title={option(group)}
                 onClick={() => people$.groupFilter.set(group.id)}
                 className={row(active)}
               >

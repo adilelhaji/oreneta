@@ -195,11 +195,17 @@ export function PeopleView() {
   return (
     <>
       {inPane && (
-        <FolderPane title={t('people.booksAndGroups')}>
+        <FolderPane title={t('people.contactGroups')}>
           <PeopleGroups onWrite={writeToGroup} onDelete={(group) => void removeGroup(group)} />
         </FolderPane>
       )}
-      <div data-region="content" className="flex min-h-0 min-w-0 flex-1 bg-app">
+      <div
+        data-region="content"
+        // Beside the pane the module asks for its list (288 px) and the
+        // reader's minimum for the person (360 px, ADR-0068 §7) as its basis:
+        // the pane, whose shrink factor dwarfs this one's, gives way first.
+        className={clsx('flex min-h-0 min-w-0 bg-app', inPane ? 'flex-[1_1_648px]' : 'flex-1')}
+      >
         <section
           // The pane is the "folders" region from 1025 px; this is the list.
           data-region={inPane ? undefined : 'folders'}
