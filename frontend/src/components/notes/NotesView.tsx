@@ -11,6 +11,7 @@ import { NoteEditor } from './NoteEditor'
 import { backArrow } from '../../lib/direction'
 import { FOLDER_PANE_MIN_WINDOW, FolderPane } from '../shell/FolderPane'
 import { useWideWindow } from '../resizer/useElementWidth'
+import { useFolderPaneFocus } from '../shell/folderPaneFocus'
 import { NotesTagsPane } from './NotesTagsPane'
 
 /**
@@ -28,6 +29,7 @@ export function NotesView() {
   const selected = useValue(notes$.selected)
   // From 1025 px the tags are the common folder pane's body (ADR-0068 §4, #335).
   const inPane = useWideWindow(FOLDER_PANE_MIN_WINDOW)
+  useFolderPaneFocus(inPane)
   // The editor is remounted only when the reader opens another note, not
   // when a new note gets its id on first save.
   const [opened, setOpened] = useState<{ key: number; id: string | null } | null>(null)
@@ -100,7 +102,11 @@ export function NotesView() {
               opened && 'max-[899px]:hidden',
             )}
           >
-            <div className="flex flex-col gap-2 border-b border-border p-3">
+            <div
+              // Below 1025 px the chips stand in for the pane: focus goes back here (#341).
+              data-focus-return={inPane ? undefined : ''}
+              className="flex flex-col gap-2 border-b border-border p-3"
+            >
               <div className="flex items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-1.5 focus-within:border-accent-fg">
                 <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
                 <input
@@ -117,6 +123,7 @@ export function NotesView() {
                     <button
                       key={entry.tag}
                       type="button"
+                      data-focus-key={`tag:${entry.tag}`}
                       aria-pressed={tag === entry.tag}
                       onClick={() => notes$.tag.set(tag === entry.tag ? '' : entry.tag)}
                       className={clsx(

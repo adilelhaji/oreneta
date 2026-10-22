@@ -343,3 +343,56 @@ describe('Attachments at 1024 px and below (#339)', () => {
     expect(listed()).toHaveLength(requests)
   })
 })
+
+// #341: the focus follows the control across 1025 px.
+// happy-dom tells a media query's listeners about a change only once the query
+// has matched, so a window that starts wide is resized wide once (1500 px)
+// before it narrows to 1024 px, as a browser's would have been.
+const narrowWindow = async () => {
+  await act(async () => setWidth(1500))
+  await act(async () => setWidth(1024))
+}
+
+describe('Attachments keep the focus across 1025 px (#341)', () => {
+  it('moves it from a filter in the pane to the same filter in the bar and back', async () => {
+    const screen = render(<AttachmentsView />)
+    await ready(screen)
+    const name = within(pane(screen)).getByLabelText('File name')
+    name.focus()
+    fireEvent.change(name, { target: { value: 'scan' } })
+    await narrowWindow()
+    const bar = within(content(screen)).getByLabelText('File name')
+    expect(document.activeElement).toBe(bar)
+    expect((bar as HTMLInputElement).value).toBe('scan')
+    await act(async () => setWidth(1025))
+    expect(document.activeElement).toBe(within(pane(screen)).getByLabelText('File name'))
+    // A select keeps it as well.
+    const type = within(pane(screen)).getByLabelText('Type')
+    type.focus()
+    await narrowWindow()
+    expect(document.activeElement).toBe(within(content(screen)).getByLabelText('Type'))
+  })
+
+  it('does not pull the focus back into the filters once a press took it elsewhere', async () => {
+    const screen = render(<AttachmentsView />)
+    await ready(screen)
+    const name = within(pane(screen)).getByLabelText('File name')
+    name.focus()
+    // A press on the list's background: the focus goes to <body>, with no focusin.
+    fireEvent.pointerDown(content(screen))
+    name.blur()
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+    await narrowWindow()
+    expect(document.activeElement).toBe(document.body)
+  })
+
+  it('leaves the focus alone when it was on the list, and does nothing on the first render', async () => {
+    const screen = render(<AttachmentsView />)
+    await ready(screen)
+    expect(document.activeElement).toBe(document.body)
+    const open = within(content(screen)).getAllByRole('button')[0]
+    open.focus()
+    await narrowWindow()
+    expect(document.activeElement).toBe(open)
+  })
+})

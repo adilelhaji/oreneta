@@ -419,3 +419,45 @@ describe('Notes at 1024 px and below (#335)', () => {
     expect(screen.container.querySelectorAll('[data-region="folders"]')).toHaveLength(1)
   })
 })
+
+// #341: the focus follows the control across 1025 px.
+// happy-dom tells a media query's listeners about a change only once the query
+// has matched, so a window that starts wide is resized wide once (1500 px)
+// before it narrows to 1024 px, as a browser's would have been.
+const narrowWindow = async () => {
+  await act(async () => setWidth(1500))
+  await act(async () => setWidth(1024))
+}
+
+describe('Notes keep the focus across 1025 px (#341)', () => {
+  it("moves it from a tag row to the same tag's chip and back", async () => {
+    const screen = render(<NotesView />)
+    await ready(screen)
+    const row = within(pane(screen)).getByRole('button', { name: '#travel (2)' })
+    row.focus()
+    await narrowWindow()
+    const chip = [...screen.container.querySelectorAll<HTMLElement>('[aria-label="Tags"] button')].find((button) =>
+      button.textContent?.startsWith('#travel'),
+    )!
+    expect(document.activeElement).toBe(chip)
+    await act(async () => setWidth(1025))
+    expect(document.activeElement).toBe(within(pane(screen)).getByRole('button', { name: '#travel (2)' }))
+  })
+
+  it('falls back to the first control of the list header when "All notes" has no chip', async () => {
+    const screen = render(<NotesView />)
+    await ready(screen)
+    within(pane(screen)).getByTitle('All notes').focus()
+    await narrowWindow()
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Search notes' }))
+  })
+
+  it('leaves the focus alone when it was elsewhere', async () => {
+    const screen = render(<NotesView />)
+    await ready(screen)
+    const search = screen.getByRole('textbox', { name: 'Search notes' })
+    search.focus()
+    await narrowWindow()
+    expect(document.activeElement).toBe(search)
+  })
+})

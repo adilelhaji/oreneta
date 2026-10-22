@@ -559,3 +559,56 @@ sota la capçalera, passa a ser el cos de la subfinestra de carpetes comuna
   1024 px; filtrar des de la subfinestra, amb els valors i la llista mantinguts
   en travessar els 1025 px; l'amplada desada des d'Adjunts i des del correu;
   l'àrab, amb axe). El recorregut d'F6 de #306 hi afegeix Adjunts.
+
+### El focus en travessar els 1025 px (#341)
+
+Data: 2026-10-22. Des de 1025 px els controls de carpeta de cada mòdul són el cos
+de la subfinestra comuna; per sota, són en un altre lloc (pestanyes, botons
+d'etiqueta, la columna, la barra de filtres). Cada mòdul en munta només un dels
+dos, de manera que el control que tenia el focus es desmuntava en travessar els
+1025 px i el focus queia a `<body>`. Ara el focus segueix el control.
+
+- **Funció auxiliar comuna:** `useFolderPaneFocus(inPane)`, a
+  `frontend/src/components/shell/folderPaneFocus.ts`, al costat de `FolderPane`.
+  Cada mòdul la crida just després de `useWideWindow(FOLDER_PANE_MIN_WINDOW)`.
+- **Com s'assenyala:** un control que existeix en tots dos modes porta el mateix
+  `data-focus-key` (`list:<id>`, `tag:<nom>`, `conversation:<jid>`,
+  `filter-name`, `group-filter`…), i el contenidor que fa de subfinestra per sota
+  de 1025 px porta `data-focus-return`.
+- **Què fa:** cada cop que el focus entra en un control de la subfinestra o del
+  contenidor de `data-focus-return`, en desa la clau. Després de cada clic torna
+  a mirar on és el focus: un clic en una zona sense control el deixa a `<body>`,
+  un segon clic al camp que ja té el focus no el mou i, en una pantalla tàctil,
+  el focus canvia en aixecar el dit. Quan canvia el mode, després del pintat,
+  enfoca el control del mode nou que té la mateixa clau; si no n'hi ha cap (una
+  fila sense equivalent), enfoca el primer element enfocable de la regió que la
+  substitueix: la subfinestra, en passar a ample, i el contenidor de
+  `data-focus-return`, en passar a estret. No llegeix el focus en el moment del
+  canvi perquè, quan arriba la consulta de mitjà, el navegador ja l'ha perdut.
+- **Què no fa:** no fa res ni en el primer pintat, ni quan el focus era fora
+  d'aquestes àrees, ni quan ha sobreviscut al canvi, i no toca el recorregut d'F6
+  entre regions. Un focus que cau sol a `<body>` (un control que l'aplicació
+  treu) no es detecta: en el canvi següent va al primer control de la regió que
+  la substitueix, cosa que és millor que deixar-lo a `<body>`.
+- **Mòduls:**
+  - Tasques: fila de llista i pestanya; «Llista nova», «Canvia el nom» i
+    «Suprimeix».
+  - Notes: fila d'etiqueta i botó d'etiqueta; «Totes les notes» no té botó i va
+    a la cerca.
+  - Xat: tots els controls de la columna (el compte, el teu estat, les peticions
+    per veure el teu estat i qui el pot veure, «Xateja amb (adreça)», el
+    formulari d'«Uneix-te a un grup», les invitacions, les converses i «Elimina
+    aquest compte de xat»). Es conserven l'estat sense desar, la llista de
+    permisos oberta i les aturades demanades, perquè aquestes parts es tornen a
+    muntar en canviar de lloc.
+  - Adjunts: els cinc filtres.
+  - Persones: el grup en pantalla i el selector de grup; les accions del grup.
+  - Calendari: cada calendari, les fletxes i els dies del minicalendari.
+  - El correu no la necessita: la subfinestra del correu no es desmunta (només
+    s'amaga) i per sota de 1025 px no té cap control equivalent, sinó el
+    selector «Canvia de carpeta».
+- **Proves:** els `*FolderPane.test.tsx` de cada mòdul (focus en una fila, creuar
+  els 1025 px en els dos sentits, el control equivalent o el primer element
+  enfocable de la regió que el substitueix, i focus extern sense alterar) i
+  `frontend/e2e/startup.e2e.ts` («#341»: el camp «Nom del fitxer» d'Adjunts i
+  una fila de llista de Tasques, amb un canvi real de la mida de la finestra).

@@ -6723,3 +6723,53 @@ test("in Arabic Attachments's folder pane sits between the rail and the list, an
   expect(blocking).toEqual([])
   expect(errors).toEqual([])
 })
+
+// #341: crossing 1025 px swaps the pane's controls for their narrow twins (or
+// the reverse), and the focus goes with the control instead of falling to <body>.
+test('focus in the Attachments "File name" field follows it across 1025px, both ways (#341)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const errors = await openAttachmentsPane(page)
+  const pane = page.getByRole('navigation', { name: 'Attachment filters', exact: true })
+  const content = page.locator('main > [data-region="content"]')
+  await pane.getByRole('textbox', { name: 'File name' }).fill('report')
+  await expect(pane.getByRole('textbox', { name: 'File name' })).toBeFocused()
+
+  await page.setViewportSize({ width: 1024, height: 900 })
+  await expect(page.locator('[data-folder-pane]')).toHaveCount(0)
+  await expect(content.getByRole('textbox', { name: 'File name' })).toBeFocused()
+  await expect(content.getByRole('textbox', { name: 'File name' })).toHaveValue('report')
+
+  await page.setViewportSize({ width: 1025, height: 900 })
+  await expect(pane.getByRole('textbox', { name: 'File name' })).toBeFocused()
+  // What was typed goes on from where the focus is.
+  await page.keyboard.type('s')
+  await expect(pane.getByRole('textbox', { name: 'File name' })).toHaveValue('reports')
+
+  // Focus that was not in the filters stays where it was: the same element,
+  // once the narrow layout is drawn.
+  await content.getByRole('button').first().focus()
+  await page.evaluate(() => {
+    ;(window as any).keptFocus = document.activeElement
+  })
+  await page.setViewportSize({ width: 1024, height: 900 })
+  await expect(page.locator('[data-folder-pane]')).toHaveCount(0)
+  expect(await page.evaluate(() => document.activeElement === (window as any).keptFocus)).toBe(true)
+  expect(errors).toEqual([])
+})
+
+test('focus on a Tasks list row follows it to the list tab across 1025px, both ways (#341)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const errors = await openTasksPane(page)
+  const pane = page.getByRole('navigation', { name: 'Task lists', exact: true })
+  await pane.getByRole('button', { name: 'Home (2)', exact: true }).click()
+  await expect(pane.getByRole('button', { name: 'Home (2)', exact: true })).toBeFocused()
+
+  await page.setViewportSize({ width: 1024, height: 900 })
+  await expect(page.locator('[data-folder-pane]')).toHaveCount(0)
+  await expect(page.getByRole('tab', { name: /^Home/ })).toBeFocused()
+  await expect(page.getByRole('tab', { name: /^Home/ })).toHaveAttribute('aria-selected', 'true')
+
+  await page.setViewportSize({ width: 1025, height: 900 })
+  await expect(pane.getByRole('button', { name: 'Home (2)', exact: true })).toBeFocused()
+  expect(errors).toEqual([])
+})

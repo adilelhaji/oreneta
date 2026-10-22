@@ -56,6 +56,7 @@ import { Button } from '../button/Button'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
 import { FOLDER_PANE_MIN_WINDOW, FolderPane } from '../shell/FolderPane'
 import { useWideWindow } from '../resizer/useElementWidth'
+import { useFolderPaneFocus } from '../shell/folderPaneFocus'
 import { clsx } from '../../lib/utils'
 
 const input = 'rounded-control-sm border border-border bg-app px-2.5 py-1.5 text-sm text-primary'
@@ -96,8 +97,26 @@ export function MessagingView() {
   const [active, setActive] = useState(0)
   const [closedAt, setClosedAt] = useState<number | null>(null)
   const [showPeople, setShowPeople] = useState(false)
+  // The column's own status and status permissions remount when the window
+  // crosses 1025 px (they move between the pane and the column), so what the
+  // person was doing in them lives here: an unsaved status, the permission
+  // list left open, the stops asked for (#341).
+  // The draft is kept with its account: a Save that ends after a switch
+  // clears only its own account's draft, never the next one's.
+  const [ownDraft, setOwnDraft] = useState<{ account: string; draft: OwnDraft } | null>(null)
+  const [permissionsOpen, setPermissionsOpen] = useState(false)
+  const [stopping, setStopping] = useState<string[]>([])
+  const allowed = useValue(statusPermissions$.allowed)
+  // A new word from the server offers the stop buttons again.
+  useEffect(() => setStopping([]), [allowed])
+  useEffect(() => {
+    setOwnDraft(null)
+    setPermissionsOpen(false)
+    setStopping([])
+  }, [account])
   // From 1025 px the conversations column is the common folder pane (ADR-0068 §4, #337).
   const inPane = useWideWindow(FOLDER_PANE_MIN_WINDOW)
+  useFolderPaneFocus(inPane)
   const end = useRef<HTMLDivElement | null>(null)
   const composer = useRef<HTMLTextAreaElement | null>(null)
 
@@ -195,6 +214,7 @@ export function MessagingView() {
     <>
       {accounts.length > 1 ? (
         <select
+          data-focus-key="chat-account"
           aria-label={t('messaging.account', { defaultValue: 'Chat account' })}
           value={account}
           onChange={(e) => {
@@ -245,9 +265,23 @@ export function MessagingView() {
   )
   const columnBody = (
     <>
-      <OwnStatus key={`own-${account}`} />
+      <OwnStatus
+        key={`own-${account}`}
+        draft={ownDraft?.account === account ? ownDraft.draft : null}
+        setDraft={(draft) =>
+          setOwnDraft((kept) => (draft ? { account, draft } : kept?.account === account ? null : kept))
+        }
+      />
       <StatusRequests />
-      {online && <StatusPermissions key={`permissions-${account}`} />}
+      {online && (
+        <StatusPermissions
+          key={`permissions-${account}`}
+          open={permissionsOpen}
+          setOpen={setPermissionsOpen}
+          stopping={stopping}
+          setStopping={setStopping}
+        />
+      )}
       <form
         className="flex gap-1.5 border-b border-border px-3 py-2"
         onSubmit={(e) => {
@@ -256,13 +290,14 @@ export function MessagingView() {
         }}
       >
         <input
+          data-focus-key="new-chat"
           aria-label={t('messaging.newChat', { defaultValue: 'Chat with (address)' })}
           placeholder="name@server.example"
           value={newChat}
           onChange={(e) => setNewChat(e.target.value)}
           className={`${input} min-w-0 flex-1`}
         />
-        <Button size="sm" type="submit" disabled={!newChat.includes('@')}>
+        <Button size="sm" type="submit" data-focus-key="new-chat-open" disabled={!newChat.includes('@')}>
           {t('messaging.start', { defaultValue: 'Open' })}
         </Button>
       </form>
@@ -278,6 +313,7 @@ export function MessagingView() {
           <label className="flex flex-col gap-1 text-caption text-secondary">
             {t('messaging.roomAddress', { defaultValue: 'Group address' })}
             <input
+              data-focus-key="join-room"
               className={input}
               placeholder="team@rooms.server.example"
               value={joining.room}
@@ -287,6 +323,7 @@ export function MessagingView() {
           <label className="flex flex-col gap-1 text-caption text-secondary">
             {t('messaging.nick', { defaultValue: 'Your name in the group' })}
             <input
+              data-focus-key="join-nick"
               className={input}
               value={joining.nick}
               onChange={(e) => setJoining({ ...joining, nick: e.target.value })}
@@ -297,16 +334,28 @@ export function MessagingView() {
             <input
               type="password"
               autoComplete="off"
+              data-focus-key="join-password"
               className={input}
               value={joining.password}
               onChange={(e) => setJoining({ ...joining, password: e.target.value })}
             />
           </label>
           <div className="flex gap-1.5">
-            <Button size="sm" type="submit" disabled={!joining.room.includes('@') || !joining.nick.trim()}>
+            <Button
+              size="sm"
+              type="submit"
+              data-focus-key="join-submit"
+              disabled={!joining.room.includes('@') || !joining.nick.trim()}
+            >
               {t('messaging.join', { defaultValue: 'Join' })}
             </Button>
-            <Button size="sm" variant="ghost" type="button" onClick={() => setJoining(null)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              type="button"
+              data-focus-key="join-cancel"
+              onClick={() => setJoining(null)}
+            >
               {t('buttons.cancel', { defaultValue: 'Cancel' })}
             </Button>
           </div>
@@ -315,6 +364,7 @@ export function MessagingView() {
         <div className="border-b border-border px-3 py-1.5">
           <button
             type="button"
+            data-focus-key="join-group"
             onClick={() => startJoin()}
             className="flex items-center gap-1.5 text-caption text-accent-fg underline cursor-pointer"
           >
@@ -341,6 +391,7 @@ export function MessagingView() {
               <span className="flex gap-2">
                 <button
                   type="button"
+                  data-focus-key={`invitation-join:${inv.room}`}
                   onClick={() => startJoin(inv.room)}
                   className="text-accent-fg underline cursor-pointer"
                 >
@@ -348,6 +399,7 @@ export function MessagingView() {
                 </button>
                 <button
                   type="button"
+                  data-focus-key={`invitation-dismiss:${inv.room}`}
                   onClick={() => void dismissInvitation(inv.room)}
                   className="text-secondary underline cursor-pointer"
                 >
@@ -369,6 +421,7 @@ export function MessagingView() {
                 <li key={r.room}>
                   <ConversationButton
                     inPane={inPane}
+                    focusKey={r.room}
                     name={r.room}
                     last={r.last_body || roomStateLabel(r, t)}
                     unread={r.unread}
@@ -392,6 +445,7 @@ export function MessagingView() {
               <li key={c.conversation}>
                 <ConversationButton
                   inPane={inPane}
+                  focusKey={c.conversation}
                   name={inRoom ? `${inRoom.nick} (${inRoom.room})` : c.conversation}
                   last={c.last_body}
                   unread={c.unread}
@@ -412,6 +466,7 @@ export function MessagingView() {
     <footer className={clsx('px-3 py-2', !inPane && 'border-t border-border')}>
       <button
         type="button"
+        data-focus-key="remove-account"
         className="text-caption text-secondary underline cursor-pointer"
         onClick={() =>
           void confirmAction({
@@ -721,6 +776,8 @@ export function MessagingView() {
           <section
             aria-label={t('messaging.conversations', { defaultValue: 'Conversations' })}
             data-region="folders"
+            // The column stands in for the pane below 1025 px: focus goes back here (#341).
+            data-focus-return
             className={`flex w-72 shrink-0 flex-col border-e border-border max-[769px]:w-full ${conversation ? 'max-[769px]:hidden' : ''}`}
           >
             <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
@@ -770,11 +827,12 @@ function PresenceDot({ show }: { show?: string }) {
   return <span aria-hidden="true" className={`inline-block size-2 shrink-0 rounded-full ${color}`} />
 }
 
+type OwnDraft = { show: OwnShow; status: string }
+
 /** The person's own status for the open account, and its text. */
-function OwnStatus() {
+function OwnStatus({ draft, setDraft }: { draft: OwnDraft | null; setDraft: (draft: OwnDraft | null) => void }) {
   const { t } = useTranslation()
   const own = useValue(chatPresence$.own)
-  const [draft, setDraft] = useState<{ show: OwnShow; status: string } | null>(null)
   const shown = draft ?? { show: own.show, status: own.status }
   const canHide = own.invisible_supported === true
   const save = async () => {
@@ -796,6 +854,7 @@ function OwnStatus() {
     >
       <div className="flex gap-1.5">
         <select
+          data-focus-key="own-show"
           aria-label={t('messaging.presence.label', { defaultValue: 'Your status' })}
           value={shown.show}
           onChange={(e) => setDraft({ ...shown, show: e.target.value as OwnShow })}
@@ -809,6 +868,7 @@ function OwnStatus() {
           </option>
         </select>
         <input
+          data-focus-key="own-status"
           aria-label={t('messaging.presence.statusText', { defaultValue: 'Status message' })}
           placeholder={t('messaging.presence.statusText', { defaultValue: 'Status message' })}
           maxLength={200}
@@ -816,7 +876,7 @@ function OwnStatus() {
           onChange={(e) => setDraft({ ...shown, status: e.target.value })}
           className={`${input} min-w-0 flex-1`}
         />
-        <Button size="sm" type="submit" disabled={!draft}>
+        <Button size="sm" type="submit" data-focus-key="own-save" disabled={!draft}>
           {t('buttons.save', { defaultValue: 'Save' })}
         </Button>
       </div>
@@ -881,6 +941,7 @@ function StatusRequests() {
           <span className="flex gap-2">
             <button
               type="button"
+              data-focus-key={`request-allow:${jid}`}
               onClick={() => void answer(jid, true)}
               className="text-accent-fg underline cursor-pointer"
             >
@@ -888,6 +949,7 @@ function StatusRequests() {
             </button>
             <button
               type="button"
+              data-focus-key={`request-deny:${jid}`}
               onClick={() => void answer(jid, false)}
               className="text-secondary underline cursor-pointer"
             >
@@ -905,15 +967,21 @@ function StatusRequests() {
  * (ADR-0064), and stopping it, only on a click and after confirming. Unknown
  * until the server has said; never shown as "nobody" before that.
  */
-function StatusPermissions() {
+function StatusPermissions({
+  open,
+  setOpen,
+  stopping,
+  setStopping,
+}: {
+  open: boolean
+  setOpen: (open: boolean) => void
+  /** Asked to stop; the list changes when the server says so. A new word from the server, or half a minute without one, offers the button again. */
+  stopping: string[]
+  setStopping: (update: (list: string[]) => string[]) => void
+}) {
   const { t } = useTranslation()
   const allowed = useValue(statusPermissions$.allowed)
   const more = useValue(statusPermissions$.more)
-  const [open, setOpen] = useState(false)
-  // Asked to stop; the list changes when the server says so. A new word
-  // from the server, or half a minute without one, offers the button again.
-  const [stopping, setStopping] = useState<string[]>([])
-  useEffect(() => setStopping([]), [allowed])
   const title = t('messaging.permissions.title', { defaultValue: 'Who can see your status' })
   const stop = async (jid: string) => {
     const ok = await confirmAction({
@@ -938,6 +1006,7 @@ function StatusPermissions() {
     <div className="border-b border-border px-3 py-1.5">
       <button
         type="button"
+        data-focus-key="permissions"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
         className="text-caption text-accent-fg underline cursor-pointer"
@@ -974,6 +1043,7 @@ function StatusPermissions() {
                 ) : (
                   <button
                     type="button"
+                    data-focus-key={`permission-stop:${jid}`}
                     onClick={() => void stop(jid)}
                     aria-label={t('messaging.permissions.stopNamed', {
                       jid,
@@ -1105,6 +1175,7 @@ function ConversationButton({
   mentionsCapped = false,
   muted,
   inPane,
+  focusKey,
   onOpen,
 }: {
   name: string
@@ -1127,12 +1198,15 @@ function ConversationButton({
    * alone barely differs from the pane.
    */
   inPane?: boolean
+  /** The conversation's address: the same control in the pane and in the column keeps the focus across 1025 px (#341). */
+  focusKey: string
   onOpen: () => void
 }) {
   const { t } = useTranslation()
   return (
     <button
       type="button"
+      data-focus-key={`conversation:${focusKey}`}
       aria-current={current}
       onClick={onOpen}
       className={`flex w-full flex-col gap-0.5 px-3 py-2 text-start cursor-pointer ${

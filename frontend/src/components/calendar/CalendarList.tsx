@@ -65,6 +65,7 @@ export function CalendarList() {
                         "is it shown" and "which one is it" at a glance. */}
                     <button
                       type="button"
+                      data-focus-key={`calendar-shown:${key(calendar)}`}
                       onClick={() => void setCalendarEnabled(calendar.accountId, calendar.id, !calendar.enabled)}
                       aria-label={calendar.name}
                       aria-pressed={calendar.enabled}
@@ -78,6 +79,7 @@ export function CalendarList() {
                     </button>
                     <button
                       type="button"
+                      data-focus-key={`calendar-colour:${key(calendar)}`}
                       onClick={() => setPicking(open ? null : key(calendar))}
                       // The name can end in "…" in a narrow pane: the tooltip
                       // has it whole, and what the button does (ADR-0068 §4).

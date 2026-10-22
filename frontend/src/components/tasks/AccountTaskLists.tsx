@@ -181,6 +181,7 @@ export function AddAccountListMenu({ entries, inline = false }: { entries: Accou
     <Wrapper className={inline ? undefined : 'relative'}>
       <button
         type="button"
+        data-focus-key="add-account-list"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
         className={

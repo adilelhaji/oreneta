@@ -37,6 +37,7 @@ import { MoveQuestions, MoveStatus } from './MoveQuestions'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
 import { FOLDER_PANE_MIN_WINDOW, FolderPane } from '../shell/FolderPane'
 import { useWideWindow } from '../resizer/useElementWidth'
+import { useFolderPaneFocus } from '../shell/folderPaneFocus'
 import { EventContextMenu, type EventContextMenuState } from './EventContextMenu'
 import { settings$ } from '../../states/settings'
 import { accounts$ } from '../../states/accounts'
@@ -65,6 +66,7 @@ export function CalendarView() {
   const calendarPrefs = useValue(settings$.calendar)
   const [menu, setMenu] = useState<EventContextMenuState | null>(null)
   const inPane = useWideWindow(FOLDER_PANE_MIN_WINDOW)
+  useFolderPaneFocus(inPane)
   const calendarsName = t('calendar.calendars')
 
   useEffect(() => {
@@ -215,6 +217,8 @@ export function CalendarView() {
           {!inPane && (
             <nav
               data-region="folders"
+              // The column stands in for the pane below 1025 px: focus goes back here (#341).
+              data-focus-return
               aria-label={calendarsName}
               className="flex shrink-0 flex-col border-border bg-raised min-[769px]:w-48 min-[769px]:border-e"
             >
