@@ -100,7 +100,7 @@ function ColorMenu({
         aria-haspopup="true"
         aria-expanded={open}
         className={`flex h-7 w-7 items-center justify-center rounded-control-sm transition-colors cursor-pointer ${
-          current ? 'bg-accent/15 text-accent' : 'text-secondary hover:bg-hover'
+          current ? 'bg-accent/15 text-accent-fg' : 'text-secondary hover:bg-hover'
         }`}
       >
         {icon}
@@ -157,7 +157,7 @@ function ToolbarButton({
       onClick={onClick}
       title={title}
       className={`flex h-7 w-7 items-center justify-center rounded-control-sm transition-colors cursor-pointer ${
-        active ? 'bg-active text-accent' : 'text-secondary hover:bg-hover'
+        active ? 'bg-active text-accent-fg' : 'text-secondary hover:bg-hover'
       }`}
     >
       {children}

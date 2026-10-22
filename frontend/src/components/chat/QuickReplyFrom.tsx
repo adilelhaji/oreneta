@@ -65,7 +65,7 @@ export function QuickReplyFrom() {
               checked={identity.email === selected.email}
               icon={
                 identity.email === selected.email ? (
-                  <Check size={14} className="shrink-0 text-accent" strokeWidth={1.75} />
+                  <Check size={14} className="shrink-0 text-accent-fg" strokeWidth={1.75} />
                 ) : (
                   <span className="w-[13px] shrink-0" />
                 )

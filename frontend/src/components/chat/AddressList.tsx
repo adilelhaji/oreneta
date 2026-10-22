@@ -25,7 +25,7 @@ export function AddressPill({ name, original }: AddressItem) {
     >
       <span dir="auto" className="min-w-0 truncate font-semibold">{name}</span>
 
-      <span className="opacity-0 group-hover:opacity-75 transition-opacity duration-120 shrink-0 text-accent">
+      <span className="opacity-0 group-hover:opacity-75 transition-opacity duration-120 shrink-0 text-accent-fg">
         {copied ? (
           <CheckCheck size={14} className="text-success" strokeWidth={1.75} />
         ) : (
@@ -60,7 +60,7 @@ export function AddressRow({ label, rawList }: { label: string; rawList: string 
           <button
             type="button"
             onClick={() => setExpanded(!expanded)}
-            className="inline-flex min-w-0 items-center justify-center rounded-md bg-accent/10 px-2 py-1 text-2xs font-bold text-accent outline-none transition-colors duration-120 hover:bg-accent/20 dark:bg-accent/25 dark:hover:bg-accent/35 cursor-pointer select-none"
+            className="inline-flex min-w-0 items-center justify-center rounded-md bg-accent/10 px-2 py-1 text-2xs font-bold text-accent-fg outline-none transition-colors duration-120 hover:bg-accent/20 dark:bg-accent/25 dark:hover:bg-accent/35 cursor-pointer select-none"
           >
             {expanded ? t('common.showLess') : t('common.moreCount', { count: items.length - threshold })}
           </button>

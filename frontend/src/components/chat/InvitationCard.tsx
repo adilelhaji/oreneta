@@ -130,7 +130,7 @@ export function InvitationCard({ message }: { message: Message }) {
       className="mb-3 rounded-panel border border-border bg-raised p-3 text-caption"
     >
       <div className="flex items-start gap-2.5">
-        <Icon size={18} strokeWidth={1.75} className="mt-0.5 shrink-0 text-accent" aria-hidden="true" />
+        <Icon size={18} strokeWidth={1.75} className="mt-0.5 shrink-0 text-accent-fg" aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <p className="text-ui font-semibold text-primary">
             {method === 'CANCEL'

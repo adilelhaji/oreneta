@@ -247,7 +247,7 @@ export function PeopleView() {
                 </Button>
               </div>
             </div>
-            <div className="flex min-w-0 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-2 focus-within:border-accent">
+            <div className="flex min-w-0 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-2 focus-within:border-accent-fg">
               <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
               <input
                 value={query}
@@ -265,7 +265,7 @@ export function PeopleView() {
                     value={shownGroup ? shownGroup.id : ''}
                     onChange={(event) => people$.groupFilter.set(event.target.value)}
                     aria-label={t('people.groupFilter', { defaultValue: 'Show group' })}
-                    className="min-w-0 flex-1 rounded-control-sm border border-border bg-chats px-2 py-1 text-caption text-primary outline-none focus:border-accent"
+                    className="min-w-0 flex-1 rounded-control-sm border border-border bg-chats px-2 py-1 text-caption text-primary outline-none focus:border-accent-fg"
                   >
                     <option value="">{t('people.allContacts', { defaultValue: 'All contacts' })}</option>
                     {groups.map((group) => (
@@ -335,7 +335,7 @@ export function PeopleView() {
               <button
                 type="button"
                 onClick={() => people$.duplicatesOpen.set(true)}
-                className="self-start rounded-control-sm px-2 py-1 text-caption font-semibold text-accent hover:bg-hover cursor-pointer"
+                className="self-start rounded-control-sm px-2 py-1 text-caption font-semibold text-accent-fg hover:bg-hover cursor-pointer"
               >
                 {t('people.duplicatesCount', {
                   count: duplicates.length,
@@ -594,7 +594,7 @@ function PersonCard({
                   const group = joinable.find((candidate) => candidate.id === event.target.value)
                   if (group) void setMembership(group, person.id, true)
                 }}
-                className="rounded-control-sm border border-border bg-chats px-2 py-1 text-caption text-primary outline-none focus:border-accent"
+                className="rounded-control-sm border border-border bg-chats px-2 py-1 text-caption text-primary outline-none focus:border-accent-fg"
               >
                 <option value="">{t('people.addToGroup', { defaultValue: 'Add to group' })}</option>
                 {joinable.map((group) => (

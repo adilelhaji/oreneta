@@ -63,8 +63,8 @@ export function WallpaperDialog({
               disabled={busy}
               className={`relative flex aspect-[16/10] cursor-pointer flex-col items-center justify-center gap-1.5 overflow-hidden rounded-control border border-dashed transition-all ${
                 selectedKey.startsWith('custom:')
-                  ? 'border-accent bg-accent/5 text-accent ring-2 ring-accent/20'
-                  : 'border-border text-secondary hover:border-accent/50 hover:bg-accent/2 hover:text-accent'
+                  ? 'border-accent bg-accent/5 text-accent-fg ring-2 ring-accent/20'
+                  : 'border-border text-secondary hover:border-accent/50 hover:bg-accent/2 hover:text-accent-fg'
               } disabled:opacity-50`}
             >
               {wallpaper?.kind === 'custom' && (

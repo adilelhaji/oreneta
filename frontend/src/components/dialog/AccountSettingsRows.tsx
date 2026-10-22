@@ -127,7 +127,7 @@ export function SegmentedRow<T extends string>({
               aria-pressed={value === opt.value}
               onClick={() => onChange(opt.value)}
               className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
-                value === opt.value ? 'bg-chats text-accent shadow-sm' : 'text-secondary hover:text-primary'
+                value === opt.value ? 'bg-chats text-accent-fg shadow-sm' : 'text-secondary hover:text-primary'
               }`}
             >
               {opt.label}

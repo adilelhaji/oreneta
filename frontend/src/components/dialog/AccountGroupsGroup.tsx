@@ -124,7 +124,7 @@ export function AccountGroupsGroup() {
             maxLength={60}
             aria-label={t('accountGroups.name', { defaultValue: 'Group name' })}
             onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-            className="rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent"
+            className="rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent-fg"
           />
           <fieldset className="flex flex-col gap-1">
             <legend className="text-secondary">

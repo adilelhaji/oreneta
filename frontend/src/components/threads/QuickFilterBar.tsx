@@ -59,7 +59,7 @@ export function QuickFilterBar({ hideSnoozed }: { hideSnoozed?: boolean }) {
             onClick={() => ui$.filters.set(nextFilters(filters, facet))}
             className={clsx(
               'flex items-center gap-1.5 whitespace-nowrap rounded-control-sm px-2 py-1 text-caption font-semibold transition-colors cursor-pointer',
-              on ? 'bg-accent/12 text-accent' : 'text-secondary hover:bg-hover hover:text-primary',
+              on ? 'bg-accent/12 text-accent-fg' : 'text-secondary hover:bg-hover hover:text-primary',
             )}
           >
             <Icon
@@ -98,7 +98,7 @@ export function QuickFilterBar({ hideSnoozed }: { hideSnoozed?: boolean }) {
           aria-label={t('labels.filterBy')}
           className={clsx(
             'ms-1 max-w-[10rem] rounded-control-sm py-1 ps-2 text-caption font-semibold',
-            activeLabel && dropdownLabels.some((label) => label.id === activeLabel) && 'text-accent',
+            activeLabel && dropdownLabels.some((label) => label.id === activeLabel) && 'text-accent-fg',
           )}
         >
           <option value="">{t('labels.anyLabel')}</option>
@@ -118,7 +118,7 @@ export function QuickFilterBar({ hideSnoozed }: { hideSnoozed?: boolean }) {
         onClick={() => settings$.stickyFilters.set(!sticky)}
         className={clsx(
           'ms-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-control-sm transition-colors cursor-pointer',
-          sticky ? 'bg-accent/12 text-accent' : 'text-secondary hover:bg-hover hover:text-primary',
+          sticky ? 'bg-accent/12 text-accent-fg' : 'text-secondary hover:bg-hover hover:text-primary',
         )}
       >
         <Pin size={14} className={clsx(sticky && 'fill-current')} strokeWidth={1.75} />

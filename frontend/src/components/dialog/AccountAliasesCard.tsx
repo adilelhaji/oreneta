@@ -34,7 +34,7 @@ export function AccountAliasesCard({ account }: { account: Account }) {
         control={
           <button
             onClick={() => updateAliases([...aliasesVal, { email: '', name: '' }])}
-            className="flex items-center gap-1 text-xs font-semibold text-accent hover:underline cursor-pointer"
+            className="flex items-center gap-1 text-xs font-semibold text-accent-fg hover:underline cursor-pointer"
           >
             <Plus size={14} strokeWidth={1.75} /> {t('settings.account.addAlias')}
           </button>

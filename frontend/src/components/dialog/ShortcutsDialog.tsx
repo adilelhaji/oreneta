@@ -200,7 +200,7 @@ function ShortcutRow({
             aria-pressed={recording}
             className={`rounded border px-1.5 py-0.5 font-mono text-caption font-medium cursor-pointer ${
               recording
-                ? 'border-accent text-accent'
+                ? 'border-accent text-accent-fg'
                 : 'border-border bg-app text-secondary hover:border-accent hover:text-primary'
             }`}
             onClick={onEdit}

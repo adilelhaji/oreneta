@@ -264,9 +264,9 @@ export function SidebarAgenda({ now = () => Date.now() }: { now?: () => number }
                     onClick={() => (item.kind === 'event' ? openAgendaEvent(item.event) : openAgendaTask(item.task))}
                   >
                     {item.kind === 'event' ? (
-                      <CalendarDays size={14} strokeWidth={1.75} className="shrink-0 text-accent" aria-hidden="true" />
+                      <CalendarDays size={14} strokeWidth={1.75} className="shrink-0 text-accent-fg" aria-hidden="true" />
                     ) : (
-                      <ListTodo size={14} strokeWidth={1.75} className="shrink-0 text-accent" aria-hidden="true" />
+                      <ListTodo size={14} strokeWidth={1.75} className="shrink-0 text-accent-fg" aria-hidden="true" />
                     )}
                     <span className="min-w-0 flex-1 truncate text-primary">
                       {item.title || t('chat.noSubject', { defaultValue: '(no subject)' })}

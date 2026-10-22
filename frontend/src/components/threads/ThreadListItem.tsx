@@ -205,7 +205,7 @@ export function ThreadListItem({
                 }}
                 className="absolute inset-0 z-10 hidden items-center justify-center rounded-full bg-chats cursor-pointer group-hover/avatar:flex focus-visible:flex"
               >
-                <span className="flex h-7 w-7 items-center justify-center rounded-full border border-secondary/40 text-secondary/50 transition-colors hover:border-accent hover:text-accent">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full border border-secondary/40 text-secondary/50 transition-colors hover:border-accent hover:text-accent-fg">
                   <Check size={20} strokeWidth={1.75} />
                 </span>
               </span>
@@ -263,7 +263,7 @@ export function ThreadListItem({
               className={clsx(
                 'shrink-0 text-caption font-normal',
                 thread.has_attachments ? 'ms-1' : 'ms-auto',
-                unread ? 'text-accent' : 'text-secondary',
+                unread ? 'text-accent-fg' : 'text-secondary',
               )}
             >
               {formatThreadDate(thread.date)}

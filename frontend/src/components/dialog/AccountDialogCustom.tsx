@@ -123,7 +123,7 @@ export function AccountDialogCustom({
                 void save()
               }
             }}
-            className={`${inputClass ?? 'w-full text-xs py-2 px-3.5 rounded-control border border-border bg-raised text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'} pe-11`}
+            className={`${inputClass ?? 'w-full text-xs py-2 px-3.5 rounded-control border border-border bg-raised text-primary placeholder-secondary focus:ring-1 focus:ring-accent-fg focus:border-transparent focus:bg-chats transition-all outline-none'} pe-11`}
           />
           <button
             type="button"
@@ -145,7 +145,7 @@ export function AccountDialogCustom({
         <div
           className={`${isSetup ? 'rounded-panel p-4 text-sm gap-3' : 'rounded-control p-3 text-caption gap-2'} flex items-start bg-accent/[0.06] border border-accent/15 leading-relaxed text-secondary -mt-1`}
         >
-          <Info size={isSetup ? 16 : 14} className="shrink-0 mt-0.5 text-accent" strokeWidth={1.75} />
+          <Info size={isSetup ? 16 : 14} className="shrink-0 mt-0.5 text-accent-fg" strokeWidth={1.75} />
           <p className="flex-1 font-medium">{t('accounts.appPasswordHint', { provider: appPasswordHint.provider })}</p>
         </div>
       )}
@@ -327,7 +327,7 @@ function SecurityField({
           onChange={(event) => onChange(event.target.value as MailSecurity)}
           className={`${
             inputClassName ??
-            'w-full text-xs py-2 px-3.5 rounded-control border border-border bg-raised text-primary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'
+            'w-full text-xs py-2 px-3.5 rounded-control border border-border bg-raised text-primary focus:ring-1 focus:ring-accent-fg focus:border-transparent focus:bg-chats transition-all outline-none'
           } appearance-none pe-10 cursor-pointer`}
         >
           <option value="tls">TLS</option>

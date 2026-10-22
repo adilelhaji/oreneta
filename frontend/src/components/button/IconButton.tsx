@@ -24,12 +24,12 @@ function variantClasses(variant: IconButtonVariant, active: boolean): string {
     case 'accent':
       return 'bg-accent text-on-accent enabled:hover:bg-accent-hover'
     case 'accentSoft':
-      return 'bg-active text-accent enabled:hover:bg-hover'
+      return 'bg-active text-accent-fg enabled:hover:bg-hover'
     case 'danger':
       return 'text-danger enabled:hover:bg-danger-soft'
     case 'ghost':
     default:
-      return active ? 'bg-active text-accent' : 'text-secondary enabled:hover:bg-hover enabled:hover:text-primary'
+      return active ? 'bg-active text-accent-fg' : 'text-secondary enabled:hover:bg-hover enabled:hover:text-primary'
   }
 }
 

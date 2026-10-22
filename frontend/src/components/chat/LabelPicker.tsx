@@ -82,7 +82,7 @@ export function LabelPicker({ threadId, applied }: { threadId: string; applied: 
                       {label.name}
                     </span>
                   }
-                  trailing={on ? <Check size={14} className="shrink-0 text-accent" strokeWidth={1.75} /> : undefined}
+                  trailing={on ? <Check size={14} className="shrink-0 text-accent-fg" strokeWidth={1.75} /> : undefined}
                   onClick={() => void toggle(label.id)}
                 />
               )

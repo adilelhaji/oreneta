@@ -54,7 +54,7 @@ function ThemeSection({
         <button
           type="button"
           onClick={() => onEdit({ appearance: newTileAppearance, theme: null })}
-          className="flex min-h-[112px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-control border border-dashed border-border text-secondary transition-colors hover:border-accent/50 hover:text-accent"
+          className="flex min-h-[112px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-control border border-dashed border-border text-secondary transition-colors hover:border-accent/50 hover:text-accent-fg"
         >
           <Plus size={16} strokeWidth={1.75} />
           <span className="text-caption font-bold">{t('theme.custom')}</span>

@@ -33,7 +33,7 @@ export function UpdateBanner() {
       aria-labelledby={titleId}
       className="flex shrink-0 items-center justify-center gap-2 border-b border-accent/20 bg-accent/10 px-3 py-1.5 text-xs font-medium text-primary"
     >
-      <Sparkles size={14} className="shrink-0 text-accent" strokeWidth={1.75} />
+      <Sparkles size={14} className="shrink-0 text-accent-fg" strokeWidth={1.75} />
       <span id={titleId} className="min-w-0 truncate">
         {ready
           ? t('updates.ready', { version: status.latestVersion })
@@ -42,7 +42,7 @@ export function UpdateBanner() {
       <button
         type="button"
         onClick={() => void (ready ? applyDownloadedUpdate() : startUpdateDownload())}
-        className="inline-flex h-6 shrink-0 items-center gap-1 rounded-control-sm px-2 font-semibold text-accent hover:bg-accent/10"
+        className="inline-flex h-6 shrink-0 items-center gap-1 rounded-control-sm px-2 font-semibold text-accent-fg hover:bg-accent/10"
       >
         <Download size={14} strokeWidth={1.75} />
         <span>{ready ? t('updates.restartAndInstall') : t('updates.download')}</span>

@@ -28,7 +28,7 @@ export function menuItemStateClass({ danger = false, disabled = false } = {}): s
 export { menuItemBase }
 
 /** `appearance` of the checked row of a choice shown in accent text (the reader's view mode, the current folder). */
-export const menuItemCurrentClass = 'cursor-pointer font-semibold text-accent hover:bg-hover focus-visible:bg-hover'
+export const menuItemCurrentClass = 'cursor-pointer font-semibold text-accent-fg hover:bg-hover focus-visible:bg-hover'
 
 /** `appearance` of the checked row of a filter choice: an accent tint behind it. */
-export const menuItemSelectedClass = 'cursor-pointer bg-accent/10 text-accent dark:bg-accent/15'
+export const menuItemSelectedClass = 'cursor-pointer bg-accent/10 text-accent-fg dark:bg-accent/15'

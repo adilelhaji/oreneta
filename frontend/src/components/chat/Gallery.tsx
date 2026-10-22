@@ -314,12 +314,12 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
             onClick={(event) => event.stopPropagation()}
           >
             <MenuItem
-              icon={<Download size={14} className="text-accent" strokeWidth={1.75} />}
+              icon={<Download size={14} className="text-accent-fg" strokeWidth={1.75} />}
               label={t('chat.actions.saveImage')}
               onClick={saveCurrent}
             />
             <MenuItem
-              icon={<Copy size={14} className="text-accent" strokeWidth={1.75} />}
+              icon={<Copy size={14} className="text-accent-fg" strokeWidth={1.75} />}
               label={t('chat.actions.copyImage')}
               onClick={copyCurrent}
             />

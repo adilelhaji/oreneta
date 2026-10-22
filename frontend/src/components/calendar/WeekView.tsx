@@ -495,7 +495,7 @@ export function WeekView({
                 const box = menuKey.currentTarget.getBoundingClientRect()
                 setMenu({ x: startEdgeX(box), y: box.bottom, start: slotTimes.start, end: slotTimes.end, day: slotDay })
               }}
-              className="absolute inset-x-0.5 rounded-md opacity-0 outline-none focus-visible:opacity-100 bg-accent/10 ring-2 ring-accent"
+              className="absolute inset-x-0.5 rounded-md opacity-0 outline-none focus-visible:opacity-100 bg-accent/10 ring-2 ring-accent-fg"
               style={{
                 top: (shownSlot.minute / 60) * HOUR_PX,
                 height: (shownSlot.length / 60) * HOUR_PX,
@@ -517,7 +517,7 @@ export function WeekView({
           className="fixed z-[61] min-w-[180px] rounded-control border border-border bg-header p-1 shadow-overlay"
         >
           <MenuItem
-            icon={<Plus size={14} className="text-accent" strokeWidth={1.75} />}
+            icon={<Plus size={14} className="text-accent-fg" strokeWidth={1.75} />}
             label={t('calendar.newEvent', { defaultValue: 'New event' })}
             disabled={!canCreate}
             onClick={() => {

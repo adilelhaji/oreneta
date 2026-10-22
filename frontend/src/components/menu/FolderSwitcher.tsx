@@ -45,7 +45,7 @@ function FolderNodeRow({
   const appearance = selectable
     ? undefined
     : current
-      ? 'cursor-default font-semibold text-accent'
+      ? 'cursor-default font-semibold text-accent-fg'
       : !node.folder
         ? 'cursor-default text-secondary'
         : 'cursor-default text-primary opacity-40'
@@ -79,7 +79,7 @@ function FolderNodeRow({
               />
             </span>
             {current ? (
-              <Check size={14} className="shrink-0 text-accent" strokeWidth={1.75} />
+              <Check size={14} className="shrink-0 text-accent-fg" strokeWidth={1.75} />
             ) : (
               <Icon size={14} strokeWidth={1.75} className="shrink-0 text-secondary" />
             )}

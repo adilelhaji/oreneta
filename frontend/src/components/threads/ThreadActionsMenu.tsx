@@ -182,7 +182,7 @@ export function ThreadActionsMenuItems({
               icon={
                 <RefreshCw
                   size={14}
-                  className={`text-secondary shrink-0 ${syncing ? 'animate-spin text-accent' : ''}`}
+                  className={`text-secondary shrink-0 ${syncing ? 'animate-spin text-accent-fg' : ''}`}
                   strokeWidth={1.75}
                 />
               }

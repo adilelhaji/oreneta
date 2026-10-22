@@ -70,7 +70,7 @@ export function AccountDialogOAuth({
         <div className="flex flex-col items-center gap-2">
           <p
             role="status"
-            className={`${isSetup ? 'text-base' : 'text-2xs'} text-accent font-semibold text-center animate-pulse`}
+            className={`${isSetup ? 'text-base' : 'text-2xs'} text-accent-fg font-semibold text-center animate-pulse`}
           >
             {t('accounts.oauth.waitingForSignIn', { provider: oauthLabel })}
           </p>
