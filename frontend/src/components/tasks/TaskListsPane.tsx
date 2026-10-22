@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { Pencil, Plus, Server, Trash2 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
@@ -26,7 +26,7 @@ export function TaskListsPane({
   onAddCalDav,
 }: {
   onRename: () => void
-  /** Resolves to whether the list was deleted: the confirmation can be declined. */
+  /** Resolves to whether the person confirmed the delete: the confirmation can be declined. */
   onDelete: () => Promise<boolean>
   onAddCalDav: () => void
 }) {
@@ -38,6 +38,8 @@ export function TaskListsPane({
   const current = lists.find((list) => list.id === selectedList)
   const newButton = useRef<HTMLButtonElement | null>(null)
   const listRef = useRef<HTMLUListElement | null>(null)
+  const nameField = useRef<HTMLInputElement | null>(null)
+  const nameFieldId = useId()
 
   // The row that held the focus is gone with the list it acted on: focus goes
   // to "All", which is where the selection goes.
@@ -69,7 +71,11 @@ export function TaskListsPane({
           iconSize={14}
           size="sm"
           label={t('tasks.newList', { defaultValue: 'New list' })}
-          onClick={() => setNewList('')}
+          aria-expanded={newList !== null}
+          aria-controls={newList !== null ? nameFieldId : undefined}
+          // With the field open, a second press brings the focus back to it
+          // and keeps what was typed.
+          onClick={() => (newList === null ? setNewList('') : nameField.current?.focus())}
         />
         <IconButton
           icon={Server}
@@ -102,7 +108,12 @@ export function TaskListsPane({
         className="flex flex-col"
         // Up and Down move between the lists in reading order, as the arrows
         // moved between the tabs (ADR-0061); Home and End go to the ends.
-        onKeyDown={(event) => handleGroupArrowKeys(event, '[data-list-row]', 'vertical')}
+        onKeyDown={(event) => {
+          // The keys are taken here: let through, the window's list navigation
+          // would step the mail thread list as well and open another
+          // conversation.
+          if (handleGroupArrowKeys(event, '[data-list-row]', 'vertical')) event.stopPropagation()
+        }}
       >
         {entries.map((entry) => {
           const active = selectedList === entry.id
@@ -150,11 +161,18 @@ export function TaskListsPane({
           }}
         >
           <input
+            ref={nameField}
+            id={nameFieldId}
             autoFocus
             value={newList}
             aria-label={t('tasks.newListName', { defaultValue: 'New list name' })}
             onChange={(event) => setNewList(event.target.value)}
             onKeyDown={(event) => {
+              // A key that ends a composition (an IME) is not Enter or Esc here.
+              if (event.nativeEvent.isComposing) {
+                if (event.key === 'Enter') event.preventDefault()
+                return
+              }
               if (event.key === 'Escape') {
                 event.preventDefault()
                 event.stopPropagation()

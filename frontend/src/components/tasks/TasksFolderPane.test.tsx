@@ -4,6 +4,8 @@ import i18n from '../../lib/i18n'
 import { accounts$ } from '../../states/accounts'
 import { settings$ } from '../../states/settings'
 import { tasks$, type AccountTaskList, type Task, type TaskList } from '../../states/tasks'
+import { AppHotkeys } from '../dialog/AppHotkeys'
+import { mail$ } from '../../states/mail'
 import { settleConfirm, ui$ } from '../../states/ui'
 import { FolderPane } from '../shell/FolderPane'
 import { messages, supportedI18nLanguages } from '../../generated/locales'
@@ -256,6 +258,60 @@ describe('Tasks in the common folder pane (ADR-0068 §4, #329)', () => {
     // Left and Right are not the lists' keys here.
     fireEvent.keyDown(all, { key: 'ArrowRight' })
     expect(tasks$.selectedList.peek()).toBe('all')
+  })
+
+  it('takes the arrow keys: the mail thread list behind does not step with them', async () => {
+    const thread = (id: string) => ({ thread_id: id, id }) as never
+    mail$.threads.set([thread('t1'), thread('t2')])
+    ui$.selectedThread.set('t1')
+    try {
+      const screen = render(
+        <>
+          <AppHotkeys />
+          <TasksView />
+        </>,
+      )
+      await ready(screen)
+      const all = within(pane(screen)).getByRole('button', { name: 'All' })
+      all.focus()
+      fireEvent.keyDown(all, { key: 'ArrowDown' })
+      expect(tasks$.selectedList.peek()).toBe('mail')
+      fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
+      expect(tasks$.selectedList.peek()).toBe('list:home')
+      expect(ui$.selectedThread.peek()).toBe('t1')
+    } finally {
+      mail$.threads.set([])
+      ui$.selectedThread.set('')
+    }
+  })
+
+  it('keeps what was typed when New list is pressed again, and says the field is open', async () => {
+    const screen = render(<TasksView />)
+    await ready(screen)
+    const nav = within(pane(screen))
+    const button = nav.getByRole('button', { name: 'New list' })
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(button)
+    const name = nav.getByLabelText('New list name')
+    expect(button.getAttribute('aria-expanded')).toBe('true')
+    expect(button.getAttribute('aria-controls')).toBe(name.id)
+    fireEvent.change(name, { target: { value: 'Errands' } })
+    ;(document.activeElement as HTMLElement).blur()
+    fireEvent.click(button)
+    expect((nav.getByLabelText('New list name') as HTMLInputElement).value).toBe('Errands')
+    expect(document.activeElement).toBe(name)
+  })
+
+  it('ignores Esc and Enter while an IME composition is active', async () => {
+    const screen = render(<TasksView />)
+    await ready(screen)
+    const nav = within(pane(screen))
+    fireEvent.click(nav.getByRole('button', { name: 'New list' }))
+    const name = nav.getByLabelText('New list name')
+    fireEvent.keyDown(name, { key: 'Escape', isComposing: true })
+    expect(nav.queryByLabelText('New list name')).toBe(name)
+    fireEvent.keyDown(name, { key: 'Escape' })
+    expect(nav.queryByLabelText('New list name')).toBeNull()
   })
 
   it('moves the same way in right-to-left', async () => {

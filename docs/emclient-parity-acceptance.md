@@ -168,18 +168,20 @@ canvia d'estat (S01-04, S01-05, SET-19, SET-27): l'evidència nativa de Windows 
 El 2026-10-22 (#329, pas 2 d'ADR-0068, `docs/design/mail-navigation.md`) les llistes de tasques
 de Tasques (SET-20), que eren pestanyes, van passar a ser la subfinestra de carpetes comuna a
 partir de 1025 px, amb les mateixes llistes, el mateix ordre i els mateixos recomptes (la del
-correu, les locals, les de CalDAV i les que arriben amb un compte), i crear-ne, canviar-ne el nom i
-suprimir-ne, afegir-ne una de CalDAV i tornar a afegir les de compte declinades (ADR-0070), amb les mateixes
-condicions; cada acció diu quina llista afecta. Els avisos de les llistes de compte i l'estat de
-sincronització continuen sobre les tasques. Les files es mouen amb Amunt, Avall, Inici i Final
-(abans, les pestanyes, amb les fletxes del costat), i trien la llista en arribar-hi. Fa servir l'amplada del correu, del Calendari i de Persones
-(`folder_pane_width`, en px) i no creix amb el zoom de l'aplicació. És la regió d'F6 «Llistes de
-tasques», que en cap idioma no coincideix amb la de `<main>`. Per sota de 1025 px es conserven les
-pestanyes d'abans. Les proves automàtiques de tasques, de límits, de dreta a esquerra, de zoom, de
-regions i d'axe es mantenen, i se n'hi afegeixen de noves: les tasques a 1025, 1100 i 1440 px sense
-desplaçament horitzontal, l'amplada compartida, les llistes a la subfinestra, l'àrab i el 200 %.
-Cap fila no canvia d'estat (S01-04, S01-05, SET-20, SET-27): l'evidència nativa de Windows continua
-pendent, i SET-20 es manté `partial` (falten Google Tasks i To Do de Graph).
+correu, les locals, les de CalDAV i les que arriben amb un compte), i crear-ne, canviar-ne el nom
+i suprimir-ne, afegir-ne una de CalDAV i tornar a afegir les de compte declinades (ADR-0070), amb
+les mateixes condicions; cada acció diu quina llista afecta. Els avisos de les llistes de compte
+i l'estat de sincronització continuen sobre les tasques. Des del 2026-10-22 les files es mouen
+amb Amunt, Avall, Inici i Final (abans, les pestanyes, amb les fletxes esquerra i dreta) i
+trien la llista en arribar-hi. La subfinestra fa servir l'amplada del correu, del Calendari i de
+Persones (`folder_pane_width`, en px) i no creix amb el zoom de l'aplicació. És la regió d'F6
+«Llistes de tasques», que en cap idioma no coincideix amb la de `<main>`. Per sota de 1025 px es
+conserven les pestanyes d'abans. Les proves automàtiques de tasques, de límits, de dreta a
+esquerra, de zoom, de regions i d'axe es mantenen, i se n'hi afegeixen de noves: les tasques a
+1025, 1100 i 1440 px sense desplaçament horitzontal, l'amplada compartida, les llistes a la
+subfinestra, l'àrab i el 200 %. Cap fila no canvia d'estat (S01-04, S01-05, SET-20, SET-27):
+l'evidència nativa de Windows continua pendent, i SET-20 es manté `partial` (falten Google Tasks
+i To Do de Graph).
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per

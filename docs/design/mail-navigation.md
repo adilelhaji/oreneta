@@ -113,8 +113,8 @@ Data: 2026-10-17. Fila SET-07 (#87) de la paritat amb eM Client 10.4.
 Data: 2026-10-21. Pas 2 de l'ordre de migració
 d'[ADR-0068](../adr/0068-marc-comu-de-l-aplicacio.md) (§4, §7 i §9), primer al
 correu; els altres mòduls hi entren després, un per PR. El Calendari hi va entrar
-el 2026-10-22 ([més avall](#calendari-323)), i Persones el mateix dia
-([més avall](#persones-326)); Tasques hi va entrar després ([més avall](#tasques-329)).
+el 2026-10-22 ([més avall](#calendari-323)), i Persones i Tasques el mateix dia
+([més avall](#persones-326) i [més avall](#tasques-329)).
 
 - **Què és:** un sol component, `frontend/src/components/shell/FolderPane.tsx`,
   amb una fila de títol de 40 px al 100 % (2,5 rem, de manera que creix amb el
@@ -342,9 +342,11 @@ eren pestanyes sota la capçalera, passen a ser la subfinestra de carpetes comun
 - **Teclat:** les pestanyes es movien amb les fletxes (`handleGroupArrowKeys`,
   ADR-0061) i triaven la llista en arribar-hi. Les files de la subfinestra
   conserven aquesta semàntica, amb l'orientació vertical, que és la d'una llista
-  de files: Amunt i Avall (amb volta), Inici i Final, que també trien la llista;
-  igual en dreta a esquerra. Les fletxes cap a l'inici i cap al final de la línia
-  ja no hi mouen res. Fins que arribi l'arbre de carpetes (ADR-0068 §4), el
+  de files: Amunt i Avall (cíclics), Inici i Final, que també trien la llista;
+  igual de dreta a esquerra. Les fletxes cap a l'inici i cap al final de la línia
+  ja no hi mouen res. La subfinestra pren les tecles: no arriben a la navegació
+  de la llista de converses del correu (`AppHotkeys`), que si no canviaria la
+  conversa oberta. Fins que arribi l'arbre de carpetes (ADR-0068 §4), el
   mòdul manté la semàntica que tenia.
 - **Accions:** a dalt, com a Persones, «Llista nova» (que demana el nom allà
   mateix, com abans), «Llista de tasques CalDAV…» (que obre el mateix diàleg) i,
@@ -362,7 +364,7 @@ eren pestanyes sota la capçalera, passen a ser la subfinestra de carpetes comun
   es tanqués en perdre el focus, el primer clic sobre una llista es perdria,
   perquè les files pujarien sota el punter abans que s'acabés. Per això no es
   tanca en perdre el focus: es tanca amb Retorn (que crea la llista, si té nom) o
-  amb Escapada (que la cancel·la), i el focus torna al botó «Llista nova». Després
+  amb Esc (que la cancel·la), i el focus torna al botó «Llista nova». Després
   de suprimir una llista confirmada, el focus va a «Totes», que és on va la
   tria; si la confirmació es declina, el focus es queda al botó.
 - **Què queda al mòdul:** els avisos de les llistes de compte (les que s'estan
@@ -395,7 +397,7 @@ eren pestanyes sota la capçalera, passen a ser la subfinestra de carpetes comun
   subfinestra al costat del mòdul i amb el seu nom, diferent del de `<main>` en
   tots els catàlegs; les llistes amb el recompte, la indicació i el nom
   accessible; triar, crear, cancel·lar, canviar el nom i suprimir, amb el
-  focus; les fletxes, també en dreta a esquerra; el diàleg CalDAV; «Afegeix una
+  focus; les fletxes, també de dreta a esquerra; el diàleg CalDAV; «Afegeix una
   llista» i els avisos que es queden al mòdul; «Totes» amb una llista de compte
   pendent; l'amplada compartida amb el correu; les pestanyes a 1024 px i el pas
   d'un lloc a l'altre) i `frontend/e2e/startup.e2e.ts` («#329»: les tasques a
