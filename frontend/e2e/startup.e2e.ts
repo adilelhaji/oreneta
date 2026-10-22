@@ -4678,6 +4678,10 @@ for (const language of ['en', 'ca', 'ar']) {
     await page.getByRole('button', { name: /pau@chat.test/ }).click()
     await expect(page.getByText('Hello Ana')).toBeVisible()
     await audit('chat', catalog['messaging.title'])
+    // The conversations are the folder pane (#337), beside the module: from
+    // the rail, F6 goes to the module, then the pane, then back to the rail.
+    await page.getByTitle(catalog['messaging.title'], { exact: true }).focus()
+    expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'folders', 'modules'])
 
     await page.getByTitle(catalog['attachmentsView.title'], { exact: true }).click()
     await audit('attachments', catalog['attachmentsView.title'])
@@ -5921,6 +5925,189 @@ test("in Arabic Notes's folder pane sits between the rail and the list, and its 
   expect(contentBox.x).toBeGreaterThanOrEqual(-1)
   await insidePane(page, pane)
   await rtlInView(page, 'notes folder pane')
+  await settled(page)
+  const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+  const blocking = results.violations
+    .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+    .map(
+      (violation) =>
+        `${violation.id} (${violation.impact}) on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`,
+    )
+  expect(blocking).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// #337: the chat conversations in the common folder pane (ADR-0068 §4), at the
+// one width every module shares. The open conversation stays beside it and
+// keeps 360 px. At 1024 px and below the pane is not drawn, and the column
+// keeps its w-72 width with its own header.
+async function openChatPane(page: Page, options: SetupOptions = {}, catalog = enCatalog) {
+  const errors = await prepareStartup(page, true, { navigation: true, ...options })
+  await page.addInitScript(() => {
+    const replies = (window as any).startupProbe.replies
+    replies['chat.accounts'] = [
+      { id: 'c1', jid: 'ana@chat.test', host: '', port: 5222 },
+      // Long enough to push the account row past a 200 px pane, were it free to.
+      { id: 'c2', jid: 'ana.with-a-longer-name@work.example.test', host: '', port: 5222 },
+    ]
+    replies['chat.status'] = { c1: { account: 'c1', state: 'online' }, c2: { account: 'c2', state: 'offline' } }
+    replies['chat.conversations'] = [
+      { conversation: 'pau@chat.test', last_body: 'Hello', last_stamp: 1760000120, last_direction: 'in', unread: 1 },
+      { conversation: 'a-contact-with-a-very-long-address-for-the-pane@chat.test', last_body: 'A long preview of the last message', last_stamp: 1760000100, last_direction: 'in', unread: 0 },
+    ]
+    replies['chat.rooms'] = [
+      { account: 'c1', room: 'team@rooms.chat.test', nick: 'ana', has_password: false, last_body: 'Hi team', last_stamp: 1760000200, unread: 0, state: 'joined', detail: null },
+    ]
+    replies['chat.invitations'] = [
+      { account: 'c1', room: 'club@rooms.chat.test', inviter: 'marta@chat.test', reason: 'Join the club', has_password: false, received_at: 1 },
+    ]
+    replies['chat.history'] = [
+      { account: 'c1', conversation: 'pau@chat.test', id: 'm1', stanza_id: 'a1', direction: 'in', sender: 'pau@chat.test', body: 'Hello Ana', stamp: 1760000000, state: 'received' },
+    ]
+    replies['chat.markRead'] = { ok: true }
+    replies['chat.presence'] = { own: { show: 'available', status: '' }, contacts: {}, requests: [] }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await page.getByTitle(catalog['messaging.title'], { exact: true }).click()
+  await expect(page.getByRole('main', { name: catalog['messaging.title'], exact: true })).toBeVisible()
+  return errors
+}
+
+for (const [width, paneWidth] of [
+  [1025, 200],
+  [1025, 260],
+  [1025, 400],
+  [1100, 200],
+  [1100, 260],
+  [1440, 200],
+  [1440, 260],
+] as const) {
+  test(`Chat's folder pane leaves the conversation whole at ${width}px, ${paneWidth}px wide (#337)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const errors = await openChatPane(page, { preferences: { folder_pane_width: paneWidth } })
+    const pane = page.getByRole('navigation', { name: 'Conversations', exact: true })
+    const content = page.locator('main > [data-region="content"]')
+    await expect(pane).toHaveAttribute('data-region', 'folders')
+    await expect(pane.getByRole('heading', { level: 2, name: 'Conversations' })).toBeVisible()
+    await expect(pane.getByRole('combobox', { name: 'Chat account' })).toBeVisible()
+    await expect(pane.getByRole('list', { name: 'Invitations' })).toBeVisible()
+    await expect(pane.getByRole('list', { name: 'Groups' })).toBeVisible()
+    await expect(pane.getByRole('button', { name: 'Remove this chat account' })).toBeVisible()
+    // Right after the rail, at the shared width, and the conversation right after it.
+    const rail = await boxOf(page.locator('main > aside').first())
+    const paneBox = await boxOf(pane)
+    expect(Math.abs(paneBox.x - (rail.x + rail.width))).toBeLessThanOrEqual(1)
+    expect(Math.abs(paneBox.width - Math.min(paneWidth, width - 60 - 360))).toBeLessThanOrEqual(1)
+    const contentBox = await boxOf(content)
+    expect(Math.abs(contentBox.x - (paneBox.x + paneBox.width))).toBeLessThanOrEqual(1)
+    expect(contentBox.x + contentBox.width).toBeLessThanOrEqual(width + 1)
+    expect(contentBox.width).toBeGreaterThanOrEqual(359)
+    // The column is gone from the module, and the pane is the only region.
+    await expect(page.locator('[data-region="folders"]')).toHaveCount(1)
+    await expect(content.locator('[data-region="folders"]')).toHaveCount(0)
+
+    await pane.getByRole('button', { name: /pau@chat.test/ }).click()
+    await expect(content.getByText('Hello Ana', { exact: true })).toBeVisible()
+    await settled(page)
+    await ltrInView(page, `chat at ${width}px, folders ${paneWidth}px`)
+    const outside = await content.evaluate((region) => {
+      const { left, right } = region.getBoundingClientRect()
+      return [...region.querySelectorAll<HTMLElement>('button, textarea, input')]
+        .map((element) => ({ element, box: element.getBoundingClientRect() }))
+        .filter(({ box }) => box.width > 0 && (box.left < left - 1 || box.right > right + 1))
+        .map(({ element }) => element.getAttribute('aria-label') ?? element.textContent?.trim().slice(0, 40))
+    })
+    expect(outside).toEqual([])
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await insidePane(page, pane)
+    // Nothing in the pane's body scrolls sideways: the account selector gives
+    // way and the connection status stays whole inside the pane.
+    const body = await page.evaluate(() => {
+      const scroller = document.querySelector<HTMLElement>('[data-folder-pane] > div:nth-child(2)')!
+      return { scroll: scroller.scrollWidth, client: scroller.clientWidth }
+    })
+    expect(body.scroll).toBeLessThanOrEqual(body.client + 1)
+    const drawn = await boxOf(pane)
+    for (const control of [pane.getByRole('combobox', { name: 'Chat account' }), pane.getByRole('status').first()]) {
+      const box = await boxOf(control)
+      expect(box.x).toBeGreaterThanOrEqual(drawn.x - 1)
+      expect(box.x + box.width).toBeLessThanOrEqual(drawn.x + drawn.width + 1)
+    }
+    expect(errors).toEqual([])
+  })
+}
+
+test('at 1024px Chat keeps its w-72 column with its header, and draws no folder pane (#337)', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 900 })
+  const errors = await openChatPane(page)
+  await expect(page.locator('[data-folder-pane]')).toHaveCount(0)
+  await expect(page.getByRole('separator', { name: 'Resize folder pane' })).toHaveCount(0)
+  await expect(page.getByRole('navigation', { name: 'Conversations' })).toHaveCount(0)
+  const column = page.locator('main [data-region="folders"]')
+  await expect(column).toHaveCount(1)
+  await expect(column.getByRole('combobox', { name: 'Chat account' })).toBeVisible()
+  await expect(column.getByRole('button', { name: /pau@chat.test/ })).toBeVisible()
+  expect(Math.round((await boxOf(column)).width)).toBe(288)
+  // The long address gives way in the 18 rem column too: its header holds the
+  // selector and the status inside it.
+  const drawn = await boxOf(column)
+  for (const control of [column.getByRole('combobox', { name: 'Chat account' }), column.getByRole('status').first()]) {
+    const box = await boxOf(control)
+    expect(box.x).toBeGreaterThanOrEqual(drawn.x - 1)
+    expect(box.x + box.width).toBeLessThanOrEqual(drawn.x + drawn.width + 1)
+  }
+  await ltrInView(page, 'chat at 1024px')
+  expect(errors).toEqual([])
+})
+
+test('the folder pane resized in Chat is the width mail draws, and the reverse (#337)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await openChatPane(page)
+  const chat = page.getByRole('navigation', { name: 'Conversations', exact: true })
+  const mail = page.getByRole('navigation', { name: 'Accounts and folders', exact: true })
+  const handleIn = (pane: ReturnType<Page['locator']>) => pane.getByRole('separator', { name: 'Resize folder pane' })
+  const drawn = async (pane: ReturnType<Page['locator']>) => Math.round((await boxOf(pane)).width)
+  const stored = () =>
+    page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}').folder_pane_width)
+  const chatButton = page.getByTitle('Chat', { exact: true })
+  await expect(handleIn(chat)).toHaveAttribute('aria-valuenow', '260')
+  await handleIn(chat).focus()
+  await page.keyboard.press('End')
+  await expect(handleIn(chat)).toHaveAttribute('aria-valuenow', '400')
+  expect(await drawn(chat)).toBe(400)
+  await expect.poll(stored).toBe(400)
+  await chatButton.click()
+  await expect(handleIn(mail)).toHaveAttribute('aria-valuenow', '400')
+  await handleIn(mail).focus()
+  await page.keyboard.press('Home')
+  await expect.poll(stored).toBe(200)
+  await chatButton.click()
+  await expect(handleIn(chat)).toHaveAttribute('aria-valuenow', '200')
+  expect(await drawn(chat)).toBe(200)
+  expect(errors).toEqual([])
+})
+
+test("in Arabic Chat's folder pane sits between the rail and the conversation, and its separator follows the reading (#337)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await openChatPane(page, { language: 'ar' }, arCatalog)
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+  const pane = page.getByRole('navigation', { name: arCatalog['messaging.conversations'], exact: true })
+  await expect(pane).toBeVisible()
+  const railBox = await boxOf(page.locator('main > aside').first())
+  const paneBox = await boxOf(pane)
+  const contentBox = await boxOf(page.locator('main > [data-region="content"]'))
+  expect(Math.abs(paneBox.x + paneBox.width - railBox.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(contentBox.x + contentBox.width - paneBox.x)).toBeLessThanOrEqual(1)
+  expect(contentBox.x).toBeGreaterThanOrEqual(-1)
+  await pane.getByRole('button', { name: /pau@chat.test/ }).click()
+  await expect(page.getByText('Hello Ana')).toBeVisible()
+  await insidePane(page, pane)
+  await rtlInView(page, 'chat folder pane')
   await settled(page)
   const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
   const blocking = results.violations

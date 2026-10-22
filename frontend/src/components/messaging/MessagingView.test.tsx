@@ -475,9 +475,7 @@ it('the person sets their status and text; invisible only where the server can h
   expect((within(select).getByRole('option', { name: 'Invisible' }) as HTMLOptionElement).disabled).toBe(false)
   expect(screen.getByText('Hidden from your contacts. Groups you are in still see you.')).toBeTruthy()
   // Invisible chosen but not possible: said plainly, never shown as online.
-  await act(async () =>
-    onChatEvent('chat.own', { account: 'c1', applied: 'withheld', invisible_supported: false }),
-  )
+  await act(async () => onChatEvent('chat.own', { account: 'c1', applied: 'withheld', invisible_supported: false }))
   expect(screen.getByRole('alert').textContent).toContain('your contacts see you offline')
   expect(screen.getByRole('alert').textContent).toContain('Groups you are in still see you')
   // Another account's status changes nothing here.
@@ -511,9 +509,7 @@ it('a contact’s status shows once they allow it; asking and answering happen o
   expect(within(screen.getByRole('region', { name: 'pau@chat.test' })).getByText('Offline')).toBeTruthy()
   expect(screen.queryByRole('button', { name: 'Ask to see their status' })).toBeNull()
   // Not connected: no status is claimed.
-  await act(async () =>
-    onChatEvent('chat.presence', { account: 'c1', jid: 'pau@chat.test', show: 'dnd', status: '' }),
-  )
+  await act(async () => onChatEvent('chat.presence', { account: 'c1', jid: 'pau@chat.test', show: 'dnd', status: '' }))
   const open = screen.getByRole('region', { name: 'pau@chat.test' })
   await waitFor(() => expect(within(open).getByText('Busy')).toBeTruthy())
   await act(async () => onChatEvent('chat.status', { account: 'c1', state: 'offline' }))
@@ -568,7 +564,11 @@ it('in a group, @ offers who is there, the picked names go with the message, and
   const box = screen.getByLabelText('Message') as HTMLTextAreaElement
   fireEvent.change(box, { target: { value: 'Hola @pa', selectionStart: 8 } })
   const list = screen.getByRole('listbox', { name: 'People to mention' })
-  expect(within(list).getAllByRole('option').map((o) => o.textContent)).toEqual(['pablo', 'Pau'])
+  expect(
+    within(list)
+      .getAllByRole('option')
+      .map((o) => o.textContent),
+  ).toEqual(['pablo', 'Pau'])
   expect(box.getAttribute('aria-activedescendant')).toBe('chat-mention-0')
   fireEvent.keyDown(box, { key: 'ArrowDown' })
   fireEvent.keyDown(box, { key: 'Enter' })
@@ -577,7 +577,11 @@ it('in a group, @ offers who is there, the picked names go with the message, and
   expect(calls.some((c) => c.command === 'chat.send')).toBe(false)
   // Escape closes the list without picking; the text stays as written.
   fireEvent.change(box, { target: { value: 'Hola @Pau y @m', selectionStart: 14 } })
-  expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['Marta'])
+  expect(
+    within(screen.getByRole('listbox'))
+      .getAllByRole('option')
+      .map((o) => o.textContent),
+  ).toEqual(['Marta'])
   fireEvent.keyDown(box, { key: 'Escape' })
   expect(screen.queryByRole('listbox')).toBeNull()
   await act(async () => {
@@ -669,7 +673,10 @@ it('clicking a chat notification opens its conversation in the Chat view', async
   await act(async () => openChatFromNotification('c1', 'pau@chat.test'))
   expect(ui$.module.peek()).toBe('chat')
   expect(messaging$.conversation.peek()).toBe('pau@chat.test')
-  expect(calls.find((c) => c.command === 'chat.markRead')?.payload).toEqual({ account: 'c1', conversation: 'pau@chat.test' })
+  expect(calls.find((c) => c.command === 'chat.markRead')?.payload).toEqual({
+    account: 'c1',
+    conversation: 'pau@chat.test',
+  })
   ui$.module.set('mail')
 })
 
@@ -682,7 +689,9 @@ it('the saved status shows before connecting, and invisible says it needs the co
   })
   const screen = render(<MessagingView />)
   const form = await waitFor(() => screen.getByRole('form', { name: 'Your status' }))
-  await waitFor(() => expect((within(form).getByLabelText('Status message') as HTMLInputElement).value).toBe('En clase'))
+  await waitFor(() =>
+    expect((within(form).getByLabelText('Status message') as HTMLInputElement).value).toBe('En clase'),
+  )
   expect((within(form).getByRole('combobox', { name: 'Your status' }) as HTMLSelectElement).value).toBe('dnd')
   expect(screen.getByText('Connect to check whether this server can hide you.')).toBeTruthy()
   expect(screen.getByText('While busy, chat messages raise no notifications.')).toBeTruthy()
@@ -694,7 +703,11 @@ it('an answer about another account is not shown', async () => {
   messaging$.account.set('c1')
   const pending = loadPresence()
   messaging$.account.set('c2')
-  release({ own: { show: 'away', status: 'De c1', applied: 'announced', invisible_supported: true }, contacts: {}, requests: ['x@y.z'] })
+  release({
+    own: { show: 'away', status: 'De c1', applied: 'announced', invisible_supported: true },
+    contacts: {},
+    requests: ['x@y.z'],
+  })
   await pending
   expect(chatPresence$.own.peek().status).toBe('')
   expect(chatPresence$.requests.peek()).toEqual([])
@@ -725,13 +738,15 @@ it('a new chat session clears what the old one showed, and contacts shown stay b
 // ---- Who may see the status, muting and unread mentions (ADR-0064) --------------------
 
 it('who can see the status comes from the server, and sharing stops only on a confirmed click', async () => {
-  const presence = (allowed: string[] | null, more = false) => () => ({
-    own: {},
-    contacts: {},
-    requests: [],
-    allowed,
-    allowed_more: more,
-  })
+  const presence =
+    (allowed: string[] | null, more = false) =>
+    () => ({
+      own: {},
+      contacts: {},
+      requests: [],
+      allowed,
+      allowed_more: more,
+    })
   answers['chat.presence'] = presence(null)
   const screen = render(<MessagingView />)
   const toggle = await waitFor(() => screen.getByRole('button', { name: /Who can see your status/ }))
@@ -913,7 +928,9 @@ it('a conversation without messages yet, or a private one, shows its mute and ca
   await waitFor(() => expect(toggle().getAttribute('aria-pressed')).toBe('true'))
   // What muting means is reachable without a mouse.
   expect(toggle().getAttribute('aria-describedby')).toBe('chat-muted-hint')
-  expect(screen.getByText('No notifications from this conversation, not even mentions. New messages still count as unread.')).toBeTruthy()
+  expect(
+    screen.getByText('No notifications from this conversation, not even mentions. New messages still count as unread.'),
+  ).toBeTruthy()
   await act(async () => {
     fireEvent.click(toggle())
   })
@@ -978,7 +995,9 @@ it('each group shows its unread mentions, the account its total, and a lower bou
   ]
   await act(async () => onChatEvent('chat.room', { account: 'c1', room: 'club@rooms.chat.test' }))
   await waitFor(() => expect(screen.getByText('Unread mentions in your groups: 2 or more')).toBeTruthy())
-  const club = within(screen.getByRole('list', { name: 'Groups' })).getByRole('button', { name: /club@rooms.chat.test/ })
+  const club = within(screen.getByRole('list', { name: 'Groups' })).getByRole('button', {
+    name: /club@rooms.chat.test/,
+  })
   expect(club.textContent).toContain('Unread mentions: 0 or more')
   expect(club.textContent).toContain('0+')
 

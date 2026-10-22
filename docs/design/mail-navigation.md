@@ -113,9 +113,9 @@ Data: 2026-10-17. Fila SET-07 (#87) de la paritat amb eM Client 10.4.
 Data: 2026-10-21. Pas 2 de l'ordre de migració
 d'[ADR-0068](../adr/0068-marc-comu-de-l-aplicacio.md) (§4, §7 i §9), primer al
 correu; els altres mòduls hi entren després, un per PR. El Calendari hi va entrar
-el 2026-10-22 ([més avall](#calendari-323)), i Persones, Tasques i Notes el mateix
-dia (vegeu [Persones](#persones-326), [Tasques](#tasques-329) i
-[Notes](#notes-335) més avall).
+el 2026-10-22 ([més avall](#calendari-323)), i Persones, Tasques, Notes i Xat el
+mateix dia (vegeu [Persones](#persones-326), [Tasques](#tasques-329),
+[Notes](#notes-335) i [Xat](#xat-337) més avall).
 
 - **Què és:** un sol component, `frontend/src/components/shell/FolderPane.tsx`,
   amb una fila de títol de 40 px al 100 % (2,5 rem, de manera que creix amb el
@@ -462,3 +462,48 @@ carpetes comuna (ADR-0068 §4, fila de Notes).
   desplaçament horitzontal; els botons a 1024 px; triar, treure i la paperera;
   l'amplada desada des de Notes i des del correu; l'àrab, amb axe). El
   recorregut d'F6 de #306 hi afegeix Notes.
+
+### Xat (#337)
+
+Data: 2026-10-22. El sisè mòdul del pas 2: la columna de converses de Xat, de 18
+rem, passa a ser la subfinestra de carpetes comuna (ADR-0068 §4, fila de Xat).
+
+- **Cos:** el mateix contingut i el mateix ordre que la columna, peu inclòs. Primer
+  la fila del compte (el selector de compte o l'adreça, la insígnia de mencions
+  sense llegir i l'estat de la connexió), després el teu estat, les peticions de
+  veure l'estat i els permisos d'estat, «Xateja amb», «Uneix-te a un grup» (o el seu formulari), les
+  invitacions, els grups, les converses directes i, al peu de la subfinestra,
+  «Elimina aquest compte de xat». El títol de la subfinestra és
+  «Converses» (`messaging.conversations`), la clau que ja era el nom de la
+  columna: no hi ha cap cadena nova. Els botons de navegació compacta i la icona
+  de xat de la capçalera de la columna no hi són, perquè la subfinestra ja té la
+  seva fila de títol de 2,5 rem. Obrir una conversa, canviar de compte, unir-se a
+  un grup i la resta fan el mateix que a la columna.
+- **Conversa oberta:** com que la fila de la conversa oberta és sobre el fons de la
+  subfinestra (`--me-bg-app`), més fosc que el de la columna (`--me-bg-chats`), el
+  to `accent/10` que la marcava deixava el text secundari de l'últim missatge
+  per sota de 4,5:1. A la subfinestra la fila oberta es marca com la carpeta
+  triada de la subfinestra del correu: fons `bg-active` i nom en `accent-fg`,
+  perquè el fons sol gairebé no es distingeix del de la subfinestra. A la
+  columna d'abans no canvia res.
+- **Amplada:** la mateixa preferència `folder_pane_width` i el mateix separador que
+  al correu, al Calendari, a Persones, a Tasques i a Notes, en px. La conversa
+  oberta demana 360 px com a base (`flex-[1_1_360px]`, el mínim del lector
+  d'ADR-0068 §7): la subfinestra, que cedeix abans que res, s'encongeix fins a
+  donar-los-hi. `w-72` desapareix a la subfinestra.
+- **Regió i nom:** la subfinestra és l'única regió «carpetes» d'F6 de Xat i es diu
+  «Converses», diferent de `<main>` («Xat»), de «Grups», de «Converses directes»,
+  d'«Invitacions» i de la resta de noms de regió en els 20 catàlegs, com comprova
+  una prova. No ha calgut canviar cap nom.
+- **Per sota de 1025 px** la subfinestra no es mostra i es conserva la columna d'abans
+  tal com és (de 18 rem, a tota l'amplada per sota de 769 px, amb el flux de tornada
+  quan hi ha una conversa oberta). Mai no són a dos llocs alhora. Sense cap compte,
+  `ChatSetup` es manté.
+- **Proves:** `frontend/src/components/messaging/MessagingFolderPane.test.tsx` (la
+  regió i el seu nom; el cos i l'ordre; obrir una conversa; canviar de compte;
+  l'amplada compartida i la base de 360 px; el nom diferent del de les altres
+  regions en els 20 catàlegs; la columna a 1024 px i el pas de 1024 a 1025 px amb
+  la conversa oberta) i `frontend/e2e/startup.e2e.ts` («#337»: la conversa a 1025,
+  1100 i 1440 px amb la subfinestra a 200, 260 i 400 px, sense desplaçament
+  horitzontal; la columna a 1024 px; l'amplada desada des de Xat i des del correu;
+  l'àrab, amb axe). El recorregut d'F6 de #306 hi afegeix Xat.
