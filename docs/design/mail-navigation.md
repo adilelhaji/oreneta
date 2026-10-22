@@ -291,8 +291,8 @@ que el filtre d'abans (ADR-0068 §4, fila de Persones).
 - **Amplada:** la mateixa preferència `folder_pane_width` i el mateix separador
   que al correu i al Calendari: redimensionar-la a Persones la canvia a tots dos, i a
   l'inrevés, en px. Al costat de la subfinestra, la columna de la llista fa
-  288 px (18 rem al 100 %) i no creix amb el zoom de l'aplicació, i la fila del
-  títol i les accions de la capçalera passa a una línia nova si no hi caben:
+  288 px (18 rem al 100 %) i no creix amb el zoom de l'aplicació, i a la seva
+  capçalera el títol i les accions passen a una línia nova si no hi caben:
   sense això, al 200 % a 1025 px, la fitxa de la persona es quedava a 129 px. Per
   sota de 1025 px la columna segueix sent de 18 rem.
 - **Espai a 1025 px:** el mòdul demana 648 px com a base (la llista de 288 px i
