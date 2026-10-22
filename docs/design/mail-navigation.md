@@ -114,7 +114,7 @@ Data: 2026-10-21. Pas 2 de l'ordre de migració
 d'[ADR-0068](../adr/0068-marc-comu-de-l-aplicacio.md) (§4, §7 i §9), primer al
 correu; els altres mòduls hi entren després, un per PR. El Calendari hi va entrar
 el 2026-10-22 ([més avall](#calendari-323)), i Persones i Tasques el mateix dia
-([més avall](#persones-326) i [més avall](#tasques-329)).
+(vegeu [Persones](#persones-326) i [Tasques](#tasques-329) més avall).
 
 - **Què és:** un sol component, `frontend/src/components/shell/FolderPane.tsx`,
   amb una fila de títol de 40 px al 100 % (2,5 rem, de manera que creix amb el

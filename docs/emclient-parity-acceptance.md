@@ -171,7 +171,7 @@ partir de 1025 px, amb les mateixes llistes, el mateix ordre i els mateixos reco
 correu, les locals, les de CalDAV i les que arriben amb un compte), i crear-ne, canviar-ne el nom
 i suprimir-ne, afegir-ne una de CalDAV i tornar a afegir les de compte declinades (ADR-0070), amb
 les mateixes condicions; cada acció diu quina llista afecta. Els avisos de les llistes de compte
-i l'estat de sincronització continuen sobre les tasques. Des del 2026-10-22 les files es mouen
+i l'estat de sincronització continuen sobre les tasques. Les files es mouen
 amb Amunt, Avall, Inici i Final (abans, les pestanyes, amb les fletxes esquerra i dreta) i
 trien la llista en arribar-hi. La subfinestra fa servir l'amplada del correu, del Calendari i de
 Persones (`folder_pane_width`, en px) i no creix amb el zoom de l'aplicació. És la regió d'F6

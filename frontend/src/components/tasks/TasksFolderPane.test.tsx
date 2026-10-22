@@ -308,8 +308,16 @@ describe('Tasks in the common folder pane (ADR-0068 §4, #329)', () => {
     const nav = within(pane(screen))
     fireEvent.click(nav.getByRole('button', { name: 'New list' }))
     const name = nav.getByLabelText('New list name')
+    fireEvent.change(name, { target: { value: '買い物' } })
     fireEvent.keyDown(name, { key: 'Escape', isComposing: true })
     expect(nav.queryByLabelText('New list name')).toBe(name)
+    // Enter that commits a candidate does not submit the name: false means
+    // its default, the form's submission, was prevented. WebKit sends it
+    // after compositionend, with isComposing false and keyCode 229.
+    expect(fireEvent.keyDown(name, { key: 'Enter', isComposing: true })).toBe(false)
+    expect(fireEvent.keyDown(name, { key: 'Enter', keyCode: 229 })).toBe(false)
+    fireEvent.keyDown(name, { key: 'Escape', keyCode: 229 })
+    expect((nav.getByLabelText('New list name') as HTMLInputElement).value).toBe('買い物')
     fireEvent.keyDown(name, { key: 'Escape' })
     expect(nav.queryByLabelText('New list name')).toBeNull()
   })

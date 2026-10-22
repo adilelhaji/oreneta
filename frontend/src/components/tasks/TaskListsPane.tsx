@@ -169,8 +169,11 @@ export function TaskListsPane({
             onChange={(event) => setNewList(event.target.value)}
             onKeyDown={(event) => {
               // A key that ends a composition (an IME) is not Enter or Esc here.
-              if (event.nativeEvent.isComposing) {
+              // WebKit sends the Enter that commits it after compositionend,
+              // with isComposing false and keyCode 229.
+              if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) {
                 if (event.key === 'Enter') event.preventDefault()
+                event.stopPropagation()
                 return
               }
               if (event.key === 'Escape') {
