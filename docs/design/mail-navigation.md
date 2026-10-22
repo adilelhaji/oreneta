@@ -470,8 +470,8 @@ rem, passa a ser la subfinestra de carpetes comuna (ADR-0068 §4, fila de Xat).
 
 - **Cos:** el mateix contingut i el mateix ordre que la columna, peu inclòs. Primer
   la fila del compte (el selector de compte o l'adreça, la insígnia de mencions
-  sense llegir i l'estat de la connexió), després el teu estat, les peticions i els
-  permisos d'estat, «Xateja amb», «Uneix-te a un grup» (o el seu formulari), les
+  sense llegir i l'estat de la connexió), després el teu estat, les peticions de
+  veure l'estat i els permisos d'estat, «Xateja amb», «Uneix-te a un grup» (o el seu formulari), les
   invitacions, els grups, les converses directes i, al peu de la subfinestra,
   «Elimina aquest compte de xat». El títol de la subfinestra és
   «Converses» (`messaging.conversations`), la clau que ja era el nom de la
@@ -481,18 +481,18 @@ rem, passa a ser la subfinestra de carpetes comuna (ADR-0068 §4, fila de Xat).
   un grup i la resta fan el mateix que a la columna.
 - **Conversa oberta:** com que la fila de la conversa oberta és sobre el fons de la
   subfinestra (`--me-bg-app`), més fosc que el de la columna (`--me-bg-chats`), la
-  tinta `accent/10` que la marcava deixava el text secundari de l'últim missatge
-  per sota de 4,5:1. A la subfinestra la fila oberta fa servir `bg-active`, la
-  tinta que ja fan servir les altres llistes; a la columna d'abans no canvia res.
+  to `accent/10` que la marcava deixava el text secundari de l'últim missatge
+  per sota de 4,5:1. A la subfinestra la fila oberta fa servir `bg-active`, el
+  to que ja fan servir les altres llistes; a la columna d'abans no canvia res.
 - **Amplada:** la mateixa preferència `folder_pane_width` i el mateix separador que
-  al correu, al Calendari, a Persones, a Tasques i a Notes, en px. El costat de la
-  conversa demana 360 px com a base (`flex-[1_1_360px]`, el mínim del lector
+  al correu, al Calendari, a Persones, a Tasques i a Notes, en px. La conversa
+  oberta demana 360 px com a base (`flex-[1_1_360px]`, el mínim del lector
   d'ADR-0068 §7): la subfinestra, que cedeix abans que res, s'encongeix fins a
   donar-los-hi. `w-72` desapareix a la subfinestra.
 - **Regió i nom:** la subfinestra és l'única regió «carpetes» d'F6 de Xat i es diu
-  «Converses», diferent de `<main>` («Xat») i de «Grups», «Converses directes»,
-  «Invitacions» i de la resta de noms de regió en els 20 catàlegs, com comprova una
-  prova. Cap nom no s'ha hagut de canviar.
+  «Converses», diferent de `<main>` («Xat»), de «Grups», de «Converses directes»,
+  d'«Invitacions» i de la resta de noms de regió en els 20 catàlegs, com comprova
+  una prova. No ha calgut canviar cap nom.
 - **Per sota de 1025 px** la subfinestra no es mostra i es conserva la columna d'abans
   tal com és (de 18 rem, a tota l'amplada per sota de 769 px, amb el flux de tornada
   quan hi ha una conversa oberta). Mai no són a dos llocs alhora. Sense cap compte,

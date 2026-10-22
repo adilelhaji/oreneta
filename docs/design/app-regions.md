@@ -57,9 +57,9 @@ mòdul.
   subfinestra de carpetes comuna va substituir «Comptes i carpetes» al correu,
   amb el mateix nom i la mateixa regió, i a partir de 1025 px també la columna
   de calendaris del Calendari (#323), els grups de Persones (#326), les llistes
-  de Tasques (#329), les etiquetes de Notes (#335) i les converses de Xat (#337). Les proves que hi arriben
-  amb `main > aside` canvien al pas 4 (ADR-0068 §8), quan la barra passa a ser
-  el `<nav>` «Mòduls» d'ADR-0068 §1.
+  de Tasques (#329), les etiquetes de Notes (#335) i les converses de Xat
+  (#337). Les proves que hi arriben amb `main > aside` canvien al pas 4
+  (ADR-0068 §8), quan la barra passa a ser el `<nav>` «Mòduls» d'ADR-0068 §1.
 - La barra vertical té nom perquè no hi hagi dues regions complementàries sense
   nom quan la barra lateral de detalls és oberta.
 - Fins al pas 2, la columna de Notes té el mateix nom que `<main>` («Notes»).
