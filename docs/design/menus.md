@@ -77,7 +77,16 @@ tauler; abast de la cerca del tauler; selector de carpetes; menús de la barra l
 selector de color del calendari; «Més accions» i menú del remitent del lector; menú
 de la persona als detalls de la conversa; menú de la imatge a la galeria; remitent de
 la resposta ràpida; etiquetes; cerques desades; enviar més tard; text desat; i la
-mostra del catàleg de disseny.
+mostra del catàleg de disseny. Des de #343, també el menú de l'aplicació de la
+banda superior ([top-band.md](top-band.md)): les ordres de la paleta agrupades per
+àrea amb `MenuGroup`, i elements de ràdio per a les que mostren un estat.
+
+Un menú prou llarg per desplaçar-se (el de l'aplicació) passa `tabStop` a
+`MenuList`: el menú mateix entra a l'ordre de Tab, perquè la zona que es desplaça
+es pugui fer servir amb el teclat (la regla `scrollable-region-focusable` d'axe),
+mentre que els elements en continuen fora i Tab el continua tancant. En arribar a
+un element, el menú es desplaça fins que la fila es veu sencera dins de les vores
+(`focusMenuItem` mesura la part que es desplaça, no la caixa amb la vora).
 
 ## Proves i límits
 
@@ -91,8 +100,8 @@ prova, també en tots dos idiomes, obre un menú des del seu botó amb el teclat
 passa axe i comprova que una lletra escrita al menú no arriba a les dreceres.
 
 Fora d'abast: les accions noves del menú del missatge (posar una etiqueta, crear una
-reunió, crear una regla, veure l'origen), que són una peça posterior; el menú principal de la banda
-superior (peça 13); les barres d'eines i els botons dividits (peça 8); i les finestres
+reunió, crear una regla, veure l'origen), que són una peça posterior; les barres d'eines i
+els botons dividits (peça 8); i les finestres
 que no són menús (compleció automàtica de destinataris, paleta d'ordres, suggeriments
 de gramàtica).
 

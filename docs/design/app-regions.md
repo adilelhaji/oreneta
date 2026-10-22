@@ -9,8 +9,8 @@ que hi ha a cada regió, no aquest mecanisme.
 Codi: `frontend/src/lib/regions.ts`, `states/ui.ts` (`ui$.module`), `App.tsx`,
 `components/dialog/AppHotkeys.tsx`, `lib/shortcuts.ts`,
 `components/chat/HtmlFrame.tsx`, `components/sidenav/SideNav.tsx`,
-`components/banner/UpdateBanner.tsx` i els `data-region` de les vistes de cada
-mòdul.
+`components/banner/UpdateBanner.tsx`, `components/shell/AppHeader.tsx` (la
+banda superior, des de #343) i els `data-region` de les vistes de cada mòdul.
 
 ## Un sol estat de mòdul
 
@@ -26,6 +26,8 @@ mòdul.
 
 | Regió | Element | Nom accessible | `data-region` |
 |---|---|---|---|
+| Capçalera (des de #343) | `<header>` (`banner`), fora de `<main>`, entre la barra de títol i els avisos | «Oreneta», en tots els idiomes | — |
+| Banda superior (des de #343): la primera fila de la capçalera, amb el botó «Menú de l'aplicació» ([top-band.md](top-band.md)) | dins del `<header>` | — | `search` |
 | Barra vertical | `<aside>` | «Mòduls» | `modules` |
 | Subfinestra de carpetes del correu (`FolderPane`, des de #317) | `<nav>` | el de la seva fila de títol: «Comptes i carpetes» | `folders` |
 | Subfinestra de carpetes del Calendari (`FolderPane`, des de #323); per sota de 1025 px, la columna d'abans | `<nav>` | «Calendaris» | `folders` |
@@ -42,6 +44,13 @@ mòdul.
 - Hi ha un sol `<main>`. Els diàlegs de l'aplicació, els avisos (toasts), les
   confirmacions i l'avís de certificat en surten i es pinten al costat de les
   regions.
+- La capçalera (#343) és el `<header>` «Oreneta», el punt de referència
+  `banner` de la finestra. Es pinta després de `MacTitleBar` i abans de `ConnectivityBanner` i
+  `UpdateBanner`, fora de `<main>`, com demana ADR-0068 §1 (barra de títol,
+  capçalera, avisos i la resta). El seu nom és el de l'aplicació, igual en els 20
+  catàlegs, i no coincideix amb el de cap altra regió en cap idioma, com comprova
+  una prova; el del botó «Menú de l'aplicació» tampoc no coincideix amb el «Més»
+  de la barra vertical.
 - Els diàlegs que obre un mòdul (l'editor d'una persona, l'editor i el detall
   d'un esdeveniment, la revisió del context de l'assistent, la galeria
   d'imatges) es pinten dins d'aquest mòdul i són modals (`aria-modal="true"`).
@@ -96,9 +105,12 @@ mòdul.
 ## F6 i Maj+F6
 
 - **Ordre:** cerca de la banda, barra d'eines, carpetes, mòduls, llista o
-  contingut, lector i barra lateral (`REGION_ORDER`). Avui no hi ha ni banda ni
-  barra d'eines. Al correu, doncs, l'ordre és aquest: carpetes, barra vertical,
-  llista, lector i barra lateral. La barra vertical es pinta abans que les carpetes,
+  contingut, lector i barra lateral (`REGION_ORDER`). Des de #343, la regió
+  `search` és la banda superior sencera, i F6 hi porta el focus al botó «Menú de
+  l'aplicació»; el camp de cerca (13b) s'hi afegirà. Encara no hi ha barra
+  d'eines. Al correu, doncs, l'ordre és aquest: banda, carpetes, barra vertical,
+  llista, lector i barra lateral; a la resta de mòduls, banda, carpetes, barra
+  vertical i el mòdul. La barra vertical es pinta abans que les carpetes,
   però F6 hi arriba després: és l'ordre del marc nou, on els mòduls són al peu
   de les carpetes (pas 4), i així no canvia d'un pas a l'altre. ADR-0068 §6 diu
   que és l'ordre del document: al marc nou tots dos coincideixen, i mentre la
@@ -137,14 +149,16 @@ mòdul.
 
 | Nivell | Què cobreix |
 |---|---|
-| N1 (`lib/regions.test.ts`) | L'ordre del marc i, dins d'un mateix tipus, el del document; un tipus desconegut falla; les regions amagades, inertes o sense res que pugui rebre el focus se salten; un element que no accepta el focus no compta; el cicle d'anada i tornada; el focus torna a l'últim element; una regió dins d'una altra; un diàleg modal |
+| N1 (`lib/regions.test.ts`) | L'ordre del marc i, dins d'un mateix tipus, el del document; un tipus desconegut falla; les regions amagades, inertes o sense res que pugui rebre el focus se salten; un element que no accepta el focus no compta; el cicle d'anada i tornada; el focus torna a l'últim element; una regió dins d'una altra; un diàleg modal; la banda superior és la primera regió i F6 surt del seu menú cap a la regió següent (#343) |
+| N2 (`components/shell/AppHeader.test.tsx`) | La capçalera «Oreneta» amb la banda (`search`) com a primera fila; el nom de la capçalera i el del botó del menú, diferents dels de les altres regions en els 20 catàlegs (#343) |
 | N2 (`components/dialog/AppHotkeys.test.tsx`) | F6 des d'un camp de text, amb la tecla consumida; res amb un diàleg modal d'un mòdul ni amb Configuració oberta; la paleta d'ordres es queda les tecles; reassignada a una lletra, s'escriu dins d'un camp; reassignada a F8, actua mentre s'escriu i no amb un diàleg modal; una posició de la barra vertical assignada a una tecla de funció no actua amb un diàleg modal d'un mòdul |
 | N2 (`components/dialog/ModalCard.test.tsx`) | Diàleg modal amb nom; pren el focus de l'element que l'obre i l'hi torna en tancar-se; respecta el focus que un control de dins ja ha pres |
 | N1 (`lib/shortcuts.test.ts`) | F6 i Maj+F6 per defecte, sense col·lisions; F1–F12 no són nues; reassignar F6 a una lletra torna a posar la barrera |
 | N2 (`HtmlFrame.test.tsx`) | El marc reenvia F1–F12, amb Maj o sense, i no una lletra |
 | N1 (`states/uiModule.test.ts`) | Els set mòduls; el botó de la barra vertical obre el mòdul i, si ja és obert, torna al correu; mai dos mòduls alhora |
 | N2 (proves dels mòduls) | `ui$.module` en lloc dels sis booleans |
-| e2e (`startup.e2e.ts`, «#306») | A 1440 px, en anglès, català i àrab: un sol `<main>` amb el nom del mòdul, la barra vertical «Mòduls» i F6 / Maj+F6 en el mateix ordre, fins a tornar a la fila de la llista. Des d'un camp de text, des del missatge HTML i amb un diàleg modal obert; un avís emergent (toast) i el diàleg fora de `<main>`. Al calendari, a Persones, a Tasques, a Notes, a Xat i a Adjunts, F6 va del mòdul a la seva columna (des de #323, #326, #329, #335, #337 i #339, a la subfinestra de carpetes) i torna a la barra vertical. Una reassignació a una lletra. A 600 px, només les regions que es veuen; al 200 % de l'aplicació, el mateix ordre sense desplaçament horitzontal. Les regles de regions d'axe (`region`, `landmark-unique`, `landmark-one-main`) no troben res a la bústia ni a cap mòdul |
+| e2e (`startup.e2e.ts`, «#306») | A 1440 px, en anglès, català i àrab: un sol `<main>` amb el nom del mòdul, la barra vertical «Mòduls» i F6 / Maj+F6 en el mateix ordre, des de #343 passant per la banda, fins a tornar a la fila de la llista. Des d'un camp de text, des del missatge HTML i amb un diàleg modal obert; un avís emergent (toast) i el diàleg fora de `<main>`. Al calendari, a Persones, a Tasques, a Notes, a Xat i a Adjunts, F6 va del mòdul a la banda (des de #343), a la seva columna (des de #323, #326, #329, #335, #337 i #339, a la subfinestra de carpetes) i torna a la barra vertical. Una reassignació a una lletra. A 600 px, només les regions que es veuen (la banda, que s'hi veu, i la llista o el lector); al 200 % de l'aplicació, el mateix ordre sense desplaçament horitzontal. Les regles de regions d'axe (`region`, `landmark-unique`, `landmark-one-main`) no troben res a la bústia ni a cap mòdul |
 
 Les proves de límits, de zoom, de dreta a esquerra i les auditories axe que ja
-hi havia no canvien: aquest pas no mou res de lloc.
+hi havia no canvien: aquest pas no mou res de lloc. La banda superior (#343) hi
+afegeix les seves pròpies proves «#343» (vegeu [top-band.md](top-band.md)).

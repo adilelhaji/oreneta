@@ -40,6 +40,12 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
     l'amplada de la finestra en px. Tots continuen al menú ⋮;
   - al camp de destinataris faltava `min-w-0`, i l'amplada natural del camp
     empenyia «Cc/Cco» fora de la pantalla.
+- **La banda superior** (#343, ADR-0068 §2, [top-band.md](top-band.md)) es mesura
+  en rem des del principi: 2,25 rem (`h-9`), és a dir, 36 px al 100 % i 72 px al
+  200 %. El seu menú fa 20 rem d'amplada, sense passar mai de l'amplada de la
+  finestra. L'alçada de la banda surt de les subfinestres que té a sota: al 200 %
+  i a 1025 px la pàgina no es desplaça, i els controls dels límits del correu
+  continuen dins de l'alçada de la finestra.
 - **El que continua en px:**
   - l'amplada dels taulers que la persona arrossega;
   - l'amplada de la subfinestra de carpetes (260 px per defecte, de 200 a 400,
@@ -70,6 +76,7 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
 | N1 (`shortcuts.test.ts`) | Ctrl/⌘ amb `=`, `+` (amb Maj o sense), `-` i `0`; mai sense la tecla d'ordre; reassignar «amplia» treu també el `+`; sense col·lisions amb les dreceres per defecte |
 | N2 (`zoom.test.ts`) | El paràmetre es mou, l'arrel passa a 32 px al 200 % i torna; l'avís indica la mida |
 | e2e (`startup.e2e.ts`, 1440 i 1024 px) | Al 200 % no hi ha desplaçament horitzontal i cap botó no queda fora de la pantalla a la bústia, al lector i a la redacció; Ctrl/⌘ `-` amb el focus en un camp no toca el text ni el focus; la mida es recupera després de recarregar; Ctrl/⌘ `0` la restableix |
+| e2e (`startup.e2e.ts`, «#343», 1025 px) | Al 200 % la banda superior fa 72 px, la pàgina no es desplaça i la llista, les carpetes, la resposta i els botons de la bústia i de la conversa continuen dins de l'alçada de la finestra |
 
 Falta la prova nativa (N4) a Windows, que es farà una sola vegada amb la versió
 final.

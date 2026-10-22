@@ -26,6 +26,15 @@ es mantenen intactes. Els àlies en anglès continuen sent cercables en castell�
 No s'introdueix cap motor d'ordres, model de persistència, capacitat de proveïdor
 ni enviament automàtic de correu nous.
 
+Des de #343 (ADR-0068 §2), la mateixa llista d'ordres (`useCommandList`) alimenta
+el menú de l'aplicació de la banda superior ([top-band.md](top-band.md)). Cada
+ordre porta una àrea (`area`), que només fa servir aquest menú per agrupar-les; la
+paleta l'ignora i conserva el seu ordre i la seva cerca. La paleta també té ara el
+que només oferia el menú «Més» de la barra vertical: un «Ves a: …» per a cada mòdul,
+la paleta d'ordres, el no molestar i «Quant a Oreneta». Les destinacions del correu
+(«Ves a: Correu», un compte, un tauler o una carpeta) tornen al correu des d'un
+altre mòdul, com fa la barra vertical.
+
 ## Comportament
 
 - La cerca unifica majúscules i minúscules, accents i formes de compatibilitat
