@@ -41,6 +41,7 @@ export function PeopleGroups({
     <div className="flex flex-col gap-1 px-3 py-2">
       <div className="flex flex-wrap items-center gap-1">
         <IconButton
+          data-focus-key="group-new"
           icon={Plus}
           iconSize={14}
           size="sm"
@@ -49,6 +50,7 @@ export function PeopleGroups({
         />
         {shown && (
           <IconButton
+            data-focus-key="group-write"
             icon={Mail}
             iconSize={14}
             size="sm"
@@ -60,6 +62,7 @@ export function PeopleGroups({
         {shown?.editable && (
           <>
             <IconButton
+              data-focus-key="group-rename"
               icon={Pencil}
               iconSize={14}
               size="sm"
@@ -75,6 +78,7 @@ export function PeopleGroups({
               }
             />
             <IconButton
+              data-focus-key="group-delete"
               icon={Trash2}
               iconSize={14}
               size="sm"
@@ -88,6 +92,9 @@ export function PeopleGroups({
         <li>
           <button
             type="button"
+            // The row of the group on show is what the narrow layout's group
+            // select shows: the two share a key (#341).
+            data-focus-key={!shown ? 'group-filter' : undefined}
             aria-current={!shown ? 'true' : undefined}
             onClick={() => people$.groupFilter.set('')}
             className={row(!shown)}
@@ -101,6 +108,7 @@ export function PeopleGroups({
             <li key={group.id}>
               <button
                 type="button"
+                data-focus-key={active ? 'group-filter' : undefined}
                 aria-current={active ? 'true' : undefined}
                 // The name can end in "…" in a narrow pane: the tooltip has it
                 // whole, with how many it holds (ADR-0068 §4), and the

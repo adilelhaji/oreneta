@@ -67,6 +67,7 @@ export function TaskListsPane({
       <div className="flex flex-wrap items-center gap-1">
         <IconButton
           ref={newButton}
+          data-focus-key="new-list"
           icon={Plus}
           iconSize={14}
           size="sm"
@@ -78,6 +79,7 @@ export function TaskListsPane({
           onClick={() => (newList === null ? setNewList('') : nameField.current?.focus())}
         />
         <IconButton
+          data-focus-key="caldav-list"
           icon={Server}
           iconSize={14}
           size="sm"
@@ -87,6 +89,7 @@ export function TaskListsPane({
         {current && current.id !== MAIL_LIST && (
           <>
             <IconButton
+              data-focus-key="rename-list"
               icon={Pencil}
               iconSize={14}
               size="sm"
@@ -94,6 +97,7 @@ export function TaskListsPane({
               onClick={onRename}
             />
             <IconButton
+              data-focus-key="delete-list"
               icon={Trash2}
               iconSize={14}
               size="sm"
@@ -126,6 +130,7 @@ export function TaskListsPane({
               <button
                 type="button"
                 data-list-row={entry.id}
+                data-focus-key={`list:${entry.id}`}
                 aria-current={active ? 'true' : undefined}
                 // The name can end in "…" in a narrow pane: the tooltip has it
                 // whole, with its open tasks (ADR-0068 §4), and the accessible
@@ -163,6 +168,7 @@ export function TaskListsPane({
           <input
             ref={nameField}
             id={nameFieldId}
+            data-focus-key="new-list-name"
             autoFocus
             value={newList}
             aria-label={t('tasks.newListName', { defaultValue: 'New list name' })}

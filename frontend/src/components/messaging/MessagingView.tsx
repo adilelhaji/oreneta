@@ -56,6 +56,7 @@ import { Button } from '../button/Button'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
 import { FOLDER_PANE_MIN_WINDOW, FolderPane } from '../shell/FolderPane'
 import { useWideWindow } from '../resizer/useElementWidth'
+import { useFolderPaneFocus } from '../shell/folderPaneFocus'
 import { clsx } from '../../lib/utils'
 
 const input = 'rounded-control-sm border border-border bg-app px-2.5 py-1.5 text-sm text-primary'
@@ -98,6 +99,7 @@ export function MessagingView() {
   const [showPeople, setShowPeople] = useState(false)
   // From 1025 px the conversations column is the common folder pane (ADR-0068 §4, #337).
   const inPane = useWideWindow(FOLDER_PANE_MIN_WINDOW)
+  useFolderPaneFocus(inPane)
   const end = useRef<HTMLDivElement | null>(null)
   const composer = useRef<HTMLTextAreaElement | null>(null)
 
@@ -256,6 +258,7 @@ export function MessagingView() {
         }}
       >
         <input
+          data-focus-key="new-chat"
           aria-label={t('messaging.newChat', { defaultValue: 'Chat with (address)' })}
           placeholder="name@server.example"
           value={newChat}
@@ -315,6 +318,7 @@ export function MessagingView() {
         <div className="border-b border-border px-3 py-1.5">
           <button
             type="button"
+            data-focus-key="join-group"
             onClick={() => startJoin()}
             className="flex items-center gap-1.5 text-caption text-accent-fg underline cursor-pointer"
           >
@@ -369,6 +373,7 @@ export function MessagingView() {
                 <li key={r.room}>
                   <ConversationButton
                     inPane={inPane}
+                    focusKey={r.room}
                     name={r.room}
                     last={r.last_body || roomStateLabel(r, t)}
                     unread={r.unread}
@@ -392,6 +397,7 @@ export function MessagingView() {
               <li key={c.conversation}>
                 <ConversationButton
                   inPane={inPane}
+                  focusKey={c.conversation}
                   name={inRoom ? `${inRoom.nick} (${inRoom.room})` : c.conversation}
                   last={c.last_body}
                   unread={c.unread}
@@ -412,6 +418,7 @@ export function MessagingView() {
     <footer className={clsx('px-3 py-2', !inPane && 'border-t border-border')}>
       <button
         type="button"
+        data-focus-key="remove-account"
         className="text-caption text-secondary underline cursor-pointer"
         onClick={() =>
           void confirmAction({
@@ -721,6 +728,8 @@ export function MessagingView() {
           <section
             aria-label={t('messaging.conversations', { defaultValue: 'Conversations' })}
             data-region="folders"
+            // The column stands in for the pane below 1025 px: focus goes back here (#341).
+            data-focus-return
             className={`flex w-72 shrink-0 flex-col border-e border-border max-[769px]:w-full ${conversation ? 'max-[769px]:hidden' : ''}`}
           >
             <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
@@ -1105,6 +1114,7 @@ function ConversationButton({
   mentionsCapped = false,
   muted,
   inPane,
+  focusKey,
   onOpen,
 }: {
   name: string
@@ -1127,12 +1137,15 @@ function ConversationButton({
    * alone barely differs from the pane.
    */
   inPane?: boolean
+  /** The conversation's address: the same control in the pane and in the column keeps the focus across 1025 px (#341). */
+  focusKey: string
   onOpen: () => void
 }) {
   const { t } = useTranslation()
   return (
     <button
       type="button"
+      data-focus-key={`conversation:${focusKey}`}
       aria-current={current}
       onClick={onOpen}
       className={`flex w-full flex-col gap-0.5 px-3 py-2 text-start cursor-pointer ${

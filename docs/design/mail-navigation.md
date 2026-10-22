@@ -559,3 +559,40 @@ sota la capçalera, passa a ser el cos de la subfinestra de carpetes comuna
   1024 px; filtrar des de la subfinestra, amb els valors i la llista mantinguts
   en travessar els 1025 px; l'amplada desada des d'Adjunts i des del correu;
   l'àrab, amb axe). El recorregut d'F6 de #306 hi afegeix Adjunts.
+
+### El focus en travessar els 1025 px (#341)
+
+Data: 2026-10-22. Des de 1025 px els controls de carpeta de cada mòdul són el cos
+de la subfinestra comuna; per sota, són en un altre lloc (pestanyes, xips, la
+columna, la barra de filtres). Els mòduls en munten un o l'altre, de manera que el
+control que tenia el focus es desmuntava en travessar els 1025 px i el focus
+queia a `<body>`. Ara el focus segueix el control.
+
+- **Ajuda comuna:** `useFolderPaneFocus(inPane)`, a
+  `frontend/src/components/shell/folderPaneFocus.ts`, al costat de `FolderPane`.
+  Cada mòdul la crida just després de `useWideWindow(FOLDER_PANE_MIN_WINDOW)`.
+- **Com s'assenyala:** un control que existeix en tots dos modes porta el mateix
+  `data-focus-key` (`list:<id>`, `tag:<nom>`, `conversation:<jid>`, `filter-name`,
+  `group-filter`…), i el contenidor que fa de subfinestra per sota de 1025 px
+  porta `data-focus-return`.
+- **Què fa:** quan canvia la consulta de mitjans, llegeix la clau del que té el
+  focus si és dins de la subfinestra o del contenidor d'aquest, abans que React
+  pinti l'altre mode; després del pintat, enfoca el control amb la mateixa clau
+  del mode nou. Si no n'hi ha cap (una fila sense equivalent), enfoca el primer
+  element enfocable de la regió que la substitueix: la subfinestra en passar a
+  ample, el contenidor de `data-focus-return` en passar a estret.
+- **Què no fa:** no fa res en el primer pintat, ni si el focus era fora d'aquestes
+  àrees o ha sobreviscut al canvi, i no toca el recorregut d'F6 entre regions.
+- **Mòduls:** Tasques (fila de llista, pestanya; «Nova llista», «Canvia el nom»,
+  «Suprimeix»), Notes (fila d'etiqueta, xip; «Totes les notes» no té xip i cau a la
+  cerca), Xat (conversa, «Xat amb», «Uneix-te a un grup», «Elimina aquest
+  compte»), Adjunts (els cinc filtres), Persones (el grup en pantalla i el
+  selector de grup; les accions del grup) i Calendari (cada calendari, les
+  fletxes i els dies del minicalendari). El correu no la necessita: la seva
+  subfinestra no es desmunta (només s'amaga) i per sota de 1025 px no té cap
+  control equivalent, sinó el selector «Canvia de carpeta».
+- **Proves:** els `*FolderPane.test.tsx` de cada mòdul (focus en una fila, creuar
+  els 1025 px en els dos sentits, el control equivalent o el recurs, i focus
+  extern intacte) i `frontend/e2e/startup.e2e.ts` («#341»: el camp «Nom del
+  fitxer» d'Adjunts i una fila de llista de Tasques, amb un canvi real de la
+  mida de la finestra).

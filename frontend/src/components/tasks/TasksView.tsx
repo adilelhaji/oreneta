@@ -49,6 +49,7 @@ import { LoadingState } from '../empty-state/StateViews'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
 import { FOLDER_PANE_MIN_WINDOW, FolderPane } from '../shell/FolderPane'
 import { useWideWindow } from '../resizer/useElementWidth'
+import { useFolderPaneFocus } from '../shell/folderPaneFocus'
 import { TaskListsPane } from './TaskListsPane'
 import { CalDavTaskListDialog } from './CalDavTaskListDialog'
 import { describeRecurrence } from '../calendar/RepeatFields'
@@ -108,6 +109,7 @@ export function TasksView() {
   // this occurrence is done or the repetition is over (ADR-0053).
   const [choosing, setChoosing] = useState<number | null>(null)
   const inPane = useWideWindow(FOLDER_PANE_MIN_WINDOW)
+  useFolderPaneFocus(inPane)
   const syncing = useValue(tasks$.syncing)
   const accountLists = useValue(tasks$.accountLists)
   const listsById = new Map(lists.map((list) => [list.id, list]))
@@ -254,7 +256,11 @@ export function TasksView() {
             </Button>
           </div>
         </header>
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-header px-4 py-2">
+        <div
+          // Below 1025 px the tabs stand in for the pane: focus goes back here (#341).
+          data-focus-return={inPane ? undefined : ''}
+          className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-header px-4 py-2"
+        >
           {!inPane && (
             <>
               <div
@@ -272,6 +278,7 @@ export function TasksView() {
                     key={entry.id}
                     type="button"
                     role="tab"
+                    data-focus-key={`list:${entry.id}`}
                     aria-selected={selectedList === entry.id}
                     onClick={() => tasks$.selectedList.set(entry.id)}
                     className={clsx(
@@ -287,6 +294,7 @@ export function TasksView() {
               {newList === null ? (
                 <button
                   type="button"
+                  data-focus-key="new-list"
                   onClick={() => setNewList('')}
                   className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer"
                 >
@@ -303,6 +311,7 @@ export function TasksView() {
                 >
                   <input
                     autoFocus
+                    data-focus-key="new-list-name"
                     value={newList}
                     aria-label={t('tasks.newListName', { defaultValue: 'New list name' })}
                     onChange={(event) => setNewList(event.target.value)}
@@ -313,6 +322,7 @@ export function TasksView() {
               )}
               <button
                 type="button"
+                data-focus-key="caldav-list"
                 onClick={() => setAddingCalDav(true)}
                 className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer"
               >
@@ -323,6 +333,7 @@ export function TasksView() {
                 <span className="ms-auto flex gap-1">
                   <button
                     type="button"
+                    data-focus-key="rename-list"
                     onClick={() => void renameList()}
                     className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer"
                   >
@@ -330,6 +341,7 @@ export function TasksView() {
                   </button>
                   <button
                     type="button"
+                    data-focus-key="delete-list"
                     onClick={() => void removeList()}
                     className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-danger-soft hover:text-danger cursor-pointer"
                   >

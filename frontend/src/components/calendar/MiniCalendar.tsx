@@ -69,6 +69,7 @@ export function MiniCalendar({ inFooter = false }: { inFooter?: boolean }) {
         </p>
         <button
           type="button"
+          data-focus-key="mini-previous"
           onClick={() => page(-1)}
           aria-label={t('calendar.previousMonth', { defaultValue: 'Previous month' })}
           className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
@@ -77,6 +78,7 @@ export function MiniCalendar({ inFooter = false }: { inFooter?: boolean }) {
         </button>
         <button
           type="button"
+          data-focus-key="mini-next"
           onClick={() => page(1)}
           aria-label={t('calendar.nextMonth', { defaultValue: 'Next month' })}
           className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
@@ -133,6 +135,7 @@ function MiniDay({
       ref={setNodeRef}
       type="button"
       data-mini-day={date.getTime()}
+      data-focus-key={`mini-day:${date.getTime()}`}
       aria-label={label}
       aria-current={today ? 'date' : undefined}
       aria-pressed={selected}

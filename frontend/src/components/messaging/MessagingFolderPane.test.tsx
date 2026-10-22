@@ -370,3 +370,45 @@ describe('Chat at 1024 px and below (#337)', () => {
     expect(screen.getByText('Hola Ana')).toBeTruthy()
   })
 })
+
+// #341: the focus follows the control across 1025 px.
+// happy-dom tells a media query's listeners about a change only once the query
+// has matched, so a window that starts wide is resized wide once (1500 px)
+// before it narrows to 1024 px, as a browser's would have been.
+const narrowWindow = async () => {
+  await act(async () => setWidth(1500))
+  await act(async () => setWidth(1024))
+}
+
+describe('Chat keeps the focus across 1025 px (#341)', () => {
+  it('moves it from a conversation in the pane to the same one in the column and back', async () => {
+    const screen = render(<MessagingView />)
+    await ready(screen)
+    const button = within(pane(screen)).getByRole('button', { name: /pau@chat.test/ })
+    button.focus()
+    await narrowWindow()
+    const column = screen.container.querySelector<HTMLElement>('[data-region="folders"]')!
+    expect(column.hasAttribute('data-folder-pane')).toBe(false)
+    expect(document.activeElement).toBe(within(column).getByRole('button', { name: /pau@chat.test/ }))
+    await act(async () => setWidth(1025))
+    expect(document.activeElement).toBe(within(pane(screen)).getByRole('button', { name: /pau@chat.test/ }))
+  })
+
+  it('falls back to the first control of the column when the pane control has no twin', async () => {
+    const screen = render(<MessagingView />)
+    await ready(screen)
+    within(pane(screen)).getByRole('combobox', { name: 'Chat account' }).focus()
+    await narrowWindow()
+    const column = screen.container.querySelector<HTMLElement>('[data-region="folders"]')!
+    expect(document.activeElement).not.toBe(document.body)
+    expect(column.contains(document.activeElement)).toBe(true)
+  })
+
+  it('leaves the focus alone when it was in the conversation side', async () => {
+    const screen = render(<MessagingView />)
+    await ready(screen)
+    expect(document.activeElement).toBe(document.body)
+    await narrowWindow()
+    expect(document.activeElement).toBe(document.body)
+  })
+})
