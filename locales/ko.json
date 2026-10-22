@@ -2892,6 +2892,7 @@
   "composer.recipients.groupCount": "그룹, {count, plural, other {#명}}",
   "people.addToGroup": "그룹에 추가",
   "people.allContacts": "모든 연락처",
+  "people.booksAndGroups": "주소록 및 그룹",
   "people.deleteGroup": "그룹 삭제",
   "people.deleteGroupTitle": "그룹을 삭제할까요?",
   "people.familyName": "성",

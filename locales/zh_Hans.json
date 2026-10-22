@@ -2892,6 +2892,7 @@
   "composer.recipients.groupCount": "群组，{count, plural, other {# 人}}",
   "people.addToGroup": "添加到群组",
   "people.allContacts": "所有联系人",
+  "people.booksAndGroups": "通讯录和群组",
   "people.deleteGroup": "删除群组",
   "people.deleteGroupTitle": "删除群组？",
   "people.familyName": "姓",

@@ -2892,6 +2892,7 @@
   "composer.recipients.groupCount": "grup, {count, plural, one {# kişi} other {# kişi}}",
   "people.addToGroup": "Gruba ekle",
   "people.allContacts": "Tüm kişiler",
+  "people.booksAndGroups": "Adres defterleri ve gruplar",
   "people.deleteGroup": "Grubu sil",
   "people.deleteGroupTitle": "Grup silinsin mi?",
   "people.familyName": "Soyadı",

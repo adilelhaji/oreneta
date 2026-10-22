@@ -1,0 +1,331 @@
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
+import i18n from '../../lib/i18n'
+import { accounts$ } from '../../states/accounts'
+import { people$ } from '../../states/people'
+import { contactSources$ } from '../../states/contactSources'
+import { settings$ } from '../../states/settings'
+import { settleConfirm, ui$ } from '../../states/ui'
+import { FolderPane } from '../shell/FolderPane'
+import { messages, supportedI18nLanguages } from '../../generated/locales'
+import type { Account, ContactGroup, Person } from '../../types'
+import { PeopleView } from './PeopleView'
+
+// #326: People's groups in the common folder pane (ADR-0068 §4), at the width
+// every module shares. At 1024 px and below the pane is not drawn, and the
+// groups keep their filter under the list's header.
+
+const person = (id: string, given: string, family: string, addr: string): Person => ({
+  id,
+  source: 'local',
+  account: '',
+  book: 'local',
+  name: `${given} ${family}`,
+  given,
+  family,
+  organisation: '',
+  note: '',
+  photo: '',
+  emails: [{ addr, label: '' }],
+  phones: [],
+  version: '1',
+  editable: true,
+})
+
+const zoe = person('local::local:z', 'Zoe', 'Adams', 'zoe@example.test')
+const bob = person('local::local:b', 'Bob', 'Young', 'bob@example.test')
+const member = (p: Person) => ({ id: p.id, name: p.name, given: p.given, family: p.family, addr: p.emails[0].addr })
+
+const climbing: ContactGroup = {
+  id: 'group:local::local:g1',
+  source: 'local',
+  account: '',
+  book: 'local',
+  name: 'Climbing',
+  version: '4',
+  editable: true,
+  members: [member(bob), member(zoe)],
+}
+const shared: ContactGroup = {
+  id: 'group:google::google-a:g2',
+  source: 'google',
+  account: 'acct',
+  book: 'google-a',
+  name: 'A group on a server with a name too long for the pane',
+  version: '1',
+  editable: false,
+  members: [member(zoe)],
+}
+
+let calls: { command: string; payload: any }[] = []
+
+const setWidth = (width: number) => (window as any).happyDOM.setViewport({ width, height: 900 })
+
+beforeEach(async () => {
+  calls = []
+  await i18n.changeLanguage('en')
+  accounts$.set([
+    {
+      id: 'acct',
+      email: 'ana@example.test',
+      display_name: 'Ana',
+      provider: 'imap',
+      auth_type: 'password',
+      paused: false,
+    },
+  ] as unknown as Account[])
+  contactSources$.set({ sources: [], loaded: true })
+  settings$.contactNameDisplay.set('auto')
+  settings$.contactNameSort.set('auto')
+  settings$.folderPaneWidth.set(260)
+  people$.set({
+    people: [zoe, bob],
+    loaded: true,
+    loading: false,
+    query: '',
+    selectedId: '',
+    editing: null,
+    importing: null,
+    duplicates: [],
+    duplicatesOpen: false,
+    groups: [climbing, shared],
+    groupsLoaded: true,
+    groupFilter: '',
+    groupEditing: null,
+  })
+  ;(window as any).go = {
+    main: {
+      App: {
+        Invoke: async (command: string, payload: any) => {
+          calls.push({ command, payload })
+          if (command === 'people.groups') return { groups: [climbing, shared] }
+          if (command === 'people.list') return { people: [zoe, bob] }
+          return { ok: true }
+        },
+      },
+    },
+  }
+  setWidth(1440)
+})
+
+afterEach(() => {
+  cleanup()
+  // happy-dom's own window: 1024 px wide.
+  ;(window as any).happyDOM.setViewport({ width: 1024, height: 768 })
+  accounts$.set([])
+  people$.groupFilter.set('')
+  settings$.folderPaneWidth.set(260)
+  ui$.module.set('mail')
+  delete (window as any).go
+})
+
+const written = (key: string) =>
+  calls.filter((call) => call.command === 'app.prefsSet' && call.payload.key === key).map((call) => call.payload.value)
+
+const pane = (screen: ReturnType<typeof render>) => screen.getByRole('navigation', { name: 'Address books and groups' })
+const content = (screen: ReturnType<typeof render>) =>
+  screen.container.querySelector<HTMLElement>('[data-region="content"]')!
+const rows = (screen: ReturnType<typeof render>) =>
+  within(screen.getByRole('listbox'))
+    .getAllByRole('option')
+    .map((option) => option.querySelector('span span')?.textContent)
+
+describe('People in the common folder pane (ADR-0068 §4, #326)', () => {
+  it('is the "folders" region beside the whole module, named by its title row', () => {
+    const screen = render(<PeopleView />)
+    const nav = pane(screen)
+    expect(nav.dataset.region).toBe('folders')
+    expect(nav.hasAttribute('data-folder-pane')).toBe(true)
+    expect(within(nav).getByRole('heading', { level: 2, name: 'Address books and groups' }).getAttribute('title')).toBe(
+      'Address books and groups',
+    )
+    // Beside the module, not inside it: the pane comes first, then the list.
+    expect(content(screen).contains(nav)).toBe(false)
+    expect(nav.compareDocumentPosition(content(screen)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // One "folders" region in the module, and it holds no other region.
+    expect(screen.container.querySelectorAll('[data-region="folders"]')).toHaveLength(1)
+    expect(nav.querySelectorAll('[data-region]')).toHaveLength(0)
+    // The old filter row is not drawn in the list's header as well.
+    expect(screen.queryByLabelText('Show group')).toBeNull()
+    expect(within(content(screen)).queryByRole('button', { name: 'New group' })).toBeNull()
+  })
+
+  it('lists all contacts and each group with how many it holds, and chooses one', () => {
+    const screen = render(<PeopleView />)
+    const nav = within(pane(screen))
+    const all = nav.getByRole('button', { name: 'All contacts' })
+    const group = nav.getByRole('button', { name: /^Climbing\s*2$/ })
+    expect(all.getAttribute('aria-pressed')).toBe('true')
+    expect(group.getAttribute('aria-pressed')).toBe('false')
+    // A name that can end in "…" is whole in its tooltip, with its count.
+    expect(group.getAttribute('title')).toBe('Climbing (2)')
+    const long = nav.getByTitle(`${shared.name} (1)`)
+    expect(long.textContent).toContain(shared.name)
+    expect(rows(screen)).toEqual(['Bob Young', 'Zoe Adams'])
+
+    fireEvent.click(group)
+    expect(people$.groupFilter.peek()).toBe(climbing.id)
+    expect(group.getAttribute('aria-pressed')).toBe('true')
+    expect(all.getAttribute('aria-pressed')).toBe('false')
+
+    fireEvent.click(long)
+    expect(rows(screen)).toEqual(['Zoe Adams'])
+    fireEvent.click(all)
+    expect(rows(screen)).toEqual(['Bob Young', 'Zoe Adams'])
+  })
+
+  it('says when there are no groups', () => {
+    people$.groups.set([])
+    const screen = render(<PeopleView />)
+    expect(within(pane(screen)).getByText('No groups yet')).toBeTruthy()
+    expect(within(pane(screen)).getByRole('button', { name: 'All contacts' })).toBeTruthy()
+    expect(within(pane(screen)).getByRole('button', { name: 'New group' })).toBeTruthy()
+  })
+
+  it('creates, renames, writes to and deletes a group from the pane, as the row did', async () => {
+    const screen = render(<PeopleView />)
+    const nav = within(pane(screen))
+    // With none on show, only "New group".
+    expect(nav.queryByRole('button', { name: 'Rename group' })).toBeNull()
+    expect(nav.queryByRole('button', { name: 'Delete group' })).toBeNull()
+    expect(nav.queryByRole('button', { name: /^Write to everyone/ })).toBeNull()
+
+    fireEvent.click(nav.getByRole('button', { name: 'New group' }))
+    expect(people$.groupEditing.peek()).toEqual({ name: '', book: '', members: [] })
+    // The dialog is the module's, and it saves as before.
+    fireEvent.change(screen.getByLabelText('Group name'), { target: { value: ' Book club ' } })
+    fireEvent.click(screen.getByText('Save'))
+    await waitFor(() => expect(calls.some((call) => call.command === 'people.groupSave')).toBe(true))
+    expect(calls.find((call) => call.command === 'people.groupSave')!.payload).toEqual({
+      name: 'Book club',
+      members: [],
+    })
+    await waitFor(() => expect(people$.groupEditing.peek()).toBeNull())
+
+    fireEvent.click(nav.getByRole('button', { name: /^Climbing/ }))
+    fireEvent.click(nav.getByRole('button', { name: 'Rename group' }))
+    expect(people$.groupEditing.peek()).toEqual({
+      id: climbing.id,
+      version: '4',
+      name: 'Climbing',
+      book: 'local',
+      members: [bob.id, zoe.id],
+    })
+    people$.groupEditing.set(null)
+
+    // Write to everyone in it: a compose tab from the account that can send.
+    const write = nav.getByRole('button', { name: 'Write to everyone in Climbing' })
+    expect((write as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(write)
+    expect(ui$.module.peek()).toBe('mail')
+
+    fireEvent.click(nav.getByRole('button', { name: 'Delete group' }))
+    await waitFor(() => expect(ui$.confirm.peek()).not.toBeNull())
+    expect(ui$.confirm.peek()!.message).toBe('The group Climbing will be deleted. The people in it stay.')
+    settleConfirm(false)
+  })
+
+  it('offers no rename or delete for a group it cannot write', () => {
+    const screen = render(<PeopleView />)
+    const nav = within(pane(screen))
+    fireEvent.click(nav.getByTitle(`${shared.name} (1)`))
+    expect(nav.queryByRole('button', { name: 'Rename group' })).toBeNull()
+    expect(nav.queryByRole('button', { name: 'Delete group' })).toBeNull()
+    expect(nav.getByRole('button', { name: `Write to everyone in ${shared.name}` })).toBeTruthy()
+  })
+
+  it('shows the list and a person beside the pane, as before', () => {
+    people$.selectedId.set(bob.id)
+    const screen = render(<PeopleView />)
+    expect(rows(screen)).toEqual(['Bob Young', 'Zoe Adams'])
+    expect(screen.getByRole('heading', { level: 2, name: 'Bob Young' })).toBeTruthy()
+    // The list's header keeps the title, the actions and the search.
+    const column = content(screen)
+    expect(within(column).getByRole('heading', { level: 1, name: 'People' })).toBeTruthy()
+    expect(within(column).getByRole('button', { name: 'New contact' })).toBeTruthy()
+    expect(within(column).getByRole('button', { name: 'Import contacts' })).toBeTruthy()
+    expect(within(column).getByRole('textbox', { name: 'Search people' })).toBeTruthy()
+  })
+
+  it('shares one width with mail: resized here, it is the width mail draws, and the reverse', () => {
+    const screen = render(<PeopleView />)
+    const handle = within(pane(screen)).getByRole('separator', { name: 'Resize folder pane' })
+    expect(pane(screen).style.width).toBe('260px')
+    expect(handle.getAttribute('aria-valuenow')).toBe('260')
+    fireEvent.keyDown(handle, { key: 'End' })
+    expect(pane(screen).style.width).toBe('400px')
+    expect(written('folder_pane_width')).toEqual([400])
+    cleanup()
+
+    const mail = render(
+      <FolderPane title="Accounts and folders">
+        <button type="button">Inbox</button>
+      </FolderPane>,
+    )
+    expect(mail.getByRole('navigation', { name: 'Accounts and folders' }).style.width).toBe('400px')
+    fireEvent.keyDown(mail.getByRole('separator', { name: 'Resize folder pane' }), { key: 'Home' })
+    expect(written('folder_pane_width')).toEqual([400, 200])
+    cleanup()
+
+    const again = render(<PeopleView />)
+    expect(pane(again).style.width).toBe('200px')
+    expect(within(pane(again)).getByRole('separator').getAttribute('aria-valuenow')).toBe('200')
+  })
+})
+
+describe('the name of People\'s "folders" region (ADR-0068 §1, #326)', () => {
+  it('is never the name of <main> or of the card\'s "Groups", in any language', () => {
+    // A screen reader reads two names that differ only in case or spacing the
+    // same, so compare them as it would hear them.
+    const clashes = supportedI18nLanguages.flatMap((language) => {
+      const catalog = messages[language]
+      const heard = (s: string | undefined) =>
+        (s ?? '').trim().normalize('NFC').toLocaleLowerCase(language.replace('_', '-'))
+      const name = catalog['people.booksAndGroups']
+      if (!name?.trim()) return [`${language}: missing`]
+      return [
+        ...(heard(name) === heard(catalog['people.title']) ? [`${language}: same as <main>, "${name}"`] : []),
+        ...(heard(name) === heard(catalog['people.groups']) ? [`${language}: same as "Groups", "${name}"`] : []),
+      ]
+    })
+    expect(supportedI18nLanguages.length).toBe(20)
+    expect(clashes).toEqual([])
+  })
+})
+
+describe('People at 1024 px and below (#326)', () => {
+  it("keeps the groups as a filter under the list's header, as before", () => {
+    setWidth(1024)
+    const screen = render(<PeopleView />)
+    expect(screen.container.querySelector('[data-folder-pane]')).toBeNull()
+    expect(screen.queryByRole('separator', { name: 'Resize folder pane' })).toBeNull()
+    expect(screen.queryByRole('navigation', { name: 'Address books and groups' })).toBeNull()
+    const column = screen.container.querySelector<HTMLElement>('[data-region="folders"]')!
+    expect(content(screen).contains(column)).toBe(true)
+    const filter = within(column).getByLabelText('Show group') as HTMLSelectElement
+    expect(within(column).getByText('Climbing (2)')).toBeTruthy()
+    fireEvent.change(filter, { target: { value: climbing.id } })
+    expect(rows(screen)).toEqual(['Bob Young', 'Zoe Adams'])
+    expect(within(column).getByRole('button', { name: 'New group' })).toBeTruthy()
+    expect(within(column).getByRole('button', { name: 'Rename group' })).toBeTruthy()
+    expect(within(column).getByRole('button', { name: 'Delete group' })).toBeTruthy()
+    expect(within(column).getByRole('button', { name: 'Write to everyone in Climbing' })).toBeTruthy()
+  })
+
+  it('follows the window across 1025 px, one place at a time, keeping the chosen group', async () => {
+    setWidth(1024)
+    const screen = render(<PeopleView />)
+    people$.groupFilter.set(shared.id)
+    expect(screen.getAllByLabelText('Show group')).toHaveLength(1)
+    await act(async () => setWidth(1025))
+    expect(pane(screen).hasAttribute('data-folder-pane')).toBe(true)
+    expect(screen.queryByLabelText('Show group')).toBeNull()
+    expect(screen.container.querySelectorAll('[data-region="folders"]')).toHaveLength(1)
+    expect(within(pane(screen)).getByTitle(`${shared.name} (1)`).getAttribute('aria-pressed')).toBe('true')
+    expect(rows(screen)).toEqual(['Zoe Adams'])
+    await act(async () => setWidth(1024))
+    expect(screen.container.querySelector('[data-folder-pane]')).toBeNull()
+    expect((screen.getByLabelText('Show group') as HTMLSelectElement).value).toBe(shared.id)
+    expect(screen.container.querySelectorAll('[data-region="folders"]')).toHaveLength(1)
+  })
+})

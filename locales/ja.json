@@ -2892,6 +2892,7 @@
   "composer.recipients.groupCount": "グループ、{count, plural, other {# 人}}",
   "people.addToGroup": "グループに追加",
   "people.allContacts": "すべての連絡先",
+  "people.booksAndGroups": "アドレス帳とグループ",
   "people.deleteGroup": "グループを削除",
   "people.deleteGroupTitle": "グループを削除しますか？",
   "people.familyName": "姓",

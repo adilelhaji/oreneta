@@ -2892,6 +2892,7 @@
   "composer.recipients.groupCount": "مجموعة، {count, plural, zero {لا أشخاص} one {شخص واحد} two {شخصان} few {# أشخاص} many {# شخصًا} other {# شخص}}",
   "people.addToGroup": "إضافة إلى مجموعة",
   "people.allContacts": "كل جهات الاتصال",
+  "people.booksAndGroups": "دفاتر العناوين والمجموعات",
   "people.deleteGroup": "حذف المجموعة",
   "people.deleteGroupTitle": "حذف المجموعة؟",
   "people.familyName": "اسم العائلة",

@@ -2892,6 +2892,7 @@
   "composer.recipients.groupCount": "grupa, {count, plural, zero {# cilvēku} one {# cilvēks} other {# cilvēki}}",
   "people.addToGroup": "Pievienot grupai",
   "people.allContacts": "Visas kontaktpersonas",
+  "people.booksAndGroups": "Adrešu grāmatas un grupas",
   "people.deleteGroup": "Dzēst grupu",
   "people.deleteGroupTitle": "Vai dzēst grupu?",
   "people.familyName": "Uzvārds",

@@ -2892,6 +2892,7 @@
   "composer.recipients.groupCount": "grupp, {count, plural, one {# inimene} other {# inimest}}",
   "people.addToGroup": "Lisa gruppi",
   "people.allContacts": "Kõik kontaktid",
+  "people.booksAndGroups": "Aadressiraamatud ja grupid",
   "people.deleteGroup": "Kustuta grupp",
   "people.deleteGroupTitle": "Kas kustutada grupp?",
   "people.familyName": "Perekonnanimi",

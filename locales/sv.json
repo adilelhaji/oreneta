@@ -2892,6 +2892,7 @@
   "composer.recipients.groupCount": "grupp, {count, plural, one {# person} other {# personer}}",
   "people.addToGroup": "Lägg till i grupp",
   "people.allContacts": "Alla kontakter",
+  "people.booksAndGroups": "Adressböcker och grupper",
   "people.deleteGroup": "Radera grupp",
   "people.deleteGroupTitle": "Radera gruppen?",
   "people.familyName": "Efternamn",

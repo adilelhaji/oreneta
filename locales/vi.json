@@ -2892,6 +2892,7 @@
   "composer.recipients.groupCount": "nhóm, {count, plural, other {# người}}",
   "people.addToGroup": "Thêm vào nhóm",
   "people.allContacts": "Tất cả liên hệ",
+  "people.booksAndGroups": "Sổ địa chỉ và nhóm",
   "people.deleteGroup": "Xóa nhóm",
   "people.deleteGroupTitle": "Xóa nhóm?",
   "people.familyName": "Họ",

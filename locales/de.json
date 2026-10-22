@@ -2892,6 +2892,7 @@
   "composer.recipients.groupCount": "Gruppe, {count, plural, one {# Person} other {# Personen}}",
   "people.addToGroup": "Zu Gruppe hinzufügen",
   "people.allContacts": "Alle Kontakte",
+  "people.booksAndGroups": "Adressbücher und Gruppen",
   "people.deleteGroup": "Gruppe löschen",
   "people.deleteGroupTitle": "Gruppe löschen?",
   "people.familyName": "Nachname",

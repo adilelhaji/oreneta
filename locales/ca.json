@@ -2892,6 +2892,7 @@
   "composer.recipients.groupCount": "grup, {count, plural, one {# persona} other {# persones}}",
   "people.addToGroup": "Afegeix al grup",
   "people.allContacts": "Tots els contactes",
+  "people.booksAndGroups": "Llibretes i grups",
   "people.deleteGroup": "Suprimeix el grup",
   "people.deleteGroupTitle": "Vols suprimir el grup?",
   "people.familyName": "Cognoms",

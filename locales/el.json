@@ -2892,6 +2892,7 @@
   "composer.recipients.groupCount": "ομάδα, {count, plural, one {# άτομο} other {# άτομα}}",
   "people.addToGroup": "Προσθήκη σε ομάδα",
   "people.allContacts": "Όλες οι επαφές",
+  "people.booksAndGroups": "Βιβλία διευθύνσεων και ομάδες",
   "people.deleteGroup": "Διαγραφή ομάδας",
   "people.deleteGroupTitle": "Διαγραφή ομάδας;",
   "people.familyName": "Επώνυμο",
