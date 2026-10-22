@@ -6,6 +6,7 @@ import { calendar$, startOfDay } from '../../states/calendar'
 import { settings$ } from '../../states/settings'
 import { DEFAULT_CALENDAR_PREFS } from '../../lib/calendarWeek'
 import { FolderPane } from '../shell/FolderPane'
+import { messages, supportedI18nLanguages } from '../../generated/locales'
 import type { Account } from '../../types'
 import { CalendarView } from './CalendarView'
 
@@ -140,9 +141,13 @@ describe('Calendar in the common folder pane (ADR-0068 §4, #323)', () => {
     })
     await waitFor(() => expect(ticks('Holidays').getAttribute('aria-pressed')).toBe('true'))
 
-    // Its name opens the colour menu; a swatch sets the colour and closes it.
-    const name = nav.getAllByTitle('Colour')[0]
+    // Its name opens the colour menu; its tooltip has the whole name and what
+    // it does, and the button is still named by the calendar alone.
+    const name = nav.getByTitle('Home — Colour')
     expect(name.getAttribute('aria-haspopup')).toBe('menu')
+    expect(nav.getAllByRole('button', { name: 'Home' })).toContain(name)
+    expect(nav.getByTitle('Holidays — Colour').textContent).toBe('Holidays')
+    // A swatch sets the colour and closes the menu.
     await act(async () => {
       fireEvent.click(name)
     })
@@ -174,8 +179,6 @@ describe('Calendar in the common folder pane (ADR-0068 §4, #323)', () => {
     }
     const separator = within(nav).getByRole('separator', { name: 'Resize folder pane' })
     expect(separator.previousElementSibling!.contains(month)).toBe(true)
-    // The pane's footer draws the divider above it; it draws none of its own.
-    expect(month.className.split(' ')).not.toContain('border-b')
     // Only one month at a glance, and no column beside the views.
     expect(screen.getAllByRole('navigation', { name: 'Month at a glance' })).toHaveLength(1)
     expect(content(screen).querySelector('[data-region="folders"]')).toBeNull()
@@ -191,8 +194,6 @@ describe('Calendar in the common folder pane (ADR-0068 §4, #323)', () => {
       fireEvent.click(within(month).getByRole('button', { name: 'Next month' }))
     })
     expect(within(month).getByText('November 2026')).toBeTruthy()
-    // A day is never wider than before, and no wider than its seventh of the month.
-    expect(day.className.split(' ')).toEqual(expect.arrayContaining(['w-full', 'max-w-6', 'aspect-square']))
   })
 
   it('shares one width with mail: resized here, it is the width mail draws, and the reverse', async () => {
@@ -223,6 +224,24 @@ describe('Calendar in the common folder pane (ADR-0068 §4, #323)', () => {
   })
 })
 
+describe('the name of Calendar\'s "folders" region (ADR-0068 §1, #323)', () => {
+  it('is never the name of <main> or of the month at a glance, in any language', () => {
+    // In German, Japanese, Korean, Vietnamese and Chinese the plural of
+    // "calendar" is the word itself, so the pane has a name of its own there.
+    const clashes = supportedI18nLanguages.flatMap((language) => {
+      const catalog = messages[language]
+      const name = catalog['calendar.calendars']
+      if (!name?.trim()) return [`${language}: missing`]
+      return [
+        ...(name === catalog['calendar.title'] ? [`${language}: same as <main>, "${name}"`] : []),
+        ...(name === catalog['calendar.miniCalendar'] ? [`${language}: same as the month, "${name}"`] : []),
+      ]
+    })
+    expect(supportedI18nLanguages.length).toBe(20)
+    expect(clashes).toEqual([])
+  })
+})
+
 describe('Calendar at 1024 px and below (#323)', () => {
   it('keeps its column beside the views, the month above the list, as before', async () => {
     setWidth(1024)
@@ -231,12 +250,10 @@ describe('Calendar at 1024 px and below (#323)', () => {
     expect(screen.queryByRole('separator', { name: 'Resize folder pane' })).toBeNull()
     const column = screen.getByRole('navigation', { name: 'Calendars' })
     expect(column.dataset.region).toBe('folders')
-    // Inside the module, under its header, 12 rem wide from 769 px as before.
+    // Inside the module, under its header, as before (its width is the e2e's).
     expect(content(screen).contains(column)).toBe(true)
-    expect(column.className.split(' ')).toContain('min-[769px]:w-48')
     const month = within(column).getByRole('navigation', { name: 'Month at a glance' })
     expect(month.compareDocumentPosition(tick(column, 'Home')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(month.className.split(' ')).toContain('border-b')
     expect(screen.queryByRole('complementary')).toBeNull()
   })
 

@@ -4834,7 +4834,7 @@ for (const [width, paneWidth] of [
   [1440, 200],
   [1440, 260],
 ] as const) {
-  test(`Calendar's folder pane leaves the day, week and month whole at ${width}px, ${paneWidth}px wide (#323)`, async ({
+  test(`Calendar's folder pane leaves the agenda, day, week and month whole at ${width}px, ${paneWidth}px wide (#323)`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 })
@@ -4860,7 +4860,7 @@ for (const [width, paneWidth] of [
     // Today's column is gone from beside the views.
     await expect(content.locator('[data-region="folders"]')).toHaveCount(0)
 
-    for (const view of ['Day', 'Week', 'Month']) {
+    for (const view of ['Agenda', 'Day', 'Week', 'Month']) {
       await page.getByRole('button', { name: view, exact: true }).click()
       await expect(page.getByRole('button', { name: view, exact: true })).toHaveAttribute('aria-pressed', 'true')
       await settled(page)
@@ -4874,7 +4874,8 @@ for (const [width, paneWidth] of [
           .map(({ element }) => element.getAttribute('aria-label') ?? element.textContent?.trim().slice(0, 40))
       })
       expect(outside, view).toEqual([])
-      if (view !== 'Month') await expect(page.locator('[data-day-column]')).toHaveCount(view === 'Day' ? 1 : 7)
+      const columns = ({ Agenda: 0, Day: 1, Week: 7 } as Record<string, number>)[view]
+      if (columns !== undefined) await expect(page.locator('[data-day-column]')).toHaveCount(columns)
       await insidePane(page, pane)
     }
     expect(errors).toEqual([])
@@ -4953,7 +4954,7 @@ test('in Arabic Calendar\'s folder pane sits between the rail and the views, and
   await page.setViewportSize({ width: 1440, height: 1000 })
   const errors = await openCalendarPane(page, { language: 'ar' }, arCatalog)
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
-  const pane = page.getByRole('navigation', { name: arCatalog['mobile.calendar.calendars'], exact: true })
+  const pane = page.getByRole('navigation', { name: arCatalog['calendar.calendars'], exact: true })
   await expect(pane).toBeVisible()
   await expect(pane.getByRole('navigation', { name: arCatalog['calendar.miniCalendar'], exact: true })).toBeVisible()
   const railBox = await boxOf(page.locator('main > aside').first())
@@ -5064,7 +5065,7 @@ for (const width of [1440, 1024]) {
     expect((await requests('calendar.setEnabled')).at(-1)).toMatchObject({ calendar_id: 'holidays', enabled: false })
 
     // Its name opens the colours.
-    await region.getByTitle('Colour').last().click()
+    await region.getByTitle('Holidays — Colour', { exact: true }).last().click()
     const menu = region.getByRole('menu', { name: 'Colour' })
     await expect(menu).toBeVisible()
     if (width > 1024) {

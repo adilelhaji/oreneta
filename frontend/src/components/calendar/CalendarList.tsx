@@ -79,7 +79,14 @@ export function CalendarList() {
                     <button
                       type="button"
                       onClick={() => setPicking(open ? null : key(calendar))}
-                      title={t('calendar.color', { defaultValue: 'Colour' })}
+                      // The name can end in "…" in a narrow pane: the tooltip
+                      // has it whole, and what the button does (ADR-0068 §4).
+                      // Its accessible name stays the calendar's name.
+                      title={t('calendar.nameAndColor', {
+                        name: calendar.name,
+                        action: t('calendar.color', { defaultValue: 'Colour' }),
+                        defaultValue: '{name} — {action}',
+                      })}
                       aria-haspopup="menu"
                       aria-expanded={open}
                       className={`min-w-0 flex-1 truncate text-start text-xs transition-colors cursor-pointer ${

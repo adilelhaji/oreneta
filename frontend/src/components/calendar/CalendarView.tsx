@@ -65,7 +65,7 @@ export function CalendarView() {
   const calendarPrefs = useValue(settings$.calendar)
   const [menu, setMenu] = useState<EventContextMenuState | null>(null)
   const inPane = useWideWindow(FOLDER_PANE_MIN_WINDOW)
-  const calendarsName = t('mobile.calendar.calendars')
+  const calendarsName = t('calendar.calendars')
 
   useEffect(() => {
     void loadCalendars()
