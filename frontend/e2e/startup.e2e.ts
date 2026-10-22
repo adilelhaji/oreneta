@@ -4173,10 +4173,25 @@ for (const language of ['en', 'ca']) {
         })
       expect(blocking).toEqual([])
 
-      // Back on the conversation, its quick reply is reachable again.
-      await page.getByTitle(catalog['chat.currentConversation'], { exact: true }).click()
-      await expect(page.locator('[inert]', { has: quickReply })).toHaveCount(0)
-      await expect(page.locator('[aria-hidden="true"]', { has: quickReply })).toHaveCount(0)
+      // Back on the conversation, its quick reply is reachable again. Going
+      // back, the quick reply's `transition-all` carries the inherited
+      // `visibility` from hidden to visible, and a transition stays on its
+      // start value (hidden) until its first tick; a hidden control ignores
+      // focus(), which does not wait. A slow runner stretches that gap, so the
+      // gap is held open here, with the animation timeline stopped, so every
+      // run meets it: the quick reply is proved hidden before time resumes.
+      const animations = await page.context().newCDPSession(page)
+      await animations.send('Animation.setPlaybackRate', { playbackRate: 0 })
+      try {
+        await page.getByTitle(catalog['chat.currentConversation'], { exact: true }).click()
+        await expect(page.locator('[inert]', { has: quickReply })).toHaveCount(0)
+        await expect(page.locator('[aria-hidden="true"]', { has: quickReply })).toHaveCount(0)
+        await expect(quickReply).toBeHidden()
+      } finally {
+        await animations.send('Animation.setPlaybackRate', { playbackRate: 1 })
+      }
+      // toBeVisible reads the computed `visibility`, so it waits for the tick.
+      await expect(quickReply).toBeVisible()
       await quickReply.focus()
       await expect(quickReply).toBeFocused()
       expect(errors).toEqual([])
