@@ -228,13 +228,19 @@ describe('the name of Calendar\'s "folders" region (ADR-0068 §1, #323)', () => 
   it('is never the name of <main> or of the month at a glance, in any language', () => {
     // In German, Japanese, Korean, Vietnamese and Chinese the plural of
     // "calendar" is the word itself, so the pane has a name of its own there.
+    // A screen reader reads two names that differ only in case or spacing
+    // the same, so compare them as it would hear them.
     const clashes = supportedI18nLanguages.flatMap((language) => {
       const catalog = messages[language]
+      const heard = (s: string | undefined) =>
+        (s ?? '').trim().normalize('NFC').toLocaleLowerCase(language.replace('_', '-'))
       const name = catalog['calendar.calendars']
       if (!name?.trim()) return [`${language}: missing`]
       return [
-        ...(name === catalog['calendar.title'] ? [`${language}: same as <main>, "${name}"`] : []),
-        ...(name === catalog['calendar.miniCalendar'] ? [`${language}: same as the month, "${name}"`] : []),
+        ...(heard(name) === heard(catalog['calendar.title']) ? [`${language}: same as <main>, "${name}"`] : []),
+        ...(heard(name) === heard(catalog['calendar.miniCalendar'])
+          ? [`${language}: same as the month, "${name}"`]
+          : []),
       ]
     })
     expect(supportedI18nLanguages.length).toBe(20)

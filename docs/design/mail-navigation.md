@@ -187,7 +187,7 @@ Calendari passa a ser la subfinestra de carpetes comuna, amb el mateix contingut
   alemany, japonès, coreà, vietnamita i xinès, el plural de «calendari» és la
   mateixa paraula que el nom de `<main>` (`calendar.title`), i ADR-0068 §1 no
   deixa que dues regions comparteixin nom: allà la subfinestra es diu, per
-  exemple, «Kalenderliste» o «カレンダー一覧», i una prova comprova en tots els
+  exemple, «Kalenderliste» o «カレンダー一覧», i una prova verifica en tots els
   catàlegs que no coincideix ni amb `<main>` ni amb el calendari petit. Abans, la
   llista era un `<aside>` «Calendari», amb el mateix nom que `<main>`; ara és el
   cos de la subfinestra i no és una regió pròpia. La subfinestra és dins de
