@@ -4178,21 +4178,22 @@ for (const language of ['en', 'ca']) {
       // `visibility` from hidden to visible, and a transition stays on its
       // start value (hidden) until its first tick; a hidden control ignores
       // focus(), which does not wait. A slow runner stretches that gap, so the
-      // gap is held open here, 400 ms, to make it certain rather than a race.
+      // gap is held open here, with the animation timeline stopped, so every
+      // run meets it: the quick reply is proved hidden before time resumes.
       const animations = await page.context().newCDPSession(page)
-      await animations.send('Animation.enable')
       await animations.send('Animation.setPlaybackRate', { playbackRate: 0 })
-      const resumed = new Promise<void>((resolve) => setTimeout(resolve, 400)).then(() =>
-        animations.send('Animation.setPlaybackRate', { playbackRate: 1 }),
-      )
-      await page.getByTitle(catalog['chat.currentConversation'], { exact: true }).click()
-      await expect(page.locator('[inert]', { has: quickReply })).toHaveCount(0)
-      await expect(page.locator('[aria-hidden="true"]', { has: quickReply })).toHaveCount(0)
+      try {
+        await page.getByTitle(catalog['chat.currentConversation'], { exact: true }).click()
+        await expect(page.locator('[inert]', { has: quickReply })).toHaveCount(0)
+        await expect(page.locator('[aria-hidden="true"]', { has: quickReply })).toHaveCount(0)
+        await expect(quickReply).toBeHidden()
+      } finally {
+        await animations.send('Animation.setPlaybackRate', { playbackRate: 1 })
+      }
       // toBeVisible reads the computed `visibility`, so it waits for the tick.
       await expect(quickReply).toBeVisible()
       await quickReply.focus()
       await expect(quickReply).toBeFocused()
-      await resumed
       expect(errors).toEqual([])
     })
   }
