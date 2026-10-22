@@ -113,8 +113,9 @@ Data: 2026-10-17. Fila SET-07 (#87) de la paritat amb eM Client 10.4.
 Data: 2026-10-21. Pas 2 de l'ordre de migració
 d'[ADR-0068](../adr/0068-marc-comu-de-l-aplicacio.md) (§4, §7 i §9), primer al
 correu; els altres mòduls hi entren després, un per PR. El Calendari hi va entrar
-el 2026-10-22 ([més avall](#calendari-323)), i Persones i Tasques el mateix dia
-(vegeu [Persones](#persones-326) i [Tasques](#tasques-329) més avall).
+el 2026-10-22 ([més avall](#calendari-323)), i Persones, Tasques i Notes el mateix
+dia (vegeu [Persones](#persones-326), [Tasques](#tasques-329) i
+[Notes](#notes-335) més avall).
 
 - **Què és:** un sol component, `frontend/src/components/shell/FolderPane.tsx`,
   amb una fila de títol de 40 px al 100 % (2,5 rem, de manera que creix amb el
@@ -408,3 +409,56 @@ eren pestanyes sota la capçalera, passen a ser la subfinestra de carpetes comun
   correu amb el teclat, el punter i un reinici; l'àrab, amb axe; el 200 % a
   1440 px i a 1025 px amb la subfinestra a 260 i 400 px). El recorregut d'F6 de
   #306 hi afegeix Tasques.
+
+### Notes (#335)
+
+Data: 2026-10-22. El cinquè mòdul del pas 2: les etiquetes de les notes, que fins
+ara eren botons sobre la llista de notes, passen a ser el cos de la subfinestra de
+carpetes comuna (ADR-0068 §4, fila de Notes).
+
+- **Cos:** «Totes les notes» i cada etiqueta amb quantes notes té, en el mateix
+  ordre i amb els mateixos recomptes que els botons d'abans (els que respon el
+  nucli). «Totes les notes» (`notes.allNotes`) treu el filtre. Triar una etiqueta
+  posa `notes$.tag`, i triar-ne la que ja és triada el treu, com el botó. La fila
+  triada té `aria-current="true"`. El nom que no hi cap acaba en «…»; la indicació
+  el mostra sencer amb el recompte, per exemple «#viatge (2)» (`notes.tagOption`),
+  i és també el nom accessible del botó. La tria es manté en passar de 1024 a
+  1025 px i a l'inrevés.
+- **Teclat:** com a Tasques, les files es mouen amb Amunt, Avall, Inici i Final
+  (`handleGroupArrowKeys`, orientació vertical, ADR-0061), trien l'etiqueta en
+  arribar-hi i prenen les tecles: no arriben a la navegació de la llista de
+  converses del correu.
+- **Paperera:** a la paperera no s'ofereixen etiquetes, com abans. La subfinestra
+  no mostra les files i diu «La paperera no es filtra per etiqueta»
+  (`notes.trashNoTags`); en sortir-ne, les files tornen. Perquè la frase sigui
+  certa, `loadNotes` no envia l'etiqueta a la paperera: abans, una etiqueta triada
+  abans d'entrar-hi seguia filtrant-la, sense cap botó per treure-la, i la
+  paperera semblava buida. L'etiqueta triada es conserva i torna a aplicar-se en
+  sortir de la paperera.
+- **Què queda a la llista:** la cerca (a dalt de la llista; passarà a la banda
+  superior en una peça posterior), «Paperera» i «Nota nova» a la capçalera, la
+  llista de notes i l'editor. La columna de la llista és de 320 px (20 rem a
+  1024 px i menys) i el mòdul demana 680 px com a base (la llista i els 360 px de
+  la nota, el mínim del lector d'ADR-0068 §7): la subfinestra, que cedeix abans
+  que res, s'encongeix fins a donar-los-hi. A 1025 px, amb la barra vertical de
+  60 px, la subfinestra de 400 px es pinta a uns 285 px.
+- **Regió i nom:** la subfinestra és la regió «carpetes» d'F6 de Notes i es diu
+  «Etiquetes de notes» (`notes.tagsPane`), diferent de `<main>` («Notes»), de la
+  llista («Notes»), de «Etiquetes» i de la resta de noms de regió en els 20
+  catàlegs, com comprova una prova. La columna de la llista ja no té
+  `data-region="folders"` a partir de 1025 px.
+- **Amplada:** la mateixa preferència `folder_pane_width` i el mateix separador
+  que al correu, al Calendari, a Persones i a Tasques, en px.
+- **Per sota de 1025 px** la subfinestra no es mostra i es conserven els botons
+  d'etiqueta sobre la llista, amb la columna com a regió «carpetes». Mai no són a
+  dos llocs alhora.
+- **Proves:** `frontend/src/components/notes/NotesFolderPane.test.tsx` (la
+  subfinestra al costat del mòdul i amb el seu nom; les files amb el recompte, la
+  indicació i el nom accessible; triar, tornar a triar i «Totes les notes»;
+  `aria-current`; les fletxes; la paperera; l'amplada compartida; el nom diferent
+  del de les altres regions en els 20 catàlegs; els botons a 1024 px i el pas
+  d'un lloc a l'altre) i `frontend/e2e/startup.e2e.ts` («#335»: la llista i la
+  nota a 1025, 1100 i 1440 px amb la subfinestra a 200, 260 i 400 px, sense
+  desplaçament horitzontal; els botons a 1024 px; triar, treure i la paperera;
+  l'amplada desada des de Notes i des del correu; l'àrab, amb axe). El
+  recorregut d'F6 de #306 hi afegeix Notes.

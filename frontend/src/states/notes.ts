@@ -72,10 +72,13 @@ export function parseTags(text: string): string[] {
 
 export async function loadNotes() {
   try {
+    // The trash is not filtered by tag (#335): the tags are not offered there,
+    // so a tag chosen before is kept for the way back and not applied.
+    const trash = notes$.trash.peek()
     const res = await invoke<{ notes: NoteSummary[]; tags: { tag: string; count: number }[] }>('notes.list', {
       search: notes$.search.peek(),
-      tag: notes$.tag.peek(),
-      trash: notes$.trash.peek(),
+      tag: trash ? '' : notes$.tag.peek(),
+      trash,
     })
     notes$.items.set(res?.notes ?? [])
     notes$.tags.set(res?.tags ?? [])

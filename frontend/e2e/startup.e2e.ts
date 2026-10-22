@@ -4656,8 +4656,13 @@ for (const language of ['en', 'ca', 'ar']) {
     expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'folders', 'modules'])
     await audit('tasks', catalog['tasks.title'])
 
-    await page.getByTitle(catalog['notes.title'], { exact: true }).click()
+    const notesButton = page.getByTitle(catalog['notes.title'], { exact: true })
+    await notesButton.click()
     await page.getByRole('button', { name: /Meeting notes/ }).click()
+    // The tags are the folder pane (#335), beside the module: from the rail,
+    // F6 goes to the module, then the pane, then back to the rail.
+    await notesButton.focus()
+    expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'folders', 'modules'])
     await audit('notes', catalog['notes.title'])
 
     const calendarButton = page.getByTitle(catalog['calendar.title'], { exact: true })
@@ -5712,3 +5717,218 @@ for (const [width, paneWidth] of [
     expect(errors).toEqual([])
   })
 }
+
+// #335: the notes' tags in the common folder pane (ADR-0068 §4), at the one
+// width every module shares. The list and the open note stay beside it. At
+// 1024 px and below the pane is not drawn, and the tags keep their chips above
+// the list.
+async function openNotesPane(page: Page, options: SetupOptions = {}, catalog = enCatalog) {
+  const errors = await prepareStartup(page, true, { navigation: true, ...options })
+  await page.addInitScript(() => {
+    const replies = (window as any).startupProbe.replies
+    const note = (id: string, title: string, tags: string[], deleted_at: number | null = null) => ({
+      id,
+      title,
+      html: `<p>${title} body</p>`,
+      text: `${title} body`,
+      preview: `${title} body`,
+      tags,
+      pinned: false,
+      revision: 1,
+      created_at: 0,
+      updated_at: 1760000000,
+      deleted_at,
+    })
+    const all = [
+      note('note:1', 'Plan the trip', ['travel', 'ideas']),
+      note('note:2', 'Packing list', ['travel']),
+      note('note:3', 'Pasta', ['cooking']),
+      note('note:4', 'Old receipt', [], 5),
+    ]
+    const tags = [
+      { tag: 'travel', count: 2 },
+      { tag: 'cooking', count: 1 },
+      { tag: 'a-tag-with-a-name-far-too-long-for-the-pane', count: 1 },
+      { tag: 'ideas', count: 1 },
+    ]
+    // As the core answers: the tags of the live notes, the list by filter.
+    const app = (window as any).go.main.App
+    const inner = app.Invoke
+    app.Invoke = async (command: string, payload: any) => {
+      if (command === 'notes.list')
+        return {
+          notes: all.filter(
+            (n) => (n.deleted_at !== null) === !!payload?.trash && (!payload?.tag || n.tags.includes(payload.tag)),
+          ),
+          tags,
+        }
+      if (command === 'notes.get') return { note: all.find((n) => n.id === payload?.id) ?? null }
+      return inner(command, payload)
+    }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await page.getByTitle(catalog['notes.title'], { exact: true }).click()
+  await expect(page.getByRole('main', { name: catalog['notes.title'], exact: true })).toBeVisible()
+  return errors
+}
+
+for (const [width, paneWidth] of [
+  [1025, 200],
+  [1025, 260],
+  [1025, 400],
+  [1100, 200],
+  [1100, 260],
+  [1440, 200],
+  [1440, 260],
+] as const) {
+  test(`Notes's folder pane leaves the list and a note whole at ${width}px, ${paneWidth}px wide (#335)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const errors = await openNotesPane(page, { preferences: { folder_pane_width: paneWidth } })
+    const pane = page.getByRole('navigation', { name: 'Note tags', exact: true })
+    const content = page.locator('main > [data-region="content"]')
+    await expect(pane).toHaveAttribute('data-region', 'folders')
+    await expect(pane.getByRole('heading', { level: 2, name: 'Note tags' })).toBeVisible()
+    await expect(pane.getByRole('button', { name: 'All notes', exact: true })).toBeVisible()
+    await expect(pane.getByRole('button', { name: '#travel (2)', exact: true })).toBeVisible()
+    // Right after the rail, at the shared width, and the module right after it.
+    const rail = await boxOf(page.locator('main > aside').first())
+    const paneBox = await boxOf(pane)
+    expect(Math.abs(paneBox.x - (rail.x + rail.width))).toBeLessThanOrEqual(1)
+    expect(Math.abs(paneBox.width - Math.min(paneWidth, width - 60 - 680))).toBeLessThanOrEqual(1)
+    const contentBox = await boxOf(content)
+    expect(Math.abs(contentBox.x - (paneBox.x + paneBox.width))).toBeLessThanOrEqual(1)
+    expect(contentBox.x + contentBox.width).toBeLessThanOrEqual(width + 1)
+    // The chips are gone from the list, and the list no longer claims the region.
+    await expect(content.locator('[data-region="folders"]')).toHaveCount(0)
+    await expect(content.getByLabel('Tags', { exact: true })).toHaveCount(0)
+
+    await expect(content.getByText('Pasta', { exact: true })).toBeVisible()
+    await pane.getByRole('button', { name: '#travel (2)', exact: true }).click()
+    await expect(content.getByText('Packing list', { exact: true })).toBeVisible()
+    await expect(content.getByText('Pasta', { exact: true })).toHaveCount(0)
+    await content.getByRole('button', { name: /Plan the trip/ }).click()
+    await expect(content.getByLabel('Title', { exact: true })).toHaveValue('Plan the trip')
+    await settled(page)
+    await ltrInView(page, `notes at ${width}px, folders ${paneWidth}px`)
+    const outside = await content.evaluate((region) => {
+      const { left, right } = region.getBoundingClientRect()
+      return [...region.querySelectorAll<HTMLElement>('button, input, h1')]
+        .map((element) => ({ element, box: element.getBoundingClientRect() }))
+        .filter(({ box }) => box.width > 0 && (box.left < left - 1 || box.right > right + 1))
+        .map(({ element }) => element.getAttribute('aria-label') ?? element.textContent?.trim().slice(0, 40))
+    })
+    expect(outside).toEqual([])
+    // The note keeps its minimum (360 px, ADR-0068 §7) beside the list.
+    const editor = await boxOf(content.locator('section[aria-label="Note"]'))
+    expect(editor.width).toBeGreaterThanOrEqual(359)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await insidePane(page, pane)
+    expect(errors).toEqual([])
+  })
+}
+
+test('at 1024px Notes keeps its tags as chips above the list, and draws no folder pane (#335)', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 900 })
+  const errors = await openNotesPane(page)
+  await expect(page.locator('[data-folder-pane]')).toHaveCount(0)
+  await expect(page.getByRole('separator', { name: 'Resize folder pane' })).toHaveCount(0)
+  await expect(page.getByRole('navigation', { name: 'Note tags' })).toHaveCount(0)
+  const chips = page.getByLabel('Tags', { exact: true })
+  await expect(chips.getByRole('button')).toHaveCount(4)
+  await chips.getByRole('button', { name: /^#cooking/ }).click()
+  await expect(chips.getByRole('button', { name: /^#cooking/ })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('[data-region="folders"]').getByText('Pasta', { exact: true })).toBeVisible()
+  await ltrInView(page, 'notes at 1024px')
+  expect(errors).toEqual([])
+})
+
+test("Notes's tags choose, clear, and give way to a line in the Trash from the folder pane (#335)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const errors = await openNotesPane(page)
+  const pane = page.getByRole('navigation', { name: 'Note tags', exact: true })
+  const content = page.locator('main > [data-region="content"]')
+  const long = pane.getByTitle('#a-tag-with-a-name-far-too-long-for-the-pane (1)')
+  await expect(long).toBeVisible()
+  await expect(pane.getByRole('button', { name: 'All notes', exact: true })).toHaveAttribute('aria-current', 'true')
+  await pane.getByRole('button', { name: '#cooking (1)', exact: true }).click()
+  await expect(pane.getByRole('button', { name: '#cooking (1)', exact: true })).toHaveAttribute('aria-current', 'true')
+  await expect(content.getByText('Pasta', { exact: true })).toBeVisible()
+  await expect(content.getByText('Packing list', { exact: true })).toHaveCount(0)
+  // The chosen tag again clears the filter.
+  await pane.getByRole('button', { name: '#cooking (1)', exact: true }).click()
+  await expect(pane.getByRole('button', { name: 'All notes', exact: true })).toHaveAttribute('aria-current', 'true')
+  await expect(content.getByText('Packing list', { exact: true })).toBeVisible()
+  // Down moves to the next row and chooses it.
+  await pane.getByRole('button', { name: 'All notes', exact: true }).focus()
+  await page.keyboard.press('ArrowDown')
+  await expect(pane.getByRole('button', { name: '#travel (2)', exact: true })).toHaveAttribute('aria-current', 'true')
+
+  // In the Trash the tags are not offered, and the pane says so.
+  await content.getByRole('button', { name: 'Trash', exact: true }).click()
+  await expect(content.getByText('Old receipt', { exact: true })).toBeVisible()
+  await expect(pane.getByRole('button')).toHaveCount(0)
+  await expect(pane.getByText('The trash is not filtered by tag.')).toBeVisible()
+  await content.getByRole('button', { name: 'Trash', exact: true }).click()
+  await expect(pane.getByRole('button', { name: '#travel (2)', exact: true })).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+test('the folder pane resized in Notes is the width mail draws, and the reverse (#335)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await openNotesPane(page)
+  const notes = page.getByRole('navigation', { name: 'Note tags', exact: true })
+  const mail = page.getByRole('navigation', { name: 'Accounts and folders', exact: true })
+  const handleIn = (pane: ReturnType<Page['locator']>) => pane.getByRole('separator', { name: 'Resize folder pane' })
+  const drawn = async (pane: ReturnType<Page['locator']>) => Math.round((await boxOf(pane)).width)
+  const stored = () =>
+    page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}').folder_pane_width)
+  const notesButton = page.getByTitle('Notes', { exact: true })
+  await expect(handleIn(notes)).toHaveAttribute('aria-valuenow', '260')
+  await handleIn(notes).focus()
+  await page.keyboard.press('End')
+  await expect(handleIn(notes)).toHaveAttribute('aria-valuenow', '400')
+  expect(await drawn(notes)).toBe(400)
+  await expect.poll(stored).toBe(400)
+  await notesButton.click()
+  await expect(handleIn(mail)).toHaveAttribute('aria-valuenow', '400')
+  await handleIn(mail).focus()
+  await page.keyboard.press('Home')
+  await expect.poll(stored).toBe(200)
+  await notesButton.click()
+  await expect(handleIn(notes)).toHaveAttribute('aria-valuenow', '200')
+  expect(await drawn(notes)).toBe(200)
+  expect(errors).toEqual([])
+})
+
+test("in Arabic Notes's folder pane sits between the rail and the list, and its separator follows the reading (#335)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await openNotesPane(page, { language: 'ar' }, arCatalog)
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+  const pane = page.getByRole('navigation', { name: arCatalog['notes.tagsPane'], exact: true })
+  await expect(pane).toBeVisible()
+  const railBox = await boxOf(page.locator('main > aside').first())
+  const paneBox = await boxOf(pane)
+  const contentBox = await boxOf(page.locator('main > [data-region="content"]'))
+  expect(Math.abs(paneBox.x + paneBox.width - railBox.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(contentBox.x + contentBox.width - paneBox.x)).toBeLessThanOrEqual(1)
+  expect(contentBox.x).toBeGreaterThanOrEqual(-1)
+  await insidePane(page, pane)
+  await rtlInView(page, 'notes folder pane')
+  await settled(page)
+  const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+  const blocking = results.violations
+    .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+    .map(
+      (violation) =>
+        `${violation.id} (${violation.impact}) on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`,
+    )
+  expect(blocking).toEqual([])
+  expect(errors).toEqual([])
+})

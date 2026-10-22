@@ -182,6 +182,18 @@ esquerra, de zoom, de regions i d'axe es mantenen, i se n'hi afegeixen de noves:
 subfinestra, l'àrab i el 200 %. Cap fila no canvia d'estat (S01-04, S01-05, SET-20, SET-27):
 l'evidència nativa de Windows continua pendent, i SET-20 es manté `partial` (falten Google Tasks
 i To Do de Graph).
+El 2026-10-22 (#335, pas 2 d'ADR-0068, `docs/design/mail-navigation.md`) les etiquetes de Notes
+(NOTE-01), que eren botons sobre la llista de notes, van passar a ser la subfinestra de carpetes
+comuna a partir de 1025 px: «Totes les notes» i cada etiqueta amb el mateix ordre i els mateixos
+recomptes, triar-ne una filtra la llista i tornar-la a triar treu el filtre. A la paperera no
+s'ofereixen etiquetes i la subfinestra ho diu. Fa servir l'amplada del correu, del Calendari, de
+Persones i de Tasques (`folder_pane_width`, en px). És la regió d'F6 «Etiquetes de notes», que en
+cap idioma no coincideix amb la de `<main>` ni amb les altres regions. Per sota de 1025 px es
+conserven els botons d'abans. Les proves automàtiques de notes, de límits, de dreta a esquerra,
+de regions i d'axe es mantenen, i se n'hi afegeixen de noves: la llista i la nota a 1025, 1100 i
+1440 px sense desplaçament horitzontal, l'amplada compartida, les etiquetes a la subfinestra, la
+paperera i l'àrab. NOTE-01 es manté `partial` (falta la sincronització de notes amb proveïdors) i
+l'evidència nativa de Windows continua pendent.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per
