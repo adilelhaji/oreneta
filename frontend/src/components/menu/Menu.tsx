@@ -29,6 +29,7 @@ export function MenuList({
   onClick,
   onContextMenu,
   orientation = 'vertical',
+  tabStop = false,
   ...name
 }: {
   children: ReactNode
@@ -49,6 +50,13 @@ export function MenuList({
   onContextMenu?: (event: MouseEvent<HTMLDivElement>) => void
   /** A row of items (colour swatches): the horizontal arrows move, in reading order. */
   orientation?: 'vertical' | 'horizontal'
+  /**
+   * Puts the menu itself in the tab order. For a menu long enough to scroll
+   * (the app menu): its items are reached with the arrows and are never Tab
+   * stops, so the scrolling region needs one of its own to count as keyboard
+   * reachable (axe `scrollable-region-focusable`). Tab from it still closes it.
+   */
+  tabStop?: boolean
 } & MenuName) {
   const ref = useRef<HTMLDivElement | null>(null)
   const onKeyDown = useMenuKeys({ closeMenu: onClose, orientation })
@@ -63,7 +71,7 @@ export function MenuList({
         aria-label={name.label}
         aria-labelledby={name.labelledBy}
         aria-describedby={describedBy}
-        tabIndex={-1}
+        tabIndex={tabStop ? 0 : -1}
         className={clsx('outline-none', className)}
         style={style}
         onClick={onClick}

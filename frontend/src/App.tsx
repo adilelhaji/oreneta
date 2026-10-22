@@ -11,6 +11,7 @@ import { useAppEffects } from './useAppEffects'
 import { SideNav } from './components/sidenav/SideNav'
 import { MailNavigation } from './components/sidenav/MailNavigation'
 import { FolderPane } from './components/shell/FolderPane'
+import { AppHeader } from './components/shell/AppHeader'
 import { ThreadList } from './components/threads/ThreadList'
 import { KanbanView } from './components/kanban/KanbanView'
 import { CalendarView } from './components/calendar/CalendarView'
@@ -100,6 +101,11 @@ export default function App() {
   return (
     <div className="flex h-full w-full flex-col bg-app text-primary">
       <MacTitleBar />
+      {/* Title bar, header, notices, then the rest (ADR-0068 §1): the header's
+          first row is the top band with the app menu (§2). */}
+      <ErrorBoundary label="top band">
+        <AppHeader />
+      </ErrorBoundary>
       <ConnectivityBanner />
       <UpdateBanner />
       {/* One <main>, named after the module on screen (ADR-0068 §1). The rail
@@ -143,13 +149,9 @@ export default function App() {
             <MessagingView />
           </ErrorBoundary>
         ) : (
-        <ErrorBoundary label="thread list">
-          {activeBoardId ? (
-            <KanbanView boardId={activeBoardId} />
-          ) : (
-            <ThreadList width={threadListWidth} resizable />
-          )}
-        </ErrorBoundary>
+          <ErrorBoundary label="thread list">
+            {activeBoardId ? <KanbanView boardId={activeBoardId} /> : <ThreadList width={threadListWidth} resizable />}
+          </ErrorBoundary>
         )}
         {activeModule !== 'mail' ? null : !activeBoardId ? (
           <ErrorBoundary label="conversation">
