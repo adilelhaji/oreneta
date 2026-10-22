@@ -6051,6 +6051,14 @@ test('at 1024px Chat keeps its w-72 column with its header, and draws no folder 
   await expect(column.getByRole('combobox', { name: 'Chat account' })).toBeVisible()
   await expect(column.getByRole('button', { name: /pau@chat.test/ })).toBeVisible()
   expect(Math.round((await boxOf(column)).width)).toBe(288)
+  // The long address gives way in the 18 rem column too: its header holds the
+  // selector and the status inside it.
+  const drawn = await boxOf(column)
+  for (const control of [column.getByRole('combobox', { name: 'Chat account' }), column.getByRole('status').first()]) {
+    const box = await boxOf(control)
+    expect(box.x).toBeGreaterThanOrEqual(drawn.x - 1)
+    expect(box.x + box.width).toBeLessThanOrEqual(drawn.x + drawn.width + 1)
+  }
   await ltrInView(page, 'chat at 1024px')
   expect(errors).toEqual([])
 })

@@ -204,7 +204,7 @@ export function MessagingView() {
             void loadPresence().catch(() => {})
           }}
           // A long address must not push the status out of a narrow pane.
-          className={`${input} min-w-0 flex-1 truncate`}
+          className={`${input} min-w-0 truncate`}
         >
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
