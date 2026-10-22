@@ -5947,7 +5947,8 @@ async function openChatPane(page: Page, options: SetupOptions = {}, catalog = en
     const replies = (window as any).startupProbe.replies
     replies['chat.accounts'] = [
       { id: 'c1', jid: 'ana@chat.test', host: '', port: 5222 },
-      { id: 'c2', jid: 'ana@work.test', host: '', port: 5222 },
+      // Long enough to push the account row past a 200 px pane, were it free to.
+      { id: 'c2', jid: 'ana.with-a-longer-name@work.example.test', host: '', port: 5222 },
     ]
     replies['chat.status'] = { c1: { account: 'c1', state: 'online' }, c2: { account: 'c2', state: 'offline' } }
     replies['chat.conversations'] = [
@@ -6022,6 +6023,19 @@ for (const [width, paneWidth] of [
     expect(outside).toEqual([])
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await insidePane(page, pane)
+    // Nothing in the pane's body scrolls sideways: the account selector gives
+    // way and the connection status stays whole inside the pane.
+    const body = await page.evaluate(() => {
+      const scroller = document.querySelector<HTMLElement>('[data-folder-pane] > div:nth-child(2)')!
+      return { scroll: scroller.scrollWidth, client: scroller.clientWidth }
+    })
+    expect(body.scroll).toBeLessThanOrEqual(body.client + 1)
+    const drawn = await boxOf(pane)
+    for (const control of [pane.getByRole('combobox', { name: 'Chat account' }), pane.getByRole('status').first()]) {
+      const box = await boxOf(control)
+      expect(box.x).toBeGreaterThanOrEqual(drawn.x - 1)
+      expect(box.x + box.width).toBeLessThanOrEqual(drawn.x + drawn.width + 1)
+    }
     expect(errors).toEqual([])
   })
 }

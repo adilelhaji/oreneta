@@ -203,7 +203,8 @@ export function MessagingView() {
             void refreshConversations()
             void loadPresence().catch(() => {})
           }}
-          className={input}
+          // A long address must not push the status out of a narrow pane.
+          className={`${input} min-w-0 flex-1 truncate`}
         >
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
@@ -212,7 +213,7 @@ export function MessagingView() {
           ))}
         </select>
       ) : (
-        <span className="truncate text-sm font-semibold text-primary">{accounts[0].jid}</span>
+        <span className="min-w-0 truncate text-sm font-semibold text-primary">{accounts[0].jid}</span>
       )}
       {(mentionTotal > 0 || mentionTotalCapped) && (
         <MentionBadge
@@ -233,7 +234,7 @@ export function MessagingView() {
       )}
       <span
         role="status"
-        className={`ms-auto text-caption ${state === 'online' ? 'text-success' : 'text-secondary'}`}
+        className={`ms-auto shrink-0 text-caption ${state === 'online' ? 'text-success' : 'text-secondary'}`}
         title={status[account]?.message}
       >
         {state === 'online'
@@ -244,9 +245,9 @@ export function MessagingView() {
   )
   const columnBody = (
     <>
-      <OwnStatus key={account} />
+      <OwnStatus key={`own-${account}`} />
       <StatusRequests />
-      {online && <StatusPermissions key={account} />}
+      {online && <StatusPermissions key={`permissions-${account}`} />}
       <form
         className="flex gap-1.5 border-b border-border px-3 py-2"
         onSubmit={(e) => {
@@ -698,44 +699,42 @@ export function MessagingView() {
     </section>
   )
 
-  if (inPane) {
-    return (
-      <>
+  // One tree in both modes: the reader stays the content's second child, so
+  // crossing 1025 px keeps the open conversation mounted, with its focus and
+  // its scroll position. Only the conversations move, into the pane or back.
+  return (
+    <>
+      {inPane && (
         <FolderPane title={t('messaging.conversations', { defaultValue: 'Conversations' })} footer={columnFooter}>
-          <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">{accountRow}</div>
+          <div className="flex min-w-0 items-center gap-2 border-b border-border px-3 py-2.5">{accountRow}</div>
           {columnBody}
         </FolderPane>
-        <div
-          data-region="content"
-          // Beside the pane the module asks for the reader's minimum (360 px,
-          // ADR-0068 §7) as its basis: the pane, whose shrink factor dwarfs
-          // this one's, gives way first.
-          className="flex min-w-0 flex-[1_1_360px] bg-chats"
-        >
-          {reader}
-        </div>
-      </>
-    )
-  }
-
-  return (
-    <div data-region="content" className="flex min-w-0 flex-1 bg-chats">
-      <section
-        aria-label={t('messaging.conversations', { defaultValue: 'Conversations' })}
-        data-region="folders"
-        className={`flex w-72 shrink-0 flex-col border-e border-border max-[769px]:w-full ${conversation ? 'max-[769px]:hidden' : ''}`}
+      )}
+      <div
+        data-region="content"
+        // Beside the pane the module asks for the reader's minimum (360 px,
+        // ADR-0068 §7) as its basis: the pane, whose shrink factor dwarfs
+        // this one's, gives way first.
+        className={clsx('flex min-w-0 bg-chats', inPane ? 'flex-[1_1_360px]' : 'flex-1')}
       >
-        <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
-          <CompactNavigation />
-          <MessagesSquare size={16} strokeWidth={1.75} className="text-accent-fg" aria-hidden="true" />
-          {accountRow}
-        </header>
-        {columnBody}
-        {columnFooter}
-      </section>
-
-      {reader}
-    </div>
+        {!inPane && (
+          <section
+            aria-label={t('messaging.conversations', { defaultValue: 'Conversations' })}
+            data-region="folders"
+            className={`flex w-72 shrink-0 flex-col border-e border-border max-[769px]:w-full ${conversation ? 'max-[769px]:hidden' : ''}`}
+          >
+            <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
+              <CompactNavigation />
+              <MessagesSquare size={16} strokeWidth={1.75} className="text-accent-fg" aria-hidden="true" />
+              {accountRow}
+            </header>
+            {columnBody}
+            {columnFooter}
+          </section>
+        )}
+        {reader}
+      </div>
+    </>
   )
 }
 
@@ -1121,7 +1120,12 @@ function ConversationButton({
   mentionsCapped?: boolean
   /** Muted by the person: no notification from it. */
   muted?: boolean
-  /** In the folder pane, whose background is darker than the column's: the open one takes the tint the other lists use. */
+  /**
+   * In the folder pane, whose background is darker than the column's, the open
+   * one is marked as mail's pane marks its folder: `bg-active` (text keeps
+   * 4.5:1 on it in every theme) and the name in `accent-fg`, since the tint
+   * alone barely differs from the pane.
+   */
   inPane?: boolean
   onOpen: () => void
 }) {
@@ -1139,7 +1143,10 @@ function ConversationButton({
         {group && <Users size={14} strokeWidth={1.75} className="shrink-0 text-secondary" aria-hidden="true" />}
         {privateInRoom && <Lock size={12} strokeWidth={1.75} className="shrink-0 text-secondary" aria-hidden="true" />}
         {show && <PresenceDot show={show} />}
-        <span dir="auto" className="truncate text-sm font-semibold text-primary">
+        <span
+          dir="auto"
+          className={clsx('truncate text-sm font-semibold', current && inPane ? 'text-accent-fg' : 'text-primary')}
+        >
           {name}
         </span>
         {show && <span className="sr-only">{showLabel(show, t)}</span>}

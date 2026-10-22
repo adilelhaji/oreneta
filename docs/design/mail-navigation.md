@@ -480,10 +480,12 @@ rem, passa a ser la subfinestra de carpetes comuna (ADR-0068 §4, fila de Xat).
   seva fila de títol de 2,5 rem. Obrir una conversa, canviar de compte, unir-se a
   un grup i la resta fan el mateix que a la columna.
 - **Conversa oberta:** com que la fila de la conversa oberta és sobre el fons de la
-  subfinestra (`--me-bg-app`), més fosc que el de la columna (`--me-bg-chats`), la
+  subfinestra (`--me-bg-app`), més fosc que el de la columna (`--me-bg-chats`), el
   to `accent/10` que la marcava deixava el text secundari de l'últim missatge
-  per sota de 4,5:1. A la subfinestra la fila oberta fa servir `bg-active`, el
-  to que ja fan servir les altres llistes; a la columna d'abans no canvia res.
+  per sota de 4,5:1. A la subfinestra la fila oberta es marca com la carpeta
+  triada de la subfinestra del correu: fons `bg-active` i nom en `accent-fg`,
+  perquè el fons sol gairebé no es distingeix del de la subfinestra. A la
+  columna d'abans no canvia res.
 - **Amplada:** la mateixa preferència `folder_pane_width` i el mateix separador que
   al correu, al Calendari, a Persones, a Tasques i a Notes, en px. La conversa
   oberta demana 360 px com a base (`flex-[1_1_360px]`, el mínim del lector

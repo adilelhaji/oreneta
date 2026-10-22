@@ -206,8 +206,11 @@ describe('Chat in the common folder pane (ADR-0068 §4, #337)', () => {
         .getByRole('button', { name: /pau@chat.test/ })
         .getAttribute('aria-current'),
     ).toBe('true')
-    // The open one takes the tint the other lists use: the pane is darker than the column.
-    expect(within(pane(screen)).getByRole('button', { name: /pau@chat.test/ }).className).toContain('bg-active')
+    // The open one is marked as mail's pane marks its folder: the pane is darker
+    // than the column, so the tint alone would barely show.
+    const open = within(pane(screen)).getByRole('button', { name: /pau@chat.test/ })
+    expect(open.className).toContain('bg-active')
+    expect(open.querySelector('[dir="auto"]')!.className).toContain('text-accent-fg')
     // Chat with an address, from the pane.
     fireEvent.change(within(pane(screen)).getByRole('textbox', { name: 'Chat with (address)' }), {
       target: { value: 'nou@chat.test' },
@@ -343,7 +346,12 @@ describe('Chat at 1024 px and below (#337)', () => {
       fireEvent.click(screen.getByRole('button', { name: /pau@chat.test/ }))
     })
     await waitFor(() => expect(screen.getByText('Hola Ana')).toBeTruthy())
+    // The conversation stays mounted across the switch: the same composer, still focused.
+    const composer = screen.getByLabelText('Message')
+    composer.focus()
     await act(async () => setWidth(1025))
+    expect(screen.getByLabelText('Message')).toBe(composer)
+    expect(document.activeElement).toBe(composer)
     expect(pane(screen).hasAttribute('data-folder-pane')).toBe(true)
     expect(screen.container.querySelectorAll('[data-region="folders"]')).toHaveLength(1)
     expect(messaging$.conversation.peek()).toBe('pau@chat.test')
@@ -354,6 +362,8 @@ describe('Chat at 1024 px and below (#337)', () => {
         .getAttribute('aria-current'),
     ).toBe('true')
     await act(async () => setWidth(1024))
+    expect(screen.getByLabelText('Message')).toBe(composer)
+    expect(document.activeElement).toBe(composer)
     expect(screen.container.querySelector('[data-folder-pane]')).toBeNull()
     expect(screen.container.querySelectorAll('[data-region="folders"]')).toHaveLength(1)
     expect(messaging$.conversation.peek()).toBe('pau@chat.test')

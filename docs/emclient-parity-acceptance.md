@@ -196,8 +196,8 @@ paperera i l'àrab. NOTE-01 es manté `partial` (falta la sincronització de not
 l'evidència nativa de Windows continua pendent.
 El 2026-10-22 (#337, pas 2 d'ADR-0068, `docs/design/mail-navigation.md`) la columna de converses
 del xat (SET-21) va passar a ser la subfinestra de carpetes comuna a partir de 1025 px, amb el
-mateix contingut i el mateix ordre (el compte, el teu estat, «Xateja amb», els grups, les
-invitacions, les converses directes i «Elimina aquest compte de xat»). Fa servir l'amplada del
+mateix contingut i el mateix ordre (el compte, el teu estat, «Xateja amb», les invitacions,
+els grups, les converses directes i «Elimina aquest compte de xat»). Fa servir l'amplada del
 correu, del Calendari, de Persones, de Tasques i de Notes (`folder_pane_width`, en px) i és la
 regió d'F6 «Converses», que en cap idioma no coincideix amb la de `<main>` ni amb les altres
 regions. Per sota de 1025 px es conserva la columna d'abans. Les proves del xat, de límits, de
