@@ -6385,11 +6385,15 @@ test('focus in the Attachments "File name" field follows it across 1025px, both 
   await page.keyboard.type('s')
   await expect(pane.getByRole('textbox', { name: 'File name' })).toHaveValue('reports')
 
-  // Focus that was not in the filters stays where it was.
+  // Focus that was not in the filters stays where it was: the same element,
+  // once the narrow layout is drawn.
   await content.getByRole('button').first().focus()
-  const kept = await page.evaluate(() => document.activeElement?.outerHTML ?? '')
+  await page.evaluate(() => {
+    ;(window as any).keptFocus = document.activeElement
+  })
   await page.setViewportSize({ width: 1024, height: 900 })
-  expect(await page.evaluate(() => document.activeElement?.outerHTML ?? '')).toBe(kept)
+  await expect(page.locator('[data-folder-pane]')).toHaveCount(0)
+  expect(await page.evaluate(() => document.activeElement === (window as any).keptFocus)).toBe(true)
   expect(errors).toEqual([])
 })
 

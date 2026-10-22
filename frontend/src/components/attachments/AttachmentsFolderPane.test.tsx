@@ -373,6 +373,19 @@ describe('Attachments keep the focus across 1025 px (#341)', () => {
     expect(document.activeElement).toBe(within(content(screen)).getByLabelText('Type'))
   })
 
+  it('does not pull the focus back into the filters once a press took it elsewhere', async () => {
+    const screen = render(<AttachmentsView />)
+    await ready(screen)
+    const name = within(pane(screen)).getByLabelText('File name')
+    name.focus()
+    // A press on the list's background: the focus goes to <body>, with no focusin.
+    fireEvent.pointerDown(content(screen))
+    name.blur()
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+    await narrowWindow()
+    expect(document.activeElement).toBe(document.body)
+  })
+
   it('leaves the focus alone when it was on the list, and does nothing on the first render', async () => {
     const screen = render(<AttachmentsView />)
     await ready(screen)

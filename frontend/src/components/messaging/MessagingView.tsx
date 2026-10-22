@@ -197,6 +197,7 @@ export function MessagingView() {
     <>
       {accounts.length > 1 ? (
         <select
+          data-focus-key="chat-account"
           aria-label={t('messaging.account', { defaultValue: 'Chat account' })}
           value={account}
           onChange={(e) => {
@@ -265,7 +266,7 @@ export function MessagingView() {
           onChange={(e) => setNewChat(e.target.value)}
           className={`${input} min-w-0 flex-1`}
         />
-        <Button size="sm" type="submit" disabled={!newChat.includes('@')}>
+        <Button size="sm" type="submit" data-focus-key="new-chat-open" disabled={!newChat.includes('@')}>
           {t('messaging.start', { defaultValue: 'Open' })}
         </Button>
       </form>
@@ -281,6 +282,7 @@ export function MessagingView() {
           <label className="flex flex-col gap-1 text-caption text-secondary">
             {t('messaging.roomAddress', { defaultValue: 'Group address' })}
             <input
+              data-focus-key="join-room"
               className={input}
               placeholder="team@rooms.server.example"
               value={joining.room}
@@ -290,6 +292,7 @@ export function MessagingView() {
           <label className="flex flex-col gap-1 text-caption text-secondary">
             {t('messaging.nick', { defaultValue: 'Your name in the group' })}
             <input
+              data-focus-key="join-nick"
               className={input}
               value={joining.nick}
               onChange={(e) => setJoining({ ...joining, nick: e.target.value })}
@@ -300,16 +303,28 @@ export function MessagingView() {
             <input
               type="password"
               autoComplete="off"
+              data-focus-key="join-password"
               className={input}
               value={joining.password}
               onChange={(e) => setJoining({ ...joining, password: e.target.value })}
             />
           </label>
           <div className="flex gap-1.5">
-            <Button size="sm" type="submit" disabled={!joining.room.includes('@') || !joining.nick.trim()}>
+            <Button
+              size="sm"
+              type="submit"
+              data-focus-key="join-submit"
+              disabled={!joining.room.includes('@') || !joining.nick.trim()}
+            >
               {t('messaging.join', { defaultValue: 'Join' })}
             </Button>
-            <Button size="sm" variant="ghost" type="button" onClick={() => setJoining(null)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              type="button"
+              data-focus-key="join-cancel"
+              onClick={() => setJoining(null)}
+            >
               {t('buttons.cancel', { defaultValue: 'Cancel' })}
             </Button>
           </div>
@@ -345,6 +360,7 @@ export function MessagingView() {
               <span className="flex gap-2">
                 <button
                   type="button"
+                  data-focus-key={`invitation-join:${inv.room}`}
                   onClick={() => startJoin(inv.room)}
                   className="text-accent-fg underline cursor-pointer"
                 >
@@ -352,6 +368,7 @@ export function MessagingView() {
                 </button>
                 <button
                   type="button"
+                  data-focus-key={`invitation-dismiss:${inv.room}`}
                   onClick={() => void dismissInvitation(inv.room)}
                   className="text-secondary underline cursor-pointer"
                 >
@@ -805,6 +822,7 @@ function OwnStatus() {
     >
       <div className="flex gap-1.5">
         <select
+          data-focus-key="own-show"
           aria-label={t('messaging.presence.label', { defaultValue: 'Your status' })}
           value={shown.show}
           onChange={(e) => setDraft({ ...shown, show: e.target.value as OwnShow })}
@@ -818,6 +836,7 @@ function OwnStatus() {
           </option>
         </select>
         <input
+          data-focus-key="own-status"
           aria-label={t('messaging.presence.statusText', { defaultValue: 'Status message' })}
           placeholder={t('messaging.presence.statusText', { defaultValue: 'Status message' })}
           maxLength={200}
@@ -825,7 +844,7 @@ function OwnStatus() {
           onChange={(e) => setDraft({ ...shown, status: e.target.value })}
           className={`${input} min-w-0 flex-1`}
         />
-        <Button size="sm" type="submit" disabled={!draft}>
+        <Button size="sm" type="submit" data-focus-key="own-save" disabled={!draft}>
           {t('buttons.save', { defaultValue: 'Save' })}
         </Button>
       </div>
@@ -890,6 +909,7 @@ function StatusRequests() {
           <span className="flex gap-2">
             <button
               type="button"
+              data-focus-key={`request-allow:${jid}`}
               onClick={() => void answer(jid, true)}
               className="text-accent-fg underline cursor-pointer"
             >
@@ -897,6 +917,7 @@ function StatusRequests() {
             </button>
             <button
               type="button"
+              data-focus-key={`request-deny:${jid}`}
               onClick={() => void answer(jid, false)}
               className="text-secondary underline cursor-pointer"
             >
@@ -947,6 +968,7 @@ function StatusPermissions() {
     <div className="border-b border-border px-3 py-1.5">
       <button
         type="button"
+        data-focus-key="permissions"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
         className="text-caption text-accent-fg underline cursor-pointer"
@@ -983,6 +1005,7 @@ function StatusPermissions() {
                 ) : (
                   <button
                     type="button"
+                    data-focus-key={`permission-stop:${jid}`}
                     onClick={() => void stop(jid)}
                     aria-label={t('messaging.permissions.stopNamed', {
                       jid,

@@ -394,14 +394,30 @@ describe('Chat keeps the focus across 1025 px (#341)', () => {
     expect(document.activeElement).toBe(within(pane(screen)).getByRole('button', { name: /pau@chat.test/ }))
   })
 
-  it('falls back to the first control of the column when the pane control has no twin', async () => {
+  it('keeps it on the account selector, the same control in the column', async () => {
     const screen = render(<MessagingView />)
     await ready(screen)
     within(pane(screen)).getByRole('combobox', { name: 'Chat account' }).focus()
     await narrowWindow()
     const column = screen.container.querySelector<HTMLElement>('[data-region="folders"]')!
-    expect(document.activeElement).not.toBe(document.body)
-    expect(column.contains(document.activeElement)).toBe(true)
+    expect(document.activeElement).toBe(within(column).getByRole('combobox', { name: 'Chat account' }))
+  })
+
+  it('keeps it in the join form, on the same field and with what was typed, not on the account selector', async () => {
+    const screen = render(<MessagingView />)
+    await ready(screen)
+    fireEvent.click(within(pane(screen)).getByRole('button', { name: 'Join a group' }))
+    const room = within(pane(screen)).getByRole('textbox', { name: 'Group address' })
+    room.focus()
+    fireEvent.change(room, { target: { value: 'team@rooms.chat.test' } })
+    // A second press in the field that already has the focus keeps it there.
+    fireEvent.pointerDown(room)
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+    await narrowWindow()
+    const column = screen.container.querySelector<HTMLElement>('[data-region="folders"]')!
+    const twin = within(column).getByRole('textbox', { name: 'Group address' })
+    expect(document.activeElement).toBe(twin)
+    expect((twin as HTMLInputElement).value).toBe('team@rooms.chat.test')
   })
 
   it('leaves the focus alone when it was in the conversation side', async () => {

@@ -577,7 +577,9 @@ queia a `<body>`. Ara el focus segueix el control.
   `group-filter`…), i el contenidor que fa de subfinestra per sota de 1025 px
   porta `data-focus-return`.
 - **Què fa:** cada cop que el focus entra en un control de la subfinestra o del
-  contenidor de `data-focus-return`, en desa la clau (un clic l'esborra). Quan
+  contenidor de `data-focus-return`, en desa la clau, i després de cada clic
+  torna a mirar on és el focus (un clic al fons el deixa a `<body>`; un segon
+  clic al camp que ja el té no el mou). Quan
   canvia el mode, després del pintat, enfoca el control amb la mateixa clau del
   mode nou. No llegeix el focus en el moment del canvi perquè, quan arriba la
   consulta de mitjà, el navegador ja l'ha deixat anar. Si no n'hi ha cap (una fila sense equivalent), enfoca el primer
@@ -585,12 +587,16 @@ queia a `<body>`. Ara el focus segueix el control.
   ample, el contenidor de `data-focus-return` en passar a estret.
 - **Què no fa:** no fa res en el primer pintat, ni quan el focus era fora
   d'aquestes àrees ni quan ha sobreviscut al canvi, i no toca el recorregut d'F6
-  entre regions.
+  entre regions. Un focus que cau sol a `<body>` (un control que l'aplicació
+  treu) no es detecta: en el canvi següent va al control equivalent, que és
+  millor que `<body>`.
 - **Mòduls:** Tasques (fila de llista, pestanya; «Llista nova», «Canvia el nom»,
   «Suprimeix»), Notes (fila d'etiqueta, botó d'etiqueta; «Totes les notes» no té
-  botó i cau a la cerca), Xat (conversa, «Xateja amb (adreça)», «Uneix-te a un
-  grup», «Elimina aquest compte de xat»), Adjunts (els cinc filtres), Persones (el grup en pantalla i el
-  selector de grup; les accions del grup) i Calendari (cada calendari, les
+  botó i cau a la cerca), Xat (tots els controls de la columna: el compte, el teu
+  estat, «Xateja amb (adreça)», el formulari d'«Uneix-te a un grup», les
+  invitacions, les converses i «Elimina aquest compte de xat»), Adjunts (els cinc
+  filtres), Persones (el grup en pantalla i el selector de grup; les accions del
+  grup) i Calendari (cada calendari, les
   fletxes i els dies del minicalendari). El correu no la necessita: la seva
   subfinestra no es desmunta (només s'amaga) i per sota de 1025 px no té cap
   control equivalent, sinó el selector «Canvia de carpeta».

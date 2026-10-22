@@ -34,8 +34,10 @@ function focused(): boolean {
  * already have dropped it by then (the pane is hidden by CSS the moment the
  * query stops matching), and React removes the control after. So the key of the
  * last control focused in the pane, or in its narrow stand-in, is kept as it
- * happens (`focusin`), and forgotten when the focus goes elsewhere or a press
- * of the pointer may have taken it away. After the render of the other layout
+ * happens (`focusin`), and read again after each press of the pointer, which
+ * may have moved it with no focusin. Focus that falls to <body> by itself (a
+ * control the app removes) is not noticed: the next crossing then puts it on
+ * the pane's counterpart, which is still better than <body>. After the render of the other layout
  * the control with the same key takes the focus; with none, the first focusable
  * thing of the region that stands in its place (the pane going wide, the
  * `data-focus-return` container going narrow). Focus that survived the switch
@@ -50,15 +52,22 @@ export function useFolderPaneFocus(inPane: boolean) {
     const entered = (event: FocusEvent) => {
       key.current = keyInAreas(event.target)
     }
-    // A press on the page's background moves the focus to <body> with no focusin.
+    // A press may move the focus with no focusin (onto the page's background,
+    // which leaves it on <body>) or not move it at all (a second press in the
+    // field that has it): once the press is over, read where the focus is.
+    let afterPress: ReturnType<typeof setTimeout> | undefined
     const pressed = () => {
-      key.current = undefined
+      clearTimeout(afterPress)
+      afterPress = setTimeout(() => {
+        key.current = focused() ? keyInAreas(document.activeElement) : undefined
+      })
     }
     document.addEventListener('focusin', entered, true)
     document.addEventListener('pointerdown', pressed, true)
     return () => {
       document.removeEventListener('focusin', entered, true)
       document.removeEventListener('pointerdown', pressed, true)
+      clearTimeout(afterPress)
     }
   }, [])
 
