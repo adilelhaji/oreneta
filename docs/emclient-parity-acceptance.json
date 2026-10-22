@@ -1945,6 +1945,14 @@
           {
             "sha": "68436c268f25f0b0a20d7c47b9b7f1fdad993d5b",
             "result": "frontend/src/components/notes/NoteAttachments.test.tsx"
+          },
+          {
+            "sha": "16c52eb04bfa6c4e48e9fcc11731069f12b94419",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "16c52eb04bfa6c4e48e9fcc11731069f12b94419",
+            "result": "frontend/src/components/notes/NotesFolderPane.test.tsx"
           }
         ],
         "native": [],
