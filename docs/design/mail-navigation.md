@@ -113,9 +113,9 @@ Data: 2026-10-17. Fila SET-07 (#87) de la paritat amb eM Client 10.4.
 Data: 2026-10-21. Pas 2 de l'ordre de migració
 d'[ADR-0068](../adr/0068-marc-comu-de-l-aplicacio.md) (§4, §7 i §9), primer al
 correu; els altres mòduls hi entren després, un per PR. El Calendari hi va entrar
-el 2026-10-22 ([més avall](#calendari-323)), i Persones, Tasques, Notes i Xat el
-mateix dia (vegeu [Persones](#persones-326), [Tasques](#tasques-329),
-[Notes](#notes-335) i [Xat](#xat-337) més avall).
+el 2026-10-22 ([més avall](#calendari-323)), i Persones, Tasques, Notes, Xat i
+Adjunts el mateix dia (vegeu [Persones](#persones-326), [Tasques](#tasques-329),
+[Notes](#notes-335), [Xat](#xat-337) i [Adjunts](#adjunts-339) més avall).
 
 - **Què és:** un sol component, `frontend/src/components/shell/FolderPane.tsx`,
   amb una fila de títol de 40 px al 100 % (2,5 rem, de manera que creix amb el
@@ -507,3 +507,54 @@ rem, passa a ser la subfinestra de carpetes comuna (ADR-0068 §4, fila de Xat).
   1100 i 1440 px amb la subfinestra a 200, 260 i 400 px, sense desplaçament
   horitzontal; la columna a 1024 px; l'amplada desada des de Xat i des del correu;
   l'àrab, amb axe). El recorregut d'F6 de #306 hi afegeix Xat.
+
+### Adjunts (#339)
+
+Data: 2026-10-22. El setè mòdul del pas 2: la barra de filtres d'Adjunts, que era
+sota la capçalera, passa a ser el cos de la subfinestra de carpetes comuna
+(ADR-0068 §4). Adjunts no tenia cap columna de «carpetes».
+
+- **Cos:** els mateixos cinc filtres, en l'ordre d'abans i lligats al mateix
+  `attachmentList$.filter` amb la mateixa espera de 200 ms en els camps de text:
+  nom del fitxer, remitent, tipus, quan i, només amb més d'un compte, compte. Van
+  apilats, un per fila, cadascun amb una etiqueta visible (`<label>`, amb el
+  mateix text que el nom accessible d'abans: «Nom del fitxer», «De», «Tipus»,
+  «Quan», «Compte»). Cada control conserva el seu nom accessible, de manera que
+  els localitzadors existents continuen funcionant. Els camps i els selectors són
+  `w-full min-w-0`, perquè un compte amb una adreça llarga cedeixi davant de la
+  subfinestra en lloc d'empènyer-ne el cos de costat. No hi ha cap cadena de
+  filtre nova.
+- **Títol:** la clau nova `attachmentsView.filters`, «Filtres d'adjunts»
+  (traduïda als 20 catàlegs).
+- **Amplada:** la mateixa preferència `folder_pane_width` i el mateix separador que
+  al correu, al Calendari, a Persones, a Tasques, a Notes i a Xat, en px. El
+  contingut demana 360 px com a base (`flex-[1_1_360px]`, el mínim de la llista
+  d'ADR-0068 §7): la subfinestra, que cedeix abans que res, s'encongeix fins a
+  donar-los-hi.
+- **Un sol arbre en els dos modes:** la subfinestra i el contingut són germans, i la
+  llista té la mateixa posició entre els fills del contingut a 1024 px i a 1025
+  px (el que canvia és si la barra hi és o no). Travessar els 1025 px no torna a
+  muntar la llista ni en perd el desplaçament; els valors dels filtres viuen a
+  `attachmentList$` i es mantenen, i no es torna a demanar res al nucli.
+- **Regió i nom:** la subfinestra és l'única regió «carpetes» d'F6 d'Adjunts, que
+  passa a ser contingut, carpetes, mòduls. Es diu «Filtres d'adjunts», diferent de
+  `<main>` («Adjunts») i de la resta de noms de regió i de panell, i de les
+  etiquetes dels controls d'Adjunts, en els 20 catàlegs, com comprova una prova.
+  Atès que els filtres ja no són dins del contingut, una llista buida deixa el
+  contingut sense cap element on F6 pugui posar el focus, i F6 el salta; amb
+  fitxers a la llista, hi arriba al botó «Obre'n el missatge».
+- **Per sota de 1025 px** la subfinestra no es mostra i la barra de filtres és
+  exactament la d'abans, sota la capçalera, amb els noms accessibles i sense
+  etiquetes visibles. Mai no són a dos llocs alhora.
+- **Proves:** `frontend/src/components/attachments/AttachmentsFolderPane.test.tsx`
+  (la regió i el seu nom; els cinc filtres, en ordre i amb etiqueta visible; el
+  filtre de compte només amb més d'un compte; cada filtre canvia
+  `attachmentList$.filter` i recarrega; l'amplada compartida i la base de 360 px;
+  el nom diferent del de les altres regions en els 20 catàlegs; la barra a 1024 px
+  i el pas de 1024 a 1025 px amb la mateixa llista i els mateixos valors) i
+  `frontend/e2e/startup.e2e.ts` («#339»: la llista a 1025, 1100 i 1440 px amb la
+  subfinestra a 200, 260 i 400 px, sense desplaçament horitzontal ni a la pàgina
+  ni al cos de la subfinestra, amb cada control dins de la subfinestra; la barra a
+  1024 px; filtrar des de la subfinestra, amb els valors i la llista mantinguts
+  en travessar els 1025 px; l'amplada desada des d'Adjunts i des del correu;
+  l'àrab, amb axe). El recorregut d'F6 de #306 hi afegeix Adjunts.
