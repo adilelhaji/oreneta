@@ -50,6 +50,7 @@ import { IconButton } from '../button/IconButton'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
 import { FOLDER_PANE_MIN_WINDOW, FolderPane } from '../shell/FolderPane'
 import { useWideWindow } from '../resizer/useElementWidth'
+import { useFolderPaneFocus } from '../shell/folderPaneFocus'
 import { Button } from '../button/Button'
 import { PersonEditor } from './PersonEditor'
 import { VcfImportDialog } from './VcfImportDialog'
@@ -97,6 +98,7 @@ export function PeopleView() {
   const detailRef = useRef<HTMLElement | null>(null)
   const focusNavigation = useRef(false)
   const inPane = useWideWindow(FOLDER_PANE_MIN_WINDOW)
+  useFolderPaneFocus(inPane)
 
   useEffect(() => {
     if (!loaded) void loadPeople()
@@ -258,11 +260,16 @@ export function PeopleView() {
               />
             </div>
             {!inPane && (
-              <div className="flex min-w-0 items-center gap-1">
+              <div
+                // Below 1025 px the group filter stands in for the pane: focus goes back here (#341).
+                data-focus-return
+                className="flex min-w-0 items-center gap-1"
+              >
                 <Users size={14} className="shrink-0 text-secondary" strokeWidth={1.75} aria-hidden="true" />
                 {groups.length > 0 ? (
                   <select
                     value={shownGroup ? shownGroup.id : ''}
+                    data-focus-key="group-filter"
                     onChange={(event) => people$.groupFilter.set(event.target.value)}
                     aria-label={t('people.groupFilter', { defaultValue: 'Show group' })}
                     className="min-w-0 flex-1 rounded-control-sm border border-border bg-chats px-2 py-1 text-caption text-primary outline-none focus:border-accent-fg"
@@ -287,6 +294,7 @@ export function PeopleView() {
                   icon={Plus}
                   iconSize={14}
                   size="sm"
+                  data-focus-key="group-new"
                   label={t('people.newGroup', { defaultValue: 'New group' })}
                   onClick={() => people$.groupEditing.set({ name: '', book: '', members: [] })}
                 />
@@ -299,6 +307,7 @@ export function PeopleView() {
                       name: shownGroup.name,
                       defaultValue: 'Write to everyone in {name}',
                     })}
+                    data-focus-key="group-write"
                     disabled={groupRecipients(shownGroup).length === 0}
                     onClick={() => writeToGroup(shownGroup)}
                   />
@@ -309,6 +318,7 @@ export function PeopleView() {
                       icon={Pencil}
                       iconSize={14}
                       size="sm"
+                      data-focus-key="group-rename"
                       label={t('people.renameGroup', { defaultValue: 'Rename group' })}
                       onClick={() =>
                         people$.groupEditing.set({
@@ -324,6 +334,7 @@ export function PeopleView() {
                       icon={Trash2}
                       iconSize={14}
                       size="sm"
+                      data-focus-key="group-delete"
                       label={t('people.deleteGroup', { defaultValue: 'Delete group' })}
                       onClick={() => void removeGroup(shownGroup)}
                     />

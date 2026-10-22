@@ -550,3 +550,78 @@ describe('Tasks at 1024 px and below (#329)', () => {
     expect(screen.getByRole('tab', { name: /Home/ }).getAttribute('aria-selected')).toBe('true')
   })
 })
+
+// #341: the focus follows the control across 1025 px.
+// happy-dom tells a media query's listeners about a change only once the query
+// has matched, so a window that starts wide is resized wide once (1500 px)
+// before it narrows to 1024 px, as a browser's would have been.
+const narrowWindow = async () => {
+  await act(async () => setWidth(1500))
+  await act(async () => setWidth(1024))
+}
+
+describe('Tasks keep the focus across 1025 px (#341)', () => {
+  it("moves it from a list row to the same list's tab and back", async () => {
+    const screen = render(<TasksView />)
+    await ready(screen)
+    const row = within(pane(screen)).getByRole('button', { name: 'Home (2)' })
+    row.focus()
+    expect(document.activeElement).toBe(row)
+    await narrowWindow()
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: /Home/ }))
+    await act(async () => setWidth(1025))
+    expect(document.activeElement).toBe(within(pane(screen)).getByRole('button', { name: 'Home (2)' }))
+  })
+
+  it('moves the "New list" and "Rename" buttons the same way', async () => {
+    const screen = render(<TasksView />)
+    await ready(screen)
+    fireEvent.click(within(pane(screen)).getByRole('button', { name: 'Home (2)' }))
+    const rename = within(pane(screen)).getByRole('button', { name: 'Rename Home' })
+    rename.focus()
+    await narrowWindow()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Rename list' }))
+    await act(async () => setWidth(1025))
+    expect(document.activeElement).toBe(within(pane(screen)).getByRole('button', { name: 'Rename Home' }))
+  })
+
+  it('falls back to the first control of the tabs row when the field it was in has no twin', async () => {
+    const screen = render(<TasksView />)
+    await ready(screen)
+    fireEvent.click(within(pane(screen)).getByRole('button', { name: 'New list' }))
+    // The field of the pane's "New list" is its own: the tabs' row has not opened one.
+    expect(document.activeElement).toBe(within(pane(screen)).getByRole('textbox', { name: 'New list name' }))
+    await narrowWindow()
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'All' }))
+  })
+
+  it("falls back to the pane's first control going the other way", async () => {
+    setWidth(1024)
+    const screen = render(<TasksView />)
+    await ready(screen)
+    fireEvent.click(screen.getByRole('button', { name: /New list/ }))
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'New list name' }))
+    await act(async () => setWidth(1025))
+    expect(document.activeElement).toBe(within(pane(screen)).getByRole('button', { name: 'New list' }))
+  })
+
+  it('leaves the focus alone when it was not on a list control, and on the first render', async () => {
+    const screen = render(<TasksView />)
+    await ready(screen)
+    expect(document.activeElement).toBe(document.body)
+    const search = screen.getByRole('textbox', { name: 'Search tasks' })
+    search.focus()
+    await narrowWindow()
+    expect(document.activeElement).toBe(search)
+    await act(async () => setWidth(1025))
+    expect(document.activeElement).toBe(search)
+  })
+
+  it('does nothing when the window crosses with no focus at all', async () => {
+    const screen = render(<TasksView />)
+    await ready(screen)
+    await narrowWindow()
+    expect(document.activeElement).toBe(document.body)
+    expect(screen.getAllByRole('tab').length).toBeGreaterThan(0)
+  })
+})

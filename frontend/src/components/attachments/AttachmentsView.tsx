@@ -19,6 +19,7 @@ import { fileIconFor, formatFileSize } from '../chat/messageHelpers'
 import { AttachmentPreviewDialog } from '../chat/AttachmentPreviewDialog'
 import { EmptyState } from '../empty-state/EmptyState'
 import { useWideWindow } from '../resizer/useElementWidth'
+import { useFolderPaneFocus } from '../shell/folderPaneFocus'
 import { FOLDER_PANE_MIN_WINDOW, FolderPane } from '../shell/FolderPane'
 import { clsx } from '../../lib/utils'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
@@ -60,6 +61,7 @@ export function AttachmentsView() {
   const accounts = useValue(accounts$).filter((account) => !isRssAccount(account, account.id))
   const [previewing, setPreviewing] = useState<Attachment | null>(null)
   const inPane = useWideWindow(FOLDER_PANE_MIN_WINDOW)
+  useFolderPaneFocus(inPane)
   const fieldId = useId()
 
   useEffect(() => {
@@ -130,11 +132,16 @@ export function AttachmentsView() {
 
   // Up to 1024 px the filters are the bar under the header, as before.
   const filterBar = (
-    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-header px-4 py-2">
+    <div
+      // Below 1025 px the bar stands in for the pane: focus goes back here (#341).
+      data-focus-return
+      className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-header px-4 py-2"
+    >
       <div className="flex min-w-40 flex-1 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-1.5 focus-within:border-accent-fg">
         <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
         <input
           value={filter.name}
+          data-focus-key="filter-name"
           onChange={(event) => attachmentList$.filter.name.set(event.target.value)}
           placeholder={nameLabel}
           aria-label={nameLabel}
@@ -143,6 +150,7 @@ export function AttachmentsView() {
       </div>
       <input
         value={filter.sender}
+        data-focus-key="filter-sender"
         onChange={(event) => attachmentList$.filter.sender.set(event.target.value)}
         placeholder={senderLabel}
         aria-label={senderLabel}
@@ -150,6 +158,7 @@ export function AttachmentsView() {
       />
       <select
         value={filter.kind}
+        data-focus-key="filter-type"
         onChange={setKind}
         aria-label={typeLabel}
         className="rounded-control border border-border bg-chats px-2 py-1.5 text-caption text-primary"
@@ -158,6 +167,7 @@ export function AttachmentsView() {
       </select>
       <select
         value={filter.within}
+        data-focus-key="filter-when"
         onChange={setWithin}
         aria-label={whenLabel}
         className="rounded-control border border-border bg-chats px-2 py-1.5 text-caption text-primary"
@@ -167,6 +177,7 @@ export function AttachmentsView() {
       {accounts.length > 1 && (
         <select
           value={filter.account}
+          data-focus-key="filter-account"
           onChange={setAccount}
           aria-label={accountLabel}
           className="rounded-control border border-border bg-chats px-2 py-1.5 text-caption text-primary"
@@ -194,6 +205,7 @@ export function AttachmentsView() {
             <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
             <input
               id={`${fieldId}-name`}
+              data-focus-key="filter-name"
               value={filter.name}
               onChange={(event) => attachmentList$.filter.name.set(event.target.value)}
               placeholder={nameLabel}
@@ -207,6 +219,7 @@ export function AttachmentsView() {
           </label>
           <input
             id={`${fieldId}-sender`}
+            data-focus-key="filter-sender"
             value={filter.sender}
             onChange={(event) => attachmentList$.filter.sender.set(event.target.value)}
             placeholder={senderLabel}
@@ -217,7 +230,13 @@ export function AttachmentsView() {
           <label htmlFor={`${fieldId}-type`} className={label}>
             {typeLabel}
           </label>
-          <select id={`${fieldId}-type`} value={filter.kind} onChange={setKind} className={field}>
+          <select
+            id={`${fieldId}-type`}
+            data-focus-key="filter-type"
+            value={filter.kind}
+            onChange={setKind}
+            className={field}
+          >
             {kindOptions}
           </select>
         </div>
@@ -225,7 +244,13 @@ export function AttachmentsView() {
           <label htmlFor={`${fieldId}-when`} className={label}>
             {whenLabel}
           </label>
-          <select id={`${fieldId}-when`} value={filter.within} onChange={setWithin} className={field}>
+          <select
+            id={`${fieldId}-when`}
+            data-focus-key="filter-when"
+            value={filter.within}
+            onChange={setWithin}
+            className={field}
+          >
             {whenOptions}
           </select>
         </div>
@@ -234,7 +259,13 @@ export function AttachmentsView() {
             <label htmlFor={`${fieldId}-account`} className={label}>
               {accountLabel}
             </label>
-            <select id={`${fieldId}-account`} value={filter.account} onChange={setAccount} className={field}>
+            <select
+              id={`${fieldId}-account`}
+              data-focus-key="filter-account"
+              value={filter.account}
+              onChange={setAccount}
+              className={field}
+            >
               {accountOptions}
             </select>
           </div>

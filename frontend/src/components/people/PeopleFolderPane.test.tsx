@@ -362,3 +362,57 @@ describe('People at 1024 px and below (#326)', () => {
     expect(screen.container.querySelectorAll('[data-region="folders"]')).toHaveLength(1)
   })
 })
+
+// #341: the focus follows the control across 1025 px.
+// happy-dom tells a media query's listeners about a change only once the query
+// has matched, so a window that starts wide is resized wide once (1500 px)
+// before it narrows to 1024 px, as a browser's would have been.
+const narrowWindow = async () => {
+  await act(async () => setWidth(1500))
+  await act(async () => setWidth(1024))
+}
+
+describe('People keep the focus across 1025 px (#341)', () => {
+  it('moves it from the group on show to the group select, and back to its row', () => {
+    return (async () => {
+      const screen = render(<PeopleView />)
+      fireEvent.click(within(pane(screen)).getByRole('button', { name: 'Climbing (2)' }))
+      const row = within(pane(screen)).getByRole('button', { name: 'Climbing (2)' })
+      row.focus()
+      await narrowWindow()
+      const select = screen.getByLabelText('Show group')
+      expect(document.activeElement).toBe(select)
+      expect((select as HTMLSelectElement).value).toBe(climbing.id)
+      await act(async () => setWidth(1025))
+      expect(document.activeElement).toBe(within(pane(screen)).getByRole('button', { name: 'Climbing (2)' }))
+    })()
+  })
+
+  it('moves "New group" the same way, and "All contacts" to the select', async () => {
+    const screen = render(<PeopleView />)
+    within(pane(screen)).getByRole('button', { name: 'New group' }).focus()
+    await narrowWindow()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'New group' }))
+    await act(async () => setWidth(1025))
+    within(pane(screen)).getByRole('button', { name: 'All contacts' }).focus()
+    await narrowWindow()
+    expect(document.activeElement).toBe(screen.getByLabelText('Show group'))
+  })
+
+  it('falls back to the group select when the row is not the group on show', async () => {
+    const screen = render(<PeopleView />)
+    // A row the arrows reached without choosing it, or one the pointer has not pressed yet.
+    within(pane(screen)).getByRole('button', { name: 'Climbing (2)' }).focus()
+    await narrowWindow()
+    expect(document.activeElement).toBe(screen.getByLabelText('Show group'))
+  })
+
+  it('leaves the focus alone when it was on the list, and does nothing on the first render', async () => {
+    const screen = render(<PeopleView />)
+    expect(document.activeElement).toBe(document.body)
+    const search = screen.getByRole('textbox', { name: 'Search people' })
+    search.focus()
+    await narrowWindow()
+    expect(document.activeElement).toBe(search)
+  })
+})

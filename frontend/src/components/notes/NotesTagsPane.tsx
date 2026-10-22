@@ -63,6 +63,7 @@ export function NotesTagsPane() {
         <button
           type="button"
           data-tag-row=""
+          data-focus-key="tag-all"
           aria-current={tag === '' ? 'true' : undefined}
           title={allNotes}
           onClick={() => notes$.tag.set('')}
@@ -87,6 +88,7 @@ export function NotesTagsPane() {
             <button
               type="button"
               data-tag-row={entry.tag}
+              data-focus-key={`tag:${entry.tag}`}
               aria-current={active ? 'true' : undefined}
               aria-label={named}
               title={named}

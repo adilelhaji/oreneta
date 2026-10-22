@@ -370,3 +370,113 @@ describe('Chat at 1024 px and below (#337)', () => {
     expect(screen.getByText('Hola Ana')).toBeTruthy()
   })
 })
+
+// #341: the focus follows the control across 1025 px.
+// happy-dom tells a media query's listeners about a change only once the query
+// has matched, so a window that starts wide is resized wide once (1500 px)
+// before it narrows to 1024 px, as a browser's would have been.
+const narrowWindow = async () => {
+  await act(async () => setWidth(1500))
+  await act(async () => setWidth(1024))
+}
+
+describe('Chat keeps the focus across 1025 px (#341)', () => {
+  it('moves it from a conversation in the pane to the same one in the column and back', async () => {
+    const screen = render(<MessagingView />)
+    await ready(screen)
+    const button = within(pane(screen)).getByRole('button', { name: /pau@chat.test/ })
+    button.focus()
+    await narrowWindow()
+    const column = screen.container.querySelector<HTMLElement>('[data-region="folders"]')!
+    expect(column.hasAttribute('data-folder-pane')).toBe(false)
+    expect(document.activeElement).toBe(within(column).getByRole('button', { name: /pau@chat.test/ }))
+    await act(async () => setWidth(1025))
+    expect(document.activeElement).toBe(within(pane(screen)).getByRole('button', { name: /pau@chat.test/ }))
+  })
+
+  it('keeps it on the account selector, the same control in the column', async () => {
+    const screen = render(<MessagingView />)
+    await ready(screen)
+    within(pane(screen)).getByRole('combobox', { name: 'Chat account' }).focus()
+    await narrowWindow()
+    const column = screen.container.querySelector<HTMLElement>('[data-region="folders"]')!
+    expect(document.activeElement).toBe(within(column).getByRole('combobox', { name: 'Chat account' }))
+  })
+
+  it('keeps it in the join form, on the same field and with what was typed, not on the account selector', async () => {
+    const screen = render(<MessagingView />)
+    await ready(screen)
+    fireEvent.click(within(pane(screen)).getByRole('button', { name: 'Join a group' }))
+    const room = within(pane(screen)).getByRole('textbox', { name: 'Group address' })
+    room.focus()
+    fireEvent.change(room, { target: { value: 'team@rooms.chat.test' } })
+    // A second press in the field that already has the focus keeps it there.
+    fireEvent.pointerDown(room)
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+    await narrowWindow()
+    const column = screen.container.querySelector<HTMLElement>('[data-region="folders"]')!
+    const twin = within(column).getByRole('textbox', { name: 'Group address' })
+    expect(document.activeElement).toBe(twin)
+    expect((twin as HTMLInputElement).value).toBe('team@rooms.chat.test')
+  })
+
+  it('keeps an unsaved status and its Save button across the line, not falling to the account selector', async () => {
+    const screen = render(<MessagingView />)
+    await ready(screen)
+    fireEvent.change(within(pane(screen)).getByRole('textbox', { name: 'Status message' }), {
+      target: { value: 'In a meeting' },
+    })
+    within(pane(screen)).getByRole('button', { name: 'Save' }).focus()
+    await narrowWindow()
+    const column = screen.container.querySelector<HTMLElement>('[data-region="folders"]')!
+    expect(document.activeElement).toBe(within(column).getByRole('button', { name: 'Save' }))
+    expect((within(column).getByRole('textbox', { name: 'Status message' }) as HTMLInputElement).value).toBe(
+      'In a meeting',
+    )
+  })
+
+  it('keeps the permission list open and the focus on its Stop button across the line', async () => {
+    const screen = render(<MessagingView />)
+    await ready(screen)
+    await act(async () => statusPermissions$.set({ allowed: ['x@chat.test'], more: false }))
+    fireEvent.click(within(pane(screen)).getByRole('button', { name: /^Who can see your status/ }))
+    within(pane(screen)).getByRole('button', { name: 'Stop sharing your status with x@chat.test' }).focus()
+    await narrowWindow()
+    const column = screen.container.querySelector<HTMLElement>('[data-region="folders"]')!
+    expect(document.activeElement).toBe(
+      within(column).getByRole('button', { name: 'Stop sharing your status with x@chat.test' }),
+    )
+  })
+
+  it("forgets an account's unsaved status and open permission list on switching account", async () => {
+    const screen = render(<MessagingView />)
+    await ready(screen)
+    await act(async () => statusPermissions$.set({ allowed: ['x@chat.test'], more: false }))
+    fireEvent.change(within(pane(screen)).getByRole('textbox', { name: 'Status message' }), {
+      target: { value: 'In a meeting' },
+    })
+    fireEvent.click(within(pane(screen)).getByRole('button', { name: /^Who can see your status/ }))
+    await act(async () => {
+      fireEvent.change(within(pane(screen)).getByRole('combobox', { name: 'Chat account' }), {
+        target: { value: 'c2' },
+      })
+    })
+    await act(async () => {
+      fireEvent.change(within(pane(screen)).getByRole('combobox', { name: 'Chat account' }), {
+        target: { value: 'c1' },
+      })
+    })
+    expect((within(pane(screen)).getByRole('textbox', { name: 'Status message' }) as HTMLInputElement).value).not.toBe(
+      'In a meeting',
+    )
+    expect(within(pane(screen)).queryByRole('button', { name: 'Stop sharing your status with x@chat.test' })).toBeNull()
+  })
+
+  it('leaves the focus alone when it was in the conversation side', async () => {
+    const screen = render(<MessagingView />)
+    await ready(screen)
+    expect(document.activeElement).toBe(document.body)
+    await narrowWindow()
+    expect(document.activeElement).toBe(document.body)
+  })
+})

@@ -281,3 +281,56 @@ describe('Calendar at 1024 px and below (#323)', () => {
     expect(screen.container.querySelectorAll('[data-mini-calendar]')).toHaveLength(1)
   })
 })
+
+// #341: the focus follows the control across 1025 px.
+// happy-dom tells a media query's listeners about a change only once the query
+// has matched, so a window that starts wide is resized wide once (1500 px)
+// before it narrows to 1024 px, as a browser's would have been.
+const narrowWindow = async () => {
+  await act(async () => setWidth(1500))
+  await act(async () => setWidth(1024))
+}
+
+describe('Calendar keeps the focus across 1025 px (#341)', () => {
+  it("moves it from a calendar's tick or the month arrows to the same control in the column and back", async () => {
+    const screen = await open()
+    tick(pane(screen), 'Work').focus()
+    await narrowWindow()
+    const column = screen.container.querySelector<HTMLElement>('nav[data-region="folders"]')!
+    expect(column.hasAttribute('data-folder-pane')).toBe(false)
+    expect(document.activeElement).toBe(tick(column, 'Work'))
+    await act(async () => setWidth(1025))
+    expect(document.activeElement).toBe(tick(pane(screen), 'Work'))
+    within(pane(screen)).getByRole('button', { name: 'Next month' }).focus()
+    await narrowWindow()
+    expect(document.activeElement).toBe(
+      within(screen.container.querySelector<HTMLElement>('nav[data-region="folders"]')!).getByRole('button', {
+        name: 'Next month',
+      }),
+    )
+  })
+
+  it("falls back to the column's first control when the pane control has no twin", async () => {
+    const screen = await open()
+    // The colours of a calendar open in a menu that does not survive the switch.
+    const name = within(pane(screen))
+      .getAllByRole('button', { name: 'Work' })
+      .find((button) => !button.hasAttribute('aria-pressed'))!
+    fireEvent.click(name)
+    expect(pane(screen).contains(document.activeElement)).toBe(true)
+    expect(document.activeElement).not.toBe(name)
+    await narrowWindow()
+    const column = screen.container.querySelector<HTMLElement>('nav[data-region="folders"]')!
+    expect(document.activeElement).not.toBe(document.body)
+    expect(column.contains(document.activeElement)).toBe(true)
+  })
+
+  it('leaves the focus alone when it was in the views', async () => {
+    const screen = await open()
+    expect(document.activeElement).toBe(document.body)
+    const today = within(content(screen)).getByRole('button', { name: 'Today' })
+    today.focus()
+    await narrowWindow()
+    expect(document.activeElement).toBe(today)
+  })
+})
