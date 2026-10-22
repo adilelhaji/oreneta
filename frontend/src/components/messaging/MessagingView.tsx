@@ -54,6 +54,9 @@ import { formatFileSize } from '../chat/messageHelpers'
 import { confirmAction, showToast } from '../../states/ui'
 import { Button } from '../button/Button'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
+import { FOLDER_PANE_MIN_WINDOW, FolderPane } from '../shell/FolderPane'
+import { useWideWindow } from '../resizer/useElementWidth'
+import { clsx } from '../../lib/utils'
 
 const input = 'rounded-control-sm border border-border bg-app px-2.5 py-1.5 text-sm text-primary'
 
@@ -93,6 +96,8 @@ export function MessagingView() {
   const [active, setActive] = useState(0)
   const [closedAt, setClosedAt] = useState<number | null>(null)
   const [showPeople, setShowPeople] = useState(false)
+  // From 1025 px the conversations column is the common folder pane (ADR-0068 §4, #337).
+  const inPane = useWideWindow(FOLDER_PANE_MIN_WINDOW)
   const end = useRef<HTMLDivElement | null>(null)
   const composer = useRef<HTMLTextAreaElement | null>(null)
 
@@ -184,6 +189,533 @@ export function MessagingView() {
     }
   }
 
+  // The account, its mentions and its connection: the column's header row, and
+  // from 1025 px the first row of the pane's body (the pane has its own title).
+  const accountRow = (
+    <>
+      {accounts.length > 1 ? (
+        <select
+          aria-label={t('messaging.account', { defaultValue: 'Chat account' })}
+          value={account}
+          onChange={(e) => {
+            messaging$.account.set(e.target.value)
+            messaging$.conversation.set('')
+            void refreshConversations()
+            void loadPresence().catch(() => {})
+          }}
+          className={input}
+        >
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.jid}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <span className="truncate text-sm font-semibold text-primary">{accounts[0].jid}</span>
+      )}
+      {(mentionTotal > 0 || mentionTotalCapped) && (
+        <MentionBadge
+          count={mentionTotal}
+          capped={mentionTotalCapped}
+          label={
+            mentionTotalCapped
+              ? t('messaging.mentionsTotalMore', {
+                  count: mentionTotal,
+                  defaultValue: 'Unread mentions in your groups: {count} or more',
+                })
+              : t('messaging.mentionsTotal', {
+                  count: mentionTotal,
+                  defaultValue: 'Unread mentions in your groups: {count}',
+                })
+          }
+        />
+      )}
+      <span
+        role="status"
+        className={`ms-auto text-caption ${state === 'online' ? 'text-success' : 'text-secondary'}`}
+        title={status[account]?.message}
+      >
+        {state === 'online'
+          ? t('messaging.online', { defaultValue: 'Connected' })
+          : t('messaging.offline', { defaultValue: 'Not connected' })}
+      </span>
+    </>
+  )
+  const columnBody = (
+    <>
+      <OwnStatus key={account} />
+      <StatusRequests />
+      {online && <StatusPermissions key={account} />}
+      <form
+        className="flex gap-1.5 border-b border-border px-3 py-2"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (newChat.includes('@')) void openConversation(newChat).then(() => setNewChat(''))
+        }}
+      >
+        <input
+          aria-label={t('messaging.newChat', { defaultValue: 'Chat with (address)' })}
+          placeholder="name@server.example"
+          value={newChat}
+          onChange={(e) => setNewChat(e.target.value)}
+          className={`${input} min-w-0 flex-1`}
+        />
+        <Button size="sm" type="submit" disabled={!newChat.includes('@')}>
+          {t('messaging.start', { defaultValue: 'Open' })}
+        </Button>
+      </form>
+      {joining ? (
+        <form
+          aria-label={t('messaging.joinTitle', { defaultValue: 'Join a group' })}
+          className="flex flex-col gap-1.5 border-b border-border px-3 py-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void join()
+          }}
+        >
+          <label className="flex flex-col gap-1 text-caption text-secondary">
+            {t('messaging.roomAddress', { defaultValue: 'Group address' })}
+            <input
+              className={input}
+              placeholder="team@rooms.server.example"
+              value={joining.room}
+              onChange={(e) => setJoining({ ...joining, room: e.target.value })}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-caption text-secondary">
+            {t('messaging.nick', { defaultValue: 'Your name in the group' })}
+            <input
+              className={input}
+              value={joining.nick}
+              onChange={(e) => setJoining({ ...joining, nick: e.target.value })}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-caption text-secondary">
+            {t('messaging.roomPassword', { defaultValue: 'Group password (if it has one)' })}
+            <input
+              type="password"
+              autoComplete="off"
+              className={input}
+              value={joining.password}
+              onChange={(e) => setJoining({ ...joining, password: e.target.value })}
+            />
+          </label>
+          <div className="flex gap-1.5">
+            <Button size="sm" type="submit" disabled={!joining.room.includes('@') || !joining.nick.trim()}>
+              {t('messaging.join', { defaultValue: 'Join' })}
+            </Button>
+            <Button size="sm" variant="ghost" type="button" onClick={() => setJoining(null)}>
+              {t('buttons.cancel', { defaultValue: 'Cancel' })}
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <div className="border-b border-border px-3 py-1.5">
+          <button
+            type="button"
+            onClick={() => startJoin()}
+            className="flex items-center gap-1.5 text-caption text-accent-fg underline cursor-pointer"
+          >
+            <Users size={14} strokeWidth={1.75} aria-hidden="true" />
+            {t('messaging.joinGroup', { defaultValue: 'Join a group' })}
+          </button>
+        </div>
+      )}
+      {invitations.length > 0 && (
+        <ul
+          aria-label={t('messaging.invitations', { defaultValue: 'Invitations' })}
+          className="flex flex-col gap-1.5 border-b border-border px-3 py-2"
+        >
+          {invitations.map((inv) => (
+            <li key={inv.room} className="flex flex-col gap-1 rounded-control-sm bg-raised px-2.5 py-1.5 text-caption">
+              <span className="text-primary">
+                {t('messaging.invited', {
+                  inviter: inv.inviter,
+                  room: inv.room,
+                  defaultValue: '{inviter} invites you to {room}',
+                })}
+              </span>
+              {inv.reason && <span className="text-secondary">{inv.reason}</span>}
+              <span className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => startJoin(inv.room)}
+                  className="text-accent-fg underline cursor-pointer"
+                >
+                  {t('messaging.joinInvited', { defaultValue: 'Join…' })}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void dismissInvitation(inv.room)}
+                  className="text-secondary underline cursor-pointer"
+                >
+                  {t('messaging.notNow', { defaultValue: 'Not now' })}
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className={inPane ? undefined : 'flex-1 overflow-y-auto'}>
+        {rooms.length > 0 && (
+          <>
+            <h3 className="px-3 pt-2 text-2xs font-semibold uppercase text-secondary">
+              {t('messaging.groups', { defaultValue: 'Groups' })}
+            </h3>
+            <ul aria-label={t('messaging.groups', { defaultValue: 'Groups' })}>
+              {rooms.map((r) => (
+                <li key={r.room}>
+                  <ConversationButton
+                    name={r.room}
+                    last={r.last_body || roomStateLabel(r, t)}
+                    unread={r.unread}
+                    mentions={r.unread_mentions}
+                    mentionsCapped={r.mentions_capped}
+                    muted={isMuted(r.room)}
+                    current={r.room === conversation}
+                    group
+                    onOpen={() => void openConversation(r.room)}
+                  />
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        <ul aria-label={t('messaging.direct', { defaultValue: 'Direct conversations' })}>
+          {conversations.map((c) => {
+            const inRoom = c.kind === 'private' ? splitPrivate(c.conversation) : null
+            const seen = online && !inRoom ? contacts[c.conversation] : undefined
+            return (
+              <li key={c.conversation}>
+                <ConversationButton
+                  name={inRoom ? `${inRoom.nick} (${inRoom.room})` : c.conversation}
+                  last={c.last_body}
+                  unread={c.unread}
+                  muted={isMuted(c.conversation)}
+                  current={c.conversation === conversation}
+                  privateInRoom={!!inRoom}
+                  show={seen?.show}
+                  onOpen={() => void openConversation(c.conversation)}
+                />
+              </li>
+            )
+          })}
+        </ul>
+      </div>
+    </>
+  )
+  const columnFooter = (
+    <footer className={clsx('px-3 py-2', !inPane && 'border-t border-border')}>
+      <button
+        type="button"
+        className="text-caption text-secondary underline cursor-pointer"
+        onClick={() =>
+          void confirmAction({
+            title: t('messaging.removeTitle', { defaultValue: 'Remove this chat account?' }),
+            message: t('messaging.removeMessage', {
+              defaultValue: 'Its conversations kept on this computer are removed. Nothing is deleted on the server.',
+            }),
+            confirmLabel: t('messaging.remove', { defaultValue: 'Remove' }),
+            cancelLabel: t('buttons.cancel'),
+          }).then((ok) => (ok ? removeChatAccount(account) : undefined))
+        }
+      >
+        {t('messaging.removeAccount', { defaultValue: 'Remove this chat account' })}
+      </button>
+    </footer>
+  )
+  const reader = (
+    <section
+      aria-label={conversation || t('messaging.noConversation', { defaultValue: 'No conversation open' })}
+      className={`flex min-w-0 flex-1 flex-col ${conversation ? '' : 'max-[769px]:hidden'}`}
+    >
+      {conversation ? (
+        <>
+          <header className="flex items-center gap-2 border-b border-border px-4 py-2.5 text-sm font-semibold text-primary">
+            <button
+              type="button"
+              onClick={() => messaging$.conversation.set('')}
+              className="text-caption font-normal text-accent-fg underline min-[769px]:hidden cursor-pointer"
+            >
+              {t('messaging.back', { defaultValue: 'Conversations' })}
+            </button>
+            {openRoom && <Users size={16} strokeWidth={1.75} className="text-accent-fg" aria-hidden="true" />}
+            {privateWith && <Lock size={14} strokeWidth={1.75} className="text-accent-fg" aria-hidden="true" />}
+            <span className="truncate">{privateWith ? privateWith.nick : conversation}</span>
+            {privateWith && (
+              <span className="truncate text-caption font-normal text-secondary">
+                {t('messaging.privateIn', { room: privateWith.room, defaultValue: 'Private message in {room}' })}
+              </span>
+            )}
+            {!openRoom && !privateWith && (
+              <ContactStatus jid={conversation} show={contact?.show} status={contact?.status} online={online} />
+            )}
+            {openRoom && (
+              <button
+                type="button"
+                aria-expanded={showPeople}
+                onClick={() => {
+                  setShowPeople(!showPeople)
+                  if (!showPeople) void loadOccupants().catch(() => {})
+                }}
+                className="flex items-center gap-1 text-caption font-normal text-accent-fg underline cursor-pointer"
+              >
+                {t('messaging.people', { defaultValue: 'People in the group' })}
+                <span className="text-secondary">({occupants.length})</span>
+              </button>
+            )}
+            {openRoom && (
+              <>
+                <span className="text-caption font-normal text-secondary" title={openRoom.detail?.message ?? undefined}>
+                  {roomStateLabel(openRoom, t)}
+                </span>
+                <button
+                  type="button"
+                  className="ms-auto text-caption font-normal text-secondary underline cursor-pointer"
+                  onClick={() =>
+                    void confirmAction({
+                      title: t('messaging.leaveTitle', { defaultValue: 'Leave this group?' }),
+                      message: t('messaging.leaveMessage', {
+                        defaultValue:
+                          'It is not joined again, and what was kept of it on this computer is removed. The group keeps its own history.',
+                      }),
+                      confirmLabel: t('messaging.leave', { defaultValue: 'Leave' }),
+                      cancelLabel: t('buttons.cancel'),
+                    }).then((ok) => (ok ? leaveRoom(openRoom.room) : undefined))
+                  }
+                >
+                  {t('messaging.leaveGroup', { defaultValue: 'Leave group' })}
+                </button>
+              </>
+            )}
+            {/* A toggle whose name stays the same; pressed means muted. */}
+            <button
+              type="button"
+              aria-pressed={muted}
+              aria-label={t('messaging.mute', { defaultValue: 'Mute notifications' })}
+              aria-describedby={muted ? 'chat-muted-hint' : undefined}
+              onClick={() => void toggleMute()}
+              title={
+                muted
+                  ? t('messaging.mutedHint', {
+                      defaultValue:
+                        'No notifications from this conversation, not even mentions. New messages still count as unread.',
+                    })
+                  : t('messaging.mute', { defaultValue: 'Mute notifications' })
+              }
+              className={`${openRoom ? '' : 'ms-auto '}flex min-h-7 shrink-0 items-center rounded-control-sm px-1.5 font-normal cursor-pointer hover:bg-hover ${
+                muted ? 'text-accent-fg' : 'text-secondary'
+              }`}
+            >
+              {muted ? (
+                <BellOff size={16} strokeWidth={1.75} aria-hidden="true" />
+              ) : (
+                <Bell size={16} strokeWidth={1.75} aria-hidden="true" />
+              )}
+            </button>
+            {muted && (
+              <span id="chat-muted-hint" className="sr-only">
+                {t('messaging.mutedHint', {
+                  defaultValue:
+                    'No notifications from this conversation, not even mentions. New messages still count as unread.',
+                })}
+              </span>
+            )}
+          </header>
+          {openRoom && showPeople && (
+            <ul
+              aria-label={t('messaging.people', { defaultValue: 'People in the group' })}
+              className="flex max-h-40 flex-col gap-1 overflow-y-auto border-b border-border px-4 py-2 text-caption"
+            >
+              {occupants.map((o) => (
+                <li key={o.nick} className="flex items-center gap-2">
+                  <PresenceDot show={o.show} />
+                  <span className="truncate text-primary">{o.nick}</span>
+                  <span className="text-secondary">{showLabel(o.show, t)}</span>
+                  <button
+                    type="button"
+                    onClick={() => void openPrivate(openRoom.room, o.nick)}
+                    className="ms-auto text-accent-fg underline cursor-pointer"
+                  >
+                    {t('messaging.writePrivately', { nick: o.nick, defaultValue: 'Write privately to {nick}' })}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex-1 overflow-y-auto px-4 py-3">
+            <ol className="flex flex-col gap-1.5">
+              {history.map((m) => (
+                <Bubble key={m.id} message={m} room={openRoom?.room} />
+              ))}
+            </ol>
+            <div ref={end} />
+          </div>
+          {roomUploads.length > 0 && (
+            <ul
+              aria-label={t('messaging.uploads', { defaultValue: 'Files being sent' })}
+              className="flex flex-col gap-1 border-t border-border px-4 py-2 text-caption"
+            >
+              {roomUploads.map(([id, u]) => (
+                <li key={id} className="flex items-center gap-2 text-secondary">
+                  <FileText size={14} strokeWidth={1.75} aria-hidden="true" />
+                  <span dir="auto" className="truncate text-primary">
+                    {u.name}
+                  </span>
+                  {u.error ? (
+                    <>
+                      <span role="alert" className="text-danger">
+                        {uploadErrorText(u.error, t)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => dismissChatUpload(id)}
+                        className="ms-auto underline cursor-pointer"
+                      >
+                        {t('messaging.dismiss', { defaultValue: 'Dismiss' })}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <progress
+                        aria-label={t('messaging.sendingFile', { name: u.name, defaultValue: 'Sending {name}' })}
+                        value={u.done}
+                        max={u.total || 1}
+                        className="w-32"
+                      />
+                      <span>
+                        {formatFileSize(u.done)} / {formatFileSize(u.total)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void cancelChatUpload(id)}
+                        className="ms-auto underline cursor-pointer"
+                      >
+                        {t('buttons.cancel', { defaultValue: 'Cancel' })}
+                      </button>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <form
+            className="relative flex items-end gap-2 border-t border-border px-4 py-2.5"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void send()
+            }}
+          >
+            {suggestions.length > 0 && (
+              <ul
+                id="chat-mention-suggestions"
+                role="listbox"
+                aria-label={t('messaging.mentionSuggestions', { defaultValue: 'People to mention' })}
+                className="absolute bottom-full start-4 z-10 mb-1 flex min-w-48 flex-col rounded-control-sm border border-border bg-raised py-1 text-sm shadow-lg"
+              >
+                {suggestions.map((nick, index) => (
+                  <li
+                    key={nick}
+                    id={`chat-mention-${index}`}
+                    role="option"
+                    aria-selected={index === active % suggestions.length}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      pick(nick)
+                    }}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 cursor-pointer ${
+                      index === active % suggestions.length ? 'bg-accent/10 text-primary' : 'text-secondary'
+                    }`}
+                  >
+                    <AtSign size={12} strokeWidth={1.75} aria-hidden="true" />
+                    {nick}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <textarea
+              ref={composer}
+              aria-label={t('messaging.message', { defaultValue: 'Message' })}
+              aria-autocomplete={openRoom ? 'list' : undefined}
+              aria-controls={suggestions.length > 0 ? 'chat-mention-suggestions' : undefined}
+              aria-activedescendant={suggestions.length > 0 ? `chat-mention-${active % suggestions.length}` : undefined}
+              value={draft}
+              rows={2}
+              dir={draft ? 'auto' : undefined}
+              onChange={(e) => {
+                setDraft(e.target.value)
+                setCaret(e.target.selectionStart ?? e.target.value.length)
+                setActive(0)
+              }}
+              onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? draft.length)}
+              onKeyDown={(e) => {
+                if (suggestions.length > 0) {
+                  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault()
+                    setActive((active + (e.key === 'ArrowDown' ? 1 : suggestions.length - 1)) % suggestions.length)
+                    return
+                  }
+                  if (e.key === 'Enter' || e.key === 'Tab') {
+                    e.preventDefault()
+                    pick(suggestions[active % suggestions.length])
+                    return
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault()
+                    setClosedAt(query?.start ?? null)
+                    return
+                  }
+                }
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  void send()
+                }
+              }}
+              className={`${input} bidi-plaintext flex-1 resize-none`}
+            />
+            <button
+              type="button"
+              onClick={() => void attach()}
+              aria-label={t('messaging.sendFile', { defaultValue: 'Send a file' })}
+              title={t('messaging.sendFile', { defaultValue: 'Send a file' })}
+              className="flex min-h-9 items-center rounded-control-sm px-2 text-secondary hover:bg-hover hover:text-primary cursor-pointer"
+            >
+              <Paperclip size={16} strokeWidth={1.75} aria-hidden="true" />
+            </button>
+            <Button type="submit" disabled={!draft.trim()} leftIcon={Send}>
+              {t('messaging.send', { defaultValue: 'Send' })}
+            </Button>
+          </form>
+        </>
+      ) : (
+        <p className="m-auto text-sm text-secondary">
+          {t('messaging.pick', { defaultValue: 'Pick a conversation, or open one with an address.' })}
+        </p>
+      )}
+    </section>
+  )
+
+  if (inPane) {
+    return (
+      <>
+        <FolderPane title={t('messaging.conversations', { defaultValue: 'Conversations' })} footer={columnFooter}>
+          <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">{accountRow}</div>
+          {columnBody}
+        </FolderPane>
+        <div
+          data-region="content"
+          // Beside the pane the module asks for the reader's minimum (360 px,
+          // ADR-0068 §7) as its basis: the pane, whose shrink factor dwarfs
+          // this one's, gives way first.
+          className="flex min-w-0 flex-[1_1_360px] bg-chats"
+        >
+          {reader}
+        </div>
+      </>
+    )
+  }
+
   return (
     <div data-region="content" className="flex min-w-0 flex-1 bg-chats">
       <section
@@ -194,508 +726,13 @@ export function MessagingView() {
         <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
           <CompactNavigation />
           <MessagesSquare size={16} strokeWidth={1.75} className="text-accent-fg" aria-hidden="true" />
-          {accounts.length > 1 ? (
-            <select
-              aria-label={t('messaging.account', { defaultValue: 'Chat account' })}
-              value={account}
-              onChange={(e) => {
-                messaging$.account.set(e.target.value)
-                messaging$.conversation.set('')
-                void refreshConversations()
-                void loadPresence().catch(() => {})
-              }}
-              className={input}
-            >
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.jid}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span className="truncate text-sm font-semibold text-primary">{accounts[0].jid}</span>
-          )}
-          {(mentionTotal > 0 || mentionTotalCapped) && (
-            <MentionBadge
-              count={mentionTotal}
-              capped={mentionTotalCapped}
-              label={
-                mentionTotalCapped
-                  ? t('messaging.mentionsTotalMore', {
-                      count: mentionTotal,
-                      defaultValue: 'Unread mentions in your groups: {count} or more',
-                    })
-                  : t('messaging.mentionsTotal', { count: mentionTotal, defaultValue: 'Unread mentions in your groups: {count}' })
-              }
-            />
-          )}
-          <span
-            role="status"
-            className={`ms-auto text-caption ${state === 'online' ? 'text-success' : 'text-secondary'}`}
-            title={status[account]?.message}
-          >
-            {state === 'online'
-              ? t('messaging.online', { defaultValue: 'Connected' })
-              : t('messaging.offline', { defaultValue: 'Not connected' })}
-          </span>
+          {accountRow}
         </header>
-        <OwnStatus key={account} />
-        <StatusRequests />
-        {online && <StatusPermissions key={account} />}
-        <form
-          className="flex gap-1.5 border-b border-border px-3 py-2"
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (newChat.includes('@')) void openConversation(newChat).then(() => setNewChat(''))
-          }}
-        >
-          <input
-            aria-label={t('messaging.newChat', { defaultValue: 'Chat with (address)' })}
-            placeholder="name@server.example"
-            value={newChat}
-            onChange={(e) => setNewChat(e.target.value)}
-            className={`${input} min-w-0 flex-1`}
-          />
-          <Button size="sm" type="submit" disabled={!newChat.includes('@')}>
-            {t('messaging.start', { defaultValue: 'Open' })}
-          </Button>
-        </form>
-        {joining ? (
-          <form
-            aria-label={t('messaging.joinTitle', { defaultValue: 'Join a group' })}
-            className="flex flex-col gap-1.5 border-b border-border px-3 py-2"
-            onSubmit={(e) => {
-              e.preventDefault()
-              void join()
-            }}
-          >
-            <label className="flex flex-col gap-1 text-caption text-secondary">
-              {t('messaging.roomAddress', { defaultValue: 'Group address' })}
-              <input
-                className={input}
-                placeholder="team@rooms.server.example"
-                value={joining.room}
-                onChange={(e) => setJoining({ ...joining, room: e.target.value })}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-caption text-secondary">
-              {t('messaging.nick', { defaultValue: 'Your name in the group' })}
-              <input
-                className={input}
-                value={joining.nick}
-                onChange={(e) => setJoining({ ...joining, nick: e.target.value })}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-caption text-secondary">
-              {t('messaging.roomPassword', { defaultValue: 'Group password (if it has one)' })}
-              <input
-                type="password"
-                autoComplete="off"
-                className={input}
-                value={joining.password}
-                onChange={(e) => setJoining({ ...joining, password: e.target.value })}
-              />
-            </label>
-            <div className="flex gap-1.5">
-              <Button size="sm" type="submit" disabled={!joining.room.includes('@') || !joining.nick.trim()}>
-                {t('messaging.join', { defaultValue: 'Join' })}
-              </Button>
-              <Button size="sm" variant="ghost" type="button" onClick={() => setJoining(null)}>
-                {t('buttons.cancel', { defaultValue: 'Cancel' })}
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <div className="border-b border-border px-3 py-1.5">
-            <button
-              type="button"
-              onClick={() => startJoin()}
-              className="flex items-center gap-1.5 text-caption text-accent-fg underline cursor-pointer"
-            >
-              <Users size={14} strokeWidth={1.75} aria-hidden="true" />
-              {t('messaging.joinGroup', { defaultValue: 'Join a group' })}
-            </button>
-          </div>
-        )}
-        {invitations.length > 0 && (
-          <ul
-            aria-label={t('messaging.invitations', { defaultValue: 'Invitations' })}
-            className="flex flex-col gap-1.5 border-b border-border px-3 py-2"
-          >
-            {invitations.map((inv) => (
-              <li
-                key={inv.room}
-                className="flex flex-col gap-1 rounded-control-sm bg-raised px-2.5 py-1.5 text-caption"
-              >
-                <span className="text-primary">
-                  {t('messaging.invited', {
-                    inviter: inv.inviter,
-                    room: inv.room,
-                    defaultValue: '{inviter} invites you to {room}',
-                  })}
-                </span>
-                {inv.reason && <span className="text-secondary">{inv.reason}</span>}
-                <span className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => startJoin(inv.room)}
-                    className="text-accent-fg underline cursor-pointer"
-                  >
-                    {t('messaging.joinInvited', { defaultValue: 'Join…' })}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void dismissInvitation(inv.room)}
-                    className="text-secondary underline cursor-pointer"
-                  >
-                    {t('messaging.notNow', { defaultValue: 'Not now' })}
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="flex-1 overflow-y-auto">
-          {rooms.length > 0 && (
-            <>
-              <h3 className="px-3 pt-2 text-2xs font-semibold uppercase text-secondary">
-                {t('messaging.groups', { defaultValue: 'Groups' })}
-              </h3>
-              <ul aria-label={t('messaging.groups', { defaultValue: 'Groups' })}>
-                {rooms.map((r) => (
-                  <li key={r.room}>
-                    <ConversationButton
-                      name={r.room}
-                      last={r.last_body || roomStateLabel(r, t)}
-                      unread={r.unread}
-                      mentions={r.unread_mentions}
-                      mentionsCapped={r.mentions_capped}
-                      muted={isMuted(r.room)}
-                      current={r.room === conversation}
-                      group
-                      onOpen={() => void openConversation(r.room)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-          <ul aria-label={t('messaging.direct', { defaultValue: 'Direct conversations' })}>
-            {conversations.map((c) => {
-              const inRoom = c.kind === 'private' ? splitPrivate(c.conversation) : null
-              const seen = online && !inRoom ? contacts[c.conversation] : undefined
-              return (
-                <li key={c.conversation}>
-                  <ConversationButton
-                    name={inRoom ? `${inRoom.nick} (${inRoom.room})` : c.conversation}
-                    last={c.last_body}
-                    unread={c.unread}
-                    muted={isMuted(c.conversation)}
-                    current={c.conversation === conversation}
-                    privateInRoom={!!inRoom}
-                    show={seen?.show}
-                    onOpen={() => void openConversation(c.conversation)}
-                  />
-                </li>
-              )
-            })}
-          </ul>
-        </div>
-        <footer className="border-t border-border px-3 py-2">
-          <button
-            type="button"
-            className="text-caption text-secondary underline cursor-pointer"
-            onClick={() =>
-              void confirmAction({
-                title: t('messaging.removeTitle', { defaultValue: 'Remove this chat account?' }),
-                message: t('messaging.removeMessage', {
-                  defaultValue:
-                    'Its conversations kept on this computer are removed. Nothing is deleted on the server.',
-                }),
-                confirmLabel: t('messaging.remove', { defaultValue: 'Remove' }),
-                cancelLabel: t('buttons.cancel'),
-              }).then((ok) => (ok ? removeChatAccount(account) : undefined))
-            }
-          >
-            {t('messaging.removeAccount', { defaultValue: 'Remove this chat account' })}
-          </button>
-        </footer>
+        {columnBody}
+        {columnFooter}
       </section>
 
-      <section
-        aria-label={conversation || t('messaging.noConversation', { defaultValue: 'No conversation open' })}
-        className={`flex min-w-0 flex-1 flex-col ${conversation ? '' : 'max-[769px]:hidden'}`}
-      >
-        {conversation ? (
-          <>
-            <header className="flex items-center gap-2 border-b border-border px-4 py-2.5 text-sm font-semibold text-primary">
-              <button
-                type="button"
-                onClick={() => messaging$.conversation.set('')}
-                className="text-caption font-normal text-accent-fg underline min-[769px]:hidden cursor-pointer"
-              >
-                {t('messaging.back', { defaultValue: 'Conversations' })}
-              </button>
-              {openRoom && <Users size={16} strokeWidth={1.75} className="text-accent-fg" aria-hidden="true" />}
-              {privateWith && <Lock size={14} strokeWidth={1.75} className="text-accent-fg" aria-hidden="true" />}
-              <span className="truncate">{privateWith ? privateWith.nick : conversation}</span>
-              {privateWith && (
-                <span className="truncate text-caption font-normal text-secondary">
-                  {t('messaging.privateIn', { room: privateWith.room, defaultValue: 'Private message in {room}' })}
-                </span>
-              )}
-              {!openRoom && !privateWith && (
-                <ContactStatus
-                  jid={conversation}
-                  show={contact?.show}
-                  status={contact?.status}
-                  online={online}
-                />
-              )}
-              {openRoom && (
-                <button
-                  type="button"
-                  aria-expanded={showPeople}
-                  onClick={() => {
-                    setShowPeople(!showPeople)
-                    if (!showPeople) void loadOccupants().catch(() => {})
-                  }}
-                  className="flex items-center gap-1 text-caption font-normal text-accent-fg underline cursor-pointer"
-                >
-                  {t('messaging.people', { defaultValue: 'People in the group' })}
-                  <span className="text-secondary">({occupants.length})</span>
-                </button>
-              )}
-              {openRoom && (
-                <>
-                  <span
-                    className="text-caption font-normal text-secondary"
-                    title={openRoom.detail?.message ?? undefined}
-                  >
-                    {roomStateLabel(openRoom, t)}
-                  </span>
-                  <button
-                    type="button"
-                    className="ms-auto text-caption font-normal text-secondary underline cursor-pointer"
-                    onClick={() =>
-                      void confirmAction({
-                        title: t('messaging.leaveTitle', { defaultValue: 'Leave this group?' }),
-                        message: t('messaging.leaveMessage', {
-                          defaultValue:
-                            'It is not joined again, and what was kept of it on this computer is removed. The group keeps its own history.',
-                        }),
-                        confirmLabel: t('messaging.leave', { defaultValue: 'Leave' }),
-                        cancelLabel: t('buttons.cancel'),
-                      }).then((ok) => (ok ? leaveRoom(openRoom.room) : undefined))
-                    }
-                  >
-                    {t('messaging.leaveGroup', { defaultValue: 'Leave group' })}
-                  </button>
-                </>
-              )}
-              {/* A toggle whose name stays the same; pressed means muted. */}
-              <button
-                type="button"
-                aria-pressed={muted}
-                aria-label={t('messaging.mute', { defaultValue: 'Mute notifications' })}
-                aria-describedby={muted ? 'chat-muted-hint' : undefined}
-                onClick={() => void toggleMute()}
-                title={
-                  muted
-                    ? t('messaging.mutedHint', {
-                        defaultValue:
-                          'No notifications from this conversation, not even mentions. New messages still count as unread.',
-                      })
-                    : t('messaging.mute', { defaultValue: 'Mute notifications' })
-                }
-                className={`${openRoom ? '' : 'ms-auto '}flex min-h-7 shrink-0 items-center rounded-control-sm px-1.5 font-normal cursor-pointer hover:bg-hover ${
-                  muted ? 'text-accent-fg' : 'text-secondary'
-                }`}
-              >
-                {muted ? (
-                  <BellOff size={16} strokeWidth={1.75} aria-hidden="true" />
-                ) : (
-                  <Bell size={16} strokeWidth={1.75} aria-hidden="true" />
-                )}
-              </button>
-              {muted && (
-                <span id="chat-muted-hint" className="sr-only">
-                  {t('messaging.mutedHint', {
-                    defaultValue:
-                      'No notifications from this conversation, not even mentions. New messages still count as unread.',
-                  })}
-                </span>
-              )}
-            </header>
-            {openRoom && showPeople && (
-              <ul
-                aria-label={t('messaging.people', { defaultValue: 'People in the group' })}
-                className="flex max-h-40 flex-col gap-1 overflow-y-auto border-b border-border px-4 py-2 text-caption"
-              >
-                {occupants.map((o) => (
-                  <li key={o.nick} className="flex items-center gap-2">
-                    <PresenceDot show={o.show} />
-                    <span className="truncate text-primary">{o.nick}</span>
-                    <span className="text-secondary">{showLabel(o.show, t)}</span>
-                    <button
-                      type="button"
-                      onClick={() => void openPrivate(openRoom.room, o.nick)}
-                      className="ms-auto text-accent-fg underline cursor-pointer"
-                    >
-                      {t('messaging.writePrivately', { nick: o.nick, defaultValue: 'Write privately to {nick}' })}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="flex-1 overflow-y-auto px-4 py-3">
-              <ol className="flex flex-col gap-1.5">
-                {history.map((m) => (
-                  <Bubble key={m.id} message={m} room={openRoom?.room} />
-                ))}
-              </ol>
-              <div ref={end} />
-            </div>
-            {roomUploads.length > 0 && (
-              <ul
-                aria-label={t('messaging.uploads', { defaultValue: 'Files being sent' })}
-                className="flex flex-col gap-1 border-t border-border px-4 py-2 text-caption"
-              >
-                {roomUploads.map(([id, u]) => (
-                  <li key={id} className="flex items-center gap-2 text-secondary">
-                    <FileText size={14} strokeWidth={1.75} aria-hidden="true" />
-                    <span dir="auto" className="truncate text-primary">{u.name}</span>
-                    {u.error ? (
-                      <>
-                        <span role="alert" className="text-danger">
-                          {uploadErrorText(u.error, t)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => dismissChatUpload(id)}
-                          className="ms-auto underline cursor-pointer"
-                        >
-                          {t('messaging.dismiss', { defaultValue: 'Dismiss' })}
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <progress
-                          aria-label={t('messaging.sendingFile', { name: u.name, defaultValue: 'Sending {name}' })}
-                          value={u.done}
-                          max={u.total || 1}
-                          className="w-32"
-                        />
-                        <span>
-                          {formatFileSize(u.done)} / {formatFileSize(u.total)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => void cancelChatUpload(id)}
-                          className="ms-auto underline cursor-pointer"
-                        >
-                          {t('buttons.cancel', { defaultValue: 'Cancel' })}
-                        </button>
-                      </>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <form
-              className="relative flex items-end gap-2 border-t border-border px-4 py-2.5"
-              onSubmit={(e) => {
-                e.preventDefault()
-                void send()
-              }}
-            >
-              {suggestions.length > 0 && (
-                <ul
-                  id="chat-mention-suggestions"
-                  role="listbox"
-                  aria-label={t('messaging.mentionSuggestions', { defaultValue: 'People to mention' })}
-                  className="absolute bottom-full start-4 z-10 mb-1 flex min-w-48 flex-col rounded-control-sm border border-border bg-raised py-1 text-sm shadow-lg"
-                >
-                  {suggestions.map((nick, index) => (
-                    <li
-                      key={nick}
-                      id={`chat-mention-${index}`}
-                      role="option"
-                      aria-selected={index === active % suggestions.length}
-                      onMouseDown={(e) => {
-                        e.preventDefault()
-                        pick(nick)
-                      }}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 cursor-pointer ${
-                        index === active % suggestions.length ? 'bg-accent/10 text-primary' : 'text-secondary'
-                      }`}
-                    >
-                      <AtSign size={12} strokeWidth={1.75} aria-hidden="true" />
-                      {nick}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <textarea
-                ref={composer}
-                aria-label={t('messaging.message', { defaultValue: 'Message' })}
-                aria-autocomplete={openRoom ? 'list' : undefined}
-                aria-controls={suggestions.length > 0 ? 'chat-mention-suggestions' : undefined}
-                aria-activedescendant={suggestions.length > 0 ? `chat-mention-${active % suggestions.length}` : undefined}
-                value={draft}
-                rows={2}
-                dir={draft ? 'auto' : undefined}
-                onChange={(e) => {
-                  setDraft(e.target.value)
-                  setCaret(e.target.selectionStart ?? e.target.value.length)
-                  setActive(0)
-                }}
-                onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? draft.length)}
-                onKeyDown={(e) => {
-                  if (suggestions.length > 0) {
-                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                      e.preventDefault()
-                      setActive((active + (e.key === 'ArrowDown' ? 1 : suggestions.length - 1)) % suggestions.length)
-                      return
-                    }
-                    if (e.key === 'Enter' || e.key === 'Tab') {
-                      e.preventDefault()
-                      pick(suggestions[active % suggestions.length])
-                      return
-                    }
-                    if (e.key === 'Escape') {
-                      e.preventDefault()
-                      setClosedAt(query?.start ?? null)
-                      return
-                    }
-                  }
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    void send()
-                  }
-                }}
-                className={`${input} bidi-plaintext flex-1 resize-none`}
-              />
-              <button
-                type="button"
-                onClick={() => void attach()}
-                aria-label={t('messaging.sendFile', { defaultValue: 'Send a file' })}
-                title={t('messaging.sendFile', { defaultValue: 'Send a file' })}
-                className="flex min-h-9 items-center rounded-control-sm px-2 text-secondary hover:bg-hover hover:text-primary cursor-pointer"
-              >
-                <Paperclip size={16} strokeWidth={1.75} aria-hidden="true" />
-              </button>
-              <Button type="submit" disabled={!draft.trim()} leftIcon={Send}>
-                {t('messaging.send', { defaultValue: 'Send' })}
-              </Button>
-            </form>
-          </>
-        ) : (
-          <p className="m-auto text-sm text-secondary">
-            {t('messaging.pick', { defaultValue: 'Pick a conversation, or open one with an address.' })}
-          </p>
-        )}
-      </section>
+      {reader}
     </div>
   )
 }
@@ -841,7 +878,11 @@ function StatusRequests() {
             {t('messaging.presence.request', { jid, defaultValue: '{jid} wants to see your status' })}
           </span>
           <span className="flex gap-2">
-            <button type="button" onClick={() => void answer(jid, true)} className="text-accent-fg underline cursor-pointer">
+            <button
+              type="button"
+              onClick={() => void answer(jid, true)}
+              className="text-accent-fg underline cursor-pointer"
+            >
               {t('messaging.presence.allow', { defaultValue: 'Allow' })}
             </button>
             <button
@@ -948,7 +989,10 @@ function StatusPermissions() {
         ))}
       {open && more && allowed && (
         <p className="text-2xs text-secondary">
-          {t('messaging.permissions.more', { count: allowed.length, defaultValue: 'Only the first {count} are shown.' })}
+          {t('messaging.permissions.more', {
+            count: allowed.length,
+            defaultValue: 'Only the first {count} are shown.',
+          })}
         </p>
       )}
     </div>
@@ -973,7 +1017,17 @@ function MentionBadge({ count, capped, label }: { count: number; capped?: boolea
 }
 
 /** A contact's status in the conversation's header, or asking to see it. */
-function ContactStatus({ jid, show, status, online }: { jid: string; show?: string; status?: string; online: boolean }) {
+function ContactStatus({
+  jid,
+  show,
+  status,
+  online,
+}: {
+  jid: string
+  show?: string
+  status?: string
+  online: boolean
+}) {
   const { t } = useTranslation()
   const [asked, setAsked] = useState(false)
   if (!online) return null
@@ -1080,7 +1134,9 @@ function ConversationButton({
         {group && <Users size={14} strokeWidth={1.75} className="shrink-0 text-secondary" aria-hidden="true" />}
         {privateInRoom && <Lock size={12} strokeWidth={1.75} className="shrink-0 text-secondary" aria-hidden="true" />}
         {show && <PresenceDot show={show} />}
-        <span dir="auto" className="truncate text-sm font-semibold text-primary">{name}</span>
+        <span dir="auto" className="truncate text-sm font-semibold text-primary">
+          {name}
+        </span>
         {show && <span className="sr-only">{showLabel(show, t)}</span>}
         {muted && (
           <>
@@ -1096,7 +1152,10 @@ function ConversationButton({
                 capped={mentionsCapped}
                 label={
                   mentionsCapped
-                    ? t('messaging.unreadMentionsMore', { count: mentions, defaultValue: 'Unread mentions: {count} or more' })
+                    ? t('messaging.unreadMentionsMore', {
+                        count: mentions,
+                        defaultValue: 'Unread mentions: {count} or more',
+                      })
                     : t('messaging.unreadMentions', { count: mentions, defaultValue: 'Unread mentions: {count}' })
                 }
               />
@@ -1190,7 +1249,10 @@ function Bubble({ message, room }: { message: ChatMessage; room?: string }) {
             type="button"
             onClick={() => void openPrivate(room, message.sender)}
             title={t('messaging.writePrivately', { nick: message.sender, defaultValue: 'Write privately to {nick}' })}
-            aria-label={t('messaging.writePrivately', { nick: message.sender, defaultValue: 'Write privately to {nick}' })}
+            aria-label={t('messaging.writePrivately', {
+              nick: message.sender,
+              defaultValue: 'Write privately to {nick}',
+            })}
             className="font-semibold text-secondary hover:underline cursor-pointer"
           >
             {message.sender}
