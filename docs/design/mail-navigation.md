@@ -302,7 +302,8 @@ que el filtre d'abans (ADR-0068 §4, fila de Persones).
   subfinestra al mínim (200 px) i 417 px amb la de per defecte (260 px); amb la
   màxima (400 px) la subfinestra es pinta a 317 px i la fitxa en té 360. Cap
   control no surt del mòdul i no hi ha desplaçament horitzontal. Al 200 % de
-  l'aplicació a 1025 px, amb la subfinestra per defecte, la fitxa en té 417.
+  l'aplicació a 1025 px la barra vertical fa 120 px, la subfinestra per defecte
+  cedeix fins a uns 257 px i la fitxa en conserva uns 360.
 - **Per sota de 1025 px** la subfinestra no es mostra. Com va decidir el
   propietari per al Calendari, es conserva la disposició d'abans: el filtre de
   grups (desplegable «Mostra el grup» i les mateixes quatre accions) sota la

@@ -5171,9 +5171,9 @@ for (const [width, paneWidth] of [
     // the list leave less, the pane gives way first, down to 200 px.
     const drawnPane = Math.max(200, Math.min(paneWidth, width - 60 - 288 - 360))
     expect(Math.abs(paneBox.width - drawnPane)).toBeLessThanOrEqual(1)
-    if (drawnPane === paneWidth) {
-      await expect(pane.getByRole('separator', { name: 'Resize folder pane' })).toHaveAttribute('aria-valuenow', String(paneWidth))
-    }
+    // The separator reports the width that is drawn, squeezed or not.
+    const valueNow = await pane.getByRole('separator', { name: 'Resize folder pane' }).getAttribute('aria-valuenow')
+    expect(Math.abs(Number(valueNow) - drawnPane)).toBeLessThanOrEqual(1)
     const contentBox = await boxOf(content)
     expect(Math.abs(contentBox.x - (paneBox.x + paneBox.width))).toBeLessThanOrEqual(1)
     expect(contentBox.x + contentBox.width).toBeLessThanOrEqual(width + 1)
@@ -5198,9 +5198,10 @@ for (const [width, paneWidth] of [
     expect(outside).toEqual([])
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     const detail = await boxOf(page.getByRole('region', { name: 'Ada Lovelace' }))
-    // At 1025 px: 477 and 417 px for a pane of 200 and 260, and 360 px for 400,
+    // The person takes all the room the rail, the pane and the list leave: at
+    // 1025 px, 477 and 417 px for a pane of 200 and 260, and 360 px for 400,
     // when the pane is drawn 317 px wide instead.
-    expect(detail.width).toBeGreaterThanOrEqual(359)
+    expect(detail.width).toBeGreaterThanOrEqual(width - 60 - drawnPane - 288 - 2)
     await insidePane(page, pane)
     expect(errors).toEqual([])
   })
