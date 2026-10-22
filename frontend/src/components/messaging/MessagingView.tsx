@@ -367,6 +367,7 @@ export function MessagingView() {
               {rooms.map((r) => (
                 <li key={r.room}>
                   <ConversationButton
+                    inPane={inPane}
                     name={r.room}
                     last={r.last_body || roomStateLabel(r, t)}
                     unread={r.unread}
@@ -389,6 +390,7 @@ export function MessagingView() {
             return (
               <li key={c.conversation}>
                 <ConversationButton
+                  inPane={inPane}
                   name={inRoom ? `${inRoom.nick} (${inRoom.room})` : c.conversation}
                   last={c.last_body}
                   unread={c.unread}
@@ -1103,6 +1105,7 @@ function ConversationButton({
   mentions = 0,
   mentionsCapped = false,
   muted,
+  inPane,
   onOpen,
 }: {
   name: string
@@ -1118,6 +1121,8 @@ function ConversationButton({
   mentionsCapped?: boolean
   /** Muted by the person: no notification from it. */
   muted?: boolean
+  /** In the folder pane, whose background is darker than the column's: the open one takes the tint the other lists use. */
+  inPane?: boolean
   onOpen: () => void
 }) {
   const { t } = useTranslation()
@@ -1127,7 +1132,7 @@ function ConversationButton({
       aria-current={current}
       onClick={onOpen}
       className={`flex w-full flex-col gap-0.5 px-3 py-2 text-start cursor-pointer ${
-        current ? 'bg-accent/10' : 'hover:bg-hover'
+        current ? (inPane ? 'bg-active' : 'bg-accent/10') : 'hover:bg-hover'
       }`}
     >
       <span className="flex items-center gap-2">

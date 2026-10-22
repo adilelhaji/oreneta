@@ -89,7 +89,7 @@ beforeEach(async () => {
   await i18n.changeLanguage('en')
   settings$.folderPaneWidth.set(260)
   reset()
-  ui$.module.set('messaging')
+  ui$.module.set('chat')
   ;(window as any).go = {
     main: {
       App: {
@@ -206,6 +206,8 @@ describe('Chat in the common folder pane (ADR-0068 §4, #337)', () => {
         .getByRole('button', { name: /pau@chat.test/ })
         .getAttribute('aria-current'),
     ).toBe('true')
+    // The open one takes the tint the other lists use: the pane is darker than the column.
+    expect(within(pane(screen)).getByRole('button', { name: /pau@chat.test/ }).className).toContain('bg-active')
     // Chat with an address, from the pane.
     fireEvent.change(within(pane(screen)).getByRole('textbox', { name: 'Chat with (address)' }), {
       target: { value: 'nou@chat.test' },
