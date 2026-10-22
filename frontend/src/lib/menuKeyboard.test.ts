@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { menuKeyAction, movedIndex, typeaheadIndex, typeaheadLabel } from './menuKeyboard'
+import { focusMenuItem, menuKeyAction, movedIndex, typeaheadIndex, typeaheadLabel } from './menuKeyboard'
 
 const ltr = { direction: 'ltr' as const, submenu: false, typing: false }
 const rtl = { direction: 'rtl' as const, submenu: false, typing: false }
@@ -102,5 +102,39 @@ describe('typeahead', () => {
   it('compares trimmed, lower-cased labels', () => {
     expect(typeaheadLabel('  Archive ')).toBe('archive')
     expect(typeaheadLabel(null)).toBe('')
+  })
+})
+
+describe('bringing a focused item into a scrolling menu (#343)', () => {
+  // A menu 100 px tall with a 1 px border, 200 px of rows, scrolled to the top.
+  function scrollingMenu() {
+    document.body.innerHTML = '<div role="menu"><button role="menuitem" id="last">Last</button></div>'
+    const menu = document.querySelector<HTMLElement>('[role="menu"]')!
+    const item = document.getElementById('last')!
+    Object.defineProperties(menu, {
+      scrollHeight: { value: 200 },
+      clientHeight: { value: 98 },
+      clientTop: { value: 1 },
+    })
+    menu.getBoundingClientRect = () => ({ top: 10, bottom: 110 }) as DOMRect
+    return { menu, item }
+  }
+
+  it('scrolls the row whole into the scrollport, inside the borders', () => {
+    const { menu, item } = scrollingMenu()
+    item.getBoundingClientRect = () => ({ top: 90, bottom: 118 }) as DOMRect
+    focusMenuItem(item)
+    // The scrollport ends at 10 + 1 + 98 = 109, not at the box's 110.
+    expect(menu.scrollTop).toBe(9)
+    expect(document.activeElement).toBe(item)
+  })
+
+  it('scrolls back up to a row above the scrollport', () => {
+    const { menu, item } = scrollingMenu()
+    menu.scrollTop = 50
+    item.getBoundingClientRect = () => ({ top: 5, bottom: 33 }) as DOMRect
+    focusMenuItem(item)
+    // The scrollport starts at 10 + 1 = 11.
+    expect(menu.scrollTop).toBe(44)
   })
 })

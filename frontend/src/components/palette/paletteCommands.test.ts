@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { filterCommands, matchesCommand } from './paletteCommands'
+import { COMMAND_AREAS, filterCommands, groupCommandsByArea, matchesCommand, type CommandArea } from './paletteCommands'
 
 describe('localized command matching', () => {
   const command = { label: 'Configuración de tipografía', keywords: 'tamaño fuente typography font' }
@@ -33,5 +33,37 @@ describe('localized command matching', () => {
       'Firma de cuenta',
       command.label,
     ])
+  })
+})
+
+describe('the areas of the app menu (#343)', () => {
+  const command = (id: string, area: CommandArea, kind?: 'setting') => ({ id, area, kind })
+  it('groups the commands in the order of the areas, each once, in their order inside an area', () => {
+    const commands = [
+      command('settings.section.appearance', 'settings', 'setting'),
+      command('compose.new', 'mail'),
+      command('theme.dark', 'theme'),
+      command('module.calendar', 'modules'),
+      command('mail.sync', 'mail'),
+      command('settings.open', 'settings'),
+      command('app.about', 'app'),
+      command('theme.light', 'theme'),
+    ]
+    const groups = groupCommandsByArea(commands)
+    expect(groups.map((group) => group.area)).toEqual(['modules', 'mail', 'theme', 'settings', 'app'])
+    expect(groups.map((group) => group.commands.map((item) => item.id))).toEqual([
+      ['module.calendar'],
+      ['compose.new', 'mail.sync'],
+      ['theme.dark', 'theme.light'],
+      // The action before the sections it can open, whatever the list's order.
+      ['settings.open', 'settings.section.appearance'],
+      ['app.about'],
+    ])
+    expect(groups.flatMap((group) => group.commands)).toHaveLength(commands.length)
+  })
+  it('leaves out an area with no command, and keeps an order for every area', () => {
+    expect(groupCommandsByArea([])).toEqual([])
+    expect(new Set(COMMAND_AREAS).size).toBe(COMMAND_AREAS.length)
+    expect(COMMAND_AREAS[0]).toBe('modules')
   })
 })

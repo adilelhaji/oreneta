@@ -310,6 +310,27 @@ describe('menu lists, groups and checkable items (#289)', () => {
     outside.remove()
   })
 
+  it('is a Tab stop itself only when asked, for a menu long enough to scroll (#343)', async () => {
+    const view = render(
+      <>
+        <MenuList label="Short">
+          <MenuItem label="One" />
+        </MenuList>
+        <MenuList label="Long" tabStop onClose={() => view.unmount()}>
+          <MenuItem label="Two" />
+        </MenuList>
+      </>,
+    )
+    expect(view.getByRole('menu', { name: 'Short' }).tabIndex).toBe(-1)
+    const long = view.getByRole('menu', { name: 'Long' })
+    expect(long.tabIndex).toBe(0)
+    // Its items stay out of the Tab order, and Tab from the menu still closes it.
+    expect(view.getByRole('menuitem', { name: 'Two' }).tabIndex).toBe(-1)
+    long.focus()
+    key(long, 'Tab')
+    expect(view.queryByRole('menu', { name: 'Long' })).toBeNull()
+  })
+
   it('moves a horizontal menu with the horizontal arrows', () => {
     const view = render(
       <MenuList label="Colour" orientation="horizontal" autoFocus>

@@ -87,6 +87,51 @@ describe('region order', () => {
   })
 })
 
+// The window since the top band (#343): the <header> before <main>, its band
+// the "search" region, with the app menu's button and, open, its menu.
+function bandWindow() {
+  mailWindow()
+  document.body.insertAdjacentHTML(
+    'afterbegin',
+    `<header aria-label="Oreneta"><div data-region="search"><button id="app-menu">App menu</button><div role="menu" tabindex="0"><button role="menuitem" tabindex="-1" id="item">Item</button></div></div></header>`,
+  )
+}
+
+describe('the top band (#343)', () => {
+  it('is the first region, before the folders, and F6 lands on its menu button', () => {
+    bandWindow()
+    expect(visibleRegions(document, shown).map((region) => region.dataset.region)).toEqual([
+      'search',
+      'folders',
+      'modules',
+      'content',
+      'reader',
+      'sidebar',
+    ])
+    byId('outside').focus()
+    step(1)
+    expect(focused()).toBe('app-menu')
+    step(-1)
+    expect(focused()).toBe('details')
+    step(1)
+    expect(focused()).toBe('app-menu')
+    step(1)
+    expect(focused()).toBe('inbox')
+  })
+
+  it('leaves the band from its menu to the next region, and comes back to the button', () => {
+    bandWindow()
+    byId('item').focus()
+    expect(regionOf(document.activeElement)?.dataset.region).toBe('search')
+    step(1)
+    expect(focused()).toBe('inbox')
+    // The menu item went with its menu: the band's first Tab stop again.
+    byId('item').closest('[role="menu"]')!.remove()
+    step(-1)
+    expect(focused()).toBe('app-menu')
+  })
+})
+
 describe('F6 and Shift+F6', () => {
   it('goes to the first region from outside every region, and Shift+F6 to the last', () => {
     mailWindow()
