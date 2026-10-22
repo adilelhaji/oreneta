@@ -70,6 +70,9 @@ export function parseTags(text: string): string[] {
   return out
 }
 
+/** SQLite's NOCASE, which the core's tag columns use: ASCII letters only. */
+const nocase = (tag: string) => tag.replace(/[A-Z]/g, (letter) => letter.toLowerCase())
+
 // Each load's reply may come back after a later one's (the core answers each
 // request on its own task); only the latest load may fill the list.
 let loadSeq = 0
@@ -93,13 +96,19 @@ export async function loadNotes() {
     // trashed) would leave the list empty with no row to clear it from: drop
     // it, which loads every note again. The tags are counted over all notes,
     // whatever the search, so this only happens when the tag is really gone.
+    // The core compares tags without regard to ASCII case and lists one
+    // spelling of each, which can change: follow it rather than drop the tag.
     const chosen = notes$.tag.peek()
-    if (!trash && chosen && !tags.some((entry) => entry.tag === chosen)) notes$.tag.set('')
+    if (!trash && chosen) {
+      const same = tags.find((entry) => nocase(entry.tag) === nocase(chosen))
+      if (same?.tag !== chosen) notes$.tag.set(same?.tag ?? '')
+    }
   } catch {
     if (seq !== loadSeq) return
     showToast(t('notes.couldNotLoad', { defaultValue: 'Could not load notes' }), 'error')
   } finally {
-    notes$.loaded.set(true)
+    // A load overtaken by a later one leaves the empty state to that one.
+    if (seq === loadSeq) notes$.loaded.set(true)
   }
 }
 

@@ -227,6 +227,20 @@ describe('Notes in the common folder pane (ADR-0068 §4, #335)', () => {
     }
   })
 
+  it('follows the spelling the core lists for the chosen tag instead of dropping it', async () => {
+    const screen = render(<NotesView />)
+    await ready(screen)
+    // Chosen as "Ideas" while another note's "ideas" is the spelling listed.
+    notes$.tag.set('Ideas')
+    await act(() => loadNotes())
+    expect(notes$.tag.peek()).toBe('ideas')
+    await waitFor(() =>
+      expect(within(pane(screen)).getByRole('button', { name: '#ideas (1)' }).getAttribute('aria-current')).toBe(
+        'true',
+      ),
+    )
+  })
+
   it('fills the list from the latest load only, whatever order the replies come in', async () => {
     const replies: ((value: unknown) => void)[] = []
     ;(window as any).go.main.App.Invoke = (command: string, payload: any) =>
@@ -244,6 +258,7 @@ describe('Notes in the common folder pane (ADR-0068 §4, #335)', () => {
     replies[0](undefined)
     await first
     expect(notes$.items.peek().map((note) => note.id)).toEqual(['ideas'])
+    expect(notes$.loaded.peek()).toBe(true)
   })
 
   it('takes the arrow keys: the mail thread list behind does not step with them', async () => {
