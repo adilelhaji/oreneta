@@ -250,6 +250,24 @@ mòduls, ara apuntats al camp de la banda, i se n'hi afegeixen de noves: la cerc
 el Calendari i el Xat desactivats amb axe, les dreceres, el botó a 768 px amb axe, l'àrab amb axe a
 1440 i 768 px i el 200 % a 1025 px. És una nota d'evidència: cap fila no canvia d'estat (S01-04,
 S01-05, SET-02, SET-27), i l'evidència nativa de Windows continua pendent.
+El 2026-10-23 (#345, peça 13c, pas 3 d'ADR-0068, `docs/design/top-band.md`) l'estat de la
+sincronització dels comptes i l'indicador del mode No molestis van passar al final de la banda
+superior. L'estat és un botó amb una icona i el resum d'abans («{count} requereixen atenció» o
+«Estat de la sincronització completa desconegut», mai «Sincronitzat»), només la icona per sota de
+1025 px, amb el resum com a nom i com a indicació, i la mateixa regió `role="status"` cortesa,
+visualment oculta, de manera que els anuncis no canvien. El botó obre el detall d'abans (cada compte,
+la seva observació i les seves accions) en una finestra emergent no modal ancorada al botó, que
+segueix la direcció de lectura i queda dins de la finestra; Escapada la tanca i torna el focus al
+botó. La barra d'amplada completa sota la capçalera només hi és quan un compte ha de tornar a
+iniciar la sessió o hi ha una fallada no descartada, i una sessió per tornar a iniciar no es pot
+descartar. L'indicador del mode No molestis és també a la barra vertical fins a la peça 14 (decisió
+del propietari a #342). Les proves de límits, de dreta a esquerra, de zoom, de regions i d'axe es
+mantenen, amb els localitzadors que trobaven la regió de la sincronització sota la capçalera, ara
+apuntats a la banda, i se n'hi afegeixen de noves: cada estat del resum, la finestra emergent amb el
+teclat i el ratolí a 1440, 1025, 1024 i 768 px, la barra destacada, l'àrab amb axe i la finestra
+oberta, el 200 % a 1025 px i el mode No molestis a la banda. És una nota d'evidència: cap fila no
+canvia d'estat (S01-04, S01-05, SET-01, SET-27), i l'evidència nativa de Windows i amb lectors de
+pantalla continua pendent.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per

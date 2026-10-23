@@ -168,6 +168,14 @@
           {
             "sha": "59a036338f10e1ab1a37764ef53af35ea66cb65f",
             "result": "frontend/src/components/shell/BandSearch.test.tsx"
+          },
+          {
+            "sha": "11bb65d1785d3d4b47e60560ded51269424b74c9",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "11bb65d1785d3d4b47e60560ded51269424b74c9",
+            "result": "frontend/src/components/shell/SyncStatus.test.tsx"
           }
         ],
         "native": [],
@@ -225,6 +233,14 @@
           {
             "sha": "7eb4f1c814851795c73896d0315aefd74e567cde",
             "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "11bb65d1785d3d4b47e60560ded51269424b74c9",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "11bb65d1785d3d4b47e60560ded51269424b74c9",
+            "result": "frontend/src/components/shell/SyncStatus.test.tsx"
           }
         ],
         "native": [],
@@ -328,6 +344,14 @@
           {
             "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
             "result": "notify_quiet_test.go"
+          },
+          {
+            "sha": "11bb65d1785d3d4b47e60560ded51269424b74c9",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "11bb65d1785d3d4b47e60560ded51269424b74c9",
+            "result": "frontend/src/components/shell/SyncStatus.test.tsx"
           }
         ],
         "native": [],
@@ -1709,6 +1733,14 @@
           {
             "sha": "59a036338f10e1ab1a37764ef53af35ea66cb65f",
             "result": "frontend/src/components/shell/BandSearch.test.tsx"
+          },
+          {
+            "sha": "11bb65d1785d3d4b47e60560ded51269424b74c9",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "11bb65d1785d3d4b47e60560ded51269424b74c9",
+            "result": "frontend/src/components/shell/SyncStatus.test.tsx"
           }
         ],
         "native": [],

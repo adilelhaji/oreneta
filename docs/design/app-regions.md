@@ -11,7 +11,10 @@ Codi: `frontend/src/lib/regions.ts`, `states/ui.ts` (`ui$.module`), `App.tsx`,
 `components/chat/HtmlFrame.tsx`, `components/sidenav/SideNav.tsx`,
 `components/banner/UpdateBanner.tsx`, `components/shell/AppHeader.tsx` (la
 banda superior, des de #343), `components/shell/BandSearch.tsx` (la cerca de la
-banda, des de #344) i els `data-region` de les vistes de cada mòdul.
+banda, des de #344), `components/shell/SyncStatus.tsx` i
+`components/banner/ConnectivityBanner.tsx` (l'estat de la sincronització a la
+banda i la barra sota la capçalera, des de #345) i els `data-region` de les
+vistes de cada mòdul.
 
 ## Un sol estat de mòdul
 
@@ -30,6 +33,7 @@ banda, des de #344) i els `data-region` de les vistes de cada mòdul.
 | Capçalera (des de #343) | `<header>` (`banner`), fora de `<main>`, entre la barra de títol i els avisos | «Oreneta», en tots els idiomes | — |
 | Banda superior (des de #343): la primera fila de la capçalera, amb el botó «Menú de l'aplicació» ([top-band.md](top-band.md)) | dins del `<header>` | — | `search` |
 | Cerca de la banda (des de #344): el camp, amb l'abast del mòdul en pantalla, al centre de la banda o, per sota de 769 px, damunt de la banda quan s'obre | `role="search"`, dins de la banda | «Cerca» | — (és dins de `search`) |
+| Barra de la sincronització (des de #345, només en el cas destacat: una sessió per tornar a iniciar, o una fallada o un problema sense compte no descartats) | `<section>` (`region`), sota la capçalera, fora de `<main>` | «Sincronització dels comptes» | — |
 | Barra vertical | `<aside>` | «Mòduls» | `modules` |
 | Subfinestra de carpetes del correu (`FolderPane`, des de #317) | `<nav>` | el de la seva fila de títol: «Comptes i carpetes» | `folders` |
 | Subfinestra de carpetes del Calendari (`FolderPane`, des de #323); per sota de 1025 px, la columna d'abans | `<nav>` | «Calendaris» | `folders` |
@@ -47,9 +51,9 @@ banda, des de #344) i els `data-region` de les vistes de cada mòdul.
   confirmacions i l'avís de certificat en surten i es pinten al costat de les
   regions.
 - La capçalera (#343) és el `<header>` «Oreneta», el punt de referència `banner`
-  de la finestra. Es pinta després de `MacTitleBar` i abans de
-  `ConnectivityBanner` i `UpdateBanner`, fora de `<main>`, com demana ADR-0068
-  §1 (barra de títol, capçalera, avisos i la resta). El seu nom és el de
+  de la finestra. Es pinta després de `MacTitleBar` i abans de la barra de la
+  sincronització (quan hi és) i d'`UpdateBanner`, fora de `<main>`, com demana
+  ADR-0068 §1 (barra de títol, capçalera, avisos i la resta). El seu nom és el de
   l'aplicació, igual en els 20 catàlegs, i no coincideix amb el de cap altra
   regió en cap idioma, com comprova una prova; el del botó «Menú de l'aplicació»
   tampoc no coincideix amb el «Més» de la barra vertical.
@@ -57,6 +61,18 @@ banda, des de #344) i els `data-region` de les vistes de cada mòdul.
   (`shell.region.search`), dins de la capçalera. És l'únic de la finestra, i el
   seu nom no coincideix amb el de la capçalera ni amb el de cap altra regió en
   cap dels 20 catàlegs, com comprova una prova. A la pantalla d'alta no hi és.
+- El final de la banda (#345) no afegeix cap punt de referència: l'indicador del
+  mode No molestis i el botó de l'estat de la sincronització són dins de la
+  capçalera i de la regió `search` d'F6, i la finestra emergent del detall és un
+  `dialog` no modal, que no és cap punt de referència, dins de la banda. La regió
+  «Sincronització dels comptes» d'abans, que sempre hi era quan hi havia comptes,
+  ara només hi és en el cas destacat, com a barra d'amplada completa sota la
+  capçalera, amb el nom d'abans, diferent del de la capçalera, del de la cerca i
+  del nom del botó del menú en els 20 catàlegs, com comproven les proves de #343
+  i #344. Hi ha una sola regió `role="status"` per a l'estat de la sincronització,
+  la de la banda, i una per al mode No molestis, també la de la banda: la barra
+  vertical en mostra el botó, no l'estat (vegeu
+  [top-band.md](top-band.md#el-final-de-la-banda-345)).
 - La pantalla d'alta del primer compte (#343) té la mateixa capçalera, amb la
   banda (`search`), i després l'alta del compte dins de `<main>`, que és la
   regió `content`: F6 i Maj+F6 van d'una a l'altra. Només hi actuen les dreceres
@@ -119,7 +135,9 @@ banda, des de #344) i els `data-region` de les vistes de cada mòdul.
   contingut, lector i barra lateral (`REGION_ORDER`). Des de #343, la regió
   `search` és la banda superior sencera, i F6 hi porta el focus al botó «Menú de
   l'aplicació» o a l'últim element que hi tenia el focus, com ara el camp de
-  cerca, que hi és des de #344. Encara no hi ha barra
+  cerca, que hi és des de #344, o el botó de l'estat de la sincronització, al
+  final de la banda des de #345. F6 des de la finestra emergent de l'estat la
+  tanca i passa a la regió següent. Encara no hi ha barra
   d'eines. Al correu, doncs, l'ordre és aquest: banda, carpetes, barra vertical,
   llista, lector i barra lateral; a la resta de mòduls, banda, carpetes, barra
   vertical i el mòdul. La barra vertical es pinta abans que les carpetes,
@@ -170,6 +188,8 @@ banda, des de #344) i els `data-region` de les vistes de cada mòdul.
 | N2 (`HtmlFrame.test.tsx`) | El marc reenvia F1–F12, amb Maj o sense, i no una lletra |
 | N1 (`states/uiModule.test.ts`) | Els set mòduls; el botó de la barra vertical obre el mòdul i, si ja és obert, torna al correu; mai dos mòduls alhora |
 | N2 (proves dels mòduls) | `ui$.module` en lloc dels sis booleans |
+| N2 (`components/shell/SyncStatus.test.tsx`, #345) | El final de la banda dins de la regió `search`, després de la cerca en l'ordre de Tab; cap punt de referència nou: la finestra emergent és un `dialog` dins de la capçalera, i la barra, l'única regió «Sincronització dels comptes»; una sola regió d'estat per a la sincronització i una per al mode No molestis |
+| e2e (`startup.e2e.ts`, «#345») | Tab des del botó del menú fins al botó de l'estat, sense sortir de la regió `search`; F6 des de la finestra emergent la tanca i va a les carpetes, i Maj+F6 torna al botó; les regles de regions d'axe amb la barra i la finestra oberta, i en àrab |
 | e2e (`startup.e2e.ts`, «#306») | A 1440 px, en anglès, català i àrab: un sol `<main>` amb el nom del mòdul, la barra vertical «Mòduls» i F6 / Maj+F6 en el mateix ordre, des de #343 passant per la banda, fins a tornar a la fila de la llista. Des d'un camp de text (des de #344, el de la cerca de la banda, d'on F6 va a les carpetes), des del missatge HTML i amb un diàleg modal obert; un avís emergent (toast) i el diàleg fora de `<main>`. Al calendari, a Persones, a Tasques, a Notes, a Xat i a Adjunts, F6 va del mòdul a la banda (des de #343), a la seva columna (des de #323, #326, #329, #335, #337 i #339, a la subfinestra de carpetes) i torna a la barra vertical. Una reassignació a una lletra. A 600 px, només les regions que es veuen (la banda, que s'hi veu, i la llista o el lector); al 200 % de l'aplicació, el mateix ordre sense desplaçament horitzontal. Les regles de regions d'axe (`region`, `landmark-unique`, `landmark-one-main`) no troben res a la bústia ni a cap mòdul |
 
 Les proves de límits, de zoom, de dreta a esquerra i les auditories axe que ja

@@ -43,6 +43,7 @@ surt), `index.css`.
 | Menús contextuals i desplegables | `FloatingContextMenu` + `startEdgeX`, `endAlignedX`, `besideEndX`, `flyoutX` |
 | Fletxes dels menús: obrir i tancar submenús, menús en fila | `menuKeyAction` (`lib/menuKeyboard.ts`, [menús](menus.md)) |
 | Menú ràpid, menú de l'aplicació de la banda superior ([top-band.md](top-band.md)), finestra de gramàtica | `menuLeft` |
+| Finestra emergent de l'estat de la sincronització, al final de la banda superior (#345) | `endAlignedX` i `menuLeft`: la vora final a la del botó, cap a l'inici de la línia |
 | Missatges HTML al seu marc | `applyContentDirection` (`dir="auto"` a cada bloc de text si el missatge no en declara cap) |
 | Correu que surt | `markRightToLeftBlocks` des d'`inlineRichStyles` (`dir="rtl"`, citació amb la barra a la dreta i sagnat amb `margin-right`, ADR-0067) |
 

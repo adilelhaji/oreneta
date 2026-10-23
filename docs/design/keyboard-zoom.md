@@ -48,7 +48,14 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
   continuen dins de l'alçada de la finestra. Des de #344 la banda té el camp de
   cerca, també en rem: 1,75 rem d'alçada i, com a màxim, 36 rem d'amplada. Al
   200 % a 1025 px, com al 100 % entre 769 i 1024 px, s'encongeix entre el botó
-  del menú i el final de la banda, sense desplaçament horitzontal.
+  del menú i el final de la banda, sense desplaçament horitzontal. Des de #345,
+  el final de la banda té l'indicador del mode No molestis i l'estat de la
+  sincronització; ocupa com a màxim el 35 % de l'amplada de la banda, una
+  proporció i no una mida en rem, perquè al 200 % el camp de cerca hi conservi
+  l'espai: el resum de l'estat s'hi escurça amb «…» i es llegeix sencer al nom
+  accessible i a la indicació. Per sota de 1025 px l'estat és només la icona. La
+  seva finestra emergent fa 24 rem d'amplada, mai més que la finestra menys 8 px a
+  cada costat, i es desplaça si no hi cap d'alçada.
 - **El que continua en px:**
   - l'amplada dels taulers que la persona arrossega;
   - l'amplada de la subfinestra de carpetes (260 px per defecte, de 200 a 400,
@@ -81,6 +88,7 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
 | e2e (`startup.e2e.ts`, 1440 i 1024 px) | Al 200 % no hi ha desplaçament horitzontal i cap botó no queda fora de la pantalla a la bústia, al lector i a la redacció; Ctrl/⌘ `-` amb el focus en un camp no toca el text ni el focus; la mida es recupera després de recarregar; Ctrl/⌘ `0` la restableix |
 | e2e (`startup.e2e.ts`, «#343», 1025 px) | Al 200 % la banda superior fa 72 px, la pàgina no es desplaça i la llista, les carpetes, la resposta i els botons de la bústia i de la conversa continuen dins de l'alçada de la finestra |
 | e2e (`startup.e2e.ts`, «#344», 1025 px i de 769 a 1024 px) | Al 200 % a 1025 px, i al 100 % a 1024, 900 i 769 px, el camp de cerca de la banda i els seus botons queden dins de la finestra, després del botó del menú, sense desplaçament horitzontal |
+| e2e (`startup.e2e.ts`, «#345», 1025 px) | Al 200 %, el final de la banda no passa del 35 % de la banda, el botó de l'estat de la sincronització és dins de la finestra, el camp de cerca fa més de 100 px i la finestra emergent queda dins de la finestra, sense desplaçament horitzontal |
 
 Falta la prova nativa (N4) a Windows, que es farà una sola vegada amb la versió
 final.
