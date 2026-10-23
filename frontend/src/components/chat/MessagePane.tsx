@@ -5,7 +5,13 @@ import { compose$, openComposeTab, withoutHydratedQuickReplyDraft } from '../../
 import { ui$ } from '../../states/ui'
 import { mail$, getActiveThread, loadThread } from '../../states/mail'
 import { accounts$ } from '../../states/accounts'
-import { resetThreadView, thread$, type ConversationMode } from '../../states/thread'
+import {
+  openThreadSearch,
+  resetThreadView,
+  takeThreadSearchRequest,
+  thread$,
+  type ConversationMode,
+} from '../../states/thread'
 import { Gallery } from './Gallery'
 import { ConversationDetailsPanel } from './ConversationDetailsPanel'
 import { EmptyState } from '../empty-state/EmptyState'
@@ -148,6 +154,8 @@ export function MessagePane() {
 
   useEffect(() => {
     resetThreadView()
+    // A search asked for from another module, before this pane was on screen (#344).
+    if (takeThreadSearchRequest()) openThreadSearch()
   }, [activeThreadId])
 
   useLayoutEffect(() => {

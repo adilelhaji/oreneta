@@ -58,8 +58,13 @@ export function useBandScope(): BandScope {
   const boardQuery = useValue(kanban$.searchQuery)
   const boardScope = useValue(kanban$.searchScope)
   const query = useValue(ui$.query)
-  const accounts = useValue(accounts$)
-  const selectedAccount = useValue(ui$.selectedAccount)
+  // Only whether the account on screen is a feeds one: the band does not
+  // follow every change to every account.
+  const feeds = useValue(() => {
+    const selected = ui$.selectedAccount.get()
+    const account = accounts$.get().find((item) => item.id === selected)
+    return account?.provider === 'rss' || account?.auth_type === 'rss'
+  })
   const notesSearch = useValue(notes$.search)
   const peopleQuery = useValue(people$.query)
   const tasksSearch = useValue(tasks$.search)
@@ -128,8 +133,6 @@ export function useBandScope(): BandScope {
   }
 
   // Mail's search (mail.threadList), or a feeds account's.
-  const account = accounts.find((item) => item.id === selectedAccount)
-  const feeds = account?.provider === 'rss' || account?.auth_type === 'rss'
   return {
     kind: 'field',
     id: feeds ? 'feeds' : 'mail',
@@ -178,7 +181,9 @@ export function BandSearch({ onCover }: { onCover: (covered: boolean) => void })
   const pending = useRef<'field' | 'trigger' | null>(null)
   const reasonId = useId()
 
-  const overlay = !wide && (open || focused)
+  const disabled = scope.kind === 'disabled'
+  // A module with no search (Calendar, Chat) has nothing to open over the band.
+  const overlay = !wide && !disabled && (open || focused)
   const shown = wide || overlay
 
   const setFocusWithin = (value: boolean) => {
@@ -221,13 +226,29 @@ export function BandSearch({ onCover }: { onCover: (covered: boolean) => void })
     // Only the nonce asks; the scope and the width are read as they are now.
   }, [nonce])
 
+  // Switching to a module with no search while the field is open over the
+  // band closes it (the overlay is not drawn for such a module): focus that
+  // was in it, or fell with it, goes back to the button, which now says why
+  // there is no search. Before the request below, which it feeds.
+  const overlayDrawn = useRef(false)
   useLayoutEffect(() => {
-    if (pending.current === 'field' && focusField()) pending.current = null
-    else if (pending.current === 'trigger') {
-      // Gone if the window widened meanwhile: then there is nothing to go back to.
-      pending.current = null
-      trigger.current?.focus()
-    }
+    const was = overlayDrawn.current
+    overlayDrawn.current = overlay
+    if (!disabled || !(was || open || focusedRef.current)) return
+    const active = document.activeElement
+    if (focusedRef.current || !active || active === document.body || !active.isConnected) pending.current = 'trigger'
+    setOpen(false)
+    setFocusWithin(false)
+  })
+
+  // One attempt, on the render that follows the request: a request that
+  // cannot be met then (no field to focus, the button gone because the
+  // window widened) is dropped, not kept to take the focus later.
+  useLayoutEffect(() => {
+    const wanted = pending.current
+    pending.current = null
+    if (wanted === 'field') focusField()
+    else if (wanted === 'trigger') trigger.current?.focus()
   })
 
   useLayoutEffect(() => {
@@ -235,7 +256,6 @@ export function BandSearch({ onCover }: { onCover: (covered: boolean) => void })
     return () => onCover(false)
   }, [overlay, onCover])
 
-  const disabled = scope.kind === 'disabled'
   const value = disabled ? '' : scope.value
   const label = disabled ? t('shell.region.search') : scope.label
 

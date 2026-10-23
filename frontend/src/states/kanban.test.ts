@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import type { Message } from '../types'
 import { accounts$ } from './accounts'
 import {
@@ -7,6 +7,7 @@ import {
   markColumnAllRead,
   openCorrespondentMail,
   removeKanbanColumnsForFolder,
+  setKanbanSearchScope,
   switchKanbanColumnFolder,
 } from './kanban'
 import { mail$ } from './mail'
@@ -282,5 +283,50 @@ describe('removeKanbanColumnsForFolder', () => {
     removeKanbanColumnsForFolder('acc1', 'Work')
 
     expect(settings$.kanbanBoards.get()[0].columns).toEqual([{ accountId: 'acc2', folderId: 'Work' }])
+  })
+})
+
+// The board's search is the top band's (#344); its scope is set here.
+describe('setKanbanSearchScope', () => {
+  const board = {
+    id: 'kb-scope',
+    name: 'Scope',
+    columns: [
+      { accountId: 'acc1', folderId: 'INBOX' },
+      { accountId: 'acc1', folderId: 'Archive' },
+    ],
+  }
+  const archive = 'acc1\nArchive'
+  const minimized = () => settings$.kanbanMinimizedColumns[`kb-scope\n${archive}`].peek()
+
+  beforeEach(() => {
+    settings$.kanbanBoards.set([board])
+    settings$.kanbanMinimizedColumns.set({})
+    kanban$.searchScope.set('all')
+  })
+  afterEach(() => {
+    settings$.kanbanBoards.set([])
+    settings$.kanbanMinimizedColumns.set({})
+    kanban$.searchScope.set('all')
+  })
+
+  it("scopes the board's search to a column and expands it if it was collapsed", () => {
+    settings$.kanbanMinimizedColumns[`kb-scope\n${archive}`].set(true)
+    setKanbanSearchScope('kb-scope', archive)
+    expect(kanban$.searchScope.peek()).toBe(archive)
+    // The matches are drawn in the column body: a collapsed column would hide them.
+    expect(minimized()).toBe(false)
+    // The other column is left as it was.
+    expect(settings$.kanbanMinimizedColumns['kb-scope\nacc1\nINBOX'].peek()).toBeUndefined()
+  })
+
+  it('goes back to every column, and touches no column for a scope that is not one', () => {
+    setKanbanSearchScope('kb-scope', archive)
+    setKanbanSearchScope('kb-scope', 'all')
+    expect(kanban$.searchScope.peek()).toBe('all')
+    settings$.kanbanMinimizedColumns.set({})
+    setKanbanSearchScope('other-board', archive)
+    expect(kanban$.searchScope.peek()).toBe(archive)
+    expect(settings$.kanbanMinimizedColumns.peek()).toEqual({})
   })
 })

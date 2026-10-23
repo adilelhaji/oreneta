@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import { Profiler } from 'react'
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
 import i18n from '../../lib/i18n'
 import { messages, supportedI18nLanguages } from '../../generated/locales'
@@ -10,11 +11,12 @@ import { notes$ } from '../../states/notes'
 import { people$ } from '../../states/people'
 import { settings$, type KanbanBoard } from '../../states/settings'
 import { tasks$ } from '../../states/tasks'
-import { thread$ } from '../../states/thread'
+import { takeThreadSearchRequest, thread$ } from '../../states/thread'
 import { ui$, type AppModule } from '../../states/ui'
 import type { Account, Person } from '../../types'
 import { AttachmentsView } from '../attachments/AttachmentsView'
 import { AppHotkeys } from '../dialog/AppHotkeys'
+import { KanbanView } from '../kanban/KanbanView'
 import { NotesView } from '../notes/NotesView'
 import { useCommandList } from '../palette/useCommandList'
 import { PeopleView } from '../people/PeopleView'
@@ -104,10 +106,17 @@ afterEach(() => {
   // happy-dom's own window: 1024 px wide.
   ;(window as any).happyDOM.setViewport({ width: 1024, height: 768 })
   setShortcutOverrides({})
-  ui$.assign({ module: 'mail', selectedThread: '', query: '' })
+  // Back to the defaults, so nothing set here reaches the next file.
+  accounts$.set([])
+  ui$.assign({ module: 'mail', selectedAccount: '', selectedFolder: 'inbox', selectedThread: '', query: '' })
   kanban$.assign({ activeBoardId: '', searchQuery: '', searchScope: 'all' })
   settings$.kanbanBoards.set([])
   settings$.savedSearches.set([])
+  notes$.search.set('')
+  people$.query.set('')
+  tasks$.search.set('')
+  attachmentList$.filter.name.set('')
+  thread$.searchOpen.set(false)
   delete (window as any).go
 })
 
@@ -285,6 +294,28 @@ describe("a board's search in the band (#344)", () => {
     expect(document.activeElement).not.toBe(input)
     settings$.kanbanMinimizedColumns[`${board.id}\n${account.id}\nArchive`].delete()
   })
+
+  it("scopes it to a column from the column's «Search», and focuses the band", async () => {
+    kanban$.activeBoardId.set(board.id)
+    answers['mail.threadList'] = () => ({ threads: [], next_cursor: '', pagination: 'conversation-v1' })
+    const view = render(
+      <>
+        <AppHeader />
+        <KanbanView boardId={board.id} />
+      </>,
+    )
+    // The board has no field of its own any more.
+    expect(view.container.querySelectorAll('section[data-region="content"] input[type="text"]')).toHaveLength(0)
+    expect(view.queryByRole('button', { name: 'Search board' })).toBeNull()
+    const columns = view.getAllByRole('button', { name: 'Thread actions' })
+    expect(columns).toHaveLength(2)
+    // The second column's menu: «Search».
+    fireEvent.click(columns[1])
+    await act(async () => fireEvent.click(view.getByRole('menuitem', { name: 'Search' })))
+    expect(kanban$.searchScope.peek()).toBe(`${account.id}\nArchive`)
+    await waitFor(() => expect(document.activeElement).toBe(field(view)))
+    expect(field(view).getAttribute('aria-label')).toBe('Search board...')
+  })
 })
 
 describe('Calendar and Chat in the band (owner decision 3 on #342, #344)', () => {
@@ -372,6 +403,14 @@ describe("each module's search from the band keeps its delay and its texts (#344
     await waitFor(() => expect(asked()).toHaveLength(2))
     expect(asked().at(-1)!.payload).toMatchObject({ query: 'zzz' })
     await waitFor(() => expect(view.container.textContent).toContain('Nobody by that name'))
+    // Cleared, everybody again, after the same 150 ms.
+    fireEvent.click(within(landmark(view)).getByRole('button', { name: 'Clear search' }))
+    expect(people$.query.peek()).toBe('')
+    await wait(90)
+    expect(asked()).toHaveLength(2)
+    await waitFor(() => expect(asked()).toHaveLength(3))
+    expect(asked().at(-1)!.payload).toMatchObject({ query: '' })
+    await waitFor(() => expect(view.container.textContent).toContain('Ana Prat'))
   })
 
   it('Attachments: asks the core 200 ms after the last key, by file name', async () => {
@@ -394,6 +433,12 @@ describe("each module's search from the band keeps its delay and its texts (#344
     expect(view.container.textContent).toContain('No attachments found')
     // The name is no longer one of the filters: one place to type it.
     expect(view.queryByRole('textbox', { name: 'File name' })).toBeNull()
+    // Cleared, the list is asked for again at once, with no name.
+    fireEvent.click(within(landmark(view)).getByRole('button', { name: 'Clear search' }))
+    expect(attachmentList$.filter.name.peek()).toBe('')
+    await wait(20)
+    expect(asked()).toHaveLength(3)
+    expect(asked().at(-1)!.payload).toMatchObject({ name: '' })
   })
 
   it('Tasks: filters what is loaded as the key is typed, by title, note and sender', async () => {
@@ -430,6 +475,11 @@ describe("each module's search from the band keeps its delay and its texts (#344
     expect(view.container.textContent).toContain('Renew the contract')
     type(field(view), 'nothing like it')
     expect(view.container.textContent).toContain('No tasks')
+    // Cleared, every task again.
+    fireEvent.click(within(landmark(view)).getByRole('button', { name: 'Clear search' }))
+    expect(tasks$.search.peek()).toBe('')
+    expect(view.container.textContent).toContain('Fix the tap')
+    expect(view.container.textContent).toContain('Renew the contract')
   })
 })
 
@@ -505,28 +555,162 @@ describe('the shortcuts reach the band (#344)', () => {
     expect(document.activeElement).toBe(within(landmark(view)).getByRole('textbox', { name: 'Search notes' }))
   })
 
-  it("the palette's search commands focus the band, and the in-conversation one only in mail", () => {
-    const view = shell()
+  // Owner decision on #344: the palette's and the menu's search commands are
+  // mail's, so from another module they go to mail first, as the account and
+  // folder commands do, and search there.
+  const command = (id: string) => {
     let commands: ReturnType<typeof useCommandList> = []
     function Probe() {
       commands = useCommandList()
       return null
     }
     render(<Probe />)
+    return commands.find((item) => item.id === id)!
+  }
+  // Looked up as the module on screen has it, then run as the palette runs it.
+  const run = (id: string) => {
+    const found = command(id)
+    act(() => found.run())
+  }
+
+  it("«Search all messages» goes to mail from Calendar or Notes, and focuses mail's field", () => {
+    const view = shell()
     const away = view.container.querySelector<HTMLElement>('#elsewhere')!
-    focus(away)
-    act(() => commands.find((command) => command.id === 'search.global')!.run())
-    expect(document.activeElement).toBe(field(view))
+    for (const module of ['calendar', 'notes'] as const) {
+      goTo(module)
+      focus(away)
+      run('search.global')
+      expect(ui$.module.peek(), module).toBe('mail')
+      expect(document.activeElement, module).toBe(field(view))
+      expect(field(view).getAttribute('aria-label'), module).toBe('Search messages...')
+    }
+  })
+
+  it('«Search current thread» goes to mail from Calendar or Notes, and searches the conversation there', () => {
+    const view = shell()
+    const away = view.container.querySelector<HTMLElement>('#elsewhere')!
+    // A conversation open in mail: its own search, once mail is on screen.
+    // The conversation pane mounts with mail and resets its view, so the
+    // search is asked of it, and it opens it then (MessagePane).
     act(() => ui$.selectedThread.set('synthetic-account#INBOX#1'))
-    goTo('people')
+    for (const module of ['calendar', 'notes'] as const) {
+      goTo(module)
+      focus(away)
+      run('search.thread')
+      expect(ui$.module.peek(), module).toBe('mail')
+      expect(takeThreadSearchRequest(), module).toBe(true)
+      expect(document.activeElement, module).not.toBe(field(view))
+    }
+    // Asked once, answered once.
+    expect(takeThreadSearchRequest()).toBe(false)
+    // In mail, with the pane on screen, it opens at once, as before.
+    run('search.thread')
+    expect(thread$.searchOpen.peek()).toBe(true)
+    expect(takeThreadSearchRequest()).toBe(false)
+    // No conversation: mail's field in the band.
+    act(() => {
+      thread$.searchOpen.set(false)
+      ui$.selectedThread.set('')
+    })
+    goTo('notes')
     focus(away)
-    act(() => commands.find((command) => command.id === 'search.thread')!.run())
+    run('search.thread')
+    expect(ui$.module.peek()).toBe('mail')
     expect(thread$.searchOpen.peek()).toBe(false)
-    expect(document.activeElement).toBe(within(landmark(view)).getByRole('textbox', { name: 'Search people' }))
+    expect(takeThreadSearchRequest()).toBe(false)
+    expect(document.activeElement).toBe(field(view))
+  })
+
+  it("the app menu's «Search all messages» does the same from Calendar", async () => {
+    ui$.module.set('calendar')
+    const view = shell()
+    fireEvent.click(within(band(view)).getByRole('button', { name: 'App menu' }))
+    fireEvent.click(view.getByRole('menuitem', { name: 'Search all messages' }))
+    await act(async () => await Promise.resolve())
+    expect(ui$.module.peek()).toBe('mail')
+    expect(document.activeElement).toBe(field(view))
+    expect(field(view).getAttribute('aria-label')).toBe('Search messages...')
   })
 })
 
 describe('the band below 769 px (#344)', () => {
+  it('closes the field over the band when the module on screen has no search, focus back on the button', () => {
+    setWidth(768)
+    const view = render(<AppHeader />)
+    const button = within(band(view)).getByRole('button', { name: 'Search messages...' })
+    const start = band(view).querySelector<HTMLElement>('[data-band-start]')!
+    fireEvent.click(button)
+    expect(document.activeElement).toBe(field(view))
+    type(field(view), 'budget')
+    goTo('calendar')
+    // No disabled field left over the band, and the band is usable again.
+    expect(within(band(view)).queryByRole('search')).toBeNull()
+    expect(start.hasAttribute('inert')).toBe(false)
+    expect(band(view).querySelector('[data-band-end]')!.hasAttribute('inert')).toBe(false)
+    // The focus, which was in the field, is on the button, which says why.
+    expect(button.getAttribute('aria-disabled')).toBe('true')
+    expect(button.className).not.toContain('invisible')
+    expect(document.activeElement).toBe(button)
+    // Back in mail it stays closed, with mail's query.
+    goTo('mail')
+    expect(within(band(view)).queryByRole('search')).toBeNull()
+    expect(ui$.query.peek()).toBe('budget')
+    expect(button.getAttribute('aria-label')).toBe('Search messages...')
+  })
+
+  it('leaves the focus where it went when the field closes for a module with no search', () => {
+    setWidth(768)
+    const view = render(
+      <>
+        <AppHeader />
+        <button type="button" id="elsewhere">
+          Elsewhere
+        </button>
+      </>,
+    )
+    fireEvent.click(within(band(view)).getByRole('button', { name: 'Search messages...' }))
+    const away = view.container.querySelector<HTMLElement>('#elsewhere')!
+    // The field stays open when the focus leaves it.
+    focus(away)
+    expect(landmark(view).hasAttribute('data-band-search-overlay')).toBe(true)
+    goTo('chat')
+    expect(within(band(view)).queryByRole('search')).toBeNull()
+    expect(band(view).querySelector('[data-band-start]')!.hasAttribute('inert')).toBe(false)
+    expect(document.activeElement).toBe(away)
+  })
+
+  it('makes one attempt at a focus it was asked for, and does not take the focus later', () => {
+    setWidth(600)
+    const view = render(
+      <>
+        <AppHeader />
+        <button type="button" id="elsewhere">
+          Elsewhere
+        </button>
+      </>,
+    )
+    // The field refuses the focus once, as a browser may while it draws it.
+    const proto = HTMLInputElement.prototype as unknown as { focus: (options?: FocusOptions) => void }
+    let refuse = true
+    proto.focus = function (this: HTMLInputElement, options?: FocusOptions) {
+      if (!refuse) HTMLElement.prototype.focus.call(this, options)
+    }
+    try {
+      fireEvent.click(within(band(view)).getByRole('button', { name: 'Search messages...' }))
+      expect(landmark(view).hasAttribute('data-band-search-overlay')).toBe(true)
+      expect(document.activeElement).not.toBe(field(view))
+      refuse = false
+      const away = view.container.querySelector<HTMLElement>('#elsewhere')!
+      focus(away)
+      // Later renders of the band do not take the focus from where it is.
+      act(() => ui$.query.set('budget'))
+      act(() => ui$.query.set('budget report'))
+      expect(document.activeElement).toBe(away)
+    } finally {
+      delete (proto as { focus?: unknown }).focus
+    }
+  })
+
   it('has a search button that opens the field over the band; Escape closes it and gives the focus back', () => {
     setWidth(768)
     const view = render(<AppHeader />)
@@ -600,6 +784,29 @@ describe('the band below 769 px (#344)', () => {
     expect(document.activeElement).toBe(input)
     expect(landmark(view).hasAttribute('data-band-search-overlay')).toBe(false)
     expect(band(view).querySelector('[data-band-start]')!.hasAttribute('inert')).toBe(false)
+  })
+})
+
+describe('what the band follows (#344)', () => {
+  it('does not render again for a change to the accounts that does not make the one on screen a feeds one', () => {
+    let commits = 0
+    const view = render(
+      <Profiler id="band" onRender={() => commits++}>
+        <AppHeader />
+      </Profiler>,
+    )
+    const before = commits
+    act(() =>
+      accounts$.set([
+        { ...account, display_name: 'Alex, renamed' },
+        { ...feeds, display_name: 'News' },
+      ]),
+    )
+    expect(commits).toBe(before)
+    // A change it follows: the account on screen becomes the feeds one.
+    act(() => ui$.selectedAccount.set(feeds.id))
+    expect(commits).toBeGreaterThan(before)
+    expect(field(view).getAttribute('aria-label')).toBe('Search feeds...')
   })
 })
 
