@@ -12,6 +12,7 @@ import { SideNav } from './components/sidenav/SideNav'
 import { MailNavigation } from './components/sidenav/MailNavigation'
 import { FolderPane } from './components/shell/FolderPane'
 import { AppHeader } from './components/shell/AppHeader'
+import { AppLayers } from './components/shell/AppLayers'
 import { ThreadList } from './components/threads/ThreadList'
 import { KanbanView } from './components/kanban/KanbanView'
 import { CalendarView } from './components/calendar/CalendarView'
@@ -20,33 +21,13 @@ import { TasksView } from './components/tasks/TasksView'
 import { NotesView } from './components/notes/NotesView'
 import { MessagingView } from './components/messaging/MessagingView'
 import { AttachmentsView } from './components/attachments/AttachmentsView'
-import { TaskDialog } from './components/tasks/TaskDialog'
-import { QuickActionDialog } from './components/quick/QuickActionDialog'
-import { AwaitingDialog } from './components/awaiting/AwaitingDialog'
-import { MergeDialog } from './components/merge/MergeDialog'
 import { MessagePane } from './components/chat/MessagePane'
 import { KanbanPaneResizer } from './components/resizer/PaneResizers'
-import { AboutDialog } from './components/dialog/AboutDialog'
-import { ChangelogDialog } from './components/dialog/ChangelogDialog'
-import { CommandPalette } from './components/palette/CommandPalette'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { AppHotkeys } from './components/dialog/AppHotkeys'
-import { ShortcutsDialog } from './components/dialog/ShortcutsDialog'
-import { AppToast } from './components/toast/AppToast'
-import { AppConfirm } from './components/dialog/AppConfirm'
-import { CertificateTrustDialog } from './components/dialog/CertificateTrustDialog'
 import { MacTitleBar } from './components/titlebar/MacTitleBar'
 import { ConnectivityBanner } from './components/banner/ConnectivityBanner'
 import { UpdateBanner } from './components/banner/UpdateBanner'
 import { SetupScreen } from './components/setup/SetupScreen'
-import { AccountDialog } from './components/dialog/AccountDialog'
-import { SettingsDialog } from './components/dialog/SettingsDialog'
-import { AddFeedDialog } from './components/dialog/AddFeedDialog'
-import { FeedEditDialog } from './components/dialog/FeedEditDialog'
-import { ScheduledSendsDialog } from './components/dialog/ScheduledSendsDialog'
-import { RuleLogDialog } from './components/dialog/RuleLogDialog'
-import { DesignCatalogue } from './components/dialog/DesignCatalogue'
-import { SweepDialog } from './components/dialog/SweepDialog'
 
 export default function App() {
   const { t } = useTranslation()
@@ -61,15 +42,6 @@ export default function App() {
   const kanbanPaneThreadId = useValue(kanban$.paneThreadId)
   const kanbanPaneWidth = useValue(settings$.kanbanPaneWidth)
   const activeModule = useValue(ui$.module)
-  const taskEditor = useValue(ui$.taskEditor)
-  const setupOpen = useValue(ui$.setupOpen)
-  const settingsOpen = useValue(ui$.settingsOpen)
-  const addFeedAccount = useValue(ui$.addFeedAccount)
-  const editFeed = useValue(ui$.editFeed)
-  const scheduledSendsOpen = useValue(ui$.scheduledSendsOpen)
-  const ruleLogOpen = useValue(ui$.ruleLogOpen)
-  const catalogueOpen = useValue(ui$.catalogueOpen)
-  const sweepTarget = useValue(ui$.sweep)
 
   useAppEffects()
 
@@ -87,16 +59,8 @@ export default function App() {
 
   const showKanbanMessagePane = !!kanbanPaneThreadId || composeTabs.some((tab) => tab.id === activeComposeTab)
 
-  if (system && accounts.length === 0) {
-    return (
-      <div className="flex h-full w-full flex-col bg-app text-primary">
-        <MacTitleBar />
-        <div className="min-h-0 flex-1">
-          <SetupScreen />
-        </div>
-      </div>
-    )
-  }
+  // No account yet: the first-account setup, under the band (#343).
+  if (system && accounts.length === 0) return <SetupScreen />
 
   return (
     <div className="flex h-full w-full flex-col bg-app text-primary">
@@ -174,38 +138,7 @@ export default function App() {
 
       {/* Dialogs, toasts and confirmations are siblings of the regions, not
           part of the module in <main> (ADR-0068 §1). */}
-      <AppHotkeys />
-      <CommandPalette />
-      <ShortcutsDialog />
-      <AboutDialog />
-      <ChangelogDialog />
-
-      {/* Settings first so the add-account dialog (setupOpen), opened from within
-        Settings, layers on top and returns here when closed. */}
-      {settingsOpen && <SettingsDialog />}
-      {setupOpen && <AccountDialog />}
-      {addFeedAccount && <AddFeedDialog />}
-      {editFeed && <FeedEditDialog />}
-      {scheduledSendsOpen && <ScheduledSendsDialog />}
-      {ruleLogOpen && <RuleLogDialog />}
-      {catalogueOpen && <DesignCatalogue />}
-      {/* Keyed by the task, so moving from one to another starts from that one's fields. */}
-      {taskEditor && <TaskDialog key={`${taskEditor.threadId}:${taskEditor.id}`} />}
-      <QuickActionDialog />
-      <AwaitingDialog />
-      <MergeDialog />
-      {sweepTarget && (
-        <SweepDialog
-          accountId={sweepTarget.accountId}
-          folder={sweepTarget.folder}
-          sender={sweepTarget.sender}
-          onClose={() => ui$.sweep.set(null)}
-        />
-      )}
-
-      <AppToast />
-      <AppConfirm />
-      <CertificateTrustDialog />
+      <AppLayers />
     </div>
   )
 }
