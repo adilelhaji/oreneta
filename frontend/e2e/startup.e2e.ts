@@ -5796,6 +5796,65 @@ test('the unified inbox row in the folder pane has the rail menu (#353)', async 
   expect(errors).toEqual([])
 })
 
+test('in Arabic the new rows of the folder pane follow the reading, and fit at the app\'s 200 percent (#353)', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, language: 'ar' })
+  await page.addInitScript(() => {
+    ;(window as any).startupProbe.replies['account.reorder'] = { ok: true }
+  })
+  await page.goto('/')
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+  const nav = page.getByRole('navigation', { name: arCatalog['mailNavigation.title'], exact: true })
+  const alex = nav.locator('[data-nav-row="account:synthetic-account"]')
+  await expect(nav.getByRole('region', { name: arCatalog['mailNavigation.boards'], exact: true })).toBeVisible()
+  // The state, in words, in Arabic; its icon at the end of the line, on the left.
+  await expect(alex).toHaveAccessibleName(`Alex · Demo alex@example.test ${arCatalog['connectivity.health.paused']}`)
+  const row = (await alex.boundingBox())!
+  const icon = (await alex.locator('svg.mail-account-status').boundingBox())!
+  expect(icon.x + icon.width / 2).toBeLessThan(row.x + row.width / 2)
+
+  // Alt+↓ moves down in right to left too, and says so in Arabic.
+  await alex.focus()
+  await page.keyboard.press('Alt+ArrowDown')
+  await expect(nav.locator('p[aria-live="polite"]')).toHaveText(
+    arCatalog['mailNavigation.moved']
+      .replace('{name}', 'Alex · Demo')
+      .replace('{position}', '2')
+      .replace('{count}', '2'),
+  )
+  await expect(alex).toBeFocused()
+
+  // Shift+F10: the menu starts at the row's start edge, which is on the right.
+  await page.keyboard.press('Shift+F10')
+  const menu = page.getByRole('menu', { name: 'Alex · Demo', exact: true })
+  await expect(menu.getByRole('menuitem', { name: arCatalog['mailNavigation.actions.hideAccount'], exact: true })).toBeVisible()
+  const menuBox = (await menu.boundingBox())!
+  const rowNow = (await alex.boundingBox())!
+  expect(Math.abs(menuBox.x + menuBox.width - (rowNow.x + rowNow.width - 20))).toBeLessThanOrEqual(2)
+  const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+  const blocking = results.violations.filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+  await info.attach('axe-pane-destinations-ar', { body: JSON.stringify(results.violations, null, 2), contentType: 'application/json' })
+  expect(blocking.map((violation) => violation.id)).toEqual([])
+  await page.keyboard.press('Escape')
+  await expect(alex).toBeFocused()
+
+  // The app's 200 %: the pane keeps its width, and its rows their parts, with
+  // nothing scrolling sideways.
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
+  const body = nav.locator('xpath=./div[2]')
+  expect(await body.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  const zoomed = (await alex.boundingBox())!
+  const zoomedIcon = (await alex.locator('svg.mail-account-status').boundingBox())!
+  expect(zoomedIcon.x).toBeGreaterThanOrEqual(zoomed.x)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.keyboard.press(`${mod}+Digit0`)
+  expect(errors).toEqual([])
+})
+
 // #323: Calendar's calendars in the common folder pane (ADR-0068 §4): the
 // list is its body and the month at a glance its footer, at the one width
 // every module shares. At 1024 px and below the pane is not drawn, and they
