@@ -287,7 +287,7 @@ obren les mateixes posicions. Les proves de límits, de dreta a esquerra, de zoo
 es mantenen, i se n'hi afegeixen de noves: unitàries de cada element i, a 1440 px, ordenar els comptes
 amb el teclat i el punter, el menú del compte, obrir un tauler des de la subfinestra, deixar anar un
 canal, el menú de la safata unificada, i l'àrab amb axe i el 200 %; i, a 1025 i 1280 px, un missatge
-nou al costat d'un tauler, sencer. És una nota d'evidència: cap fila
+nou que es veu sencer al costat d'un tauler. És una nota d'evidència: cap fila
 no canvia d'estat (S01-04, S01-05, SET-27), i l'evidència nativa de Windows continua pendent.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies

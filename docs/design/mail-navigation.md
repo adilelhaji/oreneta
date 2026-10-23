@@ -699,9 +699,9 @@ mòduls.
   vora discontínua de deixar anar. Mentre s'arrossega, el navegador només deixa
   veure el tipus del que s'arrossega, no el contingut: la barra vertical el volia
   llegir i a Chromium, que és el motor de WebView2, no acceptava mai el canal.
-  Ara totes dues el reconeixen pel tipus, i el compte d'on ve el diu la llista,
-  que el desa en començar l'arrossegament i l'oblida en acabar-lo
-  (`states/feeds.ts`): sobre aquest compte el canal no s'accepta ni la fila es
+  Ara totes dues el reconeixen pel tipus, i la llista coneix el compte d'on ve,
+  perquè el desa en començar l'arrossegament i l'oblida en acabar-lo
+  (`states/feeds.ts`): sobre aquest compte el canal no s'accepta i la fila no es
   marca (`sidenav/accountNav.ts`).
 - **«Taulers»:** un grup amb l'etiqueta «Taulers» (`mailNavigation.boards`),
   dins de «Comptes», entre la safata unificada i els grups de comptes, amb els
@@ -723,11 +723,11 @@ mòduls.
   tauler (la fila menys la barra vertical i les carpetes), amb els límits d'abans
   (del 25 al 60 %); abans ho era de la fila sencera. El percentatge que es
   recorda (`kanban_pane_width`) no canvia de valor, però ara és una part d'aquesta
-  àrea, de manera que el mateix valor la fa una mica més estreta. A partir de
-  769 px no es pinta mai més estreta que els 360 px del lector que hi ha a dins
+  àrea, de manera que el mateix valor fa la subfinestra de conversa una mica més estreta. A partir de
+  769 px no es mostra mai més estreta que els 360 px del lector que hi ha a dins
   (abans, 320 px, i el lector, que en conserva 360, en quedava tallat, amb
-  «Envia» fora de la pantalla); per sota, en conserva 320. L'àrea demana una
-  columna, de l'amplada triada, i els 360 px del lector: on la fila no hi arriba,
+  «Envia» fora de la pantalla); per sota, en conserva 320. L'àrea necessita una
+  columna de l'amplada triada més els 360 px del lector: on la fila no hi arriba,
   les carpetes cedeixen fins al seu mínim abans que les columnes, com al costat
   de la llista de converses. A 1025 px, amb les carpetes a 260 o 400 px, les
   carpetes queden a uns 245 px, i el tauler i la conversa, a 360 px cadascun. El
@@ -773,7 +773,7 @@ mòduls.
   compte amb el ratolí, Maj+F10 i la tecla de menú, i amagar-lo; obrir un tauler
   des de la subfinestra, que s'hi queda, amb el ratolí i el teclat, i el seu
   menú; suprimir un tauler des del seu menú, amb el focus al següent; deixar
-  anar un canal de la llista en un altre compte RSS, refusat sobre el seu; el
+  anar un canal de la llista en un altre compte RSS, rebutjat sobre el seu; el
   menú de la safata unificada; en àrab, l'estat i el menú en el
   sentit de lectura, axe amb el menú obert i el 200 % de l'aplicació sense
   desplaçament horitzontal; i, a 1025 px amb les carpetes a 260 i 400 px i a
