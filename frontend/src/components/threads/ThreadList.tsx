@@ -369,9 +369,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
       }}
       style={width ? ({ '--thread-list-width': `${width}px` } as CSSProperties) : undefined}
     >
-      {resizable && (
-        <ThreadListResizer list={listRef} />
-      )}
+      {resizable && <ThreadListResizer list={listRef} />}
       {bulkInThisList ? (
         <BulkActionBar items={bulkItems} allItems={filteredThreads.map(bulkItemFor)} className="min-h-16" />
       ) : (
@@ -625,7 +623,10 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
                     other ordering these headings would repeat down the page
                     and mean nothing. */}
                 {groupByDates && (
-                  <div data-date-group className="sticky top-0 z-10 border-b border-border bg-chats/95 px-3 py-1 text-2xs font-bold uppercase tracking-wide text-secondary">
+                  <div
+                    data-date-group
+                    className="sticky top-0 z-10 border-b border-border bg-chats/95 px-3 py-1 text-2xs font-bold uppercase tracking-wide text-secondary"
+                  >
                     {t(`dateGroup.${group.group}`)}
                   </div>
                 )}

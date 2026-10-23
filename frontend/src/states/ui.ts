@@ -273,9 +273,13 @@ export function openCommandPalette() {
 export function closeCommandPalette() {
   // Return focus before the selected command opens another surface, allowing
   // that surface to retain the original opener rather than a disappearing input.
-  if (document.activeElement?.closest('[data-command-palette]') &&
-      paletteOpener instanceof HTMLElement && paletteOpener.isConnected &&
-      !paletteOpener.matches(':disabled') && !paletteOpener.closest('[hidden], [inert], [aria-hidden="true"]')) {
+  if (
+    document.activeElement?.closest('[data-command-palette]') &&
+    paletteOpener instanceof HTMLElement &&
+    paletteOpener.isConnected &&
+    !paletteOpener.matches(':disabled') &&
+    !paletteOpener.closest('[hidden], [inert], [aria-hidden="true"]')
+  ) {
     paletteOpener.focus({ preventScroll: true })
   }
   paletteOpener = null
