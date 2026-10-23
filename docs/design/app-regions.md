@@ -44,13 +44,18 @@ banda superior, des de #343) i els `data-region` de les vistes de cada mòdul.
 - Hi ha un sol `<main>`. Els diàlegs de l'aplicació, els avisos (toasts), les
   confirmacions i l'avís de certificat en surten i es pinten al costat de les
   regions.
-- La capçalera (#343) és el `<header>` «Oreneta», el punt de referència
-  `banner` de la finestra. Es pinta després de `MacTitleBar` i abans de `ConnectivityBanner` i
-  `UpdateBanner`, fora de `<main>`, com demana ADR-0068 §1 (barra de títol,
-  capçalera, avisos i la resta). El seu nom és el de l'aplicació, igual en els 20
-  catàlegs, i no coincideix amb el de cap altra regió en cap idioma, com comprova
-  una prova; el del botó «Menú de l'aplicació» tampoc no coincideix amb el «Més»
-  de la barra vertical.
+- La capçalera (#343) és el `<header>` «Oreneta», el punt de referència `banner`
+  de la finestra. Es pinta després de `MacTitleBar` i abans de
+  `ConnectivityBanner` i `UpdateBanner`, fora de `<main>`, com demana ADR-0068
+  §1 (barra de títol, capçalera, avisos i la resta). El seu nom és el de
+  l'aplicació, igual en els 20 catàlegs, i no coincideix amb el de cap altra
+  regió en cap idioma, com comprova una prova; el del botó «Menú de l'aplicació»
+  tampoc no coincideix amb el «Més» de la barra vertical.
+- La pantalla d'alta del primer compte (#343) té la mateixa capçalera, amb la
+  banda (`search`), i després l'alta del compte dins de `<main>`, que és la
+  regió `content`: F6 i Maj+F6 van d'una a l'altra. Només hi actuen les dreceres
+  de l'aplicació (vegeu
+  [top-band.md](top-band.md#la-pantalla-dalta-del-primer-compte)).
 - Els diàlegs que obre un mòdul (l'editor d'una persona, l'editor i el detall
   d'un esdeveniment, la revisió del context de l'assistent, la galeria
   d'imatges) es pinten dins d'aquest mòdul i són modals (`aria-modal="true"`).
