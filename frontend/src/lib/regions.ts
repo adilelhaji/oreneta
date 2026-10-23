@@ -7,8 +7,8 @@
 // the module): the focus belongs to the innermost one.
 
 /**
- * The kinds of region, in F6 order. `search` is the top band (#343), which
- * the band's search field joins in 13b; the toolbar arrives with its step.
+ * The kinds of region, in F6 order. `search` is the top band (#343), with
+ * the app menu and the search field (#344); the toolbar arrives with its step.
  */
 export const REGION_ORDER = ['search', 'toolbar', 'folders', 'modules', 'content', 'reader', 'sidebar'] as const
 

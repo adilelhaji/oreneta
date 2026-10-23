@@ -288,6 +288,17 @@ export function getAllKanbanColumns(): KanbanColumn[] {
   return settings$.kanbanBoards.get().flatMap((board) => board.columns)
 }
 
+/**
+ * Scope the board's search to one column (its key) or to `all`. Matches are
+ * drawn in the column body, so a collapsed column is expanded: the search
+ * would otherwise hide the very results it loaded behind the strip.
+ */
+export function setKanbanSearchScope(boardId: string, scope: string) {
+  kanban$.searchScope.set(scope)
+  const column = getKanbanColumns(boardId).find((item) => kanbanColumnKey(item) === scope)
+  if (column) settings$.kanbanMinimizedColumns[kanbanBoardColumnKey(boardId, column)].set(false)
+}
+
 export function addKanbanColumn(boardId: string, column: KanbanColumn) {
   if (!boardId || !column.accountId || !column.folderId) return
   const entry = kanbanColumnKey(column)

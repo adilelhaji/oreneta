@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { closestCenter, DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable'
-import { Columns3, Plus, Search, SquarePen, X } from 'lucide-react'
+import { Columns3, Plus, SquarePen } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { invoke } from '../../lib/bridge'
 import { accounts$, isSendableAccount } from '../../states/accounts'
-import { clearBulkSelection, ui$ } from '../../states/ui'
+import { clearBulkSelection, focusGlobalSearch, ui$ } from '../../states/ui'
 import { mail$, ensureAccountFolders } from '../../states/mail'
 import { openComposeTab } from '../../states/compose'
 import type { Folder } from '../../types'
@@ -18,6 +18,7 @@ import {
   kanban$,
   removeKanbanColumn,
   setGlobalKanbanFilter,
+  setKanbanSearchScope,
   type KanbanColumn,
 } from '../../states/kanban'
 import { settings$ } from '../../states/settings'
@@ -27,7 +28,6 @@ import { AddColumnDialog, type AccountGroup } from './AddColumnDialog'
 import { SortableColumn } from './KanbanBoardColumn'
 import { KanbanDragPreview } from './KanbanThreadCard'
 import { useThreadContextMenu } from '../threads/ThreadContextMenu'
-import { SearchScopeDropdown } from './SearchScopeDropdown'
 import { BoardMenu, FilterSwitch } from './KanbanBoardMenu'
 import { isRSSAccount, loadKanbanColumn, resolveKanbanMove, useFoldersByAccount } from '../../lib/kanbanData'
 import { wallpaperCss } from '../../lib/wallpapers'
@@ -41,17 +41,10 @@ export function KanbanView({ boardId }: { boardId: string }) {
   const globalFilter = useValue(kanban$.globalFilter)
   const searchQuery = useValue(kanban$.searchQuery)
   const searchScope = useValue(kanban$.searchScope)
-  const globalSearchFocus = useValue(ui$.globalSearchFocus)
   const board = boards.find((item) => item.id === boardId)
   // No layer at all when unset, so the default board keeps the plain theme surface.
   const boardWallpaper = board?.wallpaper ? wallpaperCss(board.wallpaper) : null
   const [dialogOpen, setDialogOpen] = useState(false)
-  // The search bar is collapsed to an icon by default; it expands on click (or the
-  // search hotkey) and folds back once it's empty and loses focus. Start open if a
-  // query is already active so a persisted search stays visible.
-  const [searchOpen, setSearchOpen] = useState(() => !!kanban$.searchQuery.peek().trim())
-  const searchInputRef = useRef<HTMLInputElement | null>(null)
-  const searchBarRef = useRef<HTMLDivElement | null>(null)
   const hasSendableAccount = accounts.some(isSendableAccount)
   const visibleColumns = useMemo(() => getKanbanColumns(boardId), [boards, boardId])
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
@@ -96,33 +89,6 @@ export function KanbanView({ boardId }: { boardId: string }) {
     clearBulkSelection()
   }, [globalFilter, searchQuery, searchScope])
 
-  useEffect(() => {
-    if (globalSearchFocus === 0) return
-    setSearchOpen(true)
-    requestAnimationFrame(() => {
-      searchInputRef.current?.focus()
-      searchInputRef.current?.select()
-    })
-  }, [globalSearchFocus])
-
-  // Focus the input whenever the bar expands so it's immediately typeable.
-  useEffect(() => {
-    if (searchOpen) searchInputRef.current?.focus()
-  }, [searchOpen])
-
-  // Collapse the bar when the user clicks away, but only if it's empty — an active
-  // query keeps the bar (and its results) visible.
-  useEffect(() => {
-    if (!searchOpen) return
-    const onPointerDown = (event: MouseEvent) => {
-      if (searchBarRef.current?.contains(event.target as Node)) return
-      if (kanban$.searchQuery.peek().trim()) return
-      setSearchOpen(false)
-    }
-    document.addEventListener('mousedown', onPointerDown)
-    return () => document.removeEventListener('mousedown', onPointerDown)
-  }, [searchOpen])
-
   function openDialog() {
     // Kick a real folder LIST per account and open immediately on the cache. The
     // sync is async and deduped in core; its mail.synced({folders:true}) refreshes
@@ -137,22 +103,11 @@ export function KanbanView({ boardId }: { boardId: string }) {
     setDialogOpen(true)
   }
 
-  // Matches are drawn in the column body, so scoping a search to a collapsed
-  // column would hide the very results it just loaded behind the strip.
-  function expandSearchScope(scope: string) {
-    const column = visibleColumns.find((item) => kanbanColumnKey(item) === scope)
-    if (!column) return
-    settings$.kanbanMinimizedColumns[kanbanBoardColumnKey(boardId, column)].set(false)
-  }
-
+  // A column's «Search this column»: the board's search, in the top band
+  // (ADR-0068 §2, #344), scoped to that column.
   function searchColumn(column: KanbanColumn) {
-    kanban$.searchScope.set(kanbanColumnKey(column))
-    expandSearchScope(kanbanColumnKey(column))
-    setSearchOpen(true)
-    requestAnimationFrame(() => {
-      searchInputRef.current?.focus()
-      searchInputRef.current?.select()
-    })
+    setKanbanSearchScope(boardId, kanbanColumnKey(column))
+    focusGlobalSearch()
   }
 
   function applyColumns(nextKeys: string[]) {
@@ -225,54 +180,6 @@ export function KanbanView({ boardId }: { boardId: string }) {
           )}
           <h2 className="truncate text-sm font-bold text-primary">{board?.name || t('kanban.board.defaultName')}</h2>
         </div>
-        {searchOpen ? (
-          <div
-            ref={searchBarRef}
-            className="flex h-9 min-w-0 basis-72 shrink items-center overflow-visible rounded-control border border-transparent bg-hover focus-within:border-accent/40 focus-within:bg-chats"
-          >
-            <div className="relative h-full min-w-0 flex-1">
-              <Search
-                className="absolute start-3 top-1/2 -translate-y-1/2 text-secondary"
-                size={14}
-                strokeWidth={1.75}
-              />
-              <input
-                ref={searchInputRef}
-                value={searchQuery}
-                onChange={(event) => kanban$.searchQuery.set(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Escape') return
-                  if (searchQuery) kanban$.searchQuery.set('')
-                  else setSearchOpen(false)
-                }}
-                placeholder={t('kanban.searchBoard')}
-                className="h-full w-full border-0 bg-transparent py-1.5 ps-9.5 pe-8 text-xs text-primary outline-none placeholder-secondary transition-all"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => {
-                    kanban$.searchQuery.set('')
-                    searchInputRef.current?.focus()
-                  }}
-                  className="absolute end-2.5 top-1/2 -translate-y-1/2 text-secondary hover:text-primary cursor-pointer transition-colors"
-                  title={t('common.clearSearch')}
-                >
-                  <X size={14} strokeWidth={1.75} />
-                </button>
-              )}
-            </div>
-            <SearchScopeDropdown
-              value={searchScope}
-              onChange={(val) => {
-                kanban$.searchScope.set(val)
-                expandSearchScope(val)
-              }}
-              visibleColumns={visibleColumns}
-            />
-          </div>
-        ) : (
-          <IconButton icon={Search} label={t('kanban.searchBoardAction')} onClick={() => setSearchOpen(true)} />
-        )}
         <FilterSwitch value={globalFilter} onChange={setGlobalKanbanFilter} />
         {hasSendableAccount && (
           <IconButton

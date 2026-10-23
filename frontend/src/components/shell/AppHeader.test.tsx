@@ -110,13 +110,15 @@ describe('the top band (#343)', () => {
     // 2.25 rem (h-9), so it grows with the app's zoom; today's frame tone.
     expect(band.className.split(' ')).toContain('h-9')
     expect(band.className.split(' ')).toContain('bg-header')
-    // Start, centre and end, laid out for 13b and 13c.
+    // Start, centre and end: the centre holds the search (#344), the end is
+    // laid out for 13c.
     expect([...band.children].map((area) => Object.keys((area as HTMLElement).dataset))).toEqual([
       ['bandStart'],
       ['bandCentre'],
       ['bandEnd'],
     ])
     expect((band.children[1] as HTMLElement).className).toContain('flex-1')
+    expect(within(band.children[1] as HTMLElement).getByRole('search', { name: 'Search' })).toBeTruthy()
     // The app menu button at its start.
     const button = within(band.children[0] as HTMLElement).getByRole('button', { name: 'App menu' })
     expect(button.getAttribute('aria-haspopup')).toBe('menu')
@@ -369,6 +371,8 @@ describe('the names of the band and the menu (ADR-0068 §1, #343)', () => {
   const regions = [
     'shell.region.mail',
     'shell.region.modules',
+    // The band's search landmark (#344).
+    'shell.region.search',
     'mailNavigation.title',
     'connectivity.health.title',
     'categories.label',

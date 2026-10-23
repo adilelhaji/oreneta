@@ -9,7 +9,6 @@ import {
   Plus,
   RefreshCw,
   Repeat,
-  Search,
   Trash2,
   AlertTriangle,
 } from 'lucide-react'
@@ -256,112 +255,102 @@ export function TasksView() {
             </Button>
           </div>
         </header>
-        <div
-          // Below 1025 px the tabs stand in for the pane: focus goes back here (#341).
-          data-focus-return={inPane ? undefined : ''}
-          className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-header px-4 py-2"
-        >
-          {!inPane && (
-            <>
-              <div
-                role="tablist"
-                aria-label={t('tasks.lists', { defaultValue: 'Lists' })}
-                className="flex flex-wrap gap-1.5"
-                // Arrows move between the lists in reading order (ADR-0061).
-                onKeyDown={(event) => handleGroupArrowKeys(event, '[role="tab"]', 'horizontal')}
-              >
-                {[
-                  { id: 'all', label: t('tasks.allLists', { defaultValue: 'All' }), open: -1 },
-                  ...lists.map((list) => ({ id: list.id, label: listName(list), open: list.open })),
-                ].map((entry) => (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    role="tab"
-                    data-focus-key={`list:${entry.id}`}
-                    aria-selected={selectedList === entry.id}
-                    onClick={() => tasks$.selectedList.set(entry.id)}
-                    className={clsx(
-                      'rounded-control-sm px-2.5 py-1 text-caption font-semibold transition-colors cursor-pointer',
-                      selectedList === entry.id ? 'bg-accent text-on-accent' : 'text-secondary hover:bg-hover',
-                    )}
-                  >
-                    {entry.label}
-                    {entry.open > 0 && <span className="ms-1 tabular-nums">{entry.open}</span>}
-                  </button>
-                ))}
-              </div>
-              {newList === null ? (
+        {/* Below 1025 px the lists are tabs under the header. The search is in
+            the top band (ADR-0068 §2, #344), so from 1025 px there is no bar. */}
+        {!inPane && (
+          <div
+            // Below 1025 px the tabs stand in for the pane: focus goes back here (#341).
+            data-focus-return
+            className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-header px-4 py-2"
+          >
+            <div
+              role="tablist"
+              aria-label={t('tasks.lists', { defaultValue: 'Lists' })}
+              className="flex flex-wrap gap-1.5"
+              // Arrows move between the lists in reading order (ADR-0061).
+              onKeyDown={(event) => handleGroupArrowKeys(event, '[role="tab"]', 'horizontal')}
+            >
+              {[
+                { id: 'all', label: t('tasks.allLists', { defaultValue: 'All' }), open: -1 },
+                ...lists.map((list) => ({ id: list.id, label: listName(list), open: list.open })),
+              ].map((entry) => (
                 <button
+                  key={entry.id}
                   type="button"
-                  data-focus-key="new-list"
-                  onClick={() => setNewList('')}
-                  className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer"
+                  role="tab"
+                  data-focus-key={`list:${entry.id}`}
+                  aria-selected={selectedList === entry.id}
+                  onClick={() => tasks$.selectedList.set(entry.id)}
+                  className={clsx(
+                    'rounded-control-sm px-2.5 py-1 text-caption font-semibold transition-colors cursor-pointer',
+                    selectedList === entry.id ? 'bg-accent text-on-accent' : 'text-secondary hover:bg-hover',
+                  )}
                 >
-                  + {t('tasks.newList', { defaultValue: 'New list' })}
+                  {entry.label}
+                  {entry.open > 0 && <span className="ms-1 tabular-nums">{entry.open}</span>}
                 </button>
-              ) : (
-                <form
-                  className="flex items-center gap-1.5"
-                  onSubmit={(event) => {
-                    event.preventDefault()
-                    if (newList.trim()) void createTaskList(newList)
-                    setNewList(null)
-                  }}
-                >
-                  <input
-                    autoFocus
-                    data-focus-key="new-list-name"
-                    value={newList}
-                    aria-label={t('tasks.newListName', { defaultValue: 'New list name' })}
-                    onChange={(event) => setNewList(event.target.value)}
-                    onBlur={() => !newList.trim() && setNewList(null)}
-                    className="w-36 rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent-fg"
-                  />
-                </form>
-              )}
+              ))}
+            </div>
+            {newList === null ? (
               <button
                 type="button"
-                data-focus-key="caldav-list"
-                onClick={() => setAddingCalDav(true)}
+                data-focus-key="new-list"
+                onClick={() => setNewList('')}
                 className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer"
               >
-                + {t('tasks.addCalDavList', { defaultValue: 'CalDAV task list…' })}
+                + {t('tasks.newList', { defaultValue: 'New list' })}
               </button>
-              <AddAccountListMenu entries={accountLists} />
-              {current && current.id !== MAIL_LIST && (
-                <span className="ms-auto flex gap-1">
-                  <button
-                    type="button"
-                    data-focus-key="rename-list"
-                    onClick={() => void renameList()}
-                    className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer"
-                  >
-                    {t('tasks.renameList', { defaultValue: 'Rename list' })}
-                  </button>
-                  <button
-                    type="button"
-                    data-focus-key="delete-list"
-                    onClick={() => void removeList()}
-                    className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-danger-soft hover:text-danger cursor-pointer"
-                  >
-                    {t('tasks.deleteList', { defaultValue: 'Delete list' })}
-                  </button>
-                </span>
-              )}
-            </>
-          )}
-          <div className="flex min-w-40 flex-1 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-1.5 focus-within:border-accent-fg min-[600px]:max-w-64 min-[600px]:flex-none">
-            <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
-            <input
-              value={search}
-              onChange={(event) => tasks$.search.set(event.target.value)}
-              placeholder={t('tasks.search', { defaultValue: 'Search tasks' })}
-              aria-label={t('tasks.search', { defaultValue: 'Search tasks' })}
-              className="min-w-0 flex-1 bg-transparent text-caption text-primary placeholder-secondary outline-none"
-            />
+            ) : (
+              <form
+                className="flex items-center gap-1.5"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  if (newList.trim()) void createTaskList(newList)
+                  setNewList(null)
+                }}
+              >
+                <input
+                  autoFocus
+                  data-focus-key="new-list-name"
+                  value={newList}
+                  aria-label={t('tasks.newListName', { defaultValue: 'New list name' })}
+                  onChange={(event) => setNewList(event.target.value)}
+                  onBlur={() => !newList.trim() && setNewList(null)}
+                  className="w-36 rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent-fg"
+                />
+              </form>
+            )}
+            <button
+              type="button"
+              data-focus-key="caldav-list"
+              onClick={() => setAddingCalDav(true)}
+              className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer"
+            >
+              + {t('tasks.addCalDavList', { defaultValue: 'CalDAV task list…' })}
+            </button>
+            <AddAccountListMenu entries={accountLists} />
+            {current && current.id !== MAIL_LIST && (
+              <span className="ms-auto flex gap-1">
+                <button
+                  type="button"
+                  data-focus-key="rename-list"
+                  onClick={() => void renameList()}
+                  className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer"
+                >
+                  {t('tasks.renameList', { defaultValue: 'Rename list' })}
+                </button>
+                <button
+                  type="button"
+                  data-focus-key="delete-list"
+                  onClick={() => void removeList()}
+                  className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-danger-soft hover:text-danger cursor-pointer"
+                >
+                  {t('tasks.deleteList', { defaultValue: 'Delete list' })}
+                </button>
+              </span>
+            )}
           </div>
-        </div>
+        )}
         {current && isRemoteList(current) && (
           <SyncStatus list={current} syncing={syncing} onSync={() => void syncTaskLists(current.id)} />
         )}

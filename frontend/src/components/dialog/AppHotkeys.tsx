@@ -51,8 +51,9 @@ import {
 } from '../../lib/shortcuts'
 
 // Whether the conversation pane (and thus its in-thread search) is on screen.
+// Only mail draws it: in another module a thread chosen in mail is not shown.
 function threadSearchVisible(): boolean {
-  if (!ui$.selectedThread.peek()) return false
+  if (ui$.module.peek() !== 'mail' || !ui$.selectedThread.peek()) return false
   return !kanban$.activeBoardId.peek() || !!kanban$.paneThreadId.peek()
 }
 
@@ -349,14 +350,15 @@ export function AppHotkeys({ setup = false }: { setup?: boolean }) {
           break
         }
         case 'search.thread':
-          // Find in the open conversation; fall back to the thread-list search
-          // when no conversation is on screen. preventDefault stops the webview's
-          // native ⌘/Ctrl+F find bar.
+          // Find in the open conversation; fall back to the search in the top
+          // band (ADR-0068 §2, #344) when no conversation is on screen.
+          // preventDefault stops the webview's native ⌘/Ctrl+F find bar.
           event.preventDefault()
           if (threadSearchVisible()) openThreadSearch()
           else focusGlobalSearch()
           break
         case 'search.global':
+          // The band's search, scoped to the module on screen (#344).
           event.preventDefault()
           focusGlobalSearch()
           break

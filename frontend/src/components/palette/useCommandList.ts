@@ -191,7 +191,9 @@ export function useCommandList(): Command[] {
         keywords: 'find conversation in',
         shortcut: 'search.thread',
         run: run(() => {
-          const visible = !!selectedThread && (!activeBoardId || !!kanban$.paneThreadId.peek())
+          // As Ctrl/⌘+F: the open conversation's search, which only mail
+          // draws, or else the top band's (#344).
+          const visible = inMailView && !!selectedThread && (!activeBoardId || !!kanban$.paneThreadId.peek())
           if (visible) thread$.searchOpen.set(true)
           else focusGlobalSearch()
         }),

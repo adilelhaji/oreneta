@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, DragEvent } from 'react'
-import { Search, X, Plus, SquarePen, MoreHorizontal } from 'lucide-react'
+import { Plus, SquarePen, MoreHorizontal } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { openAddFeed, RSS_FEED_DRAG_TYPE } from '../../states/feeds'
@@ -53,7 +53,6 @@ import { categories$, dropStaleFacet } from '../../states/categories'
 import { CategoryTabs } from './CategoryTabs'
 import { canExportMail } from '../../lib/mailCapabilities'
 import type { Message } from '../../types'
-import { clsx } from '../../lib/utils'
 import { isRssAccount } from '../../lib/threadActions'
 import { folderLabel } from '../../lib/kanbanData'
 import { isUnifiedStarred } from '../../lib/unifiedFolders'
@@ -66,8 +65,6 @@ import { ThreadActionsMenu } from './ThreadActionsMenu'
 import { ScheduledSendsBar } from './ScheduledSendsBar'
 import { QuickFilterBar } from './QuickFilterBar'
 import { SearchUnderstoodBar } from './SearchUnderstoodBar'
-import { SavedSearchMenu } from './SavedSearchMenu'
-import { SearchBuilder } from './SearchBuilder'
 import { ThreadContextMenu, useThreadContextMenu } from './ThreadContextMenu'
 import { ThreadListItem, type QuickRowAction } from './ThreadListItem'
 import { ThreadTable, appliedListSort } from './ThreadTable'
@@ -144,20 +141,6 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
   // Quick-settings (view + theme) anchor for the narrow-window header button.
   // The side navigation that normally hosts these controls is hidden at this width.
   const [quickMenu, setQuickMenu] = useState<{ x: number; y: number } | null>(null)
-  // Focus the search box when ⌘/Ctrl+Shift+F (or the palette) bumps the signal.
-  const searchInputRef = useRef<HTMLInputElement | null>(null)
-  const [searchFocused, setSearchFocused] = useState(false)
-  // Searching takes over the header: the folder name and the icon buttons step
-  // aside so the box is full width while it is being used. It stays open with
-  // text in it after blur, so a typed query is never truncated out of view.
-  const searchExpanded = searchFocused || query.length > 0
-  const globalSearchFocus = useValue(ui$.globalSearchFocus)
-  useEffect(() => {
-    if (globalSearchFocus === 0) return
-    const input = searchInputRef.current
-    input?.focus()
-    input?.select()
-  }, [globalSearchFocus])
 
   // Keep the selected thread visible when it changes — chiefly so j/k keyboard
   // navigation can walk past the fold. `block: "nearest"` leaves already-visible
@@ -376,169 +359,118 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
         // Less padding on the right than the left: the trailing icon buttons carry
         // their own, so px-4 on both sides left the row lopsided.
         <div className="flex h-16 shrink-0 flex-row items-center gap-3 ps-4 pe-2 border-b border-border bg-white dark:bg-[#0f172a]/40">
-          <div className="flex items-center gap-2 w-full">
+          <div className="flex w-full min-w-0 items-center gap-2">
             {/* Current folder, doubling as a picker: switching here retargets the
-              list the same way it retargets a kanban column. Capped so a deep
-              folder name can't crowd out the search box. */}
-            {showFolderSwitcher && !searchExpanded && (
+              list the same way it retargets a kanban column. The search is in
+              the top band (ADR-0068 §2, #344), so the folder name and the icon
+              buttons keep the row. */}
+            {showFolderSwitcher && (
               <FolderSwitcher
                 accountId={selectedAccount}
                 folderId={selectedFolder}
                 label={folderLabel({ accountId: selectedAccount, folderId: selectedFolder }, folders, accounts, t)}
-                labelClassName="-ms-2 max-w-[40%] shrink-0 text-xs font-bold"
+                labelClassName="-ms-2 min-w-0 text-xs font-bold"
                 onSelect={(nextFolderId) => ui$.selectedFolder.set(nextFolderId)}
               />
             )}
-            <div className="relative min-w-0 flex-1">
-              <Search
-                className="absolute start-2.5 top-1/2 -translate-y-1/2 text-secondary"
-                size={16}
-                strokeWidth={1.75}
+            <div className="ms-auto flex shrink-0 items-center gap-2">
+              {/* Add account: only reachable here when the side navigation is hidden (narrow). */}
+              <IconButton
+                icon={Plus}
+                iconSize={20}
+                label={t('accounts.actions.addAccount')}
+                size="md"
+                radius="lg"
+                className="min-[769px]:hidden"
+                onClick={() => ui$.setupOpen.set(true)}
               />
-              <input
-                ref={searchInputRef}
-                value={query}
-                onChange={(event) => ui$.query.set(event.target.value)}
-                onFocus={() => setSearchFocused(true)}
-                onBlur={() => setSearchFocused(false)}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Escape') return
-                  ui$.query.set('')
-                  event.currentTarget.blur()
-                }}
-                placeholder={isRSSAccount ? t('threads.searchFeeds') : t('threads.searchMessages')}
-                // The operators are discoverable from the box that takes them,
-                // which is the only place someone is looking when they wonder
-                // whether this search can do more than words.
-                title={isRSSAccount ? undefined : t('search.operatorsHint')}
-                className={clsx(
-                  'w-full rounded-control bg-hover py-2 ps-8 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent-fg focus:bg-chats border border-transparent focus:border-transparent transition-all duration-120',
-                  // The right padding only has to clear the clear button while there is one.
-                  query ? 'pe-8' : 'pe-3',
-                )}
-              />
-              {query && (
-                <button
-                  type="button"
-                  aria-label={t('common.clearSearch')}
-                  onClick={() => ui$.query.set('')}
-                  className="absolute end-2.5 top-1/2 -translate-y-1/2 text-secondary hover:text-primary cursor-pointer"
-                >
-                  <X size={16} strokeWidth={1.75} />
-                </button>
+              {/* New mail (compose) */}
+              {hasSendableAccount && !isStarredView && !isRSSAccount && (
+                <IconButton
+                  icon={SquarePen}
+                  iconSize={16}
+                  label={t('composer.actions.newMessage')}
+                  size="md"
+                  radius="lg"
+                  onClick={() => openComposeTab()}
+                />
               )}
-            </div>
-
-            {!isRSSAccount && <SearchBuilder query={query} />}
-            <SavedSearchMenu query={query} />
-
-            {!searchExpanded && (
-              <>
-                {/* Add account: only reachable here when the side navigation is hidden (narrow). */}
+              {/* Mark-all-read and the folder actions. The narrowings moved
+              out to the bar below, where they can be seen and combined; the
+              menu keeps what is done rarely. */}
+              {!isStarredView && (
+                <ThreadActionsMenu
+                  hideFilters
+                  filterMode="all"
+                  onFilterChange={() => {}}
+                  hasUnread={hasUnread}
+                  onMarkAllRead={() => markAllRead()}
+                  onEmptyFolder={
+                    emptiableTarget
+                      ? () =>
+                          void emptyFolder(selectedAccount, selectedFolder, emptiableTarget).then(async (emptied) => {
+                            if (emptied) await loadThreads(false)
+                          })
+                      : undefined
+                  }
+                  emptyFolderLabel={
+                    emptiableTarget?.role === 'junk' ? t('threads.actions.emptyJunk') : t('threads.actions.emptyTrash')
+                  }
+                  onDeleteFolder={
+                    deletableTarget
+                      ? () =>
+                          void deleteFolder(
+                            selectedAccount,
+                            selectedFolder,
+                            deletableTarget.name,
+                            deletableTarget.nested,
+                          )
+                      : undefined
+                  }
+                  onExportFolder={
+                    exportable
+                      ? () =>
+                          void exportFolderMbox(
+                            selectedAccount,
+                            selectedFolder,
+                            folderLabel({ accountId: selectedAccount, folderId: selectedFolder }, folders, accounts, t),
+                          )
+                      : undefined
+                  }
+                  onSync={syncMail}
+                  syncing={busy}
+                  allLabel={isRSSAccount ? t('filters.allFeeds') : t('filters.all')}
+                  hideSnoozed={isRSSAccount}
+                  syncLabel={isRSSAccount ? t('feeds.actions.syncFeeds') : t('threads.actions.syncMailbox')}
+                  syncingLabel={t('connectivity.health.pending')}
+                />
+              )}
+              {isRSSAccount && (
                 <IconButton
                   icon={Plus}
-                  iconSize={20}
-                  label={t('accounts.actions.addAccount')}
+                  iconSize={16}
+                  label={t('feeds.actions.addToAccount')}
                   size="md"
                   radius="lg"
-                  className="min-[769px]:hidden"
-                  onClick={() => ui$.setupOpen.set(true)}
+                  onClick={() => openAddFeed(selectedAccount)}
                 />
-                {/* New mail (compose) */}
-                {hasSendableAccount && !isStarredView && !isRSSAccount && (
-                  <IconButton
-                    icon={SquarePen}
-                    iconSize={16}
-                    label={t('composer.actions.newMessage')}
-                    size="md"
-                    radius="lg"
-                    onClick={() => openComposeTab()}
-                  />
-                )}
-                {/* Mark-all-read and the folder actions. The narrowings moved
-                out to the bar below, where they can be seen and combined; the
-                menu keeps what is done rarely. */}
-                {!isStarredView && (
-                  <ThreadActionsMenu
-                    hideFilters
-                    filterMode="all"
-                    onFilterChange={() => {}}
-                    hasUnread={hasUnread}
-                    onMarkAllRead={() => markAllRead()}
-                    onEmptyFolder={
-                      emptiableTarget
-                        ? () =>
-                            void emptyFolder(selectedAccount, selectedFolder, emptiableTarget).then(async (emptied) => {
-                              if (emptied) await loadThreads(false)
-                            })
-                        : undefined
-                    }
-                    emptyFolderLabel={
-                      emptiableTarget?.role === 'junk'
-                        ? t('threads.actions.emptyJunk')
-                        : t('threads.actions.emptyTrash')
-                    }
-                    onDeleteFolder={
-                      deletableTarget
-                        ? () =>
-                            void deleteFolder(
-                              selectedAccount,
-                              selectedFolder,
-                              deletableTarget.name,
-                              deletableTarget.nested,
-                            )
-                        : undefined
-                    }
-                    onExportFolder={
-                      exportable
-                        ? () =>
-                            void exportFolderMbox(
-                              selectedAccount,
-                              selectedFolder,
-                              folderLabel(
-                                { accountId: selectedAccount, folderId: selectedFolder },
-                                folders,
-                                accounts,
-                                t,
-                              ),
-                            )
-                        : undefined
-                    }
-                    onSync={syncMail}
-                    syncing={busy}
-                    allLabel={isRSSAccount ? t('filters.allFeeds') : t('filters.all')}
-                    hideSnoozed={isRSSAccount}
-                    syncLabel={isRSSAccount ? t('feeds.actions.syncFeeds') : t('threads.actions.syncMailbox')}
-                    syncingLabel={t('connectivity.health.pending')}
-                  />
-                )}
-                {isRSSAccount && (
-                  <IconButton
-                    icon={Plus}
-                    iconSize={16}
-                    label={t('feeds.actions.addToAccount')}
-                    size="md"
-                    radius="lg"
-                    onClick={() => openAddFeed(selectedAccount)}
-                  />
-                )}
-                {/* View + theme: only reachable here when the side navigation is hidden (narrow). */}
-                <IconButton
-                  icon={MoreHorizontal}
-                  iconSize={20}
-                  label={t('common.more')}
-                  aria-haspopup="menu"
-                  aria-expanded={quickMenu !== null}
-                  size="md"
-                  radius="lg"
-                  className="min-[769px]:hidden"
-                  onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect()
-                    setQuickMenu({ x: endAlignedX(rect, 208), y: rect.bottom })
-                  }}
-                />
-              </>
-            )}
+              )}
+              {/* View + theme: only reachable here when the side navigation is hidden (narrow). */}
+              <IconButton
+                icon={MoreHorizontal}
+                iconSize={20}
+                label={t('common.more')}
+                aria-haspopup="menu"
+                aria-expanded={quickMenu !== null}
+                size="md"
+                radius="lg"
+                className="min-[769px]:hidden"
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  setQuickMenu({ x: endAlignedX(rect, 208), y: rect.bottom })
+                }}
+              />
+            </div>
           </div>
         </div>
       )}

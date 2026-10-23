@@ -157,10 +157,12 @@ describe('Tasks in the common folder pane (ADR-0068 §4, #329)', () => {
     expect(screen.queryByRole('tablist')).toBeNull()
     expect(screen.queryByRole('tab')).toBeNull()
     expect(within(content(screen)).queryByRole('button', { name: /New list/ })).toBeNull()
-    // The header keeps the title, the new task, the completed filter and the search.
+    // The header keeps the title, the new task and the completed filter. The
+    // search is in the top band (#344): no field, and no bar under the header.
     expect(within(content(screen)).getByRole('heading', { level: 1, name: 'Tasks' })).toBeTruthy()
     expect(within(content(screen)).getByRole('button', { name: 'New task' })).toBeTruthy()
-    expect(within(content(screen)).getByRole('textbox', { name: 'Search tasks' })).toBeTruthy()
+    expect(within(content(screen)).queryByRole('textbox', { name: 'Search tasks' })).toBeNull()
+    expect(content(screen).querySelector('header')!.nextElementSibling?.querySelector('input')).toBeFalsy()
   })
 
   it('lists every list the tabs showed, in the same order, with the same counts, and chooses one', async () => {
@@ -609,12 +611,14 @@ describe('Tasks keep the focus across 1025 px (#341)', () => {
     const screen = render(<TasksView />)
     await ready(screen)
     expect(document.activeElement).toBe(document.body)
-    const search = screen.getByRole('textbox', { name: 'Search tasks' })
-    search.focus()
+    // The header's «New task», which stays in place across 1025 px, as the
+    // search did before it moved to the top band (#344).
+    const newTask = within(content(screen)).getByRole('button', { name: 'New task' })
+    newTask.focus()
     await narrowWindow()
-    expect(document.activeElement).toBe(search)
+    expect(document.activeElement).toBe(newTask)
     await act(async () => setWidth(1025))
-    expect(document.activeElement).toBe(search)
+    expect(document.activeElement).toBe(newTask)
   })
 
   it('does nothing when the window crosses with no focus at all', async () => {
