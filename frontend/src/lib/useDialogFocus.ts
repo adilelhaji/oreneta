@@ -8,7 +8,12 @@ export function useDialogFocus(dialogRef: RefObject<HTMLElement | null>) {
     if (!dialog) return
     if (!dialog.contains(document.activeElement)) dialog.focus()
     return () => {
-      const ownedFocus = dialog.contains(document.activeElement)
+      // The dialog's focus is the one in it, and the one that fell out of it
+      // to the body: a control that disabled itself while it worked (Settings'
+      // «Restore») or that went. Both go back to the opener, as menus do
+      // (useMenuFocus). Focus that another surface took stays there.
+      const active = document.activeElement
+      const ownedFocus = !active || active === document.body || !active.isConnected || dialog.contains(active)
       const opener = openerRef.current
       queueMicrotask(() => {
         if (dialog.isConnected || !ownedFocus) return

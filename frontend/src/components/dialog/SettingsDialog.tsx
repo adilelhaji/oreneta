@@ -205,7 +205,12 @@ function accountMeta(account: Account, t: ReturnType<typeof useTranslation>['t']
   return { isRSS, displayName, subtitle }
 }
 
-export function SettingsDialog() {
+/**
+ * `onAddAccount` replaces the add-account dialog for the «+» of the account
+ * lists: on the first-account setup screen, which is that flow already, it
+ * takes the person back to it (#343).
+ */
+export function SettingsDialog({ onAddAccount }: { onAddAccount?: () => void }) {
   const { t } = useTranslation()
   const dialogRef = useRef<HTMLDivElement>(null)
   useDialogFocus(dialogRef)
@@ -265,8 +270,15 @@ export function SettingsDialog() {
   })
 
   // Open the add-account dialog layered on top of Settings (Settings stays open
-  // underneath, so cancelling or saving returns here).
-  const onAddAccount = (mode: SetupMode) => {
+  // underneath, so cancelling or saving returns here). Where the window has
+  // its own add-account flow, Settings closes back to it instead, and leaves
+  // its provider as it was.
+  const addAccount = (mode: SetupMode) => {
+    if (onAddAccount) {
+      onAddAccount()
+      onClose()
+      return
+    }
     ui$.setupMode.set(mode)
     ui$.setupOpen.set(true)
   }
@@ -314,7 +326,7 @@ export function SettingsDialog() {
               accounts={mailAccounts}
               activeKey={activeKey}
               onSelect={selectAccount}
-              onAdd={() => onAddAccount('gmail')}
+              onAdd={() => addAccount('gmail')}
               emptyLabel={t('settings.sections.noMailAccounts')}
             />
             <AccountGroup
@@ -322,7 +334,7 @@ export function SettingsDialog() {
               accounts={feedAccounts}
               activeKey={activeKey}
               onSelect={selectAccount}
-              onAdd={() => onAddAccount('rss')}
+              onAdd={() => addAccount('rss')}
               emptyLabel={t('settings.sections.noFeedAccounts')}
             />
           </nav>

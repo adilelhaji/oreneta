@@ -206,6 +206,9 @@ const SETUP_SHORTCUTS: ReadonlySet<ShortcutId> = new Set([
   'shortcuts.help',
   'pane.next',
   'pane.prev',
+  'view.zoomIn',
+  'view.zoomOut',
+  'view.zoomReset',
 ])
 
 /**

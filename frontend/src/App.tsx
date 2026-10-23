@@ -11,8 +11,7 @@ import { useAppEffects } from './useAppEffects'
 import { SideNav } from './components/sidenav/SideNav'
 import { MailNavigation } from './components/sidenav/MailNavigation'
 import { FolderPane } from './components/shell/FolderPane'
-import { AppHeader } from './components/shell/AppHeader'
-import { AppLayers } from './components/shell/AppLayers'
+import { AppFrame } from './components/shell/AppFrame'
 import { ThreadList } from './components/threads/ThreadList'
 import { KanbanView } from './components/kanban/KanbanView'
 import { CalendarView } from './components/calendar/CalendarView'
@@ -24,7 +23,6 @@ import { AttachmentsView } from './components/attachments/AttachmentsView'
 import { MessagePane } from './components/chat/MessagePane'
 import { KanbanPaneResizer } from './components/resizer/PaneResizers'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { MacTitleBar } from './components/titlebar/MacTitleBar'
 import { ConnectivityBanner } from './components/banner/ConnectivityBanner'
 import { UpdateBanner } from './components/banner/UpdateBanner'
 import { SetupScreen } from './components/setup/SetupScreen'
@@ -59,86 +57,91 @@ export default function App() {
 
   const showKanbanMessagePane = !!kanbanPaneThreadId || composeTabs.some((tab) => tab.id === activeComposeTab)
 
-  // No account yet: the first-account setup, under the band (#343).
-  if (system && accounts.length === 0) return <SetupScreen />
+  // No account yet: the first-account setup, in the same frame as the
+  // window's, which stays mounted when the first account arrives (#343).
+  const setup = !!system && accounts.length === 0
 
   return (
-    <div className="flex h-full w-full flex-col bg-app text-primary">
-      <MacTitleBar />
-      {/* Title bar, header, notices, then the rest (ADR-0068 §1): the header's
-          first row is the top band with the app menu (§2). */}
-      <ErrorBoundary label="top band">
-        <AppHeader />
-      </ErrorBoundary>
-      <ConnectivityBanner />
-      <UpdateBanner />
-      {/* One <main>, named after the module on screen (ADR-0068 §1). The rail
-          and, after it, the folder pane are still inside it until the module
-          strip replaces the rail (ADR-0068 §9, step 4). */}
-      <main ref={mainRef} aria-label={moduleNames[activeModule]} className="flex min-h-0 w-full flex-1 overflow-hidden">
-        <ErrorBoundary label="side navigation">
-          <SideNav />
-        </ErrorBoundary>
-        {activeModule === 'mail' && !activeBoardId && (
-          // The common folder pane, mail first (ADR-0068 §4 and §9, step 2):
-          // today's accounts and folders are its body.
-          <ErrorBoundary label="mail navigation">
-            <FolderPane title={t('mailNavigation.title')}>
-              <MailNavigation />
-            </FolderPane>
-          </ErrorBoundary>
-        )}
-        {activeModule === 'people' ? (
-          <ErrorBoundary label="people">
-            <PeopleView />
-          </ErrorBoundary>
-        ) : activeModule === 'calendar' ? (
-          <ErrorBoundary label="calendar">
-            <CalendarView />
-          </ErrorBoundary>
-        ) : activeModule === 'tasks' ? (
-          <ErrorBoundary label="tasks">
-            <TasksView />
-          </ErrorBoundary>
-        ) : activeModule === 'notes' ? (
-          <ErrorBoundary label="notes">
-            <NotesView />
-          </ErrorBoundary>
-        ) : activeModule === 'attachments' ? (
-          <ErrorBoundary label="attachments">
-            <AttachmentsView />
-          </ErrorBoundary>
-        ) : activeModule === 'chat' ? (
-          <ErrorBoundary label="messaging">
-            <MessagingView />
-          </ErrorBoundary>
-        ) : (
-          <ErrorBoundary label="thread list">
-            {activeBoardId ? <KanbanView boardId={activeBoardId} /> : <ThreadList width={threadListWidth} resizable />}
-          </ErrorBoundary>
-        )}
-        {activeModule !== 'mail' ? null : !activeBoardId ? (
-          <ErrorBoundary label="conversation">
-            <MessagePane />
-          </ErrorBoundary>
-        ) : showKanbanMessagePane ? (
-          <div
-            ref={kanbanPaneRef}
-            className="relative flex shrink-0 overflow-hidden border-s border-border bg-chat max-[600px]:w-full"
-            style={{ width: `${kanbanPaneWidth}%`, minWidth: 320 }}
+    <AppFrame setup={setup}>
+      {setup ? (
+        <SetupScreen />
+      ) : (
+        <>
+          <ConnectivityBanner />
+          <UpdateBanner />
+          {/* One <main>, named after the module on screen (ADR-0068 §1). The
+              rail and, after it, the folder pane are still inside it until the
+              module strip replaces the rail (ADR-0068 §9, step 4). */}
+          <main
+            ref={mainRef}
+            aria-label={moduleNames[activeModule]}
+            className="flex min-h-0 w-full flex-1 overflow-hidden"
           >
-            {/* The width is a percentage of the app shell, kept in settings. */}
-            <KanbanPaneResizer pane={kanbanPaneRef} shell={mainRef} />
-            <ErrorBoundary label="conversation">
-              <MessagePane />
+            <ErrorBoundary label="side navigation">
+              <SideNav />
             </ErrorBoundary>
-          </div>
-        ) : null}
-      </main>
-
-      {/* Dialogs, toasts and confirmations are siblings of the regions, not
-          part of the module in <main> (ADR-0068 §1). */}
-      <AppLayers />
-    </div>
+            {activeModule === 'mail' && !activeBoardId && (
+              // The common folder pane, mail first (ADR-0068 §4 and §9, step 2):
+              // today's accounts and folders are its body.
+              <ErrorBoundary label="mail navigation">
+                <FolderPane title={t('mailNavigation.title')}>
+                  <MailNavigation />
+                </FolderPane>
+              </ErrorBoundary>
+            )}
+            {activeModule === 'people' ? (
+              <ErrorBoundary label="people">
+                <PeopleView />
+              </ErrorBoundary>
+            ) : activeModule === 'calendar' ? (
+              <ErrorBoundary label="calendar">
+                <CalendarView />
+              </ErrorBoundary>
+            ) : activeModule === 'tasks' ? (
+              <ErrorBoundary label="tasks">
+                <TasksView />
+              </ErrorBoundary>
+            ) : activeModule === 'notes' ? (
+              <ErrorBoundary label="notes">
+                <NotesView />
+              </ErrorBoundary>
+            ) : activeModule === 'attachments' ? (
+              <ErrorBoundary label="attachments">
+                <AttachmentsView />
+              </ErrorBoundary>
+            ) : activeModule === 'chat' ? (
+              <ErrorBoundary label="messaging">
+                <MessagingView />
+              </ErrorBoundary>
+            ) : (
+              <ErrorBoundary label="thread list">
+                {activeBoardId ? (
+                  <KanbanView boardId={activeBoardId} />
+                ) : (
+                  <ThreadList width={threadListWidth} resizable />
+                )}
+              </ErrorBoundary>
+            )}
+            {activeModule !== 'mail' ? null : !activeBoardId ? (
+              <ErrorBoundary label="conversation">
+                <MessagePane />
+              </ErrorBoundary>
+            ) : showKanbanMessagePane ? (
+              <div
+                ref={kanbanPaneRef}
+                className="relative flex shrink-0 overflow-hidden border-s border-border bg-chat max-[600px]:w-full"
+                style={{ width: `${kanbanPaneWidth}%`, minWidth: 320 }}
+              >
+                {/* The width is a percentage of the app shell, kept in settings. */}
+                <KanbanPaneResizer pane={kanbanPaneRef} shell={mainRef} />
+                <ErrorBoundary label="conversation">
+                  <MessagePane />
+                </ErrorBoundary>
+              </div>
+            ) : null}
+          </main>
+        </>
+      )}
+    </AppFrame>
   )
 }
