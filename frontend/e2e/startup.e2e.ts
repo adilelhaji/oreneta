@@ -8170,7 +8170,10 @@ async function ignoredByAccessibility(page: Page, selector: string): Promise<boo
     const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector })
     expect(nodeId, selector).toBeGreaterThan(0)
     const { nodes } = await cdp.send('Accessibility.getPartialAXTree', { nodeId, fetchRelatives: false })
-    return nodes[0]?.ignored ?? true
+    // No node at all would make "ignored" pass without checking anything.
+    expect(nodes.length, selector).toBeGreaterThan(0)
+    expect(typeof nodes[0].ignored, selector).toBe('boolean')
+    return nodes[0].ignored
   } finally {
     await cdp.detach()
   }
@@ -8223,7 +8226,7 @@ test('below 769px the live regions at the end of the band keep announcing while 
 
 // Retry turns disabled while its request is pending. With the focus on it, the
 // focus fell to the page, where a bare key acts on the open conversation.
-test('Retry keeps the focus in its entry, in the popover and in the bar, and a bare key acts on nothing behind (#345)', async ({
+test('Retry keeps the focus in its entry, in the popover and in the bar, and in the popover a bare key acts on nothing behind (#345)', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })

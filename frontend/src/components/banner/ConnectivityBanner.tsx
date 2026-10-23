@@ -211,8 +211,9 @@ export function ConnectivityDetail({
                   disabled={observation?.request === 'pending'}
                   onClick={(event) => {
                     // Disabled while the request is pending, it would drop
-                    // the focus to the page, where a bare key acts on the
-                    // conversation: the entry keeps it, as with Dismiss.
+                    // the focus to the page: the entry keeps it, as with
+                    // Dismiss. In the popover that also keeps bare keys from
+                    // the conversation behind; the bar lets them through.
                     event.currentTarget.closest('li')?.focus()
                     void requestAccountSync(account.id)
                   }}

@@ -405,7 +405,8 @@ No molestis també es queda a la barra vertical fins a la peça 14.
   tancar-se. «Descarta» i «Torna-ho a provar» deixen el focus a l'entrada, que
   continua a la finestra: mentre la sol·licitud és en curs, «Torna-ho a provar»
   està desactivat, i el focus no cau a la pàgina, on una tecla nua actuaria sobre
-  la conversa. La barra fa el mateix.
+  la conversa. A la barra, «Torna-ho a provar» també deixa el focus a l'entrada,
+  però la barra no reté les tecles nues, com abans.
 - **Tecles:** una drecera amb Ctrl/⌘, Alt o una tecla de funció (la paleta, F6)
   actua des del botó, amb la finestra tancada, com al menú de l'aplicació. Les
   altres tecles (una lletra, les fletxes, Supr) es queden a la finestra: no
