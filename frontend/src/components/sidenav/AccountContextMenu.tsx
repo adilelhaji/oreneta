@@ -10,16 +10,24 @@ import { RailContextMenu, RailMenuItem } from './RailContextMenu'
 
 const secondary = 'text-secondary'
 
-// Right-click menu for an account avatar: settings, notifications, checking, and visibility.
+// The menu of an account, on the rail (right click) and in the folder pane
+// (right click, Shift+F10 and the context menu key): settings, notifications,
+// checking, and visibility.
 export function AccountContextMenu({
   account,
   x,
   y,
+  hideLabel,
+  onHidden,
   onClose,
 }: {
   account: Account
   x: number
   y: number
+  /** The hide row's text, which says where it hides from: the rail's unless given. */
+  hideLabel?: string
+  /** Told after the account was hidden, before the menu closes. */
+  onHidden?: () => void
   onClose: () => void
 }) {
   const { t } = useTranslation()
@@ -75,9 +83,10 @@ export function AccountContextMenu({
       />
       <RailMenuItem
         icon={<EyeOff size={14} className={secondary} strokeWidth={1.75} />}
-        label={t('sidenav.actions.hideFromSideNav')}
+        label={hideLabel ?? t('sidenav.actions.hideFromSideNav')}
         onClick={() => {
           setAccountSideNavHidden(account.id, true)
+          onHidden?.()
           onClose()
         }}
       />

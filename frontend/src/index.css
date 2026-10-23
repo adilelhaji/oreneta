@@ -102,6 +102,30 @@
   font-size: var(--text-caption);
   color: var(--me-text-secondary);
 }
+/* What the pane took over from the vertical rail (piece 14a): the boards, and
+   each account's state and unread count, which keep their size beside a name
+   that ends in "…". The state's icon is secondary text: the words are for the
+   screen reader and the tooltip. */
+.mail-navigation-boards {
+  border-bottom: 1px solid var(--me-border);
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+}
+.mail-account-destination > .mail-board-mark {
+  display: flex;
+  flex: none;
+  align-items: center;
+  overflow: visible;
+}
+.mail-account-destination > svg.mail-account-status {
+  color: var(--me-text-secondary);
+}
+.mail-account-destination > small.mail-account-unread {
+  flex-shrink: 0;
+  overflow: visible;
+  color: inherit;
+  font-variant-numeric: tabular-nums;
+}
 .mail-navigation button:hover {
   background: var(--me-bg-hover);
 }

@@ -79,6 +79,12 @@ export function selectKanbanBoard(boardId: string) {
   kanban$.activeBoardId.set(boardId)
 }
 
+/** Opens a board from the navigation (the rail, «Comptes i carpetes»): boards are part of mail. */
+export function openKanbanBoard(boardId: string) {
+  ui$.module.set('mail')
+  selectKanbanBoard(boardId)
+}
+
 export function closeKanbanPane() {
   ui$.selectedThread.set('')
   kanban$.paneThreadId.set('')

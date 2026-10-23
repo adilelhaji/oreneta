@@ -252,6 +252,40 @@ export async function reorderAccounts(oldIndex: number, newIndex: number) {
   }
 }
 
+/**
+ * The order of every account after one of those shown moves to where another
+ * shown one is. The others keep their places in the saved order, so moving
+ * among the accounts on screen never moves a hidden one (ADR-0068 §5: the rail
+ * and «Comptes i carpetes» show one order). Null when either is not shown.
+ */
+export function shownAccountOrder(
+  allIds: string[],
+  shownIds: string[],
+  movedId: string,
+  targetId: string,
+): string[] | null {
+  const shown = new Set(shownIds)
+  const visible = allIds.filter((id) => shown.has(id))
+  const from = visible.indexOf(movedId)
+  const to = visible.indexOf(targetId)
+  if (from === -1 || to === -1) return null
+  visible.splice(to, 0, ...visible.splice(from, 1))
+  let next = 0
+  return allIds.map((id) => (shown.has(id) ? visible[next++] : id))
+}
+
+/** Moves a shown account to where another shown one is, and saves the order. */
+export async function moveShownAccount(shownIds: string[], movedId: string, targetId: string) {
+  if (movedId === targetId) return
+  const order = shownAccountOrder(
+    accounts$.peek().map((account) => account.id),
+    shownIds,
+    movedId,
+    targetId,
+  )
+  if (order) await reorderAccountIds(order)
+}
+
 export async function reorderAccountIds(accountIds: string[]) {
   const previous = accounts$.get()
   const byId = new Map(previous.map((account) => [account.id, account]))

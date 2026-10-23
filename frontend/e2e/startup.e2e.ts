@@ -5540,6 +5540,262 @@ test('in Arabic the folder pane sits between the rail and the list, and its sepa
   expect(errors).toEqual([])
 })
 
+// #353 (piece 14a): «Comptes i carpetes» takes over what only the rail did
+// (ADR-0068 §5): accounts that reorder and open their menu, the «Taulers»
+// section, and the unified inbox's menu. The rail is still there, in the same
+// order.
+async function openPaneDestinations(page: Page) {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.addInitScript(() => {
+    const replies = (window as any).startupProbe.replies
+    replies['account.reorder'] = { ok: true }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
+  const rail = page.getByRole('complementary', { name: 'Modules', exact: true })
+  const alex = nav.locator('[data-nav-row="account:synthetic-account"]')
+  const second = nav.locator('[data-nav-row="account:second-account"]')
+  const paneOrder = () =>
+    nav
+      .locator('[data-nav-row^="account:"]')
+      .evaluateAll((rows) => rows.map((row) => row.getAttribute('data-nav-row')!.slice('account:'.length)))
+  // The rail's accounts, by the address in their tooltip (its boards have none).
+  const railOrder = () =>
+    rail
+      .locator('[aria-roledescription="sortable"][title*="@"]')
+      .evaluateAll((items) => items.map((item) => item.getAttribute('title')!.replace(/ — .*$/, '')))
+  const saved = () =>
+    page.evaluate(
+      () =>
+        (window as any).startupProbe.requests.filter((request: any) => request.command === 'account.reorder').at(-1)
+          ?.payload.accounts,
+    )
+  return { errors, nav, rail, alex, second, paneOrder, railOrder, saved }
+}
+
+test('accounts reorder in the folder pane from the keyboard and the pointer, in the rail order (#353)', async ({
+  page,
+}) => {
+  const { errors, nav, alex, second, paneOrder, railOrder, saved } = await openPaneDestinations(page)
+  expect(await paneOrder()).toEqual(['synthetic-account', 'second-account'])
+  expect(await railOrder()).toEqual(['Alex · Demo (alex@example.test)', 'Second account (second@example.test)'])
+  await expect(alex).toHaveAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown')
+  // The synthetic accounts are paused, which the row says in words.
+  await expect(alex).toHaveAccessibleName('Alex · Demo alex@example.test Mail checks paused')
+
+  // Alt+↓: one place down, the focus with it, and said.
+  await alex.focus()
+  await page.keyboard.press('Alt+ArrowDown')
+  await expect.poll(paneOrder).toEqual(['second-account', 'synthetic-account'])
+  await expect(alex).toBeFocused()
+  await expect(nav.locator('p[aria-live="polite"]')).toHaveText('Alex · Demo moved to position 2 of 2')
+  await expect.poll(saved).toEqual(['second-account', 'synthetic-account'])
+  expect(await railOrder()).toEqual(['Second account (second@example.test)', 'Alex · Demo (alex@example.test)'])
+  await page.keyboard.press('Alt+ArrowUp')
+  await expect.poll(paneOrder).toEqual(['synthetic-account', 'second-account'])
+  await expect(alex).toBeFocused()
+
+  // The pointer: Second account dragged above Alex.
+  const from = (await second.boundingBox())!
+  const to = (await alex.boundingBox())!
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 - 10, { steps: 4 })
+  await page.mouse.move(to.x + to.width / 2, to.y + 4, { steps: 8 })
+  await page.mouse.up()
+  await expect.poll(paneOrder).toEqual(['second-account', 'synthetic-account'])
+  await expect.poll(saved).toEqual(['second-account', 'synthetic-account'])
+  expect(await railOrder()).toEqual(['Second account (second@example.test)', 'Alex · Demo (alex@example.test)'])
+  // A drag does not open the account it moved.
+  await expect(second).not.toHaveAttribute('aria-current', 'true')
+  await expect(page.getByRole('status').filter({ hasText: 'Second account moved to position 1 of 2' })).toHaveCount(1)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  expect(errors).toEqual([])
+})
+
+test('the account menu opens in the folder pane with the mouse, Shift+F10 and the context menu key (#353)', async ({
+  page,
+}) => {
+  const { errors, nav, rail, alex, second } = await openPaneDestinations(page)
+  // The synthetic accounts are paused: they offer to resume.
+  const items = ['Account settings...', 'Mark all as read', 'Mute notifications', 'Resume checking', 'Hide account']
+  await second.click({ button: 'right' })
+  const secondMenu = page.getByRole('menu', { name: 'Second account', exact: true })
+  await expect(secondMenu.getByRole('menuitem')).toHaveText(items)
+  await page.keyboard.press('Escape')
+  await expect(secondMenu).toHaveCount(0)
+
+  await alex.focus()
+  await page.keyboard.press('Shift+F10')
+  const alexMenu = page.getByRole('menu', { name: 'Alex · Demo', exact: true })
+  await expect(alexMenu.getByRole('menuitem', { name: 'Account settings...' })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(alexMenu).toHaveCount(0)
+  await expect(alex).toBeFocused()
+
+  // The context menu key: hide Second account from the pane (and the rail),
+  // with the preference of before.
+  await second.focus()
+  await page.keyboard.press('ContextMenu')
+  await expect(secondMenu).toBeVisible()
+  await secondMenu.getByRole('menuitem', { name: 'Hide account' }).click()
+  await expect(second).toHaveCount(0)
+  await expect(rail.locator('[title^="Second account"]')).toHaveCount(0)
+  await expect(alex).toBeFocused()
+  await expect(nav.locator('p[aria-live="polite"]')).toHaveText(
+    'Second account hidden. It can be shown again from Settings.',
+  )
+  await expect
+    .poll(() =>
+      page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}').hidden_sidenav_accounts),
+    )
+    .toEqual(['second-account'])
+
+  // The account settings, from the menu.
+  await alex.click({ button: 'right' })
+  await alexMenu.getByRole('menuitem', { name: 'Account settings...' }).click()
+  await expect(page.getByRole('dialog', { name: /Settings/ })).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+test('a board opens from «Taulers» in the folder pane, which stays with the board marked (#353)', async ({ page }) => {
+  const { errors, nav, alex } = await openPaneDestinations(page)
+  // Every profile has a first board.
+  const boards = nav.getByRole('region', { name: 'Boards', exact: true })
+  const board = boards.getByRole('button', { name: 'Kanban board', exact: true })
+  const boardTitle = page.locator('main').getByRole('heading', { level: 2, name: 'Kanban board', exact: true })
+  // Between the unified inbox and the accounts, as on the rail and for Ctrl/⌘+1…9.
+  expect(
+    await nav.locator('[data-nav-row]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-nav-row'))),
+  ).toEqual([
+    'unified',
+    expect.stringMatching(/^board:/),
+    'account:synthetic-account',
+    'account:second-account',
+  ])
+
+  await board.click()
+  await expect(boardTitle).toBeVisible()
+  await expect(nav).toBeVisible()
+  await expect(board).toHaveAttribute('aria-current', 'true')
+  await expect(alex).not.toHaveAttribute('aria-current', 'true')
+  await expect(nav.getByRole('button', { name: 'Inbox 3', exact: true })).not.toHaveAttribute('aria-current', 'page')
+
+  // An account goes back to mail, where the mail view was.
+  await alex.click()
+  await expect(boardTitle).toHaveCount(0)
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await expect(alex).toHaveAttribute('aria-current', 'true')
+
+  // The keyboard: Enter opens the board and the focus stays on it.
+  await board.focus()
+  await page.keyboard.press('Enter')
+  await expect(boardTitle).toBeVisible()
+  await expect(board).toBeFocused()
+  // Its menu, from the keyboard.
+  await page.keyboard.press('Shift+F10')
+  const menu = page.getByRole('menu', { name: 'Kanban board', exact: true })
+  await expect(menu.getByRole('menuitem')).toHaveText(['Board settings...', 'Delete board'])
+  await page.keyboard.press('Escape')
+  await expect(board).toBeFocused()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  expect(errors).toEqual([])
+})
+
+test('a feed dragged from the list onto another RSS account in the folder pane moves there (#353)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  // The cards view, whose rows drag a feed (the table's do not).
+  const errors = await prepareStartup(page, true, {
+    navigation: true,
+    listView: 'cards',
+    preferences: { session_account: 'rss-news', session_folder: 'inbox' },
+  })
+  await page.addInitScript(() => {
+    const replies = (window as any).startupProbe.replies
+    const base = replies['account.list'].accounts[0]
+    const feeds = (id: string, name: string) => ({
+      ...base,
+      id,
+      email: '',
+      display_name: name,
+      provider: 'rss',
+      auth_type: 'rss',
+      paused: false,
+    })
+    replies['account.list'] = {
+      accounts: [...replies['account.list'].accounts, feeds('rss-news', 'News'), feeds('rss-blogs', 'Blogs')],
+    }
+    replies['rss.moveFeed'] = { ok: true }
+    // Feed accounts are not paused, so they are checked at start.
+    replies['mail.sync'] = { ok: true }
+    const feed = {
+      id: 'feed-item-1',
+      account_id: 'rss-news',
+      folder_id: 'inbox',
+      thread_id: 'rss-news#rss#https://news.example.test/feed',
+      feed_url: 'https://news.example.test/feed',
+      from_name: 'Example news',
+      from_addr: '',
+      to: '',
+      subject: 'Synthetic headline',
+      preview: 'A synthetic feed item.',
+      body: 'A synthetic feed item.',
+      date: 1760000000,
+      unread: true,
+      starred: false,
+      has_attachments: false,
+      labels: [],
+    }
+    const app = (window as any).go.main.App
+    const invoke = app.Invoke
+    app.Invoke = async (command: string, payload: Record<string, unknown>) => {
+      if (command === 'mail.threadList' && payload.account_id === 'rss-news')
+        return { threads: [feed], next_cursor: '', pagination: 'conversation-v1' }
+      if (command === 'mail.folderList' && String(payload.account_id).startsWith('rss-')) return { folders: [] }
+      return invoke(command, payload)
+    }
+  })
+  await page.goto('/')
+  const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
+  const blogs = nav.locator('[data-nav-row="account:rss-blogs"]')
+  const row = page.locator('[data-thread-list] [draggable="true"]').filter({ hasText: 'Synthetic headline' })
+  await expect(row).toBeVisible()
+  await row.dragTo(blogs)
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as any).startupProbe.requests.find((request: any) => request.command === 'rss.moveFeed')?.payload,
+      ),
+    )
+    .toEqual({ thread_id: 'rss-news#rss#https://news.example.test/feed', target_account_id: 'rss-blogs' })
+  expect(errors).toEqual([])
+})
+
+test('the unified inbox row in the folder pane has the rail menu (#353)', async ({ page }) => {
+  const { errors, nav, alex } = await openPaneDestinations(page)
+  const unified = nav.getByRole('button', { name: 'Unified inbox', exact: true })
+  await unified.click({ button: 'right' })
+  const menu = page.getByRole('menu', { name: 'Unified inbox', exact: true })
+  await expect(menu.getByRole('menuitem')).toHaveText(['Hide unified inbox'])
+  await page.keyboard.press('Escape')
+  await unified.focus()
+  await page.keyboard.press('ContextMenu')
+  await menu.getByRole('menuitem', { name: 'Hide unified inbox' }).click()
+  await expect(unified).toHaveCount(0)
+  await expect(nav.locator('[data-nav-row^="board:"]')).toBeFocused()
+  await expect
+    .poll(() =>
+      page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}').show_unified_inbox_in_sidenav),
+    )
+    .toBe(false)
+  await expect(alex).toBeVisible()
+  expect(errors).toEqual([])
+})
+
 // #323: Calendar's calendars in the common folder pane (ADR-0068 §4): the
 // list is its body and the month at a glance its footer, at the one width
 // every module shares. At 1024 px and below the pane is not drawn, and they

@@ -1,19 +1,18 @@
 import { Columns3, Pause, BellOff, KeyRound, Rss } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useValue } from '@legendapp/state/react'
 import type { DragEvent } from 'react'
 import type { Account } from '../../types'
-import { settings$ } from '../../states/settings'
-import { mail$, inboxUnread } from '../../states/mail'
 import { Avatar } from '../avatar/Avatar'
 import { UnreadCountBadge } from './UnreadCountBadge'
+import { accountStatus, isRssAccount, useAccountUnread } from './accountNav'
 
 function accountLabel(account: { display_name: string; email: string }) {
   return account.display_name || account.email
 }
 
-function sortableStyle(
+/** How a sortable row is drawn while it moves: the rail's and the folder pane's. */
+export function sortableStyle(
   transform: ReturnType<typeof useSortable>['transform'],
   transition: string | undefined,
   isDragging: boolean,
@@ -101,13 +100,12 @@ export function SortableAccount({
 }: SortableAccountProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: account.id })
 
-  const isRSS = account.provider === 'rss' || account.auth_type === 'rss'
-  const needsReconnect = account.needs_reconnect === true
-  const isPaused = account.paused ?? false
-  const isMuted = account.muted ?? false
-  const showUnreadBadge = useValue(settings$.showUnreadAccountBadge)
-  const accountFolders = useValue(mail$.foldersByAccount[account.id])
-  const unreadCount = showUnreadBadge ? inboxUnread(accountFolders) : 0
+  const isRSS = isRssAccount(account)
+  const status = accountStatus(account)
+  const needsReconnect = status === 'reconnect'
+  const isPaused = status === 'paused'
+  const isMuted = status === 'muted'
+  const unreadCount = useAccountUnread(account.id)
   const baseTooltip = isRSS
     ? account.display_name || 'RSS Feeds'
     : account.display_name

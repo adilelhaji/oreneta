@@ -31,6 +31,7 @@ export default function App() {
   const { t } = useTranslation()
   const mainRef = useRef<HTMLElement | null>(null)
   const kanbanPaneRef = useRef<HTMLDivElement | null>(null)
+  const boardAreaRef = useRef<HTMLDivElement | null>(null)
   const system = useValue(ui$.system)
   const accounts = useValue(accounts$)
   const activeBoardId = useValue(kanban$.activeBoardId)
@@ -80,9 +81,10 @@ export default function App() {
             <ErrorBoundary label="side navigation">
               <SideNav />
             </ErrorBoundary>
-            {activeModule === 'mail' && !activeBoardId && (
+            {activeModule === 'mail' && (
               // The common folder pane, mail first (ADR-0068 §4 and §9, step 2):
-              // today's accounts and folders are its body.
+              // today's accounts and folders are its body. It stays with a
+              // board open, which its «Taulers» section marks (piece 14a).
               <ErrorBoundary label="mail navigation">
                 <FolderPane title={t('mailNavigation.title')}>
                   <MailNavigation />
@@ -113,32 +115,37 @@ export default function App() {
               <ErrorBoundary label="messaging">
                 <MessagingView />
               </ErrorBoundary>
-            ) : (
-              <ErrorBoundary label="thread list">
-                {activeBoardId ? (
+            ) : activeBoardId ? (
+              // The board and its conversation pane, whose width is a share of
+              // this area: the row less the rail and the folders (ADR-0068 §4).
+              <div ref={boardAreaRef} className="flex min-w-0 flex-1 overflow-hidden">
+                <ErrorBoundary label="thread list">
                   <KanbanView boardId={activeBoardId} />
-                ) : (
-                  <ThreadList width={threadListWidth} resizable />
+                </ErrorBoundary>
+                {showKanbanMessagePane && (
+                  <div
+                    ref={kanbanPaneRef}
+                    className="relative flex shrink-0 overflow-hidden border-s border-border bg-chat max-[600px]:w-full"
+                    style={{ width: `${kanbanPaneWidth}%`, minWidth: 320 }}
+                  >
+                    {/* The width is a percentage of the board's area, kept in settings. */}
+                    <KanbanPaneResizer pane={kanbanPaneRef} shell={boardAreaRef} />
+                    <ErrorBoundary label="conversation">
+                      <MessagePane />
+                    </ErrorBoundary>
+                  </div>
                 )}
-              </ErrorBoundary>
-            )}
-            {activeModule !== 'mail' ? null : !activeBoardId ? (
-              <ErrorBoundary label="conversation">
-                <MessagePane />
-              </ErrorBoundary>
-            ) : showKanbanMessagePane ? (
-              <div
-                ref={kanbanPaneRef}
-                className="relative flex shrink-0 overflow-hidden border-s border-border bg-chat max-[600px]:w-full"
-                style={{ width: `${kanbanPaneWidth}%`, minWidth: 320 }}
-              >
-                {/* The width is a percentage of the app shell, kept in settings. */}
-                <KanbanPaneResizer pane={kanbanPaneRef} shell={mainRef} />
+              </div>
+            ) : (
+              <>
+                <ErrorBoundary label="thread list">
+                  <ThreadList width={threadListWidth} resizable />
+                </ErrorBoundary>
                 <ErrorBoundary label="conversation">
                   <MessagePane />
                 </ErrorBoundary>
-              </div>
-            ) : null}
+              </>
+            )}
           </main>
         </>
       )}
