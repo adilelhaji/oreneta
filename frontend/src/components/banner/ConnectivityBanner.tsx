@@ -209,7 +209,13 @@ export function ConnectivityDetail({
                   size="sm"
                   leftIcon={RefreshCw}
                   disabled={observation?.request === 'pending'}
-                  onClick={() => void requestAccountSync(account.id)}
+                  onClick={(event) => {
+                    // Disabled while the request is pending, it would drop
+                    // the focus to the page, where a bare key acts on the
+                    // conversation: the entry keeps it, as with Dismiss.
+                    event.currentTarget.closest('li')?.focus()
+                    void requestAccountSync(account.id)
+                  }}
                 >
                   {t('connectivity.retry')}
                 </Button>

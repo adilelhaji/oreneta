@@ -39,8 +39,17 @@ export function useQuietState(): QuietState {
  * copy (`placement="rail"`) is only the button, so the status is not there
  * twice for a screen reader. Both buttons resume, and both say the state in
  * their tooltip.
+ *
+ * `inert` makes the button alone inert (the band's search covering the band
+ * below 769 px): the status around it stays in the accessibility tree.
  */
-export function QuietIndicator({ placement = 'band' }: { placement?: 'band' | 'rail' }) {
+export function QuietIndicator({
+  placement = 'band',
+  inert = false,
+}: {
+  placement?: 'band' | 'rail'
+  inert?: boolean
+}) {
   const { t } = useTranslation()
   const state = useQuietState()
   if (!state.quiet) return null
@@ -49,6 +58,7 @@ export function QuietIndicator({ placement = 'band' }: { placement?: 'band' | 'r
   const button = (className: string, iconSize: number) => (
     <button
       type="button"
+      inert={inert}
       onClick={() => resumeNotifications()}
       title={`${status} — ${resume}`}
       aria-label={resume}

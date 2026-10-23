@@ -45,8 +45,11 @@ type Anchor = { left: number; right: number; bottom: number }
  *
  * With no account and no unattributed problem there is nothing to say, and
  * nothing is drawn, as before.
+ *
+ * `inert` (the band's search covering the band below 769 px) makes the button
+ * and the popover inert, never the live region, which keeps announcing.
  */
-export function SyncStatus() {
+export function SyncStatus({ inert = false }: { inert?: boolean }) {
   const sync = useConnectivityState()
   const wide = useWideWindow(SYNC_SUMMARY_MIN_WINDOW)
   const [anchor, setAnchor] = useState<Anchor | null>(null)
@@ -54,24 +57,27 @@ export function SyncStatus() {
   const popoverId = useId()
   const open = anchor !== null && sync.shown
 
-  // The bar under the header folds its detail while this one is open.
-  useEffect(() => {
-    syncPopoverOpen$.set(open)
-  }, [open])
+  // The bar under the header folds its detail while this one is open. Set
+  // with the anchor, in the same render, so the two details are never drawn
+  // in one commit.
   useEffect(() => () => syncPopoverOpen$.set(false), [])
   // Nothing left to say (the last account removed): closed, not reopened later.
   useEffect(() => {
-    if (!sync.shown) setAnchor(null)
+    if (sync.shown) return
+    syncPopoverOpen$.set(false)
+    setAnchor(null)
   }, [sync.shown])
 
   const show = () => {
     const trigger = button.current
     if (!trigger) return
     const rect = trigger.getBoundingClientRect()
+    syncPopoverOpen$.set(true)
     setAnchor({ left: rect.left, right: rect.right, bottom: rect.bottom })
   }
   const close = useCallback((refocus: boolean) => {
     if (refocus) button.current?.focus({ preventScroll: true })
+    syncPopoverOpen$.set(false)
     setAnchor(null)
   }, [])
 
@@ -84,6 +90,7 @@ export function SyncStatus() {
       <button
         ref={button}
         type="button"
+        inert={inert}
         data-sync-status-button=""
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -113,7 +120,7 @@ export function SyncStatus() {
       <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {sync.summary}
       </span>
-      {open && <SyncPopover id={popoverId} anchor={anchor} opener={button} onClose={close} />}
+      {open && <SyncPopover id={popoverId} anchor={anchor} opener={button} inert={inert} onClose={close} />}
     </div>
   )
 }
@@ -122,11 +129,13 @@ function SyncPopover({
   id,
   anchor,
   opener,
+  inert,
   onClose,
 }: {
   id: string
   anchor: Anchor
   opener: RefObject<HTMLButtonElement | null>
+  inert: boolean
   onClose: (refocus: boolean) => void
 }) {
   const { t } = useTranslation()
@@ -194,6 +203,7 @@ function SyncPopover({
       role="dialog"
       aria-labelledby={titleId}
       tabIndex={-1}
+      inert={inert}
       data-sync-popover=""
       className="fixed z-[61] overflow-y-auto rounded-control border border-border bg-chats p-3 text-ui text-primary shadow-overlay animate-fade-in"
       style={{

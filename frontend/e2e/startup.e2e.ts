@@ -7928,87 +7928,89 @@ test('the sync status is reached by Tab in the band and opens from the keyboard;
   expect(errors).toEqual([])
 })
 
-test('a failure brings the bar back under the header until it is dismissed, and a sign-in cannot be (#345)', async ({
-  page,
-}, info) => {
-  await page.setViewportSize({ width: 1440, height: 1000 })
-  const errors = await prepareStartup(page, true, { navigation: true, syncHealth: true })
-  await page.goto('/')
-  await expect(page.locator('[data-thread-list]')).toBeVisible()
-  const { sync, status, popover, bar } = bandEnd(page)
-  const { band } = await appMenuParts(page)
-  await expect(bar).toHaveCount(0)
-  await expect(status).toHaveText(SYNC_UNKNOWN)
+for (const width of [1440, 768]) {
+  test(`a failure brings the bar back under the header until it is dismissed, and a sign-in cannot be: ${width}px (#345)`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize({ width, height: 1000 })
+    const errors = await prepareStartup(page, true, { navigation: true, syncHealth: true })
+    await page.goto('/')
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    const { sync, status, popover, bar } = bandEnd(page)
+    const { band } = await appMenuParts(page)
+    await expect(bar).toHaveCount(0)
+    await expect(status).toHaveText(SYNC_UNKNOWN)
 
-  await sync.focus()
-  await page.evaluate(() =>
-    (window as any).startupProbe.emit('mail.syncError', {
-      account: 'synthetic-account',
-      message: 'synthetic-private-diagnostic',
-    }),
-  )
-  // The band's words change where they are, with the focus left alone; the
-  // bar comes back, across the window, under the header and above the module.
-  await expect(status).toHaveText('1 need attention')
-  await expect(sync).toHaveAttribute('title', '1 need attention')
-  await expect(sync).toBeFocused()
-  await expect(bar).toBeVisible()
-  const bandBox = await boxOf(band)
-  const barBox = await boxOf(bar)
-  expect(barBox.y).toBeGreaterThanOrEqual(bandBox.y + bandBox.height - 1)
-  expect(Math.round(barBox.width)).toBe(1440)
-  expect((await boxOf(page.getByRole('main'))).y).toBeGreaterThanOrEqual(barBox.y + barBox.height - 1)
-  await expect(bar).toContainText('1 need attention')
-  // Said once: the bar's summary is not a second live region.
-  await expect(page.getByRole('status').filter({ hasText: '1 need attention' })).toHaveCount(1)
-  await expect(bar.getByRole('status')).toHaveCount(0)
-  await expect(page.locator('body')).not.toContainText('synthetic-private-diagnostic')
-  await info.attach('sync-status-prominent', {
-    body: await page.screenshot({ path: info.outputPath('sync-status-prominent.png'), animations: 'disabled' }),
-    contentType: 'image/png',
+    await sync.focus()
+    await page.evaluate(() =>
+      (window as any).startupProbe.emit('mail.syncError', {
+        account: 'synthetic-account',
+        message: 'synthetic-private-diagnostic',
+      }),
+    )
+    // The band's words change where they are, with the focus left alone; the
+    // bar comes back, across the window, under the header and above the module.
+    await expect(status).toHaveText('1 need attention')
+    await expect(sync).toHaveAttribute('title', '1 need attention')
+    await expect(sync).toBeFocused()
+    await expect(bar).toBeVisible()
+    const bandBox = await boxOf(band)
+    const barBox = await boxOf(bar)
+    expect(barBox.y).toBeGreaterThanOrEqual(bandBox.y + bandBox.height - 1)
+    expect(Math.round(barBox.width)).toBe(width)
+    expect((await boxOf(page.getByRole('main'))).y).toBeGreaterThanOrEqual(barBox.y + barBox.height - 1)
+    await expect(bar).toContainText('1 need attention')
+    // Said once: the bar's summary is not a second live region.
+    await expect(page.getByRole('status').filter({ hasText: '1 need attention' })).toHaveCount(1)
+    await expect(bar.getByRole('status')).toHaveCount(0)
+    await expect(page.locator('body')).not.toContainText('synthetic-private-diagnostic')
+    await info.attach(`sync-status-prominent-${width}`, {
+      body: await page.screenshot({ path: info.outputPath(`sync-status-prominent-${width}.png`), animations: 'disabled' }),
+      contentType: 'image/png',
+    })
+
+    // The bar keeps its own detail; the popover folds it, so it is shown once.
+    const toggle = bar.getByRole('button', { name: 'Account sync', exact: true })
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await sync.click()
+    await expect(popover).toBeVisible()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.getByRole('listitem', { name: 'Alex · Demo', exact: true })).toHaveCount(1)
+    // Dismissed in the popover: nothing is prominent any more and the bar goes;
+    // the band still counts the failure.
+    const entry = popover.getByRole('listitem', { name: 'Alex · Demo', exact: true })
+    await entry.getByRole('button', { name: 'Dismiss', exact: true }).click()
+    await expect(entry).toBeFocused()
+    await expect(bar).toHaveCount(0)
+    await expect(status).toHaveText('1 need attention')
+    await page.keyboard.press('Escape')
+    await expect(sync).toBeFocused()
+
+    // An account that must sign in again: the bar, with nothing to dismiss in
+    // it or in the popover.
+    await page.addInitScript(() => {
+      ;(window as any).startupProbe.replies['account.list'].accounts[1].needs_reconnect = true
+    })
+    await page.reload()
+    await expect(bar).toBeVisible()
+    await expect(status).toHaveText('1 need attention')
+    await bar.getByRole('button', { name: 'Account sync', exact: true }).click()
+    await expect(bar.getByRole('listitem', { name: 'Second account', exact: true })).toContainText(
+      'Sign in again in account settings',
+    )
+    await expect(bar.getByRole('button', { name: 'Dismiss', exact: true })).toHaveCount(0)
+    await sync.click()
+    await expect(popover.getByRole('listitem', { name: 'Second account', exact: true })).toBeVisible()
+    await expect(popover.getByRole('button', { name: 'Dismiss', exact: true })).toHaveCount(0)
+    await settled(page)
+    const regions = await new AxeBuilder({ page }).withRules(REGION_RULES).analyze()
+    expect(regions.violations.map((violation) => violation.id)).toEqual([])
+    await page.keyboard.press('Escape')
+    await expect(bar).toBeVisible()
+    expect(errors).toEqual([])
   })
-
-  // The bar keeps its own detail; the popover folds it, so it is shown once.
-  const toggle = bar.getByRole('button', { name: 'Account sync', exact: true })
-  await toggle.click()
-  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
-  await sync.click()
-  await expect(popover).toBeVisible()
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
-  await expect(page.getByRole('listitem', { name: 'Alex · Demo', exact: true })).toHaveCount(1)
-  // Dismissed in the popover: nothing is prominent any more and the bar goes;
-  // the band still counts the failure.
-  const entry = popover.getByRole('listitem', { name: 'Alex · Demo', exact: true })
-  await entry.getByRole('button', { name: 'Dismiss', exact: true }).click()
-  await expect(entry).toBeFocused()
-  await expect(bar).toHaveCount(0)
-  await expect(status).toHaveText('1 need attention')
-  await page.keyboard.press('Escape')
-  await expect(sync).toBeFocused()
-
-  // An account that must sign in again: the bar, with nothing to dismiss in
-  // it or in the popover.
-  await page.addInitScript(() => {
-    ;(window as any).startupProbe.replies['account.list'].accounts[1].needs_reconnect = true
-  })
-  await page.reload()
-  await expect(bar).toBeVisible()
-  await expect(status).toHaveText('1 need attention')
-  await bar.getByRole('button', { name: 'Account sync', exact: true }).click()
-  await expect(bar.getByRole('listitem', { name: 'Second account', exact: true })).toContainText(
-    'Sign in again in account settings',
-  )
-  await expect(bar.getByRole('button', { name: 'Dismiss', exact: true })).toHaveCount(0)
-  await sync.click()
-  await expect(popover.getByRole('listitem', { name: 'Second account', exact: true })).toBeVisible()
-  await expect(popover.getByRole('button', { name: 'Dismiss', exact: true })).toHaveCount(0)
-  await settled(page)
-  const regions = await new AxeBuilder({ page }).withRules(REGION_RULES).analyze()
-  expect(regions.violations.map((violation) => violation.id)).toEqual([])
-  await page.keyboard.press('Escape')
-  await expect(bar).toBeVisible()
-  expect(errors).toEqual([])
-})
+}
 
 // In Arabic the button is at the band's left end and the popover opens from
 // there towards the start of the line, rightwards, inside the window; axe
@@ -8062,37 +8064,53 @@ for (const width of [1440, 768]) {
   })
 }
 
-test("at the app's 200 percent at 1025px the band's end leaves the search its room, and the popover stays in the window (#345)", async ({
+test("at the app's 200 percent the band's end leaves the search its room, at 1025px and from 769 to 1024px, and the popover stays in the window (#345)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1025, height: 1000 })
   const errors = await prepareStartup(page, true, { navigation: true })
   await page.goto('/')
   await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { end, sync, popover } = bandEnd(page)
+  const { band, field } = await bandSearch(page)
+  const { button: menuButton, menu } = await appMenuParts(page)
+  // Do not disturb on, so both of the end's items are there.
+  await menuButton.click()
+  await menu.getByRole('menuitem', { name: 'Do not disturb until turned off', exact: true }).click()
+  const quiet = end.getByRole('button', { name: 'Resume notifications', exact: true })
+  await expect(quiet).toBeVisible()
   const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
   for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
-  const { end, sync, popover } = bandEnd(page)
-  const { band, field } = await bandSearch(page)
   expect(Math.round((await boxOf(band)).height)).toBe(72)
-  // The end takes at most 35 % of the band; the summary is cut short there,
-  // and stays whole in the name and the tooltip.
-  expect((await boxOf(end)).width).toBeLessThanOrEqual((await boxOf(band)).width * 0.35 + 1)
-  await expect(sync).toBeInViewport({ ratio: 1 })
-  await expect(end.getByRole('button', { name: SYNC_UNKNOWN, exact: true })).toHaveCount(1)
-  await expect(sync).toHaveAttribute('title', SYNC_UNKNOWN)
-  expect((await boxOf(field)).width).toBeGreaterThan(100)
-  await ltrInView(page, 'band at 200 % and 1025px')
-  await sync.click()
-  await expect(popover).toBeVisible()
-  const popoverBox = await boxOf(popover)
-  expect(popoverBox.x).toBeGreaterThanOrEqual(0)
-  expect(popoverBox.x + popoverBox.width).toBeLessThanOrEqual(1025)
-  expect(popoverBox.y + popoverBox.height).toBeLessThanOrEqual(1000)
-  await expect(popover.getByRole('button', { name: 'Account settings', exact: true }).first()).toBeInViewport()
-  await ltrInView(page, 'popover at 200 % and 1025px')
-  await page.keyboard.press('Escape')
-  await expect(sync).toBeFocused()
+  for (const width of [1025, 1024, 900, 769]) {
+    const where = `200 % at ${width}px`
+    await page.setViewportSize({ width, height: 1000 })
+    await expect(field, where).toBeVisible()
+    // The end takes at most 35 % of the band; the summary is cut short there,
+    // and stays whole in the name and the tooltip.
+    expect((await boxOf(end)).width, where).toBeLessThanOrEqual((await boxOf(band)).width * 0.35 + 1)
+    await expect(menuButton, where).toBeInViewport({ ratio: 1 })
+    await expect(quiet, where).toBeInViewport({ ratio: 1 })
+    await expect(sync, where).toBeInViewport({ ratio: 1 })
+    await expect(end.getByRole('button', { name: SYNC_UNKNOWN, exact: true }), where).toHaveCount(1)
+    await expect(sync, where).toHaveAttribute('title', SYNC_UNKNOWN)
+    expect((await boxOf(field)).width, where).toBeGreaterThan(100)
+    expect((await boxOf(field)).x, where).toBeGreaterThanOrEqual((await boxOf(menuButton)).x + (await boxOf(menuButton)).width)
+    expect((await boxOf(field)).x + (await boxOf(field)).width, where).toBeLessThanOrEqual((await boxOf(quiet)).x)
+    await ltrInView(page, where)
+    if (width !== 1025 && width !== 769) continue
+    await sync.click()
+    await expect(popover, where).toBeVisible()
+    const popoverBox = await boxOf(popover)
+    expect(popoverBox.x, where).toBeGreaterThanOrEqual(0)
+    expect(popoverBox.x + popoverBox.width, where).toBeLessThanOrEqual(width)
+    expect(popoverBox.y + popoverBox.height, where).toBeLessThanOrEqual(1000)
+    await expect(popover.getByRole('button', { name: 'Account settings', exact: true }).first(), where).toBeInViewport()
+    await ltrInView(page, `popover, ${where}`)
+    await page.keyboard.press('Escape')
+    await expect(sync, where).toBeFocused()
+  }
   await page.keyboard.press(`${mod}+Digit0`)
   expect(errors).toEqual([])
 })
@@ -8141,3 +8159,113 @@ for (const width of [1440, 768]) {
     expect(errors).toEqual([])
   })
 }
+
+// Whether Chromium leaves an element out of its accessibility tree (an inert
+// subtree is): what a screen reader would not hear, a live region included.
+async function ignoredByAccessibility(page: Page, selector: string): Promise<boolean> {
+  const cdp = await page.context().newCDPSession(page)
+  try {
+    await cdp.send('Accessibility.enable')
+    const { root } = await cdp.send('DOM.getDocument', { depth: 0 })
+    const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector })
+    expect(nodeId, selector).toBeGreaterThan(0)
+    const { nodes } = await cdp.send('Accessibility.getPartialAXTree', { nodeId, fetchRelatives: false })
+    return nodes[0]?.ignored ?? true
+  } finally {
+    await cdp.detach()
+  }
+}
+
+// Below 769 px the band's search covers the band, and its controls go inert;
+// the live regions at its end must not, or a failure that arrives while the
+// person types is never announced.
+test('below 769px the live regions at the end of the band keep announcing while the search covers it (#345)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 768, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, syncHealth: true })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { end, sync, status } = bandEnd(page)
+  const { button: menuButton, menu } = await appMenuParts(page)
+  await menuButton.click()
+  await menu.getByRole('menuitem', { name: 'Do not disturb until turned off', exact: true }).click()
+  const quietText = 'Do not disturb is on until you turn it off'
+  await expect(end.getByRole('status', { name: quietText, exact: true })).toBeVisible()
+  const syncStatus = '[data-band-end] [data-sync-status] [role="status"]'
+  const quietStatus = '[data-band-end] [data-quiet-indicator="band"]'
+
+  // The search over the band, with something typed in it.
+  await page.locator('[data-band-search-button]').click()
+  const { field } = await bandSearch(page)
+  await field.fill('Pilot')
+  await expect(field).toBeFocused()
+  await page.evaluate(() =>
+    (window as any).startupProbe.emit('mail.syncError', { account: 'synthetic-account', message: 'synthetic' }),
+  )
+  await expect(status).toHaveText('1 need attention')
+  await expect(field).toBeFocused()
+  // Both statuses are in the accessibility tree; the controls under the
+  // search are not.
+  expect(await page.locator(syncStatus).evaluate((element) => element.closest('[inert]') === null)).toBe(true)
+  expect(await page.locator(quietStatus).evaluate((element) => element.closest('[inert]') === null)).toBe(true)
+  expect(await ignoredByAccessibility(page, syncStatus)).toBe(false)
+  expect(await ignoredByAccessibility(page, quietStatus)).toBe(false)
+  expect(await ignoredByAccessibility(page, '[data-sync-status-button]')).toBe(true)
+  expect(await ignoredByAccessibility(page, '[data-band-start] button')).toBe(true)
+  // Closed, the controls are back.
+  await page.keyboard.press('Escape')
+  await expect(page.locator('[data-band-search-overlay]')).toHaveCount(0)
+  expect(await ignoredByAccessibility(page, '[data-sync-status-button]')).toBe(false)
+  await expect(sync).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+// Retry turns disabled while its request is pending. With the focus on it, the
+// focus fell to the page, where a bare key acts on the open conversation.
+test('Retry keeps the focus in its entry, in the popover and in the bar, and a bare key acts on nothing behind (#345)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, syncHealth: true })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { sync, popover, bar } = bandEnd(page)
+  const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+  const reply = page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })
+  await row.click()
+  await expect(reply).toBeVisible()
+  await expect(row).toHaveAttribute('aria-current', 'true')
+  const before = await page.evaluate(() => (window as any).startupProbe.requests.length)
+
+  await sync.click()
+  const entry = popover.getByRole('listitem', { name: 'Alex · Demo', exact: true })
+  await entry.getByRole('button', { name: 'Retry', exact: true }).click()
+  await expect(entry).toBeFocused()
+  await expect(entry).toContainText('Request not confirmed')
+  expect(
+    await page.evaluate(
+      (start) =>
+        (window as any).startupProbe.requests.slice(start).filter((item: any) => item.command === 'mail.sync').length,
+      before,
+    ),
+  ).toBe(1)
+  // A bare key stays in the popover: the conversation does not move.
+  await page.keyboard.press('j')
+  await expect(popover).toBeVisible()
+  await expect(row).toHaveAttribute('aria-current', 'true')
+  await expect(reply).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(sync).toBeFocused()
+
+  // The bar's copy of the detail keeps it too.
+  await page.evaluate(() =>
+    (window as any).startupProbe.emit('mail.syncError', { account: 'second-account', message: 'synthetic' }),
+  )
+  await bar.getByRole('button', { name: 'Account sync', exact: true }).click()
+  const second = bar.getByRole('listitem', { name: 'Second account', exact: true })
+  await second.getByRole('button', { name: 'Retry', exact: true }).click()
+  await expect(second).toBeFocused()
+  await expect(second).toContainText('Request not confirmed')
+  expect(errors).toEqual([])
+})

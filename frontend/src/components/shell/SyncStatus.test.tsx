@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import { Profiler } from 'react'
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import i18n from '../../lib/i18n'
 import { messages, supportedI18nLanguages } from '../../generated/locales'
@@ -544,5 +545,106 @@ describe('the band end, its keyboard and its names (#345)', () => {
       'Do not disturb is on until you turn it off',
       '1 need attention',
     ])
+  })
+})
+
+describe('review round (#345)', () => {
+  it('keeps both live regions announcing below 769 px while the search covers the band: only the controls go inert', async () => {
+    setWidth(768)
+    const { view, end, button } = renderWindow()
+    await act(async () => settings$.notifications.pause.set({ until: null }))
+    fireEvent.click(
+      within(view.container.querySelector<HTMLElement>('[data-top-band]')!).getByRole('button', {
+        name: 'Search messages...',
+      }),
+    )
+    const overlay = view.container.querySelector<HTMLElement>('[data-band-search-overlay]')!
+    expect(overlay).not.toBeNull()
+    fireEvent.change(within(overlay).getByRole('textbox'), { target: { value: 'Pilot' } })
+    act(() => setSyncError('work', 'x'))
+    const sync = end().querySelector<HTMLElement>('[data-sync-status] [role="status"]')!
+    const quiet = end().querySelector<HTMLElement>('[data-quiet-indicator="band"]')!
+    expect(sync.textContent).toBe('1 need attention')
+    expect(quiet.getAttribute('role')).toBe('status')
+    expect(quiet.getAttribute('aria-label')).toBe('Do not disturb is on until you turn it off')
+    // Neither status is under an inert element, so both stay in the accessibility tree.
+    expect(sync.closest('[inert]') === null).toBe(true)
+    expect(quiet.closest('[inert]') === null).toBe(true)
+    // The controls are: under the search, they take neither the focus nor the pointer.
+    expect(button()!.closest('[inert]') === null).toBe(false)
+    expect(within(quiet).getByRole('button', { name: 'Resume notifications' }).closest('[inert]') === null).toBe(false)
+    // Closed, the controls are back.
+    fireEvent.keyDown(within(overlay).getByRole('textbox'), { key: 'Escape' })
+    expect(view.container.querySelector('[data-band-search-overlay]')).toBeNull()
+    expect(button()!.closest('[inert]') === null).toBe(true)
+  })
+
+  it('keeps the focus in the entry when Retry turns disabled, in the popover and in the bar, so a bare key stays there', async () => {
+    const pending: Array<(value: unknown) => void> = []
+    ;(window as any).go = {
+      main: {
+        App: {
+          Invoke: (command: string) =>
+            command === 'mail.sync' ? new Promise((resolve) => pending.push(resolve)) : Promise.resolve({ ok: true }),
+        },
+      },
+    }
+    setSyncError('work', 'x')
+    const { view, button, bar, popover } = renderWindow()
+    const reached: string[] = []
+    const listen = (event: KeyboardEvent) => reached.push(event.key)
+    window.addEventListener('keydown', listen)
+    try {
+      fireEvent.click(button()!)
+      const entry = within(popover()!).getByRole('listitem', { name: 'Work' })
+      const retry = within(entry).getByRole('button', { name: 'Retry' })
+      retry.focus()
+      fireEvent.click(retry)
+      expect(retry.hasAttribute('disabled')).toBe(true)
+      expect(document.activeElement === entry).toBe(true)
+      fireEvent.keyDown(document.activeElement!, { key: 'j' })
+      expect(reached).toEqual([])
+      expect(popover()).not.toBeNull()
+      // The bar's copy of the detail does the same.
+      fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+      fireEvent.click(within(bar()!).getByRole('button', { name: 'Account sync' }))
+      const home = within(bar()!).getByRole('listitem', { name: 'Home' })
+      const retryHome = within(home).getByRole('button', { name: 'Retry' })
+      retryHome.focus()
+      fireEvent.click(retryHome)
+      expect(retryHome.hasAttribute('disabled')).toBe(true)
+      expect(document.activeElement === home).toBe(true)
+      expect(view.getAllByRole('listitem', { name: 'Home' })).toHaveLength(1)
+    } finally {
+      window.removeEventListener('keydown', listen)
+      await act(async () => pending.forEach((resolve) => resolve({ ok: true, online: true })))
+    }
+  })
+
+  it("never draws the bar's detail and the popover's in one commit", () => {
+    setSyncError('work', 'x')
+    const together: number[] = []
+    let commits = 0
+    // A commit's DOM, read when React reports it.
+    const onRender = () => {
+      commits++
+      if (document.querySelectorAll('li[aria-label="Work"]').length > 1) together.push(commits)
+    }
+    const view = render(
+      <Profiler id="window" onRender={onRender}>
+        <AppHeader />
+        <ConnectivityBanner />
+      </Profiler>,
+    )
+    const toggle = within(view.getByRole('region', { name: 'Account sync' })).getByRole('button', {
+      name: 'Account sync',
+    })
+    fireEvent.click(toggle)
+    expect(document.querySelectorAll('li[aria-label="Work"]')).toHaveLength(1)
+    fireEvent.click(view.container.querySelector<HTMLElement>('[data-sync-status-button]')!)
+    expect(view.getByRole('dialog', { name: 'Account sync' })).toBeTruthy()
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(commits).toBeGreaterThan(1)
+    expect(together).toEqual([])
   })
 })

@@ -26,7 +26,8 @@ import { SyncStatus } from './SyncStatus'
 export function AppHeader({ setup = false }: { setup?: boolean }) {
   const { t } = useTranslation()
   // Below 769 px the search opens over the band and covers the rest of it,
-  // which then takes neither the focus nor the pointer.
+  // which then takes neither the focus nor the pointer. At the end only the
+  // controls go inert: the live regions there keep announcing (#345).
   const [covered, setCovered] = useState(false)
   const inert = covered && !setup
   return (
@@ -45,11 +46,11 @@ export function AppHeader({ setup = false }: { setup?: boolean }) {
         {/* At most 35 % of the band, so the search keeps its room: the
             summary is cut short with «…», its whole text still the button's
             name and tooltip. Nothing on the setup screen. */}
-        <div data-band-end inert={inert} className="flex min-w-0 max-w-[35%] shrink-0 items-center gap-1">
+        <div data-band-end className="flex min-w-0 max-w-[35%] shrink-0 items-center gap-1">
           {!setup && (
             <>
-              <QuietIndicator />
-              <SyncStatus />
+              <QuietIndicator inert={inert} />
+              <SyncStatus inert={inert} />
             </>
           )}
         </div>
