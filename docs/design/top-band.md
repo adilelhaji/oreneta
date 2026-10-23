@@ -170,10 +170,11 @@ banda.
 - **El marc no es torna a muntar** quan arriba el primer compte: només en canvia
   el contingut. Un diàleg obert damunt de l'alta continua obert, com la
   configuració després de restaurar una còpia de seguretat que porta un compte,
-  i en tancar-se torna el focus al botó del menú. Hi torna també quan el focus
-  havia caigut al cos de la pàgina perquè «Restaura» es desactiva mentre
-  treballa: el focus que cau fora d'un diàleg mentre és obert també torna al
-  control que l'havia obert (`useDialogFocus`), com als menús.
+  i en tancar-se torna el focus al control que l'havia obert, si encara hi és
+  (el botó del menú, sí; un camp de l'alta, que ha desaparegut amb ella, no, i
+  llavors el focus queda a la pàgina). El focus també hi torna quan havia caigut
+  al cos de la pàgina perquè «Restaura» es desactiva mentre treballa
+  (`useDialogFocus`), com als menús.
 - **El menú** és el mateix, amb les ordres que no necessiten cap compte: les
   àrees `theme`, `settings` i `app` (la configuració i les seves seccions, els
   temes, la paleta, les dreceres de teclat, el catàleg de disseny i «Quant a»).

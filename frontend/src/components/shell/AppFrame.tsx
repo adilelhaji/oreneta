@@ -12,8 +12,9 @@ import { AppLayers } from './AppLayers'
  *
  * The frame stays mounted when the first account arrives. A dialog open over
  * the setup, such as Settings after a backup restored an account, stays open
- * with its focus, and gives the focus back to its opener, the app menu button,
- * when it closes.
+ * with its focus, and gives the focus back to its opener when it closes, if
+ * the opener is still there: the app menu button is; a field of the setup,
+ * gone with it, is not, and the focus then stays on the page.
  */
 export function AppFrame({ setup = false, children }: { setup?: boolean; children: ReactNode }) {
   return (
