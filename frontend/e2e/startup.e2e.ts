@@ -5189,17 +5189,37 @@ test('the first-account setup screen has the top band, its app menu and F6 betwe
   await page.keyboard.press('Shift+F6')
   await expect(email).toBeFocused()
 
+  // The app's zoom works there too.
+  const rootSize = () => page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+  expect(await rootSize()).toBe('16px')
+  await page.keyboard.press('Control+Equal')
+  await expect.poll(rootSize).not.toBe('16px')
+  await page.keyboard.press('Control+Digit0')
+  await expect.poll(rootSize).toBe('16px')
+
   // The menu: what needs no account, grouped as in the window.
   await button.click()
   await expect(menu).toBeVisible()
-  const groups = await menu.getByRole('group').evaluateAll((elements) =>
-    elements.map((element) => document.getElementById(element.getAttribute('aria-labelledby')!)?.textContent),
-  )
+  const groups = await menu
+    .getByRole('group')
+    .evaluateAll((elements) =>
+      elements.map((element) => document.getElementById(element.getAttribute('aria-labelledby')!)?.textContent),
+    )
   expect(groups).toEqual(SETUP_MENU_GROUPS.map((key) => enCatalog[key]))
   for (const name of ['Open settings', 'Command palette', 'Keyboard shortcuts', 'About Oreneta'])
     await expect(menu.getByRole('menuitem', { name, exact: true }), name).toHaveCount(1)
-  for (const name of ['Add account', 'Go to: Mail', 'Go to: Calendar', 'Sync mailbox', 'Create kanban board', 'Do not disturb for 1 hour'])
-    await expect(menu.getByRole('menuitem', { name, exact: true }).or(menu.getByRole('menuitemradio', { name, exact: true })), name).toHaveCount(0)
+  for (const name of [
+    'Add account',
+    'Go to: Mail',
+    'Go to: Calendar',
+    'Sync mailbox',
+    'Create kanban board',
+    'Do not disturb for 1 hour',
+  ])
+    await expect(
+      menu.getByRole('menuitem', { name, exact: true }).or(menu.getByRole('menuitemradio', { name, exact: true })),
+      name,
+    ).toHaveCount(0)
   await expect(menu.locator('[aria-disabled="true"]')).toHaveCount(0)
   await info.attach('setup-band-menu', {
     body: await page.screenshot({ path: info.outputPath('setup-band-menu.png'), animations: 'disabled' }),
@@ -5257,7 +5277,10 @@ for (const width of [1440, 390]) {
           .map((violation) => `${violation.id} on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`),
         name,
       ).toEqual([])
-      expect(regions.violations.map((violation) => violation.id), name).toEqual([])
+      expect(
+        regions.violations.map((violation) => violation.id),
+        name,
+      ).toEqual([])
     }
     await audit('closed')
     // F6 to the band, Enter on the button: the menu opens leftwards, inside.
@@ -5270,9 +5293,11 @@ for (const width of [1440, 390]) {
     expect(menuBox.x).toBeGreaterThanOrEqual(0)
     expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(width)
     expect(menuBox.x + menuBox.width).toBeGreaterThanOrEqual(buttonBox.x - 8)
-    const groups = await menu.getByRole('group').evaluateAll((elements) =>
-      elements.map((element) => document.getElementById(element.getAttribute('aria-labelledby')!)?.textContent),
-    )
+    const groups = await menu
+      .getByRole('group')
+      .evaluateAll((elements) =>
+        elements.map((element) => document.getElementById(element.getAttribute('aria-labelledby')!)?.textContent),
+      )
     expect(groups).toEqual(SETUP_MENU_GROUPS.map((key) => arCatalog[key]))
     await rtlInView(page, 'setup screen, menu open')
     await settled(page)
@@ -5289,6 +5314,82 @@ for (const width of [1440, 390]) {
     expect(errors).toEqual([])
   })
 }
+
+// On the setup screen, Settings' «Add account» goes back to the setup, which
+// is that flow already, instead of opening a second one over it that would
+// change its provider (#343).
+test("Settings' «Add account» on the setup screen goes back to the setup as it was (#343)", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page)
+  await page.goto('/')
+  const { button, menu, email } = await setupBandParts(page, enCatalog)
+  await email.fill('person@gmail.com')
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+  // The «+» of the mail accounts, then the one of the feeds.
+  for (const index of [0, 1]) {
+    await button.click()
+    await menu.getByRole('menuitem', { name: 'Open settings', exact: true }).click()
+    await expect(settings).toBeVisible()
+    await settings.getByTitle('Add account', { exact: true }).nth(index).click()
+    await expect(settings).toHaveCount(0)
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(email).toBeFocused()
+    await expect(email).toHaveValue('person@gmail.com')
+  }
+  // The setup carries on from what was typed.
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('button', { name: 'Sign in with Google' })).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+// A backup restored from Settings on the setup screen brings the first
+// account: the window replaces the setup behind Settings, which stays the same
+// dialog, still open, and gives the focus back to the app menu button when it
+// closes (#343).
+test('a backup restored from Settings on the setup screen keeps Settings, then gives the focus to the band (#343)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  // No account at first: the restore brings the synthetic one back.
+  await page.addInitScript(() => {
+    const replies = (window as any).startupProbe.replies
+    ;(window as any).restoredAccounts = replies['account.list']
+    replies['account.list'] = { accounts: [] }
+  })
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Connect a Mail Account' })).toBeVisible()
+  const { button, menu } = await appMenuParts(page)
+  await button.click()
+  await menu.getByRole('menuitem', { name: 'Backup', exact: true }).click()
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+  await expect(settings).toBeVisible()
+  await settings.evaluate((dialog) => dialog.setAttribute('data-test-kept', ''))
+  await page.evaluate(() => {
+    const replies = (window as any).startupProbe.replies
+    replies['backup.import'] = {
+      accounts: 1,
+      skipped: 0,
+      feeds: 0,
+      settings: 0,
+      secrets: 0,
+      pgp_keys: 0,
+      smime_identities: 0,
+    }
+    replies['account.list'] = (window as any).restoredAccounts
+  })
+  await settings.getByRole('button', { name: 'Restore', exact: true }).click()
+  await expect(page.getByText('Restored 1 account', { exact: true })).toBeVisible()
+  await expect(page.locator('[data-thread-list]')).toBeAttached()
+  await expect(page.getByRole('heading', { name: 'Connect a Mail Account' })).toHaveCount(0)
+  await expect(page.locator('[role="dialog"][data-test-kept]')).toHaveCount(1)
+  // (The focus is not kept in Settings: «Restore» disables itself while it
+  // works, and the browser drops the focus to the body, as in the window.)
+  await page.keyboard.press('Escape')
+  await expect(settings).toHaveCount(0)
+  await expect(button).toBeFocused()
+  expect(errors).toEqual([])
+})
 
 // #317: the common folder pane (ADR-0068 §4), mail first. One width for every
 // module, 260 px by default and 200 to 400, in px so the app's zoom grows the
