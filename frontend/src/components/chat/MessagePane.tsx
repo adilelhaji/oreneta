@@ -152,10 +152,17 @@ export function MessagePane() {
     thread$.mediaOpen.set(false)
   }, [])
 
+  // The conversation whose search this pane opened on a request from another
+  // module (#344). Kept by the pane, not by the request: a replayed mount
+  // effect (StrictMode, in development) resets the view again, and opens the
+  // search again after it.
+  const searchAskedFor = useRef('')
   useEffect(() => {
     resetThreadView()
-    // A search asked for from another module, before this pane was on screen (#344).
-    if (takeThreadSearchRequest()) openThreadSearch()
+    if (!activeThreadId) return
+    if (takeThreadSearchRequest(activeThreadId)) searchAskedFor.current = activeThreadId
+    else if (searchAskedFor.current !== activeThreadId) searchAskedFor.current = ''
+    if (searchAskedFor.current) openThreadSearch()
   }, [activeThreadId])
 
   useLayoutEffect(() => {

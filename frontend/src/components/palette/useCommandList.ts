@@ -195,14 +195,14 @@ export function useCommandList(): Command[] {
         // #344). Then, as Ctrl/⌘+F in mail, the open conversation's search,
         // or else the top band's.
         run: run(() => {
+          const visible = !!selectedThread && (!activeBoardId || !!kanban$.paneThreadId.peek())
           // Out of mail the conversation pane is not mounted yet: it opens
-          // the search once it is on screen.
-          const paneShown = inMailView
+          // the search once it shows the conversation. Asked before mail is
+          // shown, so it does not depend on when the pane renders.
+          if (visible && !inMailView) requestThreadSearch(selectedThread)
           inMail(() => {
-            const visible = !!selectedThread && (!activeBoardId || !!kanban$.paneThreadId.peek())
             if (!visible) focusGlobalSearch()
-            else if (paneShown) thread$.searchOpen.set(true)
-            else requestThreadSearch()
+            else if (inMailView) thread$.searchOpen.set(true)
           })()
         }),
       },
@@ -213,7 +213,8 @@ export function useCommandList(): Command[] {
         icon: icon(SearchCheck),
         keywords: 'find global mailbox',
         shortcut: 'search.global',
-        // In mail, the band's search, scoped to mail (#344).
+        // In mail, the band's search, with mail's scope: the query of the
+        // thread list or, with a board open, the board's (#344).
         run: run(inMail(() => focusGlobalSearch())),
       },
       {

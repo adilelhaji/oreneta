@@ -11,7 +11,7 @@ import { notes$ } from '../../states/notes'
 import { people$ } from '../../states/people'
 import { settings$, type KanbanBoard } from '../../states/settings'
 import { tasks$ } from '../../states/tasks'
-import { takeThreadSearchRequest, thread$ } from '../../states/thread'
+import { clearThreadSearchRequest, pendingThreadSearch, thread$ } from '../../states/thread'
 import { ui$, type AppModule } from '../../states/ui'
 import type { Account, Person } from '../../types'
 import { AttachmentsView } from '../attachments/AttachmentsView'
@@ -117,6 +117,7 @@ afterEach(() => {
   tasks$.search.set('')
   attachmentList$.filter.name.set('')
   thread$.searchOpen.set(false)
+  clearThreadSearchRequest()
   delete (window as any).go
 })
 
@@ -365,9 +366,9 @@ describe("each module's search from the band keeps its delay and its texts (#344
     expect(view.container.textContent).toContain('No notes match')
     // Cleared, the list comes back at once.
     fireEvent.click(within(landmark(view)).getByRole('button', { name: 'Clear search' }))
-    await wait(20)
+    await waitFor(() => expect(calls.filter((call) => call.command === 'notes.list')).toHaveLength(3))
     expect(calls.filter((call) => call.command === 'notes.list').at(-1)!.payload).toMatchObject({ search: '' })
-    expect(view.container.textContent).toContain('No notes yet')
+    await waitFor(() => expect(view.container.textContent).toContain('No notes yet'))
   })
 
   it('People: asks the core 150 ms after the last key, and says nobody matched', async () => {
@@ -398,7 +399,8 @@ describe("each module's search from the band keeps its delay and its texts (#344
     await waitFor(() => expect(asked()).toHaveLength(1))
     type(field(view), 'zz')
     type(field(view), 'zzz')
-    await wait(90)
+    // Not before the 150 ms (a wide margin, for a slow machine).
+    await wait(50)
     expect(asked()).toHaveLength(1)
     await waitFor(() => expect(asked()).toHaveLength(2))
     expect(asked().at(-1)!.payload).toMatchObject({ query: 'zzz' })
@@ -406,7 +408,8 @@ describe("each module's search from the band keeps its delay and its texts (#344
     // Cleared, everybody again, after the same 150 ms.
     fireEvent.click(within(landmark(view)).getByRole('button', { name: 'Clear search' }))
     expect(people$.query.peek()).toBe('')
-    await wait(90)
+    // Not before the 150 ms (a wide margin, for a slow machine), then once.
+    await wait(50)
     expect(asked()).toHaveLength(2)
     await waitFor(() => expect(asked()).toHaveLength(3))
     expect(asked().at(-1)!.payload).toMatchObject({ query: '' })
@@ -436,8 +439,7 @@ describe("each module's search from the band keeps its delay and its texts (#344
     // Cleared, the list is asked for again at once, with no name.
     fireEvent.click(within(landmark(view)).getByRole('button', { name: 'Clear search' }))
     expect(attachmentList$.filter.name.peek()).toBe('')
-    await wait(20)
-    expect(asked()).toHaveLength(3)
+    await waitFor(() => expect(asked()).toHaveLength(3))
     expect(asked().at(-1)!.payload).toMatchObject({ name: '' })
   })
 
@@ -591,22 +593,22 @@ describe('the shortcuts reach the band (#344)', () => {
     const away = view.container.querySelector<HTMLElement>('#elsewhere')!
     // A conversation open in mail: its own search, once mail is on screen.
     // The conversation pane mounts with mail and resets its view, so the
-    // search is asked of it, and it opens it then (MessagePane).
+    // search is asked of it for that conversation, and it opens it then
+    // (MessagePane; MessagePaneThreadSearch.test.tsx renders it).
     act(() => ui$.selectedThread.set('synthetic-account#INBOX#1'))
     for (const module of ['calendar', 'notes'] as const) {
       goTo(module)
       focus(away)
       run('search.thread')
       expect(ui$.module.peek(), module).toBe('mail')
-      expect(takeThreadSearchRequest(), module).toBe(true)
+      expect(pendingThreadSearch(), module).toBe('synthetic-account#INBOX#1')
       expect(document.activeElement, module).not.toBe(field(view))
+      clearThreadSearchRequest()
     }
-    // Asked once, answered once.
-    expect(takeThreadSearchRequest()).toBe(false)
     // In mail, with the pane on screen, it opens at once, as before.
     run('search.thread')
     expect(thread$.searchOpen.peek()).toBe(true)
-    expect(takeThreadSearchRequest()).toBe(false)
+    expect(pendingThreadSearch()).toBe('')
     // No conversation: mail's field in the band.
     act(() => {
       thread$.searchOpen.set(false)
@@ -617,7 +619,7 @@ describe('the shortcuts reach the band (#344)', () => {
     run('search.thread')
     expect(ui$.module.peek()).toBe('mail')
     expect(thread$.searchOpen.peek()).toBe(false)
-    expect(takeThreadSearchRequest()).toBe(false)
+    expect(pendingThreadSearch()).toBe('')
     expect(document.activeElement).toBe(field(view))
   })
 

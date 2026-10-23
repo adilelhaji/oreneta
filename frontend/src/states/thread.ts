@@ -36,21 +36,35 @@ export function openThreadSearch() {
 }
 
 // The conversation's search asked for from another module (the palette's and
-// the menu's «Search current thread», #344): the conversation pane is not
-// mounted yet, and resets its view when it mounts, which would close a search
-// opened before. It opens the search once it has reset its view.
-let threadSearchRequested = false
+// the menu's «Search current thread», #344). The conversation pane is not
+// mounted yet, and resets its view when it mounts, which closes any search
+// opened before. So the request names its conversation, and the pane takes it
+// once it shows a conversation, opening the search after its reset if the
+// request was for that one.
+let threadSearchFor = ''
 
-/** Opens the conversation's search when the conversation pane next resets its view. */
-export function requestThreadSearch() {
-  threadSearchRequested = true
+/** Opens the search of conversation `threadId` once the conversation pane shows it. */
+export function requestThreadSearch(threadId: string) {
+  threadSearchFor = threadId
 }
 
-/** Whether a search was asked for before the pane was on screen; asking answers it. */
-export function takeThreadSearchRequest(): boolean {
-  const requested = threadSearchRequested
-  threadSearchRequested = false
-  return requested
+/** The conversation whose search was asked for, or '' when there is none. */
+export function pendingThreadSearch(): string {
+  return threadSearchFor
+}
+
+/**
+ * For the pane showing `threadId`: whether its search was asked for. Any
+ * request is answered then, so one for another conversation does not linger.
+ */
+export function takeThreadSearchRequest(threadId: string): boolean {
+  const asked = threadSearchFor === threadId
+  threadSearchFor = ''
+  return asked
+}
+
+export function clearThreadSearchRequest() {
+  threadSearchFor = ''
 }
 
 export function revealRemote(messageId: string) {
