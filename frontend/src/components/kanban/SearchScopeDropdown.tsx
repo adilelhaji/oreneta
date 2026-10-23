@@ -14,7 +14,8 @@ import { MenuList, MenuSeparator } from '../menu/Menu'
 import { menuItemSelectedClass } from '../menu/menuStyles'
 
 // The search scope selector: a menu button whose menu offers every column, the
-// scope in force checked (radio items, #289).
+// scope in force checked (radio items, #289). It sits at the end of the
+// board's field in the top band (#344).
 export function SearchScopeDropdown({
   value,
   onChange,
@@ -52,11 +53,11 @@ export function SearchScopeDropdown({
   }, [value, visibleColumns, folders, accounts, t])
 
   return (
-    <div ref={containerRef} className="relative h-full shrink-0 border-s border-border/60">
+    <div ref={containerRef} className="relative h-7 shrink-0">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex h-full items-center gap-1.5 px-3.5 text-caption font-semibold text-secondary hover:text-primary transition-colors cursor-pointer select-none rounded-e-xl outline-none border-0"
+        className="flex h-full items-center gap-1.5 rounded-control-sm border border-input bg-chats px-2.5 text-caption font-semibold text-secondary transition-colors hover:text-primary cursor-pointer select-none"
         title={t('kanban.searchScope.label')}
         aria-haspopup="menu"
         aria-expanded={isOpen}

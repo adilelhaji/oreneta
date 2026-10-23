@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
 import { TasksView } from './TasksView'
 import { TaskDialog } from './TaskDialog'
+import { AppHeader } from '../shell/AppHeader'
 import { tasks$, type Task } from '../../states/tasks'
 import { ui$ } from '../../states/ui'
 import { useValue } from '@legendapp/state/react'
@@ -89,13 +90,19 @@ function Editor() {
 describe('task lists (ADR-0013)', () => {
   it('shows every list, filters by list and by search', async () => {
     stubBridge({ 'tasks.list': () => ({ tasks: [task({}), standalone] }), 'tasks.lists': () => ({ lists }) })
-    const view = render(<TasksView />)
+    // The search is the top band's, scoped to Tasks (#344).
+    const view = render(
+      <>
+        <AppHeader />
+        <TasksView />
+      </>,
+    )
     await waitFor(() => expect(view.container.textContent).toContain('Fix the tap'))
     expect(view.container.textContent).toContain('Renew the contract')
     fireEvent.click(view.getByRole('tab', { name: /Home/ }))
     expect(view.container.textContent).not.toContain('Renew the contract')
     fireEvent.click(view.getByRole('tab', { name: /All/ }))
-    fireEvent.change(view.getByLabelText('Search tasks'), { target: { value: 'renew' } })
+    fireEvent.change(within(view.getByRole('search')).getByLabelText('Search tasks'), { target: { value: 'renew' } })
     expect(view.container.textContent).not.toContain('Fix the tap')
     expect(view.container.textContent).toContain('Renew the contract')
   })

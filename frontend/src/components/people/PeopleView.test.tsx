@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import { PeopleView } from './PeopleView'
+import { AppHeader } from '../shell/AppHeader'
 import { people$ } from '../../states/people'
+import { ui$ } from '../../states/ui'
 import type { Person } from '../../types'
 
 const ana: Person = {
@@ -40,7 +42,10 @@ beforeEach(() => {
   people$.query.set('')
   people$.selectedId.set('')
 })
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  ui$.module.set('mail')
+})
 
 describe('the address book as a place', () => {
   it('lists everybody with what tells them apart', () => {
@@ -113,10 +118,17 @@ describe('the address book as a place', () => {
   })
 
   it('keeps focus in search when a selected person disappears and reappears in results', () => {
-    const view = render(<PeopleView />)
+    // The search is the top band's, scoped to People (#344).
+    ui$.module.set('people')
+    const view = render(
+      <>
+        <AppHeader />
+        <PeopleView />
+      </>,
+    )
     fireEvent.click(view.getByRole('option', { name: /Ana Prat/ }))
     fireEvent.click(view.getByRole('option', { name: /Ana Prat/ }))
-    const search = view.getByRole('textbox', { name: 'Search people' })
+    const search = within(view.getByRole('search')).getByRole('textbox', { name: 'Search people' })
     search.focus()
     act(() => {
       people$.people.set([marc])

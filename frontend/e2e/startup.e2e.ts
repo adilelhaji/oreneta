@@ -370,7 +370,9 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       await page.setViewportSize({ width, height: 1000 })
       const errors = await prepareStartup(page, true, { navigation: true, language: 'es', theme })
       await page.goto('/')
-      await expect(page.getByRole('textbox').first()).toBeVisible()
+      // The mailbox is up. (Its search field, the first textbox before #344, is
+      // a button in the top band below 769 px.)
+      await expect(page.locator('[data-thread-list]')).toBeVisible()
       const openArea = async (name: string) => {
         // Narrow: the areas are items of the More menu (#289).
         if (width < 769) {
@@ -564,7 +566,9 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       await page.setViewportSize({ width, height: 1000 })
       const errors = await prepareStartup(page, true, { navigation: true, language: 'es', theme, updatesSupported: true })
       await page.goto('/')
-      const opener = page.getByRole('textbox').first()
+      // The mail search: the band's field, or below 769 px the band's search
+      // button that opens it (#344).
+      const opener = width < 769 ? page.locator('[data-band-search-button]') : page.getByRole('textbox').first()
       await opener.focus()
       await page.keyboard.press('Control+k')
       const palette = page.getByRole('dialog', { name: 'Paleta de comandos' })
@@ -4463,17 +4467,18 @@ test('F6 leaves a text field and the HTML message, and a modal dialog keeps the 
   const frame = page.frameLocator('iframe[title="Message HTML"]').first()
   await expect(frame.getByText('Wide synthetic invoice')).toBeVisible()
 
-  // While typing in the list's search field: F6 types nothing and moves on.
-  const search = page.locator('[data-thread-list]').getByRole('textbox').first()
+  // While typing in the band's search field (#344): F6 types nothing and
+  // moves on, to the folders.
+  const search = page.getByRole('search').getByRole('textbox')
   await search.click()
   await search.fill('Pilot')
   // The conversation is still open, so the reader has somewhere to land.
   await expect(frame.getByText('Wide synthetic invoice')).toBeVisible()
-  expect(await regionAtFocus(page)).toBe('content')
+  expect(await regionAtFocus(page)).toBe('search')
   await page.keyboard.press('F6')
   await expect(search).not.toBeFocused()
   await expect(search).toHaveValue('Pilot')
-  expect(await regionAtFocus(page)).toBe('reader')
+  expect(await regionAtFocus(page)).toBe('folders')
 
   // From inside the message's own frame, which forwards F1–F12.
   await frame.getByText('Wide synthetic invoice').click()
@@ -4527,8 +4532,8 @@ test('rebound to a letter, the next-region shortcut stands down while typing (#3
   // F6 itself no longer moves.
   await page.keyboard.press('F6')
   expect(await regionAtFocus(page)).toBe('content')
-  // In a text field the letter is typed, and the focus stays.
-  const search = page.locator('[data-thread-list]').getByRole('textbox').first()
+  // In a text field (the band's search, #344) the letter is typed, and the focus stays.
+  const search = page.getByRole('search').getByRole('textbox')
   await search.click()
   await page.keyboard.type('g')
   await expect(search).toBeFocused()
@@ -6870,16 +6875,19 @@ for (const [width, paneWidth] of [
     const content = page.locator('main > [data-region="content"]')
     await expect(pane).toHaveAttribute('data-region', 'folders')
     await expect(pane.getByRole('heading', { level: 2, name: 'Attachment filters' })).toBeVisible()
+    // The file name is searched from the top band (#344); the other four
+    // filters are the pane's.
     const controls = [
-      pane.getByRole('textbox', { name: 'File name' }),
       pane.getByRole('textbox', { name: 'From' }),
       pane.getByRole('combobox', { name: 'Type' }),
       pane.getByRole('combobox', { name: 'When' }),
       pane.getByRole('combobox', { name: 'Account' }),
     ]
     for (const control of controls) await expect(control).toBeVisible()
-    for (const label of ['File name', 'From', 'Type', 'When', 'Account'])
+    for (const label of ['From', 'Type', 'When', 'Account'])
       await expect(pane.locator('label', { hasText: new RegExp(`^${label}$`) })).toBeVisible()
+    await expect(pane.getByRole('textbox')).toHaveCount(1)
+    await expect(page.getByRole('search').getByRole('textbox', { name: 'Search attachments by file name' })).toBeVisible()
     // Right after the rail, at the shared width, and the list right after it.
     const rail = await boxOf(page.locator('main > aside').first())
     const paneBox = await boxOf(pane)
@@ -6892,7 +6900,7 @@ for (const [width, paneWidth] of [
     // The bar is gone from the module, and the pane is the only region.
     await expect(page.locator('[data-region="folders"]')).toHaveCount(1)
     await expect(content.locator('[data-region="folders"]')).toHaveCount(0)
-    await expect(content.getByLabel('File name')).toHaveCount(0)
+    await expect(content.getByLabel('From')).toHaveCount(0)
     await settled(page)
     await ltrInView(page, `attachments at ${width}px, folders ${paneWidth}px`)
     const outside = await content.evaluate((region) => {
@@ -6931,7 +6939,9 @@ test('at 1024px Attachments keeps its filter bar under the header, and draws no 
   await expect(page.getByRole('navigation', { name: 'Attachment filters' })).toHaveCount(0)
   await expect(page.locator('[data-region="folders"]')).toHaveCount(0)
   const content = page.locator('main > [data-region="content"]')
-  await expect(content.getByRole('textbox', { name: 'File name' })).toBeVisible()
+  // The file name is the top band's (#344); the bar keeps the other four.
+  await expect(page.getByRole('search').getByRole('textbox', { name: 'Search attachments by file name' })).toBeVisible()
+  await expect(content.getByRole('textbox')).toHaveCount(1)
   await expect(content.getByRole('textbox', { name: 'From' })).toBeVisible()
   await expect(content.getByRole('combobox', { name: 'Type' })).toBeVisible()
   await expect(content.getByRole('combobox', { name: 'When' })).toBeVisible()
@@ -6957,8 +6967,10 @@ test('Attachments filters from the pane and keeps the values and the list across
         .filter((item: any) => item.command === 'attachments.list')
         .map((item: any) => item.payload),
     )
+  // The file name from the top band (#344), the rest from the pane.
+  const name = page.getByRole('search').getByRole('textbox', { name: 'Search attachments by file name' })
   await pane.getByRole('combobox', { name: 'Type' }).selectOption('pdf')
-  await pane.getByRole('textbox', { name: 'File name' }).fill('report')
+  await name.fill('report')
   await pane.getByRole('textbox', { name: 'From' }).fill('sender')
   await expect.poll(async () => (await asked()).at(-1)).toMatchObject({ kind: 'pdf', name: 'report', sender: 'sender' })
   await pane.getByRole('combobox', { name: 'Account' }).selectOption('second-account')
@@ -6971,14 +6983,14 @@ test('Attachments filters from the pane and keeps the values and the list across
   await expect(page.locator('[data-folder-pane]')).toHaveCount(0)
   const content = page.locator('main > [data-region="content"]')
   await expect(content.getByRole('combobox', { name: 'Type' })).toHaveValue('pdf')
-  await expect(content.getByRole('textbox', { name: 'File name' })).toHaveValue('report')
+  await expect(name).toHaveValue('report')
   await expect(content.getByRole('textbox', { name: 'From' })).toHaveValue('sender')
   await expect(content.getByRole('combobox', { name: 'Account' })).toHaveValue('second-account')
   expect(await page.getByText('report.pdf').evaluate((element) => (element as any).keptAcross)).toBe(true)
 
   await page.setViewportSize({ width: 1025, height: 900 })
   await expect(pane.getByRole('combobox', { name: 'Type' })).toHaveValue('pdf')
-  await expect(pane.getByRole('textbox', { name: 'File name' })).toHaveValue('report')
+  await expect(name).toHaveValue('report')
   await expect(pane.getByRole('textbox', { name: 'From' })).toHaveValue('sender')
   await expect(pane.getByRole('combobox', { name: 'Account' })).toHaveValue('second-account')
   expect(await page.getByText('report.pdf').evaluate((element) => (element as any).keptAcross)).toBe(true)
@@ -7029,7 +7041,11 @@ test("in Arabic Attachments's folder pane sits between the rail and the list, an
   expect(Math.abs(paneBox.x + paneBox.width - railBox.x)).toBeLessThanOrEqual(1)
   expect(Math.abs(contentBox.x + contentBox.width - paneBox.x)).toBeLessThanOrEqual(1)
   expect(contentBox.x).toBeGreaterThanOrEqual(-1)
-  await expect(pane.getByRole('textbox', { name: arCatalog['attachmentsView.searchName'] })).toBeVisible()
+  await expect(pane.getByRole('textbox', { name: arCatalog['attachmentsView.sender'], exact: true })).toBeVisible()
+  // The file name is searched from the top band (#344).
+  await expect(
+    page.getByRole('search').getByRole('textbox', { name: arCatalog['attachmentsView.search'], exact: true }),
+  ).toBeVisible()
   await rtlInView(page, 'attachments folder pane')
   await settled(page)
   const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
@@ -7045,24 +7061,26 @@ test("in Arabic Attachments's folder pane sits between the rail and the list, an
 
 // #341: crossing 1025 px swaps the pane's controls for their narrow twins (or
 // the reverse), and the focus goes with the control instead of falling to <body>.
-test('focus in the Attachments "File name" field follows it across 1025px, both ways (#341)', async ({ page }) => {
+// The file name is searched from the top band since #344, so the text field
+// that crosses is the sender's.
+test('focus in the Attachments "From" field follows it across 1025px, both ways (#341)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   const errors = await openAttachmentsPane(page)
   const pane = page.getByRole('navigation', { name: 'Attachment filters', exact: true })
   const content = page.locator('main > [data-region="content"]')
-  await pane.getByRole('textbox', { name: 'File name' }).fill('report')
-  await expect(pane.getByRole('textbox', { name: 'File name' })).toBeFocused()
+  await pane.getByRole('textbox', { name: 'From' }).fill('sender')
+  await expect(pane.getByRole('textbox', { name: 'From' })).toBeFocused()
 
   await page.setViewportSize({ width: 1024, height: 900 })
   await expect(page.locator('[data-folder-pane]')).toHaveCount(0)
-  await expect(content.getByRole('textbox', { name: 'File name' })).toBeFocused()
-  await expect(content.getByRole('textbox', { name: 'File name' })).toHaveValue('report')
+  await expect(content.getByRole('textbox', { name: 'From' })).toBeFocused()
+  await expect(content.getByRole('textbox', { name: 'From' })).toHaveValue('sender')
 
   await page.setViewportSize({ width: 1025, height: 900 })
-  await expect(pane.getByRole('textbox', { name: 'File name' })).toBeFocused()
+  await expect(pane.getByRole('textbox', { name: 'From' })).toBeFocused()
   // What was typed goes on from where the focus is.
   await page.keyboard.type('s')
-  await expect(pane.getByRole('textbox', { name: 'File name' })).toHaveValue('reports')
+  await expect(pane.getByRole('textbox', { name: 'From' })).toHaveValue('senders')
 
   // Focus that was not in the filters stays where it was: the same element,
   // once the narrow layout is drawn.
@@ -7090,5 +7108,652 @@ test('focus on a Tasks list row follows it to the list tab across 1025px, both w
 
   await page.setViewportSize({ width: 1025, height: 900 })
   await expect(pane.getByRole('button', { name: 'Home (2)', exact: true })).toBeFocused()
+  expect(errors).toEqual([])
+})
+
+// #344: the search in the top band, scoped to the module on screen (ADR-0068
+// §2, piece 13b). The band's centre holds the `search` landmark; each module's
+// own field is gone, and the band's reads and writes that module's state.
+// Calendar and Chat show it disabled with the reason (owner decision 3 on
+// #342). Below 769 px a button in the band opens it over the band.
+async function bandSearch(page: Page, catalog: Record<string, string> = enCatalog) {
+  const band = page
+    .getByRole('banner', { name: catalog['shell.region.banner'], exact: true })
+    .locator('[data-top-band]')
+  const search = band.getByRole('search', { name: catalog['shell.region.search'], exact: true })
+  return { band, search, field: search.getByRole('textbox') }
+}
+
+const lastRequest = (page: Page, command: string) =>
+  page.evaluate(
+    (name) =>
+      (window as any).startupProbe.requests.filter((request: any) => request.command === name).at(-1)?.payload,
+    command,
+  )
+
+// Opens a module from its rail button, which goes back to mail when the module
+// is already open: call it for another module than the one on screen.
+async function openModule(page: Page, title: string) {
+  await page.getByTitle(title, { exact: true }).click()
+  await expect(page.getByRole('main', { name: title, exact: true })).toBeVisible()
+}
+
+test('mail is searched from the band: the query, Escape, the builder and the saved searches (#344)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.addInitScript(() => {
+    const replies = (window as any).startupProbe.replies
+    replies['search.parse'] = {
+      query: { text: 'budget', from: [], to: [], subject: [], flags: [], label: null, after: null, before: null },
+    }
+    replies['search.compose'] = { text: 'budget is:unread' }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { band, search, field } = await bandSearch(page)
+  // In the band's centre, after the app menu: one field, named after mail.
+  await expect(band.locator('[data-band-centre]').getByRole('search')).toHaveCount(1)
+  await expect(search).toHaveAttribute('data-search-scope', 'mail')
+  await expect(field).toHaveAccessibleName('Search messages...')
+  await expect(field).toHaveAttribute('placeholder', 'Search messages...')
+  await expect(field).toHaveAttribute('title', enCatalog['search.operatorsHint'])
+  // The thread list has no field of its own any more: one place to type.
+  await expect(page.locator('[data-thread-list]').getByRole('textbox')).toHaveCount(0)
+  await expect(page.locator('main').getByRole('textbox')).toHaveCount(0)
+
+  await field.fill('budget')
+  await expect
+    .poll(() => lastRequest(page, 'mail.threadList'))
+    .toMatchObject({ account_id: 'synthetic-account', folder_id: 'INBOX', query: 'budget' })
+  // Escape clears it and leaves it, as the thread list's did.
+  await field.press('Escape')
+  await expect(field).toHaveValue('')
+  await expect(field).not.toBeFocused()
+  await expect.poll(() => lastRequest(page, 'mail.threadList')).toMatchObject({ query: '' })
+
+  // The builder, from a button at the end of the field.
+  await field.fill('budget')
+  const builder = search.getByRole('button', { name: 'Search options', exact: true })
+  const fieldBox = await boxOf(field)
+  expect((await boxOf(builder)).x).toBeGreaterThanOrEqual(fieldBox.x + fieldBox.width - 1)
+  await builder.click()
+  const dialog = page.getByRole('dialog', { name: 'Search options' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByLabel('Words')).toHaveValue('budget')
+  await dialog.getByLabel('Read or unread').selectOption('unread')
+  await dialog.getByRole('button', { name: 'Search', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(builder).toBeFocused()
+  await expect(field).toHaveValue('budget is:unread')
+  await expect.poll(() => lastRequest(page, 'mail.threadList')).toMatchObject({ query: 'budget is:unread' })
+
+  // Saved, and opened again from the band.
+  await search.getByRole('button', { name: 'Save this search', exact: true }).click()
+  await field.fill('')
+  await search.getByRole('button', { name: 'Saved searches', exact: true }).click()
+  await page.getByRole('menuitem', { name: /budget is:unread/ }).first().click()
+  await expect(field).toHaveValue('budget is:unread')
+  await expect.poll(() => lastRequest(page, 'mail.threadList')).toMatchObject({ query: 'budget is:unread' })
+  expect(errors).toEqual([])
+})
+
+test('a board open in mail is searched from the band, and a column scopes it from its menu (#344)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { search, field } = await bandSearch(page)
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  // The first board, which every profile has.
+  await page.keyboard.press(`${mod}+Shift+V`)
+  const boardTitle = page.locator('main').getByRole('heading', { level: 2, name: 'Kanban board', exact: true })
+  await expect(boardTitle).toBeVisible()
+  await expect(search).toHaveAttribute('data-search-scope', 'board')
+  await expect(field).toHaveAccessibleName('Search board...')
+  // The board's header has neither a field nor a search button of its own.
+  await expect(page.locator('main').getByRole('textbox')).toHaveCount(0)
+  await expect(page.locator('main').getByRole('button', { name: 'Search board', exact: true })).toHaveCount(0)
+  await field.fill('pilot')
+  await expect.poll(() => lastRequest(page, 'mail.threadList')).toMatchObject({ query: 'pilot' })
+  // The scope, at the end of the field: every column, to start with.
+  const scope = search.getByTitle('Search scope', { exact: true })
+  await scope.click()
+  const choices = page.getByRole('menuitemradio')
+  await expect(choices.first()).toHaveAttribute('aria-checked', 'true')
+  await page.keyboard.press('Escape')
+  // A column's «Search» scopes the board to it and focuses the band.
+  await page.locator('main').getByRole('button', { name: 'Thread actions', exact: true }).first().click()
+  await page.getByRole('menuitem', { name: 'Search', exact: true }).click()
+  await expect(field).toBeFocused()
+  await scope.click()
+  await expect(choices.first()).toHaveAttribute('aria-checked', 'false')
+  await expect(choices.nth(1)).toHaveAttribute('aria-checked', 'true')
+  await page.keyboard.press('Escape')
+  // Escape in the field clears it, then leaves it, as the board's did.
+  await field.focus()
+  await page.keyboard.press('Escape')
+  await expect(field).toHaveValue('')
+  await expect(field).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(field).not.toBeFocused()
+  // Back to mail: mail's own search, untouched.
+  await page.keyboard.press(`${mod}+Shift+V`)
+  await expect(boardTitle).toHaveCount(0)
+  await expect(search).toHaveAttribute('data-search-scope', 'mail')
+  await expect(field).toHaveValue('')
+  expect(errors).toEqual([])
+})
+
+test('Notes, People, Tasks and Attachments are searched from the band, each with its own query (#344)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.addInitScript(() => {
+    const replies = (window as any).startupProbe.replies
+    const task = (id: number, title: string) => ({
+      id, thread_id: '', account_id: '', folder_id: '', note: '', due_at: null, completed_at: null, created_at: 0,
+      subject: '', from_name: '', from_addr: '', linked: false, list_id: 'mail', title, priority: 1,
+      reminder_at: null, revision: 1,
+    })
+    replies['tasks.lists'] = { lists: [{ id: 'mail', name: '', position: 0, open: 2 }] }
+    replies['tasks.list'] = { tasks: [task(1, 'Renew the contract'), task(2, 'Fix the tap')] }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { search, field } = await bandSearch(page)
+  const main = page.getByRole('main')
+
+  await openModule(page, 'Notes')
+  await expect(search).toHaveAttribute('data-search-scope', 'notes')
+  await expect(field).toHaveAccessibleName('Search notes')
+  await expect(main.getByRole('textbox', { name: 'Search notes' })).toHaveCount(0)
+  await field.fill('pasta')
+  await expect.poll(() => lastRequest(page, 'notes.list')).toMatchObject({ search: 'pasta' })
+  await expect(main.getByText('No notes match')).toBeVisible()
+
+  await openModule(page, 'People')
+  await expect(field).toHaveAccessibleName('Search people')
+  await expect(field).toHaveValue('')
+  await expect(main.getByRole('textbox', { name: 'Search people' })).toHaveCount(0)
+  await field.fill('ada')
+  await expect.poll(() => lastRequest(page, 'people.list')).toMatchObject({ query: 'ada' })
+  await expect(main.getByText('Nobody by that name')).toBeVisible()
+
+  await openModule(page, 'Tasks')
+  await expect(field).toHaveAccessibleName('Search tasks')
+  await expect(main.getByText('Fix the tap')).toBeVisible()
+  await expect(main.getByRole('textbox', { name: 'Search tasks' })).toHaveCount(0)
+  await field.fill('renew')
+  await expect(main.getByText('Fix the tap')).toHaveCount(0)
+  await expect(main.getByText('Renew the contract')).toBeVisible()
+
+  await openModule(page, 'Attachments')
+  await expect(field).toHaveAccessibleName('Search attachments by file name')
+  await field.fill('report')
+  await expect.poll(() => lastRequest(page, 'attachments.list')).toMatchObject({ name: 'report' })
+
+  // Each module kept its own query, and the field shows it again.
+  for (const [title, query] of [
+    ['Notes', 'pasta'],
+    ['People', 'ada'],
+    ['Tasks', 'renew'],
+    ['Attachments', 'report'],
+  ]) {
+    await openModule(page, title)
+    await expect(field, title).toHaveValue(query)
+  }
+  // Mail's was never touched.
+  const { button, menu } = await appMenuParts(page)
+  await button.click()
+  await menu.getByRole('menuitemradio', { name: 'Go to: Mail', exact: true }).click()
+  await expect(search).toHaveAttribute('data-search-scope', 'mail')
+  await expect(field).toHaveValue('')
+  expect(errors).toEqual([])
+})
+
+test('in Attachments the band field keeps its focus and its text across 1025px, where the filters move (#344)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const errors = await openAttachmentsPane(page)
+  const { field } = await bandSearch(page)
+  await field.fill('report')
+  await page.setViewportSize({ width: 1024, height: 900 })
+  await expect(page.locator('[data-folder-pane]')).toHaveCount(0)
+  await expect(field).toBeFocused()
+  await page.keyboard.type('s')
+  await expect(field).toHaveValue('reports')
+  await expect.poll(() => lastRequest(page, 'attachments.list')).toMatchObject({ name: 'reports' })
+  expect(errors).toEqual([])
+})
+
+test('Calendar and Chat show the band field disabled, with the reason, and axe accepts it (#344)', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.addInitScript(() => {
+    ;(window as any).startupProbe.replies['calendar.events'] = { events: [] }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { search, field } = await bandSearch(page)
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  for (const [title, scope, reason] of [
+    ['Calendar', 'calendar', 'Calendar has no search yet'],
+    ['Chat', 'chat', 'Chat has no search yet'],
+  ]) {
+    await openModule(page, title)
+    await expect(search, title).toHaveAttribute('data-search-scope', scope)
+    // Disabled, and it says why: what it shows, its tooltip and its description.
+    await expect(field, title).toBeDisabled()
+    await expect(field, title).toHaveAttribute('placeholder', reason)
+    await expect(field, title).toHaveAttribute('title', reason)
+    await expect(field, title).toHaveAccessibleName('Search')
+    await expect(field, title).toHaveAccessibleDescription(reason)
+    // Nothing there that would do nothing.
+    await expect(search.getByRole('button'), title).toHaveCount(0)
+    // The shortcut has nothing to focus.
+    await page.keyboard.press(`${mod}+Shift+F`)
+    await expect(field, title).not.toBeFocused()
+    await settled(page)
+    const inBand = await new AxeBuilder({ page }).include('[data-top-band]').withTags(AXE_TAGS).analyze()
+    const whole = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+    const regions = await new AxeBuilder({ page }).withRules(REGION_RULES).analyze()
+    await info.attach(`axe-band-search-${scope}`, {
+      body: JSON.stringify({ band: inBand.violations, page: whole.violations, regions: regions.violations }, null, 2),
+      contentType: 'application/json',
+    })
+    expect(inBand.violations.map((violation) => `${violation.id}: ${violation.help}`), title).toEqual([])
+    expect(
+      whole.violations
+        .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+        .map((violation) => `${violation.id} on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`),
+      title,
+    ).toEqual([])
+    expect(regions.violations.map((violation) => violation.id), title).toEqual([])
+  }
+  await info.attach('band-search-chat', {
+    body: await page.screenshot({ path: info.outputPath('band-search-chat.png'), animations: 'disabled' }),
+    contentType: 'image/png',
+  })
+  expect(errors).toEqual([])
+})
+
+test('Ctrl/⌘+Shift+F and Ctrl/⌘+F reach the band field, and Ctrl/⌘+F still searches an open conversation (#344)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { field } = await bandSearch(page)
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+  // The conversation's own search (its wide and narrow fields: the one drawn).
+  const conversationSearch = page.getByPlaceholder('Search thread', { exact: true }).filter({ visible: true })
+
+  // From the list, with no conversation open: the band's field, selected.
+  await row.focus()
+  await page.keyboard.press(`${mod}+Shift+F`)
+  await expect(field).toBeFocused()
+  expect(await regionAtFocus(page)).toBe('search')
+  await page.keyboard.type('pilot')
+  await row.focus()
+  await page.keyboard.press(`${mod}+Shift+F`)
+  await expect(field).toBeFocused()
+  expect(await field.evaluate((input: HTMLInputElement) => [input.selectionStart, input.selectionEnd])).toEqual([0, 5])
+  await page.keyboard.press('Escape')
+  await expect(field).toHaveValue('')
+  await row.focus()
+  await page.keyboard.press(`${mod}+KeyF`)
+  await expect(field).toBeFocused()
+  await expect(conversationSearch).toHaveCount(0)
+
+  // A conversation on screen: Ctrl/⌘+F searches it, as before.
+  await row.click()
+  await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+  await page.keyboard.press(`${mod}+KeyF`)
+  await expect(conversationSearch).toBeFocused()
+  await expect(field).not.toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(conversationSearch).toHaveCount(0)
+
+  // In another module mail's conversation is not on screen: the band's
+  // field, scoped to that module.
+  await openModule(page, 'Notes')
+  await page.getByTitle('Notes', { exact: true }).focus()
+  await page.keyboard.press(`${mod}+KeyF`)
+  await expect(field).toBeFocused()
+  await expect(field).toHaveAccessibleName('Search notes')
+  await page.getByTitle('Notes', { exact: true }).focus()
+  await page.keyboard.press(`${mod}+Shift+F`)
+  await expect(field).toBeFocused()
+  expect(errors).toEqual([])
+})
+
+test('/ focuses the band field in the scheme that binds it, and types nothing (#344)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, {
+    navigation: true,
+    preferences: { shortcut_overrides: { 'search.global': { key: '/' } } },
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { field } = await bandSearch(page)
+  await page.getByRole('table').getByRole('button', { name: /Pilot checklist/ }).focus()
+  await page.keyboard.press('/')
+  await expect(field).toBeFocused()
+  await expect(field).toHaveValue('')
+  // In the field, it is a slash.
+  await page.keyboard.type('a/b')
+  await expect(field).toHaveValue('a/b')
+  expect(errors).toEqual([])
+})
+
+test('below 769px a band button opens the search over the band; Escape closes it and gives the focus back (#344)', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 768, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { band, search, field } = await bandSearch(page)
+  const { button: menuButton } = await appMenuParts(page)
+  const button = band.getByRole('button', { name: 'Search messages...', exact: true })
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  // The menu at the band's start, the search button after it, both inside.
+  await expect(search).toHaveCount(0)
+  await expect(button).toBeVisible()
+  const bandBox = await boxOf(band)
+  const buttonBox = await boxOf(button)
+  expect((await boxOf(menuButton)).x).toBeLessThan(16)
+  expect(buttonBox.x).toBeGreaterThan((await boxOf(menuButton)).x)
+  expect(buttonBox.x + buttonBox.width).toBeLessThanOrEqual(768)
+
+  await button.click()
+  await expect(search).toBeVisible()
+  await expect(field).toBeFocused()
+  // Over the whole band, and what it covers takes no focus.
+  const overlay = await boxOf(search)
+  expect(Math.round(overlay.x)).toBe(Math.round(bandBox.x))
+  expect(Math.round(overlay.width)).toBe(Math.round(bandBox.width))
+  expect(overlay.height).toBeLessThanOrEqual(bandBox.height)
+  await expect(band.locator('[data-band-start]')).toHaveAttribute('inert', '')
+  await page.keyboard.press('Shift+Tab')
+  await expect(menuButton).not.toBeFocused()
+  await field.focus()
+  await field.fill('budget')
+  await expect.poll(() => lastRequest(page, 'mail.threadList')).toMatchObject({ query: 'budget' })
+  await ltrInView(page, 'band search open at 768px')
+  await settled(page)
+  const whole = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+  const regions = await new AxeBuilder({ page }).withRules(REGION_RULES).analyze()
+  expect(
+    whole.violations
+      .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+      .map((violation) => `${violation.id} on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`),
+  ).toEqual([])
+  expect(regions.violations.map((violation) => violation.id)).toEqual([])
+  await info.attach('band-search-768', {
+    body: await page.screenshot({ path: info.outputPath('band-search-768.png'), animations: 'disabled' }),
+    contentType: 'image/png',
+  })
+
+  // Escape closes it and gives the focus back to the button; the query stays.
+  await page.keyboard.press('Escape')
+  await expect(search).toHaveCount(0)
+  await expect(button).toBeFocused()
+  await expect(band.locator('[data-band-start]')).not.toHaveAttribute('inert', '')
+  await expect.poll(() => lastRequest(page, 'mail.threadList')).toMatchObject({ query: 'budget' })
+  await page.keyboard.press('Enter')
+  await expect(field).toBeFocused()
+  await expect(field).toHaveValue('budget')
+  // Its close button does the same.
+  await search.getByRole('button', { name: 'Close search', exact: true }).click()
+  await expect(search).toHaveCount(0)
+  await expect(button).toBeFocused()
+  // Ctrl/⌘+Shift+F opens it too.
+  await page.getByRole('table').getByRole('button', { name: /Pilot checklist/ }).focus()
+  await page.keyboard.press(`${mod}+Shift+F`)
+  await expect(field).toBeFocused()
+  // F6 goes on from it, and Shift+F6 comes back to it.
+  await page.keyboard.press('F6')
+  expect(await regionAtFocus(page)).toBe('content')
+  await page.keyboard.press('Shift+F6')
+  await expect(field).toBeFocused()
+  expect(errors).toEqual([])
+})
+
+test('below 769px the field over the band closes when the palette goes to a module with no search (#344)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 768, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.addInitScript(() => {
+    ;(window as any).startupProbe.replies['calendar.events'] = { events: [] }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { band, search, field } = await bandSearch(page)
+  const { button: menuButton, menu } = await appMenuParts(page)
+  const button = band.locator('[data-band-search-button]')
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  await button.click()
+  await expect(field).toBeFocused()
+  await field.fill('budget')
+  // From the field, the palette goes to Calendar, which has no search.
+  await page.keyboard.press(`${mod}+k`)
+  const palette = page.getByRole('dialog', { name: 'Command palette', exact: true })
+  await palette.getByRole('combobox').fill('Go to: Calendar')
+  await expect(palette.getByRole('option').first()).toContainText('Go to: Calendar')
+  await page.keyboard.press('Enter')
+  await expect(palette).toHaveCount(0)
+  await expect(page.getByRole('main', { name: 'Calendar', exact: true })).toBeVisible()
+  // No disabled field is left over the band: it is closed, the band takes the
+  // focus and the pointer again, and the focus is on the button, which says why.
+  await expect(search).toHaveCount(0)
+  await expect(band.locator('[data-band-start]')).not.toHaveAttribute('inert', '')
+  await expect(button).toHaveAttribute('aria-disabled', 'true')
+  await expect(button).toHaveAccessibleDescription('Calendar has no search yet')
+  await expect(button).toBeFocused()
+  // Pressing it opens nothing.
+  await page.keyboard.press('Enter')
+  await expect(search).toHaveCount(0)
+  // The menu works again, and back in mail the field is closed with its query.
+  await menuButton.click()
+  await menu.getByRole('menuitemradio', { name: 'Go to: Mail', exact: true }).click()
+  await expect(page.getByRole('main', { name: 'Mail', exact: true })).toBeVisible()
+  await expect(search).toHaveCount(0)
+  await expect(button).toHaveAccessibleName('Search messages...')
+  await button.click()
+  await expect(field).toHaveValue('budget')
+  await expect(field).toBeFocused()
+  expect(errors).toEqual([])
+})
+
+// Owner decision on #344: «Search all messages» and «Search current thread»,
+// in the palette and in the app menu, go to mail first and search there.
+test("the palette's and the menu's search commands go to mail first, from Calendar and from Notes (#344)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.addInitScript(() => {
+    ;(window as any).startupProbe.replies['calendar.events'] = { events: [] }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { search, field } = await bandSearch(page)
+  const { button, menu } = await appMenuParts(page)
+  const mail = page.getByRole('main', { name: 'Mail', exact: true })
+  const conversationSearch = page.getByPlaceholder('Search thread', { exact: true }).filter({ visible: true })
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  const palette = page.getByRole('dialog', { name: 'Command palette', exact: true })
+  const fromPalette = async (name: string) => {
+    await page.keyboard.press(`${mod}+k`)
+    await palette.getByRole('combobox').fill(name)
+    await expect(palette.getByRole('option').first()).toContainText(name)
+    await page.keyboard.press('Enter')
+    await expect(palette).toHaveCount(0)
+  }
+
+  // From Calendar, the menu's «Search all messages»: mail, and mail's field.
+  await openModule(page, 'Calendar')
+  await button.click()
+  await menu.getByRole('menuitem', { name: 'Search all messages', exact: true }).click()
+  await expect(mail).toBeVisible()
+  await expect(search).toHaveAttribute('data-search-scope', 'mail')
+  await expect(field).toBeFocused()
+  // From Notes, the palette's, the same.
+  await openModule(page, 'Notes')
+  await fromPalette('Search all messages')
+  await expect(mail).toBeVisible()
+  await expect(field).toBeFocused()
+  await expect(field).toHaveAccessibleName('Search messages...')
+
+  // With no conversation open, «Search current thread» from Calendar ends in mail's field too.
+  await openModule(page, 'Calendar')
+  await fromPalette('Search current thread')
+  await expect(mail).toBeVisible()
+  await expect(field).toBeFocused()
+  await expect(conversationSearch).toHaveCount(0)
+  // With one open in mail, from Notes (palette) and from Calendar (menu): its own search.
+  await page.getByRole('table').getByRole('button', { name: /Pilot checklist/ }).click()
+  await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+  await openModule(page, 'Notes')
+  await fromPalette('Search current thread')
+  await expect(mail).toBeVisible()
+  await expect(conversationSearch).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(conversationSearch).toHaveCount(0)
+  await openModule(page, 'Calendar')
+  await button.click()
+  await menu.getByRole('menuitem', { name: 'Search current thread', exact: true }).click()
+  await expect(mail).toBeVisible()
+  await expect(conversationSearch).toBeFocused()
+  await page.keyboard.press('Escape')
+
+  // The shortcuts are unchanged: in Notes, Ctrl/⌘+Shift+F searches Notes.
+  await openModule(page, 'Notes')
+  await page.getByTitle('Notes', { exact: true }).focus()
+  await page.keyboard.press(`${mod}+Shift+F`)
+  await expect(field).toBeFocused()
+  await expect(field).toHaveAccessibleName('Search notes')
+  expect(errors).toEqual([])
+})
+
+for (const width of [1440, 768]) {
+  test(`in Arabic the band search follows the reading direction and passes axe: ${width}px (#344)`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize({ width, height: 1000 })
+    const errors = await prepareStartup(page, true, { navigation: true, language: 'ar' })
+    await page.addInitScript(() => {
+      ;(window as any).startupProbe.replies['calendar.events'] = { events: [] }
+    })
+    await page.goto('/')
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    const { band, search, field } = await bandSearch(page, arCatalog)
+    const { button: menuButton } = await appMenuParts(page, arCatalog)
+    const menuBox = await boxOf(menuButton)
+    // The menu at the start of the band: its right in Arabic.
+    expect(menuBox.x + menuBox.width).toBeGreaterThan(width - 16)
+    if (width < 769) {
+      const button = band.getByRole('button', { name: arCatalog['threads.searchMessages'], exact: true })
+      expect((await boxOf(button)).x + (await boxOf(button)).width).toBeLessThanOrEqual(menuBox.x)
+      await button.click()
+    }
+    await expect(field).toBeVisible()
+    await expect(field).toHaveAccessibleName(arCatalog['threads.searchMessages'])
+    if (width >= 769) {
+      // After the menu in the reading order: to its left.
+      const fieldBox = await boxOf(field)
+      expect(fieldBox.x + fieldBox.width).toBeLessThanOrEqual(menuBox.x)
+      expect(fieldBox.x).toBeGreaterThanOrEqual(0)
+    }
+    await field.fill('ميزانية')
+    await expect.poll(() => lastRequest(page, 'mail.threadList')).toMatchObject({ query: 'ميزانية' })
+    await rtlInView(page, `band search, ${width}px`)
+    const audit = async (name: string) => {
+      await settled(page)
+      const whole = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+      const regions = await new AxeBuilder({ page }).withRules(REGION_RULES).analyze()
+      await info.attach(`axe-band-search-ar-${width}-${name}`, {
+        body: JSON.stringify({ page: whole.violations, regions: regions.violations }, null, 2),
+        contentType: 'application/json',
+      })
+      expect(
+        whole.violations
+          .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+          .map((violation) => `${violation.id} on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`),
+        name,
+      ).toEqual([])
+      expect(
+        regions.violations.map((violation) => violation.id),
+        name,
+      ).toEqual([])
+    }
+    await audit('mail')
+    await info.attach(`band-search-ar-${width}`, {
+      body: await page.screenshot({ path: info.outputPath(`band-search-ar-${width}.png`), animations: 'disabled' }),
+      contentType: 'image/png',
+    })
+    if (width >= 769) {
+      // Calendar: the field disabled, with the reason in Arabic.
+      await page.getByTitle(arCatalog['calendar.title'], { exact: true }).click()
+      await expect(field).toBeDisabled()
+      await expect(field).toHaveAccessibleDescription(arCatalog['search.band.calendar'])
+      await rtlInView(page, 'band search in Calendar')
+      await audit('calendar')
+    }
+    expect(errors).toEqual([])
+  })
+}
+
+// At the app's 200 % the band is 72 px tall and the field shrinks between the
+// menu and the end of the band, inside the window, at 1025 px; at 100 % it
+// does the same between 769 and 1024 px.
+test("the band field shrinks inside the window at the app's 200 percent at 1025px, and from 769 to 1024px (#344)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1025, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { band, search, field } = await bandSearch(page)
+  const { button: menuButton } = await appMenuParts(page)
+  const fits = async (where: string, width: number) => {
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), where).toBe(true)
+    const menuBox = await boxOf(menuButton)
+    const fieldBox = await boxOf(field)
+    const searchBox = await boxOf(search)
+    // The menu keeps its room; the field starts after it and ends inside.
+    await expect(menuButton, where).toBeInViewport({ ratio: 1 })
+    expect(fieldBox.x, where).toBeGreaterThanOrEqual(menuBox.x + menuBox.width)
+    expect(searchBox.x + searchBox.width, where).toBeLessThanOrEqual(width)
+    expect(fieldBox.width, where).toBeGreaterThan(100)
+    for (const control of await search.getByRole('button').all()) await expect(control, where).toBeInViewport({ ratio: 1 })
+    await ltrInView(page, where)
+  }
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
+  expect(Math.round((await boxOf(band)).height)).toBe(72)
+  await field.fill('budget')
+  await expect(search.getByRole('button', { name: 'Clear search', exact: true })).toBeVisible()
+  await fits('200 % at 1025px', 1025)
+  await page.keyboard.press(`${mod}+Digit0`)
+  for (const width of [1024, 900, 769]) {
+    await page.setViewportSize({ width, height: 1000 })
+    await expect(field).toBeVisible()
+    await fits(`${width}px`, width)
+  }
   expect(errors).toEqual([])
 })

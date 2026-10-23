@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type ChangeEvent } from 'react'
-import { Download, Eye, Mail, Paperclip, Search } from 'lucide-react'
+import { Download, Eye, Mail, Paperclip } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { intlLocale, useTranslation } from '../../lib/i18n'
 import { accounts$ } from '../../states/accounts'
@@ -119,7 +119,6 @@ export function AttachmentsView() {
       ))}
     </>
   )
-  const nameLabel = t('attachmentsView.searchName', { defaultValue: 'File name' })
   const senderLabel = t('attachmentsView.sender', { defaultValue: 'From' })
   const typeLabel = t('attachmentsView.type', { defaultValue: 'Type' })
   const whenLabel = t('attachmentsView.when', { defaultValue: 'When' })
@@ -130,24 +129,14 @@ export function AttachmentsView() {
     attachmentList$.filter.within.set(Number(event.target.value))
   const setAccount = (event: ChangeEvent<HTMLSelectElement>) => attachmentList$.filter.account.set(event.target.value)
 
-  // Up to 1024 px the filters are the bar under the header, as before.
+  // Up to 1024 px the filters are the bar under the header, as before. The
+  // file name is searched from the top band (ADR-0068 §2, #344).
   const filterBar = (
     <div
       // Below 1025 px the bar stands in for the pane: focus goes back here (#341).
       data-focus-return
       className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-header px-4 py-2"
     >
-      <div className="flex min-w-40 flex-1 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-1.5 focus-within:border-accent-fg">
-        <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
-        <input
-          value={filter.name}
-          data-focus-key="filter-name"
-          onChange={(event) => attachmentList$.filter.name.set(event.target.value)}
-          placeholder={nameLabel}
-          aria-label={nameLabel}
-          className="min-w-0 flex-1 bg-transparent text-caption text-primary placeholder-secondary outline-none"
-        />
-      </div>
       <input
         value={filter.sender}
         data-focus-key="filter-sender"
@@ -197,22 +186,6 @@ export function AttachmentsView() {
   const filterPane = (
     <FolderPane title={t('attachmentsView.filters', { defaultValue: 'Attachment filters' })}>
       <div className="flex min-w-0 flex-col gap-3 px-3 py-2">
-        <div className="flex min-w-0 flex-col gap-1">
-          <label htmlFor={`${fieldId}-name`} className={label}>
-            {nameLabel}
-          </label>
-          <div className="flex min-w-0 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-1.5 focus-within:border-accent-fg">
-            <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
-            <input
-              id={`${fieldId}-name`}
-              data-focus-key="filter-name"
-              value={filter.name}
-              onChange={(event) => attachmentList$.filter.name.set(event.target.value)}
-              placeholder={nameLabel}
-              className="min-w-0 flex-1 bg-transparent text-caption text-primary placeholder-secondary outline-none"
-            />
-          </div>
-        </div>
         <div className="flex min-w-0 flex-col gap-1">
           <label htmlFor={`${fieldId}-sender`} className={label}>
             {senderLabel}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Pin, Plus, Search, StickyNote, Trash2 } from 'lucide-react'
+import { Pin, Plus, StickyNote, Trash2 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { intlLocale, useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
@@ -94,6 +94,10 @@ export function NotesView() {
             aria-label={t('notes.listLabel', { defaultValue: 'Notes' })}
             // The pane is the "folders" region from 1025 px; this is the list.
             data-region={inPane ? undefined : 'folders'}
+            // Below 1025 px the list's column stands in for the pane: focus goes
+            // back to its first control, a chip or a note (#341). The search
+            // that came first is in the top band now (#344).
+            data-focus-return={inPane ? undefined : ''}
             className={clsx(
               // 20 rem, as before; beside the folder pane it is in px, like the
               // pane, so at the app's 200 % the note keeps its room (ADR-0068 §7).
@@ -102,41 +106,30 @@ export function NotesView() {
               opened && 'max-[899px]:hidden',
             )}
           >
-            <div
-              // Below 1025 px the chips stand in for the pane: focus goes back here (#341).
-              data-focus-return={inPane ? undefined : ''}
-              className="flex flex-col gap-2 border-b border-border p-3"
-            >
-              <div className="flex items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-1.5 focus-within:border-accent-fg">
-                <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
-                <input
-                  value={search}
-                  onChange={(event) => notes$.search.set(event.target.value)}
-                  placeholder={t('notes.search', { defaultValue: 'Search notes' })}
-                  aria-label={t('notes.search', { defaultValue: 'Search notes' })}
-                  className="min-w-0 flex-1 bg-transparent text-caption text-primary placeholder-secondary outline-none"
-                />
+            {/* The search is in the top band (ADR-0068 §2, #344); below 1025 px
+                the tags stay as chips above the list. */}
+            {!inPane && tags.length > 0 && !trash && (
+              <div
+                className="flex flex-wrap gap-1 border-b border-border p-3"
+                aria-label={t('notes.tags', { defaultValue: 'Tags' })}
+              >
+                {tags.map((entry) => (
+                  <button
+                    key={entry.tag}
+                    type="button"
+                    data-focus-key={`tag:${entry.tag}`}
+                    aria-pressed={tag === entry.tag}
+                    onClick={() => notes$.tag.set(tag === entry.tag ? '' : entry.tag)}
+                    className={clsx(
+                      'rounded-control-sm px-2 py-0.5 text-2xs font-semibold cursor-pointer',
+                      tag === entry.tag ? 'bg-accent text-on-accent' : 'bg-hover text-secondary hover:text-primary',
+                    )}
+                  >
+                    #{entry.tag} <span className="tabular-nums">{entry.count}</span>
+                  </button>
+                ))}
               </div>
-              {!inPane && tags.length > 0 && !trash && (
-                <div className="flex flex-wrap gap-1" aria-label={t('notes.tags', { defaultValue: 'Tags' })}>
-                  {tags.map((entry) => (
-                    <button
-                      key={entry.tag}
-                      type="button"
-                      data-focus-key={`tag:${entry.tag}`}
-                      aria-pressed={tag === entry.tag}
-                      onClick={() => notes$.tag.set(tag === entry.tag ? '' : entry.tag)}
-                      className={clsx(
-                        'rounded-control-sm px-2 py-0.5 text-2xs font-semibold cursor-pointer',
-                        tag === entry.tag ? 'bg-accent text-on-accent' : 'bg-hover text-secondary hover:text-primary',
-                      )}
-                    >
-                      #{entry.tag} <span className="tabular-nums">{entry.count}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
             <div className="min-h-0 flex-1 overflow-y-auto">
               {loaded && items.length === 0 ? (
                 <EmptyState

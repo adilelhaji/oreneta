@@ -112,8 +112,8 @@ describe('Notes in the common folder pane (ADR-0068 §4, #335)', () => {
     expect(content(screen).querySelectorAll('[data-region="folders"]')).toHaveLength(0)
     expect(nav.querySelectorAll('[data-region]')).toHaveLength(0)
     expect(content(screen).querySelector('[aria-label="Tags"]')).toBeNull()
-    // Search, Trash and New note stay where they were.
-    expect(within(content(screen)).getByRole('textbox', { name: 'Search notes' })).toBeTruthy()
+    // Trash and New note stay where they were; the search is in the top band (#344).
+    expect(within(content(screen)).queryByRole('textbox', { name: 'Search notes' })).toBeNull()
     expect(within(content(screen)).getByRole('button', { name: 'Trash' })).toBeTruthy()
     expect(within(content(screen)).getByRole('button', { name: 'New note' })).toBeTruthy()
   })
@@ -444,20 +444,36 @@ describe('Notes keep the focus across 1025 px (#341)', () => {
     expect(document.activeElement).toBe(within(pane(screen)).getByRole('button', { name: '#travel (2)' }))
   })
 
-  it('falls back to the first control of the list header when "All notes" has no chip', async () => {
+  it('falls back to the first control of the list column when "All notes" has no chip', async () => {
     const screen = render(<NotesView />)
     await ready(screen)
     within(pane(screen)).getByTitle('All notes').focus()
     await narrowWindow()
-    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Search notes' }))
+    // The search that came first is in the top band (#344): the first chip.
+    const chips = [...screen.container.querySelectorAll<HTMLElement>('[aria-label="Tags"] button')]
+    expect(chips[0].textContent).toMatch(/^#travel/)
+    expect(document.activeElement).toBe(chips[0])
+  })
+
+  it('falls back to the first note when there is no chip either', async () => {
+    const screen = render(<NotesView />)
+    await ready(screen)
+    within(pane(screen)).getByTitle('All notes').focus()
+    // No tag left: no chips below 1025 px.
+    act(() => notes$.tags.set([]))
+    await narrowWindow()
+    expect(screen.container.querySelector('[aria-label="Tags"]')).toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /Plan the trip/ }))
   })
 
   it('leaves the focus alone when it was elsewhere', async () => {
     const screen = render(<NotesView />)
     await ready(screen)
-    const search = screen.getByRole('textbox', { name: 'Search notes' })
-    search.focus()
+    // The header's «New note», which stays in place across 1025 px, as the
+    // search did before it moved to the top band (#344).
+    const newNote = screen.getByRole('button', { name: 'New note' })
+    newNote.focus()
     await narrowWindow()
-    expect(document.activeElement).toBe(search)
+    expect(document.activeElement).toBe(newNote)
   })
 })

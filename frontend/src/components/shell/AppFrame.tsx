@@ -21,9 +21,10 @@ export function AppFrame({ setup = false, children }: { setup?: boolean; childre
     <div className="flex h-full w-full flex-col bg-app text-primary">
       <MacTitleBar />
       {/* Title bar, header, notices, then the rest (ADR-0068 §1): the header's
-          first row is the top band with the app menu (§2). */}
+          first row is the top band with the app menu and, with an account,
+          the search (§2). */}
       <ErrorBoundary label="top band">
-        <AppHeader />
+        <AppHeader setup={setup} />
       </ErrorBoundary>
       {children}
       {/* Dialogs, toasts and confirmations are siblings of the regions, not

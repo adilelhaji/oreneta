@@ -11,16 +11,20 @@ l'estat de la sincronització i l'indicador del mode No molestis a la banda,
 [#343](https://github.com/adilelhaji/oreneta/issues/343): el menú és pla, amb
 grups amb títol (decisió 1); la pantalla d'alta del primer compte també té la
 banda (decisió 2); i els problemes del correu al 200 % a 1025 px van a una
-incidència pròpia (decisió 3).
+incidència pròpia (decisió 3). La cerca de la banda (13b) és a
+[#344](https://github.com/adilelhaji/oreneta/issues/344), on consten també les
+dues decisions del propietari sobre la cerca; vegeu [La cerca](#la-cerca-344).
 
 Codi: `frontend/src/components/shell/AppHeader.tsx`,
-`components/shell/AppMenu.tsx`, `components/shell/AppFrame.tsx`,
+`components/shell/AppMenu.tsx`, `components/shell/BandSearch.tsx` (la cerca,
+#344), `components/shell/AppFrame.tsx`,
 `components/shell/AppLayers.tsx`, `components/setup/SetupScreen.tsx`,
 `components/palette/paletteCommands.ts` (`area`, `menuOnly`, `COMMAND_AREAS`,
 `groupCommandsByArea`), `components/palette/useCommandList.ts`,
 `components/palette/CommandPalette.tsx`, `components/dialog/AppHotkeys.tsx`,
 `components/dialog/SettingsDialog.tsx` (`onAddAccount`),
-`lib/useDialogFocus.ts` i `App.tsx`.
+`lib/useDialogFocus.ts` i `App.tsx`. La cerca de la conversa demanada des d'un
+altre mòdul (#344) és a `components/chat/MessagePane.tsx` i a `states/thread.ts`.
 
 ## La capçalera i la banda
 
@@ -35,16 +39,16 @@ Codi: `frontend/src/components/shell/AppHeader.tsx`,
 - **Banda:** 2,25 rem d'alçada (`h-9`), és a dir, 36 px al 100 % i 72 px al 200 %
   de l'aplicació, amb el to del marc d'avui (`--me-bg-header`) fins que #287 hi
   posi el to «marc», i un divisor a sota. Té tres zones en fila: l'inici, amb el
-  botó «Menú de l'aplicació»; el centre, que ocupa l'espai que queda i on anirà
-  el camp de cerca (13b); i el final, on aniran l'indicador del mode No molestis
-  i l'estat de la sincronització (13c). De moment, el centre i el final estan
-  buits.
+  botó «Menú de l'aplicació»; el centre, que ocupa l'espai que queda i té el camp
+  de cerca (13b, [La cerca](#la-cerca-344)); i el final, on aniran l'indicador del
+  mode No molestis i l'estat de la sincronització (13c). De moment, el final és
+  buit.
 - **Totes les amplades:** la banda i el botó es veuen a qualsevol amplada, també
-  per sota de 769 px; el botó de cerca i la icona de l'estat hi arriben amb 13b i
-  13c.
+  per sota de 769 px, on el camp de cerca deixa lloc a un botó de cerca (13b); la
+  icona de l'estat hi arriba amb 13c.
 - **Regió d'F6:** la banda és la regió `search`, la primera de `REGION_ORDER`
   (vegeu [app-regions.md](app-regions.md)); F6 hi porta el focus al botó del menú.
-  13b hi afegeix el camp sense canviar la regió.
+  El camp de cerca (13b) hi és sense canviar la regió.
 - **La pantalla d'alta del primer compte** també té la banda, amb el mateix botó
   «Menú de l'aplicació» (decisió 2 del propietari a #343): la barra de títol, la
   capçalera «Oreneta» i, després, l'alta del compte dins de `<main>`, que és la
@@ -199,6 +203,127 @@ banda.
   Maj+F6 torna.
 - El focus continua començant al camp de l'adreça, com abans.
 
+## La cerca (#344)
+
+Peça 13b. ADR-0068 §2 i la seva decisió 4: el camp de la banda substitueix els
+camps de cerca dels mòduls, que desapareixen en lloc de duplicar-se. Decisió 3
+del propietari a [#342](https://github.com/adilelhaji/oreneta/issues/342): el
+Calendari i el Xat, que no tenen cerca, mostren el camp desactivat amb el motiu.
+Decisions del propietari a [#344](https://github.com/adilelhaji/oreneta/issues/344):
+
+1. **El correu conserva els dos botons** al final del camp: el del constructor de
+   cerques i el de les cerques desades, amb el comportament d'abans, i no un de
+   sol.
+2. **Les ordres de cerca van al correu:** «Cerca a tots els missatges»
+   (`search.global`) i «Cerca a la conversa actual» (`search.thread`), a la
+   paleta i al menú de l'aplicació, porten primer al correu, com les ordres d'un
+   compte o d'una carpeta, i hi cerquen. Si hi ha una conversa oberta al
+   correu, «Cerca a la conversa actual» n'obre la cerca quan la subfinestra de
+   la conversa apareix (`requestThreadSearch`, a `states/thread.ts`): en
+   aparèixer, la subfinestra torna a l'estat inicial i, sense aquesta petició,
+   tancaria una cerca oberta abans. La petició porta l'identificador de la
+   conversa i es demana abans de passar al correu. La subfinestra la respon quan
+   mostra una conversa: si és la mateixa, obre la cerca, i ho recorda, de manera
+   que la torna a obrir si l'efecte de muntatge es repeteix (StrictMode, en
+   desenvolupament); si és una altra, la descarta. La cerca no es torna a obrir
+   en mostrar una altra conversa, ni quan una carpeta deixa la subfinestra sense
+   conversa, ni en retornar al correu més tard; i una petició que el correu no
+   ha atès es descarta en sortir del correu. Les dreceres no
+   canvien: Ctrl/⌘+Maj+F cerca al mòdul en pantalla, i Ctrl/⌘+F, al correu,
+   obre la cerca de la conversa si n'hi ha una a la pantalla.
+
+- **On és:** al centre de la banda, entre el botó del menú i el final. És el punt
+  de referència `search` («Cerca», `shell.region.search`), dins de la regió
+  `search` d'F6. El nom no coincideix amb el de cap altra regió en cap dels 20
+  catàlegs, com comprova una prova. El camp fa com a màxim 36 rem
+  (`max-w-xl`) i queda centrat; quan no hi cap, s'encongeix, i el botó del menú
+  i el final de la banda conserven el seu espai.
+- **Un camp, l'estat de cada mòdul:** el camp llegeix i escriu l'estat de cerca
+  que el mòdul ja tenia. El nom accessible i el text de mostra del camp
+  (`placeholder`) diuen què es cerca:
+
+  | Mòdul | Nom del camp | Estat | Retard |
+  |---|---|---|---|
+  | Correu | «Cerca missatges…» (`threads.searchMessages`); en un compte de canals, «Cerca canals…» (`threads.searchFeeds`) | `ui$.query` → `mail.threadList` | cap, com abans |
+  | Correu, amb un tauler obert | «Cerca al tauler…» (`kanban.searchBoard`) | `kanban$.searchQuery` | cap, a la memòria |
+  | Notes | «Cerca a les notes» (`notes.search`) | `notes$.search` | 200 ms |
+  | Persones | «Cerca persones» (`people.search`) | `people$.query` | 150 ms, al nucli |
+  | Tasques | «Cerca tasques» (`tasks.search`) | `tasks$.search` | cap, a la memòria |
+  | Adjunts | «Cerca adjunts pel nom del fitxer» (`attachmentsView.search`, nova) | `attachmentList$.filter.name` | 200 ms |
+
+  Els retards són els dels efectes de cada mòdul, que no canvien, com tampoc no
+  canvien els textos de la llista buida i de «cap resultat». En canviar de
+  mòdul, el camp mostra la consulta d'aquell mòdul: cada mòdul conserva la seva,
+  com abans, i no se'n fa una de sola.
+- **Correu:** la indicació del camp (`title`) explica els operadors, com abans.
+  Al final del camp hi ha els dos botons d'abans (decisió 1), amb el mateix
+  comportament: «Opcions de cerca» (el constructor, que no hi és en un compte de
+  canals; vegeu [search-builder.md](search-builder.md)) i «Desa aquesta cerca»
+  o «Cerques desades». Amb Escapada es buida la cerca i el focus surt del camp,
+  com feia el de la llista. «Esborra la cerca» la buida i torna el focus al
+  camp; abans el focus es perdia amb el botó.
+- **Un tauler obert al correu:** el camp cerca al tauler, i al final té el
+  selector «Abast de la cerca» (totes les columnes o una). Triar una columna
+  plegada la desplega, com abans. «Cerca», al menú d'accions d'una columna,
+  tria la columna i posa el focus al camp de la banda. Amb Escapada es buida la
+  cerca i, si ja és buida, el focus surt del camp. La capçalera del tauler ja no
+  té el camp ni el botó «Cerca al tauler».
+- **Calendari i Xat:** el camp hi és desactivat (`disabled`), amb el motiu com a
+  text de mostra, com a indicació i com a descripció accessible
+  (`aria-describedby`): «El Calendari encara no té cerca» i «El Xat encara no té
+  cerca». No hi ha cap botó que no faci res, i Ctrl/⌘+Maj+F no hi posa el focus.
+- **El que es queda on era,** perquè no cerca el contingut del mòdul: el filtre de
+  carpetes de «Comptes i carpetes» (decisió 2 del propietari a #342), la cerca a
+  la conversa (`ConversationHeader`) i els altres filtres d'Adjunts (remitent,
+  tipus, quan i compte), a la subfinestra o a la barra.
+- **Dreceres:** Ctrl/⌘+Maj+F (`search.global`) i la `/` de l'esquema Gmail posen
+  el focus al camp i en seleccionen el text, en qualsevol mòdul. Ctrl/⌘+F
+  (`search.thread`) obre la cerca de la conversa quan n'hi ha una a la pantalla
+  i, si no, posa el focus al camp, com abans. Una conversa del correu només és a
+  la pantalla al correu: abans, des d'un altre mòdul, Ctrl/⌘+F obria la cerca
+  d'una conversa que no es veia. `focusGlobalSearch` i `ui$.globalSearchFocus`
+  porten a la banda. Les ordres «Cerca a tots els missatges» i «Cerca a la
+  conversa actual» de la paleta i del menú porten primer al correu (decisió 2) i
+  després hi fan el mateix que les seves dreceres.
+  Quan el camp apareix (en arribar el primer compte), no pren el focus, encara
+  que abans s'hagi demanat.
+- **Per sota de 769 px:** el centre de la banda té un botó de cerca, al final,
+  amb el nom del camp del mòdul (per exemple, «Cerca missatges…»). Si hi ha una
+  consulta, el botó es pinta actiu. El botó obre el camp damunt de tota la banda,
+  amb el focus a dins i el botó «Tanca la cerca» (`search.band.close`) al
+  final; mentrestant, la resta de la banda és `inert` (no rep ni el focus ni el
+  punter). Escapada o «Tanca la cerca» tanquen el camp i tornen el focus al
+  botó; la consulta es manté, perquè és la del mòdul. El camp no es tanca quan
+  perd el focus: es pot fer clic a la llista i continuar veient-lo.
+  Ctrl/⌘+Maj+F també l'obre. Si la finestra s'estreny mentre el camp té el
+  focus, el camp continua obert damunt de la banda i amb el focus; si
+  s'eixampla, torna al centre. Al Calendari i al Xat, el botó és
+  `aria-disabled`, no fa res i diu el motiu a la indicació i com a descripció,
+  com una ordre desactivada del menú. Si es passa a un d'aquests mòduls amb el
+  camp obert, el camp es tanca i la banda torna a rebre el focus i el punter; el
+  focus que era al camp va al botó. Una petició de focus que no es pot atendre
+  en el pintat següent (no hi ha cap camp, o el botó ja no hi és) es descarta:
+  no pren el focus més tard.
+- **La pantalla d'alta del primer compte** no té el camp: no hi ha res a cercar.
+  És el criteri que ja segueix el menú en aquesta pantalla, que no mostra,
+  en lloc de desactivar-ho, el que necessita un compte. Quan arriba el primer
+  compte, el camp apareix al centre de la banda.
+- **Teclat i F6:** el camp és dins de la regió `search`. La primera vegada, F6
+  hi porta el focus al botó del menú; després, a l'últim element que el tenia (el
+  camp, si s'hi ha escrit). Tab va del botó del menú al camp i als seus botons.
+- **Dreta a esquerra i zoom:** tot en propietats lògiques; en àrab, el camp queda
+  a l'esquerra del botó del menú, i a 768 px el botó de cerca també. El camp fa
+  1,75 rem d'alçada i els seus botons, 2 rem. Al 200 % a 1025 px, i al 100 %
+  entre 769 i 1024 px, el camp s'encongeix entre el menú i el final de la banda,
+  sense desplaçament horitzontal.
+- **La llista de converses** conserva el selector de carpeta i els botons de la
+  capçalera, que ja no s'amaguen mentre es cerca.
+- **Cadenes:** `shell.region.search`, `search.band.calendar`, `search.band.chat`,
+  `search.band.close` i `attachmentsView.search`, noves en els 20 catàlegs. Se
+  n'han tret `attachmentsView.searchName` («Nom del fitxer») i
+  `kanban.searchBoardAction` («Cerca al tauler», el botó de la capçalera del
+  tauler), que ja no fa servir res.
+
 ## Proves
 
 | Nivell | Què cobreix |
@@ -210,11 +335,15 @@ banda.
 | N2 (`lib/useDialogFocus.test.tsx`) | En tancar-se, un diàleg torna el focus al control que l'havia obert, també quan havia caigut al cos de la pàgina; el focus que ha pres un altre control s'hi queda |
 | N1 (`lib/regions.test.ts`) | La banda és la primera regió, i des del menú F6 passa a la regió següent |
 | N2 (`components/menu/Menu.test.tsx`, `lib/menuKeyboard.test.ts`) | `tabStop`; el desplaçament fins a la fila sencera |
+| N2 (`components/shell/BandSearch.test.tsx`, #344) | El punt de referència «Cerca» al centre de la banda i el nom del camp a cada mòdul; escriure-hi canvia l'estat de cada mòdul, i cada mòdul conserva la seva consulta en canviar; esborrar; al correu, Escapada, els operadors, els canals sense constructor, el constructor i les cerques desades des del final del camp; al tauler, l'abast i Escapada; el Calendari i el Xat desactivats amb el motiu; els retards de Notes (200 ms), Persones (150 ms) i Adjunts (200 ms) i el filtre de Tasques, amb els textos de «cap resultat»; Ctrl/⌘+Maj+F, la `/`, Ctrl/⌘+F (també en un altre mòdul amb una conversa triada al correu) i les ordres de la paleta; el camp no pren el focus en aparèixer; per sota de 769 px, el botó, el camp damunt de la banda, la banda `inert`, Escapada, «Tanca la cerca» i el focus quan la finestra s'estreny; el camp damunt de la banda es tanca en passar al Calendari o al Xat, amb el focus al botó si era al camp; una petició de focus que no es pot atendre es descarta; la banda no es torna a pintar per un canvi dels comptes que no la toca; esborrar a Persones, a Tasques i a Adjunts; «Cerca» al menú d'una columna del tauler; les ordres de cerca de la paleta i del menú porten al correu des del Calendari i des de Notes; la pantalla d'alta sense camp; els noms i les cadenes en els 20 catàlegs |
+| N1 (`states/kanban.test.ts`, #344) | `setKanbanSearchScope` tria l'abast de la cerca del tauler i desplega la columna plegada; «totes les columnes» i un abast que no és cap columna no toquen cap columna |
+| N2 (`components/chat/MessagePaneThreadSearch.test.tsx`, #344) | Amb StrictMode, «Cerca a la conversa actual» des de Notes passa al correu i la subfinestra de la conversa n'obre la cerca després del seu reinici repetit; una petició per a una altra conversa no obre res i es descarta; ni una altra conversa ni tornar al correu no la tornen a obrir |
+| N2 (proves dels mòduls, #344) | `AppHeader.test.tsx`, `TaskLists.test.tsx` i `PeopleView.test.tsx` escriuen al camp de la banda; `NotesFolderPane`, `PeopleFolderPane`, `TasksFolderPane` i `AttachmentsFolderPane` comproven que el mòdul ja no té el camp, i les proves de #341 fan servir un altre control que no es mou (o, a Adjunts, el remitent) |
 | e2e (`startup.e2e.ts`, «#343») | La banda i el menú a 1440, 1025, 1024 i 768 px; el teclat i el ratolí, amb la mateixa conversa oberta després d'Avall, d'Amunt i de les fletxes del menú; Ctrl/⌘+K des del menú; executar la configuració, un mòdul, un compte, el mode No molestis, «Quant a» i la paleta; el motiu d'una ordre desactivada com a descripció; el menú «Més» de la barra vertical; l'àrab amb axe i el menú obert a 1440 i a 768 px; el 200 % a 1025 px; la pantalla d'alta amb la banda, el menú, F6, el zoom i axe, en anglès i en àrab; el «+» de la configuració a la pantalla d'alta; una còpia de seguretat restaurada des de la configuració a la pantalla d'alta, amb la configuració oberta i el focus de tornada al botó del menú. El recorregut d'F6 de «#306» comença a la banda |
+| e2e (`startup.e2e.ts`, «#344») | Cercar des de la banda al correu (la consulta de `mail.threadList`, Escapada, el constructor i les cerques desades), en un tauler (l'abast, «Cerca» al menú d'una columna i Escapada), a Notes, a Persones, a Tasques i a Adjunts, i cada mòdul amb la seva consulta; el camp d'Adjunts conserva el focus i el text en travessar els 1025 px; el Calendari i el Xat desactivats amb el motiu, amb axe; Ctrl/⌘+Maj+F, Ctrl/⌘+F (amb una conversa oberta i sense, i en un altre mòdul) i la `/`; a 768 px, el botó, el camp damunt de la banda, axe, Escapada, «Tanca la cerca» i F6, i el camp que es tanca en passar al Calendari des de la paleta; l'àrab amb axe a 1440 px (també al Calendari) i a 768 px; el 200 % a 1025 px i 1024, 900 i 769 px al 100 %, sense desplaçament horitzontal. Els recorreguts d'F6 de «#306» escriuen al camp de la banda, i les proves d'Adjunts de «#339» i «#341» el fan servir per al nom del fitxer |
 
 ## Pendent
 
-- 13b (#344): el camp de cerca al centre de la banda.
 - 13c (#345): l'indicador del mode No molestis i l'estat de la sincronització al
   final.
 - Peça 14: la barra vertical se'n va, amb el seu menú «Més» i el seu indicador.

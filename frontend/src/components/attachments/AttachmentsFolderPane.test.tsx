@@ -115,17 +115,18 @@ describe('Attachments in the common folder pane (ADR-0068 §4, #339)', () => {
     expect(content(screen).querySelectorAll('[data-region="folders"]')).toHaveLength(0)
     expect(nav.querySelectorAll('[data-region]')).toHaveLength(0)
     // The bar is gone from the content, and the header and the list stay.
-    expect(within(content(screen)).queryByLabelText('File name')).toBeNull()
+    expect(within(content(screen)).queryByLabelText('From')).toBeNull()
     expect(within(content(screen)).getByRole('heading', { level: 1, name: 'Attachments' })).toBeTruthy()
     expect(within(content(screen)).getByText('scan.pdf')).toBeTruthy()
   })
 
-  it("has the five filters in the bar's order, one per row, each with a visible label", async () => {
+  it("has the four filters in the bar's order, one per row, each with a visible label", async () => {
     const screen = render(<AttachmentsView />)
     await ready(screen)
     const nav = pane(screen)
+    // The file name is searched from the top band (#344), not from here.
+    expect(within(nav).queryByRole('textbox', { name: 'File name' })).toBeNull()
     const controls = [
-      within(nav).getByRole('textbox', { name: 'File name' }),
       within(nav).getByRole('textbox', { name: 'From' }),
       within(nav).getByRole('combobox', { name: 'Type' }),
       within(nav).getByRole('combobox', { name: 'When' }),
@@ -138,17 +139,16 @@ describe('Attachments in the common folder pane (ADR-0068 §4, #339)', () => {
     // A visible <label> for each, tied to its control, and the accessible
     // name the bar gives it.
     const labels = [...nav.querySelectorAll('label')]
-    expect(labels.map((label) => label.textContent)).toEqual(['File name', 'From', 'Type', 'When', 'Account'])
+    expect(labels.map((label) => label.textContent)).toEqual(['From', 'Type', 'When', 'Account'])
     labels.forEach((label, index) => {
       expect(label.htmlFor).toBe(controls[index].id)
       // The visible label is the name, as the bar's aria-label is: one source, nothing to drift.
       expect(controls[index].getAttribute('aria-label')).toBeNull()
     })
     // Stacked: each control in a row of its own, which may shrink and fills the pane.
-    for (const control of controls.slice(1)) expect(control.className).toContain('w-full')
-    for (const control of controls.slice(1)) expect(control.className).toContain('min-w-0')
-    expect(controls[0].className).toContain('min-w-0')
-    expect(new Set(controls.map((control) => control.closest('label') ?? control.parentElement)).size).toBe(5)
+    for (const control of controls) expect(control.className).toContain('w-full')
+    for (const control of controls) expect(control.className).toContain('min-w-0')
+    expect(new Set(controls.map((control) => control.closest('label') ?? control.parentElement)).size).toBe(4)
     expect(within(nav).getByRole('option', { name: 'All types' })).toBeTruthy()
     expect(within(nav).getByRole('option', { name: 'Last 30 days' })).toBeTruthy()
     expect(within(nav).getByRole('option', { name: 'b@z' })).toBeTruthy()
@@ -186,17 +186,16 @@ describe('Attachments in the common folder pane (ADR-0068 §4, #339)', () => {
     expect(attachmentList$.filter.account.peek()).toBe('b@z')
     await waitFor(() => expect(listed().at(-1)!.payload).toMatchObject({ account: 'b@z' }))
 
-    // The text fields wait 200 ms for the last key, as the bar does.
+    // The sender waits 200 ms for the last key, as the bar does (the file
+    // name, which waits as long, is the top band's: #344).
     const before = listed().length
-    fireEvent.change(within(nav).getByRole('textbox', { name: 'File name' }), { target: { value: 'sc' } })
-    fireEvent.change(within(nav).getByRole('textbox', { name: 'File name' }), { target: { value: 'scan' } })
+    fireEvent.change(within(nav).getByRole('textbox', { name: 'From' }), { target: { value: 'an' } })
     fireEvent.change(within(nav).getByRole('textbox', { name: 'From' }), { target: { value: 'ana' } })
-    expect(attachmentList$.filter.name.peek()).toBe('scan')
     expect(attachmentList$.filter.sender.peek()).toBe('ana')
     // Nothing goes out before the wait is over, not even after 100 ms.
     await act(() => new Promise((resolve) => setTimeout(resolve, 100)))
     expect(listed()).toHaveLength(before)
-    await waitFor(() => expect(listed().at(-1)!.payload).toMatchObject({ name: 'scan', sender: 'ana' }))
+    await waitFor(() => expect(listed().at(-1)!.payload).toMatchObject({ sender: 'ana' }))
     expect(listed().length).toBe(before + 1)
   })
 
@@ -252,8 +251,8 @@ describe('the name of Attachments\' "folders" region (ADR-0068 §1, #339)', () =
       'messaging.invitations',
       'messaging.noConversation',
       'attachmentsView.title',
-      // Attachments' own controls.
-      'attachmentsView.searchName',
+      // Attachments' own controls, the file name's search in the top band too (#344).
+      'attachmentsView.search',
       'attachmentsView.sender',
       'attachmentsView.type',
       'attachmentsView.when',
@@ -294,14 +293,15 @@ describe('Attachments at 1024 px and below (#339)', () => {
     expect(screen.queryByRole('navigation', { name: 'Attachment filters' })).toBeNull()
     expect(content(screen).className).toContain('flex-1')
     expect(content(screen).className).not.toContain('360px')
-    // The five controls are in the content, named by aria-label, with no visible label.
-    for (const name of ['File name', 'From'])
-      expect(within(content(screen)).getByRole('textbox', { name })).toBeTruthy()
+    // The four controls are in the content, named by aria-label, with no visible
+    // label; the file name is the top band's (#344).
+    expect(within(content(screen)).getByRole('textbox', { name: 'From' })).toBeTruthy()
+    expect(within(content(screen)).queryByRole('textbox', { name: 'File name' })).toBeNull()
     for (const name of ['Type', 'When', 'Account'])
       expect(within(content(screen)).getByRole('combobox', { name })).toBeTruthy()
     expect(content(screen).querySelectorAll('label')).toHaveLength(0)
     const header = content(screen).querySelector('header')!
-    expect(header.nextElementSibling!.contains(screen.getByLabelText('File name'))).toBe(true)
+    expect(header.nextElementSibling!.contains(screen.getByLabelText('From'))).toBe(true)
     expect(header.nextElementSibling!.className).toContain('flex-wrap')
   })
 
@@ -313,8 +313,8 @@ describe('Attachments at 1024 px and below (#339)', () => {
     const scroller = list.parentElement!
     const row = screen.getByText('scan.pdf')
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'pdf' } })
-    fireEvent.change(screen.getByLabelText('File name'), { target: { value: 'scan' } })
-    await waitFor(() => expect(listed().at(-1)!.payload).toMatchObject({ kind: 'pdf', name: 'scan' }))
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: 'ana' } })
+    await waitFor(() => expect(listed().at(-1)!.payload).toMatchObject({ kind: 'pdf', sender: 'ana' }))
     scroller.scrollTop = 40
     const requests = listed().length
 
@@ -325,7 +325,7 @@ describe('Attachments at 1024 px and below (#339)', () => {
     expect(screen.getByText('scan.pdf')).toBe(row)
     expect(scroller.scrollTop).toBe(40)
     expect(within(pane(screen)).getByRole('combobox', { name: 'Type' })).toHaveProperty('value', 'pdf')
-    expect(within(pane(screen)).getByRole('textbox', { name: 'File name' })).toHaveProperty('value', 'scan')
+    expect(within(pane(screen)).getByRole('textbox', { name: 'From' })).toHaveProperty('value', 'ana')
     expect(screen.container.querySelectorAll('[data-region="folders"]')).toHaveLength(1)
     expect(screen.container.querySelectorAll('[data-region="content"]')).toHaveLength(1)
     expect(content(screen).className).toContain('flex-[1_1_360px]')
@@ -337,7 +337,7 @@ describe('Attachments at 1024 px and below (#339)', () => {
     expect(scroller.scrollTop).toBe(40)
     expect(screen.container.querySelector('[data-folder-pane]')).toBeNull()
     expect(screen.getByLabelText('Type')).toHaveProperty('value', 'pdf')
-    expect(screen.getByLabelText('File name')).toHaveProperty('value', 'scan')
+    expect(screen.getByLabelText('From')).toHaveProperty('value', 'ana')
     // Crossing the width asks the core for nothing: the filters did not change.
     await new Promise((resolve) => setTimeout(resolve, 250))
     expect(listed()).toHaveLength(requests)
@@ -357,15 +357,17 @@ describe('Attachments keep the focus across 1025 px (#341)', () => {
   it('moves it from a filter in the pane to the same filter in the bar and back', async () => {
     const screen = render(<AttachmentsView />)
     await ready(screen)
-    const name = within(pane(screen)).getByLabelText('File name')
-    name.focus()
-    fireEvent.change(name, { target: { value: 'scan' } })
+    // The sender, the text field left in the filters now that the file name
+    // is searched from the top band (#344).
+    const sender = within(pane(screen)).getByLabelText('From')
+    sender.focus()
+    fireEvent.change(sender, { target: { value: 'ana' } })
     await narrowWindow()
-    const bar = within(content(screen)).getByLabelText('File name')
+    const bar = within(content(screen)).getByLabelText('From')
     expect(document.activeElement).toBe(bar)
-    expect((bar as HTMLInputElement).value).toBe('scan')
+    expect((bar as HTMLInputElement).value).toBe('ana')
     await act(async () => setWidth(1025))
-    expect(document.activeElement).toBe(within(pane(screen)).getByLabelText('File name'))
+    expect(document.activeElement).toBe(within(pane(screen)).getByLabelText('From'))
     // A select keeps it as well.
     const type = within(pane(screen)).getByLabelText('Type')
     type.focus()
@@ -376,11 +378,11 @@ describe('Attachments keep the focus across 1025 px (#341)', () => {
   it('does not pull the focus back into the filters once a press took it elsewhere', async () => {
     const screen = render(<AttachmentsView />)
     await ready(screen)
-    const name = within(pane(screen)).getByLabelText('File name')
-    name.focus()
+    const sender = within(pane(screen)).getByLabelText('From')
+    sender.focus()
     // A press on the list's background: the focus goes to <body>, with no focusin.
     fireEvent.pointerDown(content(screen))
-    name.blur()
+    sender.blur()
     await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
     await narrowWindow()
     expect(document.activeElement).toBe(document.body)

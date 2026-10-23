@@ -1,4 +1,5 @@
 import { observable } from '@legendapp/state'
+import { ui$ } from './ui'
 
 export type ConversationMode = 'plain' | 'html'
 
@@ -34,6 +35,44 @@ export function openThreadSearch() {
   thread$.searchOpen.set(true)
   thread$.searchFocus.set(thread$.searchFocus.peek() + 1)
 }
+
+// The conversation's search asked for from another module (the palette's and
+// the menu's «Search current thread», #344). The conversation pane is not
+// mounted yet, and resets its view when it mounts, which closes any search
+// opened before. So the request names its conversation, and the pane takes it
+// once it shows a conversation, opening the search after its reset if the
+// request was for that one.
+let threadSearchFor = ''
+
+/** Opens the search of conversation `threadId` once the conversation pane shows it. */
+export function requestThreadSearch(threadId: string) {
+  threadSearchFor = threadId
+}
+
+/** The conversation whose search was asked for, or '' when there is none. */
+export function pendingThreadSearch(): string {
+  return threadSearchFor
+}
+
+/**
+ * For the pane showing `threadId`: whether its search was asked for. Any
+ * request is answered then, so one for another conversation does not linger.
+ */
+export function takeThreadSearchRequest(threadId: string): boolean {
+  const asked = threadSearchFor === threadId
+  threadSearchFor = ''
+  return asked
+}
+
+export function clearThreadSearchRequest() {
+  threadSearchFor = ''
+}
+
+// A request the pane never answered (mail showed no conversation for it) is
+// dropped when the person leaves mail, so it cannot open a search minutes later.
+ui$.module.onChange(({ value }) => {
+  if (value !== 'mail') threadSearchFor = ''
+})
 
 export function revealRemote(messageId: string) {
   thread$.revealedRemote[messageId].set(true)

@@ -2,8 +2,9 @@
 
 ## Ús
 
-El botó de configuració al costat del quadre de cerca obre **Opcions de
-cerca** amb el que ja s'ha escrit repartit en camps:
+El botó de configuració al final del camp de cerca del correu, a la banda
+superior des de #344 ([top-band.md](top-band.md#la-cerca-344)), obre **Opcions
+de cerca** amb el que ja s'ha escrit repartit en camps:
 - paraules;
 - remitent i destinatari (diversos separats per comes, qualsevol
   d'ells);
@@ -27,3 +28,4 @@ encara que sigui amagada; a Destacats, totes les carpetes, les amagades incloses
 |---|---|
 | N1 `search/tests.rs` | Anada i tornada d'un corpus (operadors, cometes, diversos valors, dates vàlides i no vàlides, URL amb dos punts, espais); escriptura estable; valors buits ignorats |
 | N2 `SearchBuilder.test.tsx` | El constructor s'obre amb la lectura del nucli i escriu a través del nucli; dies tal com els compta el nucli; cerca desada amb àmbit que torna a la seva carpeta; compatibilitat amb les desades anteriorment; la línia d'àmbit i les carpetes amagades (#273) |
+| N2 `components/shell/BandSearch.test.tsx` | El constructor i les cerques desades s'obren des del final del camp de la banda; en un compte de canals no hi ha constructor (#344) |

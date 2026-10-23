@@ -5,7 +5,13 @@ import { compose$, openComposeTab, withoutHydratedQuickReplyDraft } from '../../
 import { ui$ } from '../../states/ui'
 import { mail$, getActiveThread, loadThread } from '../../states/mail'
 import { accounts$ } from '../../states/accounts'
-import { resetThreadView, thread$, type ConversationMode } from '../../states/thread'
+import {
+  openThreadSearch,
+  resetThreadView,
+  takeThreadSearchRequest,
+  thread$,
+  type ConversationMode,
+} from '../../states/thread'
 import { Gallery } from './Gallery'
 import { ConversationDetailsPanel } from './ConversationDetailsPanel'
 import { EmptyState } from '../empty-state/EmptyState'
@@ -146,8 +152,22 @@ export function MessagePane() {
     thread$.mediaOpen.set(false)
   }, [])
 
+  // The conversation whose search this pane opened on a request from another
+  // module (#344). Kept by the pane, not by the request: a replayed mount
+  // effect (StrictMode, in development) resets the view again, and opens the
+  // search again after it.
+  const searchAskedFor = useRef('')
   useEffect(() => {
     resetThreadView()
+    // No conversation shown: whatever was answered is over, so coming back to
+    // the same conversation later does not open its search again.
+    if (!activeThreadId) {
+      searchAskedFor.current = ''
+      return
+    }
+    if (takeThreadSearchRequest(activeThreadId)) searchAskedFor.current = activeThreadId
+    else if (searchAskedFor.current !== activeThreadId) searchAskedFor.current = ''
+    if (searchAskedFor.current) openThreadSearch()
   }, [activeThreadId])
 
   useLayoutEffect(() => {

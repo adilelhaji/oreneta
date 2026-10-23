@@ -28,7 +28,8 @@ const list = (text: string) =>
 /**
  * The search box, field by field (#43). Opens on what is typed and writes
  * the result back into the box, through the core's own reading of it: what
- * is built here is exactly what typing it would search for.
+ * is built here is exactly what typing it would search for. Its button sits
+ * at the end of mail's field in the top band (#344).
  */
 export function SearchBuilder({ query }: { query: string }) {
   const { t } = useTranslation()
@@ -93,7 +94,7 @@ export function SearchBuilder({ query }: { query: string }) {
         onClick={() => setOpen(true)}
         title={t('search.builder', { defaultValue: 'Search options' })}
         aria-label={t('search.builder', { defaultValue: 'Search options' })}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
       >
         <SlidersHorizontal size={16} strokeWidth={1.75} />
       </button>

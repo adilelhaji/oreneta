@@ -231,9 +231,9 @@ export const ui$ = observable({
   paletteOpen: false,
   paletteQuery: '',
   paletteIndex: 0,
-  // Bumped to ask the ThreadList to focus its "Search messages" box
-  // (⌘/Ctrl+Shift+F). A nonce, not a boolean, so repeated presses re-focus even
-  // when the value would otherwise be unchanged.
+  // Bumped to ask the top band to focus its search field, scoped to the module
+  // on screen (⌘/Ctrl+Shift+F, ADR-0068 §2, #344). A nonce, not a boolean, so
+  // repeated presses re-focus even when the value would otherwise be unchanged.
   globalSearchFocus: 0,
   // Keyboard-shortcuts cheat sheet (⌘/Ctrl+?).
   shortcutsOpen: false,
@@ -273,9 +273,13 @@ export function openCommandPalette() {
 export function closeCommandPalette() {
   // Return focus before the selected command opens another surface, allowing
   // that surface to retain the original opener rather than a disappearing input.
-  if (document.activeElement?.closest('[data-command-palette]') &&
-      paletteOpener instanceof HTMLElement && paletteOpener.isConnected &&
-      !paletteOpener.matches(':disabled') && !paletteOpener.closest('[hidden], [inert], [aria-hidden="true"]')) {
+  if (
+    document.activeElement?.closest('[data-command-palette]') &&
+    paletteOpener instanceof HTMLElement &&
+    paletteOpener.isConnected &&
+    !paletteOpener.matches(':disabled') &&
+    !paletteOpener.closest('[hidden], [inert], [aria-hidden="true"]')
+  ) {
     paletteOpener.focus({ preventScroll: true })
   }
   paletteOpener = null
@@ -288,7 +292,8 @@ export function focusSettingsSection(section: string, accountId = '') {
   ui$.settingsOpen.set(true)
 }
 
-// Ask the ThreadList to focus (and select) its search box.
+// Ask the top band to focus (and select) its search field; below 769 px it
+// opens the field over the band first (#344).
 export function focusGlobalSearch() {
   ui$.globalSearchFocus.set(ui$.globalSearchFocus.peek() + 1)
 }

@@ -272,12 +272,13 @@ describe('People in the common folder pane (ADR-0068 §4, #326)', () => {
     const screen = render(<PeopleView />)
     expect(rows(screen)).toEqual(['Bob Young', 'Zoe Adams'])
     expect(screen.getByRole('heading', { level: 2, name: 'Bob Young' })).toBeTruthy()
-    // The list's header keeps the title, the actions and the search.
+    // The list's header keeps the title and the actions; the search is in the
+    // top band (#344).
     const column = content(screen)
     expect(within(column).getByRole('heading', { level: 1, name: 'People' })).toBeTruthy()
     expect(within(column).getByRole('button', { name: 'New contact' })).toBeTruthy()
     expect(within(column).getByRole('button', { name: 'Import contacts' })).toBeTruthy()
-    expect(within(column).getByRole('textbox', { name: 'Search people' })).toBeTruthy()
+    expect(within(column).queryByRole('textbox', { name: 'Search people' })).toBeNull()
   })
 
   it('shares one width with mail: resized here, it is the width mail draws, and the reverse', () => {
@@ -410,9 +411,11 @@ describe('People keep the focus across 1025 px (#341)', () => {
   it('leaves the focus alone when it was on the list, and does nothing on the first render', async () => {
     const screen = render(<PeopleView />)
     expect(document.activeElement).toBe(document.body)
-    const search = screen.getByRole('textbox', { name: 'Search people' })
-    search.focus()
+    // The list header's «New contact», which stays in place across 1025 px, as
+    // the search did before it moved to the top band (#344).
+    const newContact = screen.getByRole('button', { name: 'New contact' })
+    newContact.focus()
     await narrowWindow()
-    expect(document.activeElement).toBe(search)
+    expect(document.activeElement).toBe(newContact)
   })
 })

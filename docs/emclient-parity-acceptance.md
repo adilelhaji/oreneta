@@ -234,6 +234,22 @@ fletxes del botó i del menú no mouen la selecció de la llista), executar-hi o
 el menú obert, el 200 % a 1025 px i la pantalla d'alta amb la banda, en anglès i en àrab amb axe. És
 una nota d'evidència: cap fila no canvia d'estat (S01-04, SET-02, SET-27), i l'evidència nativa de
 Windows continua pendent.
+El 2026-10-23 (#344, peça 13b, pas 3 d'ADR-0068, `docs/design/top-band.md`) la cerca va passar a
+la banda superior: un camp al centre de la banda (`role="search"`, «Cerca») amb l'abast del mòdul en
+pantalla, que llegeix i escriu l'estat de cerca que ja tenia cada mòdul (el correu, un tauler, Notes,
+Persones, Tasques i el nom del fitxer d'Adjunts), amb els mateixos retards i els mateixos textos,
+mentre els camps propis dels mòduls desapareixen. El constructor de cerques i les cerques desades del
+correu s'obren des del final del camp. Ctrl/⌘+Maj+F i la `/` de l'esquema Gmail hi posen el focus, i
+Ctrl/⌘+F continua obrint la cerca de la conversa quan n'hi ha una a la pantalla; les ordres de cerca de
+la paleta i del menú porten primer al correu (decisió del propietari a #344). El Calendari i el Xat,
+que no tenen cerca, mostren el camp desactivat amb el motiu (decisió 3 del propietari a #342). Per
+sota de 769 px, un botó de la banda obre el camp damunt de la banda, i Escapada el tanca i torna el
+focus al botó. La pantalla d'alta del primer compte no té el camp. Les proves de límits, de dreta a
+esquerra, de zoom, de regions i d'axe es mantenen, amb els localitzadors que trobaven els camps dels
+mòduls, ara apuntats al camp de la banda, i se n'hi afegeixen de noves: la cerca des de la banda a cada mòdul,
+el Calendari i el Xat desactivats amb axe, les dreceres, el botó a 768 px amb axe, l'àrab amb axe a
+1440 i 768 px i el 200 % a 1025 px. És una nota d'evidència: cap fila no canvia d'estat (S01-04,
+S01-05, SET-02, SET-27), i l'evidència nativa de Windows continua pendent.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per

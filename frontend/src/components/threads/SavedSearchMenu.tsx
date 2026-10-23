@@ -10,7 +10,8 @@ import { MenuItem } from '../menu/MenuItem'
 import { MenuList, MenuSeparator } from '../menu/Menu'
 
 /**
- * Searches worth keeping, beside the box they were typed into.
+ * Searches worth keeping, beside the box they were typed into: at the end of
+ * mail's field in the top band (#344).
  *
  * A search only earns a name once it has been typed, so saving appears when
  * there is something to save and the list appears when there is something in
@@ -59,7 +60,7 @@ export function SavedSearchMenu({ query }: { query: string }) {
         aria-label={saved.length > 0 ? t('search.saved') : t('search.save')}
         aria-haspopup={saved.length > 0 ? 'menu' : undefined}
         aria-expanded={saved.length > 0 ? open : undefined}
-        className="flex h-9 w-9 items-center justify-center rounded-control text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+        className="flex h-8 w-8 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
       >
         {saved.length > 0 ? <Bookmark size={16} strokeWidth={1.75} /> : <BookmarkPlus size={16} strokeWidth={1.75} />}
       </button>

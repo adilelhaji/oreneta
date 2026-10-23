@@ -45,7 +45,10 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
   200 %. El seu menú fa 20 rem d'amplada, sense passar mai de l'amplada de la
   finestra. L'alçada de la banda surt de les subfinestres que té a sota: al 200 %
   i a 1025 px la pàgina no es desplaça, i els controls dels límits del correu
-  continuen dins de l'alçada de la finestra.
+  continuen dins de l'alçada de la finestra. Des de #344 la banda té el camp de
+  cerca, també en rem: 1,75 rem d'alçada i, com a màxim, 36 rem d'amplada. Al
+  200 % a 1025 px, com al 100 % entre 769 i 1024 px, s'encongeix entre el botó
+  del menú i el final de la banda, sense desplaçament horitzontal.
 - **El que continua en px:**
   - l'amplada dels taulers que la persona arrossega;
   - l'amplada de la subfinestra de carpetes (260 px per defecte, de 200 a 400,
@@ -77,6 +80,7 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
 | N2 (`zoom.test.ts`) | El paràmetre es mou, l'arrel passa a 32 px al 200 % i torna; l'avís indica la mida |
 | e2e (`startup.e2e.ts`, 1440 i 1024 px) | Al 200 % no hi ha desplaçament horitzontal i cap botó no queda fora de la pantalla a la bústia, al lector i a la redacció; Ctrl/⌘ `-` amb el focus en un camp no toca el text ni el focus; la mida es recupera després de recarregar; Ctrl/⌘ `0` la restableix |
 | e2e (`startup.e2e.ts`, «#343», 1025 px) | Al 200 % la banda superior fa 72 px, la pàgina no es desplaça i la llista, les carpetes, la resposta i els botons de la bústia i de la conversa continuen dins de l'alçada de la finestra |
+| e2e (`startup.e2e.ts`, «#344», 1025 px i de 769 a 1024 px) | Al 200 % a 1025 px, i al 100 % a 1024, 900 i 769 px, el camp de cerca de la banda i els seus botons queden dins de la finestra, després del botó del menú, sense desplaçament horitzontal |
 
 Falta la prova nativa (N4) a Windows, que es farà una sola vegada amb la versió
 final.

@@ -9,7 +9,6 @@ import {
   Pencil,
   Phone,
   Plus,
-  Search,
   SquarePen,
   Trash2,
   Upload,
@@ -248,16 +247,6 @@ export function PeopleView() {
                   {t('people.newContact', { defaultValue: 'New contact' })}
                 </Button>
               </div>
-            </div>
-            <div className="flex min-w-0 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-2 focus-within:border-accent-fg">
-              <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
-              <input
-                value={query}
-                onChange={(event) => people$.query.set(event.target.value)}
-                placeholder={t('people.search')}
-                aria-label={t('people.search')}
-                className="min-w-0 flex-1 bg-transparent text-ui text-primary placeholder-secondary outline-none"
-              />
             </div>
             {!inPane && (
               <div

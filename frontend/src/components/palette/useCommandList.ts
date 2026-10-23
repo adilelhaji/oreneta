@@ -62,7 +62,7 @@ import {
   selectKanbanBoard,
   setGlobalKanbanFilter,
 } from '../../states/kanban'
-import { thread$ } from '../../states/thread'
+import { requestThreadSearch, thread$ } from '../../states/thread'
 import {
   mail$,
   syncMail,
@@ -190,10 +190,20 @@ export function useCommandList(): Command[] {
         icon: icon(Search),
         keywords: 'find conversation in',
         shortcut: 'search.thread',
+        // Mail's commands search mail: from another module they go there
+        // first, as the account and folder commands do (owner decision on
+        // #344). Then, as Ctrl/⌘+F in mail, the open conversation's search,
+        // or else the top band's.
         run: run(() => {
           const visible = !!selectedThread && (!activeBoardId || !!kanban$.paneThreadId.peek())
-          if (visible) thread$.searchOpen.set(true)
-          else focusGlobalSearch()
+          // Out of mail the conversation pane is not mounted yet: it opens
+          // the search once it shows the conversation. Asked before mail is
+          // shown, so it does not depend on when the pane renders.
+          if (visible && !inMailView) requestThreadSearch(selectedThread)
+          inMail(() => {
+            if (!visible) focusGlobalSearch()
+            else if (inMailView) thread$.searchOpen.set(true)
+          })()
         }),
       },
       {
@@ -203,7 +213,9 @@ export function useCommandList(): Command[] {
         icon: icon(SearchCheck),
         keywords: 'find global mailbox',
         shortcut: 'search.global',
-        run: run(() => focusGlobalSearch()),
+        // In mail, the band's search, with mail's scope: the query of the
+        // thread list or, with a board open, the board's (#344).
+        run: run(inMail(() => focusGlobalSearch())),
       },
       {
         id: 'settings.open',
