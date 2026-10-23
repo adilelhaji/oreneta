@@ -22,6 +22,8 @@ import { MessagingView } from './components/messaging/MessagingView'
 import { AttachmentsView } from './components/attachments/AttachmentsView'
 import { MessagePane } from './components/chat/MessagePane'
 import { KanbanPaneResizer } from './components/resizer/PaneResizers'
+import { useWideWindow } from './components/resizer/useElementWidth'
+import { kanbanAreaBase, KANBAN_PANE_MIN_PX, KANBAN_PANE_NARROW_MIN_PX } from './lib/paneResize'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ConnectivityBanner } from './components/banner/ConnectivityBanner'
 import { UpdateBanner } from './components/banner/UpdateBanner'
@@ -40,6 +42,9 @@ export default function App() {
   const threadListWidth = useValue(settings$.threadListWidth)
   const kanbanPaneThreadId = useValue(kanban$.paneThreadId)
   const kanbanPaneWidth = useValue(settings$.kanbanPaneWidth)
+  const kanbanColumnWidth = useValue(settings$.kanbanColumnWidth)
+  // From 769 px the reader keeps 360 px, so the board's pane does too.
+  const readerKeepsItsWidth = useWideWindow(769)
   const activeModule = useValue(ui$.module)
 
   useAppEffects()
@@ -118,7 +123,13 @@ export default function App() {
             ) : activeBoardId ? (
               // The board and its conversation pane, whose width is a share of
               // this area: the row less the rail and the folders (ADR-0068 §4).
-              <div ref={boardAreaRef} className="flex min-w-0 flex-1 overflow-hidden">
+              // It asks for one column and the reader, so the folder pane gives
+              // way first where the row is short.
+              <div
+                ref={boardAreaRef}
+                className="flex min-w-0 overflow-hidden"
+                style={{ flex: `1 1 ${kanbanAreaBase(kanbanColumnWidth, showKanbanMessagePane)}px` }}
+              >
                 <ErrorBoundary label="thread list">
                   <KanbanView boardId={activeBoardId} />
                 </ErrorBoundary>
@@ -126,7 +137,10 @@ export default function App() {
                   <div
                     ref={kanbanPaneRef}
                     className="relative flex shrink-0 overflow-hidden border-s border-border bg-chat max-[600px]:w-full"
-                    style={{ width: `${kanbanPaneWidth}%`, minWidth: 320 }}
+                    style={{
+                      width: `${kanbanPaneWidth}%`,
+                      minWidth: readerKeepsItsWidth ? KANBAN_PANE_MIN_PX : KANBAN_PANE_NARROW_MIN_PX,
+                    }}
                   >
                     {/* The width is a percentage of the board's area, kept in settings. */}
                     <KanbanPaneResizer pane={kanbanPaneRef} shell={boardAreaRef} />

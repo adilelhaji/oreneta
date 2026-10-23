@@ -1,6 +1,6 @@
 import type { DragEvent } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { moveFeed, RSS_FEED_DRAG_TYPE } from '../../states/feeds'
+import { endFeedDrag, feedDragSourceAccount, moveFeed, RSS_FEED_DRAG_TYPE } from '../../states/feeds'
 import { inboxUnread, mail$ } from '../../states/mail'
 import { settings$ } from '../../states/settings'
 import type { Account } from '../../types'
@@ -33,13 +33,14 @@ export function isRssAccount(account: Pick<Account, 'provider' | 'auth_type'>): 
 /**
  * The feed a drag from the conversation list carries; null for any other drag.
  * Only the drop can read what it carries: while it is held over a target, a
- * browser shows the type alone, and then the feed has no thread.
+ * browser shows the type alone, and then the feed has no thread, and the
+ * account it comes from is the one the list noted when the drag began.
  */
 function draggedFeed(data: DataTransfer | null): { threadId?: string; accountId?: string } | null {
   if (!data || !Array.from(data.types).includes(RSS_FEED_DRAG_TYPE)) return null
   try {
     const raw = data.getData(RSS_FEED_DRAG_TYPE)
-    if (!raw) return {}
+    if (!raw) return { accountId: feedDragSourceAccount() ?? undefined }
     const parsed = JSON.parse(raw) as { threadId?: string; accountId?: string }
     return { threadId: parsed.threadId, accountId: parsed.accountId }
   } catch {
@@ -48,8 +49,8 @@ function draggedFeed(data: DataTransfer | null): { threadId?: string; accountId?
 }
 
 /**
- * A feed held over an RSS account: accepted, unless it is known to come from
- * that account. Says whether it was accepted, so a row can mark the drop.
+ * A feed held over an RSS account: accepted, unless it comes from that
+ * account. Says whether it was accepted, so a row can mark the drop.
  */
 export function feedDragOver(event: DragEvent<HTMLElement>, account: Account): boolean {
   if (!isRssAccount(account)) return false
@@ -67,6 +68,8 @@ export function feedDrop(event: DragEvent<HTMLElement>, account: Account): boole
   if (!feed?.threadId || feed.accountId === account.id) return false
   event.preventDefault()
   event.stopPropagation()
+  // The row it came from is about to go from the list, and may not see its dragend.
+  endFeedDrag()
   void moveFeed(feed.threadId, account.id)
   return true
 }

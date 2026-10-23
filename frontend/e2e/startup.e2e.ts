@@ -5663,7 +5663,8 @@ test('the account menu opens in the folder pane with the mouse, Shift+F10 and th
 test('a board opens from «Taulers» in the folder pane, which stays with the board marked (#353)', async ({ page }) => {
   const { errors, nav, alex } = await openPaneDestinations(page)
   // Every profile has a first board.
-  const boards = nav.getByRole('region', { name: 'Boards', exact: true })
+  // A group named «Taulers», under «Comptes».
+  const boards = nav.getByRole('group', { name: 'Boards', exact: true })
   const board = boards.getByRole('button', { name: 'Kanban board', exact: true })
   const boardTitle = page.locator('main').getByRole('heading', { level: 2, name: 'Kanban board', exact: true })
   // Between the unified inbox and the accounts, as on the rail and for Ctrl/⌘+1…9.
@@ -5701,6 +5702,32 @@ test('a board opens from «Taulers» in the folder pane, which stays with the bo
   await page.keyboard.press('Escape')
   await expect(board).toBeFocused()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  expect(errors).toEqual([])
+})
+
+test('deleting a board from its menu in the folder pane leaves the focus on the next board (#353)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const column = { accountId: 'unified', folderId: 'inbox' }
+  const errors = await prepareStartup(page, true, {
+    navigation: true,
+    preferences: {
+      kanban_boards: [
+        { id: 'b1', name: 'Launch', columns: [column] },
+        { id: 'b2', name: 'Hiring', columns: [column] },
+      ],
+    },
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
+  const launch = nav.locator('[data-nav-row="board:b1"]')
+  const hiring = nav.locator('[data-nav-row="board:b2"]')
+  await launch.focus()
+  await page.keyboard.press('ContextMenu')
+  await page.getByRole('menu', { name: 'Launch', exact: true }).getByRole('menuitem', { name: 'Delete board' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete', exact: true }).click()
+  await expect(launch).toHaveCount(0)
+  await expect(hiring).toBeFocused()
   expect(errors).toEqual([])
 })
 
@@ -5761,10 +5788,29 @@ test('a feed dragged from the list onto another RSS account in the folder pane m
   })
   await page.goto('/')
   const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
+  const news = nav.locator('[data-nav-row="account:rss-news"]')
   const blogs = nav.locator('[data-nav-row="account:rss-blogs"]')
   const row = page.locator('[data-thread-list] [draggable="true"]').filter({ hasText: 'Synthetic headline' })
   await expect(row).toBeVisible()
-  await row.dragTo(blogs)
+  // A real drag: held over the account it comes from, the feed is refused and
+  // no row is marked; over another RSS account, the row is marked for it.
+  const centre = async (locator: ReturnType<Page['locator']>) => {
+    const box = (await locator.boundingBox())!
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  }
+  const from = await centre(row)
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  const own = await centre(news)
+  await page.mouse.move(own.x, own.y, { steps: 6 })
+  await page.mouse.move(own.x + 2, own.y, { steps: 2 })
+  await expect(news).not.toHaveAttribute('data-drop-target')
+  const other = await centre(blogs)
+  await page.mouse.move(other.x, other.y, { steps: 6 })
+  await page.mouse.move(other.x + 2, other.y, { steps: 2 })
+  await expect(blogs).toHaveAttribute('data-drop-target', 'ok')
+  await page.mouse.up()
+  await expect(blogs).not.toHaveAttribute('data-drop-target')
   await expect
     .poll(() =>
       page.evaluate(
@@ -5796,6 +5842,51 @@ test('the unified inbox row in the folder pane has the rail menu (#353)', async 
   expect(errors).toEqual([])
 })
 
+// With a board open the folder pane stays (ADR-0068 §4), and the board's
+// conversation pane is a share of the board's area. The reader in it keeps its
+// 360 px, the folders give way before the board's columns do, and the
+// separator is there to resize it: a new message opened beside the board is
+// whole, its Send button inside the pane.
+for (const [width, folders] of [
+  [1025, 260],
+  [1025, 400],
+  [1280, 260],
+] as const) {
+  test(`a board's conversation pane keeps the reader whole beside the folder pane: ${width}px, folders ${folders}px (#353)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const errors = await prepareStartup(page, true, { navigation: true, preferences: { folder_pane_width: folders } })
+    await page.goto('/')
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
+    await nav.locator('[data-nav-row^="board:"]').first().click()
+    const board = page.locator('main section[data-region="content"]')
+    await expect(board.getByRole('heading', { level: 2, name: 'Kanban board', exact: true })).toBeVisible()
+    await page.keyboard.press('Control+n')
+    const reader = page.locator('[data-message-pane]')
+    const pane = reader.locator('xpath=..')
+    const send = page.getByRole('button', { name: 'Send', exact: true })
+    await expect(send).toBeInViewport({ ratio: 1 })
+    const box = async (locator: ReturnType<Page['locator']>) => (await locator.boundingBox())!
+    const [paneBox, readerBox, sendBox, boardBox, navBox] = await Promise.all(
+      [pane, reader, send, board, nav].map(box),
+    )
+    // The reader is not cut by the pane around it, and nor is Send.
+    expect(paneBox.width).toBeGreaterThanOrEqual(360 - 1)
+    expect(readerBox.width).toBeLessThanOrEqual(paneBox.width + 1)
+    expect(readerBox.x + readerBox.width).toBeLessThanOrEqual(paneBox.x + paneBox.width + 1)
+    expect(sendBox.x).toBeGreaterThanOrEqual(paneBox.x - 1)
+    expect(sendBox.x + sendBox.width).toBeLessThanOrEqual(paneBox.x + paneBox.width + 1)
+    await expect(page.getByRole('separator', { name: 'Resize conversation', exact: true })).toHaveCount(1)
+    // The columns keep one whole column (360 px by default): the folders gave way first.
+    expect(boardBox.width).toBeGreaterThanOrEqual(360 - 1)
+    expect(navBox.width).toBeGreaterThanOrEqual(200 - 1)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    expect(errors).toEqual([])
+  })
+}
+
 test('in Arabic the new rows of the folder pane follow the reading, and fit at the app\'s 200 percent (#353)', async ({
   page,
 }, info) => {
@@ -5808,7 +5899,7 @@ test('in Arabic the new rows of the folder pane follow the reading, and fit at t
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
   const nav = page.getByRole('navigation', { name: arCatalog['mailNavigation.title'], exact: true })
   const alex = nav.locator('[data-nav-row="account:synthetic-account"]')
-  await expect(nav.getByRole('region', { name: arCatalog['mailNavigation.boards'], exact: true })).toBeVisible()
+  await expect(nav.getByRole('group', { name: arCatalog['mailNavigation.boards'], exact: true })).toBeVisible()
   // The state, in words, in Arabic; its icon at the end of the line, on the left.
   await expect(alex).toHaveAccessibleName(`Alex · Demo alex@example.test ${arCatalog['connectivity.health.paused']}`)
   const row = (await alex.boundingBox())!

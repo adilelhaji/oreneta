@@ -5,12 +5,12 @@ import { SideNav } from './SideNav'
 import { AppHotkeys } from '../dialog/AppHotkeys'
 import { accounts$, shownAccountOrder } from '../../states/accounts'
 import { accountGroups$ } from '../../states/accountGroups'
-import { RSS_FEED_DRAG_TYPE } from '../../states/feeds'
+import { beginFeedDrag, endFeedDrag, feedDragSourceAccount, RSS_FEED_DRAG_TYPE } from '../../states/feeds'
 import { folderPrefs$ } from '../../states/folderPrefs'
 import { kanban$ } from '../../states/kanban'
 import { mail$ } from '../../states/mail'
 import { settings$, type KanbanBoard } from '../../states/settings'
-import { ui$ } from '../../states/ui'
+import { settleConfirm, ui$ } from '../../states/ui'
 import type { Account, Folder } from '../../types'
 
 // What «Comptes i carpetes» took over from the vertical rail (ADR-0068 §5,
@@ -180,25 +180,31 @@ describe('accounts in «Comptes i carpetes» (#353)', () => {
 
     fireEvent.keyDown(row('account:carla'), { key: 'ContextMenu' })
     fireEvent.click(view.getByRole('menuitem', { name: 'Mute notifications' }))
-    expect(calls.some((call) => call.command === 'account.setMuted' || /mute/i.test(call.command))).toBe(true)
+    expect(calls.filter((call) => call.command === 'account.setMuted').map((call) => call.payload)).toEqual([
+      { id: 'carla', enabled: true },
+    ])
     expect(document.activeElement).toBe(row('account:carla'))
   })
 
   it('hide from their menu, which no longer speaks of the side navigation, and keep the focus in the list', () => {
     const { view, row, announced } = pane()
+    // The account open stays in the pane, as before, and keeps the focus:
+    // nothing went, so nothing is said.
+    row('account:alex').focus()
+    fireEvent.keyDown(row('account:alex'), { key: 'ContextMenu' })
+    fireEvent.click(view.getByRole('menuitem', { name: 'Hide account' }))
+    expect(settings$.hiddenSideNavAccounts.peek()).toEqual(['alex'])
+    expect(document.activeElement).toBe(row('account:alex'))
+    expect(announced()).toBe('')
     row('account:blai').focus()
     fireEvent.keyDown(row('account:blai'), { key: 'ContextMenu' })
     expect(view.queryByRole('menuitem', { name: 'Hide from side navigation' })).toBeNull()
     fireEvent.click(view.getByRole('menuitem', { name: 'Hide account' }))
-    expect(settings$.hiddenSideNavAccounts.peek()).toEqual(['blai'])
+    expect(settings$.hiddenSideNavAccounts.peek()).toEqual(['alex', 'blai'])
     expect(view.container.querySelector('[data-nav-row="account:blai"]')).toBeNull()
-    // The row that took its place has the focus.
+    // The row that took its place has the focus, and the hiding is said.
     expect(document.activeElement).toBe(row('account:carla'))
     expect(announced()).toBe('Blai hidden. It can be shown again from Settings.')
-    // The account open stays in the pane, as before, and keeps the focus.
-    fireEvent.keyDown(row('account:alex'), { key: 'ContextMenu' })
-    fireEvent.click(view.getByRole('menuitem', { name: 'Hide account' }))
-    expect(document.activeElement).toBe(row('account:alex'))
   })
 
   it('show the inbox unread count only while the unread badges are on', () => {
@@ -259,6 +265,26 @@ describe('accounts in «Comptes i carpetes» (#353)', () => {
       fireEvent.dragOver(row('account:rss-news'), { dataTransfer: { types: ['text/plain'], getData: () => '' } }),
     ).toBe(true)
   })
+
+  it('refuse a feed held over the account it comes from, which the list noted when the drag began', () => {
+    const feeds = account('rss-news', 'News', { provider: 'rss', auth_type: 'rss' })
+    const other = account('rss-blogs', 'Blogs', { provider: 'rss', auth_type: 'rss' })
+    accounts$.set([alex, feeds, other])
+    const { row } = pane()
+    const held = { types: [RSS_FEED_DRAG_TYPE], getData: () => '' }
+    beginFeedDrag('rss-news')
+    try {
+      // Its own account: no drop, and no mark.
+      expect(fireEvent.dragOver(row('account:rss-news'), { dataTransfer: held })).toBe(true)
+      expect(row('account:rss-news').hasAttribute('data-drop-target')).toBe(false)
+      // Another RSS account takes it.
+      expect(fireEvent.dragOver(row('account:rss-blogs'), { dataTransfer: held })).toBe(false)
+      expect(row('account:rss-blogs').getAttribute('data-drop-target')).toBe('ok')
+    } finally {
+      endFeedDrag()
+    }
+    expect(feedDragSourceAccount()).toBeNull()
+  })
 })
 
 describe('«Taulers» in «Comptes i carpetes» (#353)', () => {
@@ -268,8 +294,16 @@ describe('«Taulers» in «Comptes i carpetes» (#353)', () => {
 
   it('lists the boards in their order, between the unified inbox and the accounts, with their picture', () => {
     const { view, rows } = pane()
-    const section = view.getByRole('region', { name: 'Boards' })
-    expect(within(section).getByRole('heading', { level: 3, name: 'Boards' })).toBeTruthy()
+    // A group named «Taulers» under «Comptes», not a heading or a landmark of its own.
+    const section = view.getByRole('group', { name: 'Boards' })
+    expect(view.queryByRole('heading', { name: 'Boards' })).toBeNull()
+    expect(view.queryByRole('region', { name: 'Boards' })).toBeNull()
+    const headings = view.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)
+    expect(headings).toEqual(['Accounts', 'Folders'])
+    const accountsHeading = view.getByRole('heading', { level: 3, name: 'Accounts' })
+    expect(accountsHeading.compareDocumentPosition(view.container.querySelector('[data-nav-row="unified"]')!)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    )
     expect(
       within(section)
         .getAllByRole('button')
@@ -285,8 +319,8 @@ describe('«Taulers» in «Comptes i carpetes» (#353)', () => {
   it('is not there without boards', () => {
     settings$.kanbanBoards.set([])
     const { view } = pane()
-    expect(view.queryByRole('region', { name: 'Boards' })).toBeNull()
-    expect(view.queryByRole('heading', { name: 'Boards' })).toBeNull()
+    expect(view.queryByRole('group', { name: 'Boards' })).toBeNull()
+    expect(view.queryByText('Boards')).toBeNull()
   })
 
   it('opens a board as the rail does, and marks it, not mail, while it is open', () => {
@@ -340,6 +374,34 @@ describe('«Taulers» in «Comptes i carpetes» (#353)', () => {
     fireEvent.keyDown(row('board:b2'), { key: 'ContextMenu' })
     expect(view.getByRole('menu', { name: 'Hiring' })).toBeTruthy()
   })
+
+  it('moves the focus on from a board deleted from its menu, to a new one when it was the last', async () => {
+    settings$.kanbanBoards.set([board('b1', 'Launch'), board('b2', 'Hiring'), board('b3', 'Support')])
+    const { view, row } = pane()
+    const remove = async (key: string) => {
+      row(key).focus()
+      fireEvent.keyDown(row(key), { key: 'ContextMenu' })
+      fireEvent.click(view.getByRole('menuitem', { name: 'Delete board' }))
+      expect(ui$.confirm.peek()).not.toBeNull()
+      await act(async () => settleConfirm(true))
+    }
+    // The next board, else the one before.
+    await remove('board:b2')
+    expect(settings$.kanbanBoards.peek().map((item) => item.id)).toEqual(['b1', 'b3'])
+    expect(document.activeElement).toBe(row('board:b3'))
+    await remove('board:b3')
+    expect(document.activeElement).toBe(row('board:b1'))
+    // The last one: the new, empty board that takes its place.
+    await remove('board:b1')
+    const [fresh] = settings$.kanbanBoards.peek()
+    expect(fresh.id).not.toBe('b1')
+    expect(document.activeElement).toBe(row(`board:${fresh.id}`))
+    // A deletion declined moves nothing.
+    fireEvent.keyDown(row(`board:${fresh.id}`), { key: 'ContextMenu' })
+    fireEvent.click(view.getByRole('menuitem', { name: 'Delete board' }))
+    await act(async () => settleConfirm(false))
+    expect(document.activeElement).toBe(row(`board:${fresh.id}`))
+  })
 })
 
 describe('the unified inbox row in «Comptes i carpetes» (#353)', () => {
@@ -348,7 +410,7 @@ describe('the unified inbox row in «Comptes i carpetes» (#353)', () => {
   })
 
   it('has the rail menu: each group shown together, and hiding it, from the mouse and the keyboard', () => {
-    const { view, row } = pane()
+    const { view, row, announced } = pane()
     fireEvent.contextMenu(row('unified'))
     expect(
       within(view.getByRole('menu', { name: 'Unified inbox' }))
@@ -372,6 +434,18 @@ describe('the unified inbox row in «Comptes i carpetes» (#353)', () => {
     expect(settings$.showUnifiedInboxInSideNav.peek()).toBe(false)
     expect(view.container.querySelector('[data-nav-row="unified"]')).toBeNull()
     expect(document.activeElement?.getAttribute('data-nav-row')).toBe('account:alex')
+    expect(announced()).toBe('Unified inbox hidden. It can be shown again from Settings.')
+  })
+
+  it('stays, and says nothing went, when it is hidden while it is open', () => {
+    ui$.selectedAccount.set('unified')
+    const { view, row, announced } = pane()
+    row('unified').focus()
+    fireEvent.keyDown(row('unified'), { key: 'ContextMenu' })
+    fireEvent.click(view.getByRole('menuitem', { name: 'Hide unified inbox' }))
+    expect(settings$.showUnifiedInboxInSideNav.peek()).toBe(false)
+    expect(document.activeElement).toBe(row('unified'))
+    expect(announced()).toBe('')
   })
 })
 

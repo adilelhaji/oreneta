@@ -3,7 +3,7 @@ import type { CSSProperties, DragEvent } from 'react'
 import { Plus, SquarePen, MoreHorizontal } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
-import { openAddFeed, RSS_FEED_DRAG_TYPE } from '../../states/feeds'
+import { beginFeedDrag, endFeedDrag, openAddFeed, RSS_FEED_DRAG_TYPE } from '../../states/feeds'
 import {
   openComposeTab,
   openThreadTab,
@@ -334,6 +334,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
       JSON.stringify({ threadId: thread.thread_id, accountId: thread.account_id }),
     )
     event.dataTransfer.setData('text/plain', thread.subject || thread.from_name || t('feeds.fallbackName'))
+    beginFeedDrag(thread.account_id)
   }
 
   return (
@@ -575,6 +576,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
                       showAccountBadge={isStarredView ? true : undefined}
                       draggable={feedRowsDraggable}
                       onDragStart={(event) => startFeedDrag(event, thread)}
+                      onDragEnd={endFeedDrag}
                       bulkSelectable={desktopBulk && bulkInThisList}
                       bulkSelected={!!bulkSelection[bulkItem.key]}
                       onQuickAction={(action) => runQuickAction(action, thread)}

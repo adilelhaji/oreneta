@@ -34,6 +34,7 @@ import {
   useNavRowFocus,
   type NavBoard,
 } from './MailNavigationDestinations'
+import { isRssAccount } from './accountNav'
 
 /** Drag payload types, for other windows and drop targets that read them. */
 export const FOLDER_DRAG_TYPE = 'application/x-oreneta-folder'
@@ -484,9 +485,9 @@ export function MailNavigationView({
   // the mail view was on (ADR-0068 §4).
   const boardOpen = !!activeBoard
   const currentFolder = boardOpen ? '' : selectedFolder
-  const refocusRow = useNavRowFocus([accounts, boards, unifiedVisible])
+  const refocusRow = useNavRowFocus(setAnnouncement)
   const active = accounts.find((account) => account.id === selectedAccount)
-  const isRSS = active?.provider === 'rss' || active?.auth_type === 'rss'
+  const isRSS = !!active && isRssAccount(active)
   const everyAccount = allAccounts ?? accounts
   const accountOf = (id: string) => everyAccount.find((account) => account.id === id)
   const foldersOf = (id: string): Folder[] => foldersByAccount?.[id] ?? (id === selectedAccount ? folders : [])
@@ -569,27 +570,26 @@ export function MailNavigationView({
           else if (accountId === selectedAccount) onFolder(folderId)
         }}
       />
-      {/* The unified inbox, the boards and the accounts, in the order of the
-          rail and of Ctrl/⌘+1…9 (ADR-0068 §5), the account groups after the
-          boards. */}
-      {unifiedVisible && (
-        <UnifiedInboxRow
-          current={!boardOpen && selectedAccount === 'unified' && !activeGroup}
-          onOpen={() => onAccount('unified')}
-          onShowGroup={onGroup}
+      <h3>{t('mailNavigation.accounts')}</h3>
+      <div className="mail-navigation-accounts">
+        {/* The unified inbox, the boards and the accounts, in the order of the
+            rail and of Ctrl/⌘+1…9 (ADR-0068 §5), the account groups after
+            the boards. */}
+        {unifiedVisible && (
+          <UnifiedInboxRow
+            current={!boardOpen && selectedAccount === 'unified' && !activeGroup}
+            onOpen={() => onAccount('unified')}
+            onShowGroup={onGroup}
+            refocus={refocusRow}
+          />
+        )}
+        <BoardsSection
+          boards={boards}
+          activeBoard={activeBoard}
+          onOpen={onBoard}
           refocus={refocusRow}
           announce={setAnnouncement}
         />
-      )}
-      <BoardsSection
-        boards={boards}
-        activeBoard={activeBoard}
-        onOpen={onBoard}
-        refocus={refocusRow}
-        announce={setAnnouncement}
-      />
-      <h3>{t('mailNavigation.accounts')}</h3>
-      <div className="mail-navigation-accounts">
         {/* Account groups (#99): each shows its own accounts together. */}
         {groups.map((group) => (
           <button

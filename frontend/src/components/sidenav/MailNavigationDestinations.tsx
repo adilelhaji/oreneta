@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { BellOff, Columns3, KeyRound, Mail, Pause } from 'lucide-react'
 import {
   closestCenter,
@@ -52,35 +52,54 @@ const MOVE_KEYS = 'Alt+ArrowUp Alt+ArrowDown'
 const ROW = 'data-nav-row'
 
 /**
- * Puts the focus back on a row once the rows change. A row that moves is taken
- * out of the page and put back, and one that is hidden goes, so the focus
- * would fall to the page. The first key still on the page wins: the row
- * itself, or the one that took its place. `rows` are what the rows are drawn
- * from: the focus waits for them to change, not for any other drawing.
+ * Puts the focus back on a row once a change is drawn. A row that moves is
+ * taken out of the page and put back, and one that is hidden or deleted goes,
+ * so the focus would fall to the page. The first key still drawn wins: the row
+ * itself, or one near it; a key ending in `*` stands for the first row whose
+ * key starts with what comes before it. `gone` is said only when the row
+ * itself is no longer drawn: an account that is open stays in the pane when it
+ * is hidden, and then nothing has gone. The change and the request are drawn
+ * together (React batches them), so the effect runs once, after both.
  */
-export function useNavRowFocus(rows: readonly unknown[]) {
-  const pending = useRef<string[] | null>(null)
+export function useNavRowFocus(announce: (text: string) => void) {
+  const pending = useRef<{ keys: string[]; gone?: string } | null>(null)
+  const [request, setRequest] = useState(0)
   useLayoutEffect(() => {
-    const keys = pending.current
-    if (!keys) return
+    const wanted = pending.current
+    if (!wanted) return
     pending.current = null
     const drawn = [...document.querySelectorAll<HTMLElement>(`[${ROW}]`)]
-    for (const key of keys) {
-      const row = drawn.find((element) => element.getAttribute(ROW) === key)
-      if (row) {
-        row.focus()
-        return
-      }
+    const keyOf = (element: HTMLElement) => element.getAttribute(ROW) ?? ''
+    for (const [index, key] of wanted.keys.entries()) {
+      const row = key.endsWith('*')
+        ? drawn.find((element) => keyOf(element).startsWith(key.slice(0, -1)))
+        : drawn.find((element) => keyOf(element) === key)
+      if (!row) continue
+      row.focus()
+      if (index > 0 && wanted.gone) announce(wanted.gone)
+      return
     }
-  }, rows)
-  return (keys: string[]) => {
-    pending.current = keys
+    if (wanted.gone) announce(wanted.gone)
+  }, [request])
+  return (keys: string[], gone?: string) => {
+    pending.current = { keys, gone }
+    setRequest((count) => count + 1)
   }
 }
 
 /** The row itself, then the one after it, then the one before: where the focus goes if it is hidden. */
 function rowAndNeighbours(row: HTMLElement): string[] {
   const rows = [...(row.closest('.mail-navigation') ?? document).querySelectorAll<HTMLElement>(`[${ROW}]`)]
+  const index = rows.indexOf(row)
+  return [row, rows[index + 1], rows[index - 1]].flatMap((element) => {
+    const key = element?.getAttribute(ROW)
+    return key ? [key] : []
+  })
+}
+
+/** A board's row, then the next board's, then the one before. */
+function boardAndNeighbours(row: HTMLElement): string[] {
+  const rows = [...(row.closest('ul') ?? document).querySelectorAll<HTMLElement>(`[${ROW}]`)]
   const index = rows.indexOf(row)
   return [row, rows[index + 1], rows[index - 1]].flatMap((element) => {
     const key = element?.getAttribute(ROW)
@@ -152,13 +171,11 @@ export function UnifiedInboxRow({
   onOpen,
   onShowGroup,
   refocus,
-  announce,
 }: {
   current: boolean
   onOpen: () => void
   onShowGroup: (groupId: string) => void
-  refocus: (keys: string[]) => void
-  announce: (text: string) => void
+  refocus: (keys: string[], gone?: string) => void
 }) {
   const { t } = useTranslation()
   const [menu, setMenu] = useState<MenuAt | null>(null)
@@ -192,10 +209,7 @@ export function UnifiedInboxRow({
           label={name}
           hideLabel={t('mailNavigation.actions.hideUnified')}
           onShowGroup={onShowGroup}
-          onHidden={() => {
-            refocus(rowAndNeighbours(menu.trigger))
-            announce(t('mailNavigation.hidden', { name }))
-          }}
+          onHidden={() => refocus(rowAndNeighbours(menu.trigger), t('mailNavigation.hidden', { name }))}
           onClose={() => {
             giveFocusBack(menu)
             setMenu(null)
@@ -208,7 +222,12 @@ export function UnifiedInboxRow({
 
 export type NavBoard = { id: string; name: string; avatarUrl?: string }
 
-/** «Taulers» (ADR-0068 §4 and §5): the kanban boards, in their order, between the unified inbox and the accounts. */
+/**
+ * «Taulers» (ADR-0068 §4 and §5): the kanban boards, in their order, between
+ * the unified inbox and the account groups. A group named by its label, not a
+ * heading or a landmark: under «Comptes», whose heading still leads to the
+ * groups and the accounts after it.
+ */
 export function BoardsSection({
   boards,
   activeBoard,
@@ -219,10 +238,11 @@ export function BoardsSection({
   boards: NavBoard[]
   activeBoard: string
   onOpen: (id: string) => void
-  refocus: (keys: string[]) => void
+  refocus: (keys: string[], gone?: string) => void
   announce: (text: string) => void
 }) {
   const { t } = useTranslation()
+  const labelId = useId()
   const [menu, setMenu] = useState<(MenuAt & { id: string }) | null>(null)
   const menuBoard = menu ? boards.find((board) => board.id === menu.id) : undefined
   if (!boards.length) return null
@@ -235,8 +255,10 @@ export function BoardsSection({
     if (keyboard) announce(t('mailNavigation.moved', { name: board.name, position: to + 1, count: boards.length }))
   }
   return (
-    <section className="mail-navigation-boards" aria-labelledby="mail-navigation-boards-title">
-      <h3 id="mail-navigation-boards-title">{t('mailNavigation.boards')}</h3>
+    <div role="group" className="mail-navigation-boards" aria-labelledby={labelId}>
+      <p id={labelId} className="mail-navigation-label">
+        {t('mailNavigation.boards')}
+      </p>
       <SortableNavList
         ids={ids}
         nameOf={(id) => boards.find((board) => board.id === id)?.name ?? id}
@@ -261,13 +283,16 @@ export function BoardsSection({
           board={menuBoard}
           x={menu.x}
           y={menu.y}
+          // The next board, else the one before, else whichever board is
+          // there (deleting the last one leaves a new, empty one).
+          onDelete={() => refocus([...boardAndNeighbours(menu.trigger), 'board:*'])}
           onClose={() => {
             giveFocusBack(menu)
             setMenu(null)
           }}
         />
       )}
-    </section>
+    </div>
   )
 }
 
@@ -341,7 +366,7 @@ export function AccountRows({
   accounts: Account[]
   isCurrent: (account: Account) => boolean
   onOpen: (id: string) => void
-  refocus: (keys: string[]) => void
+  refocus: (keys: string[], gone?: string) => void
   announce: (text: string) => void
 }) {
   const { t } = useTranslation()
@@ -386,10 +411,9 @@ export function AccountRows({
           x={menu.x}
           y={menu.y}
           hideLabel={t('mailNavigation.actions.hideAccount')}
-          onHidden={() => {
-            refocus(rowAndNeighbours(menu.trigger))
-            announce(t('mailNavigation.hidden', { name: nameOf(menuAccount) }))
-          }}
+          onHidden={() =>
+            refocus(rowAndNeighbours(menu.trigger), t('mailNavigation.hidden', { name: nameOf(menuAccount) }))
+          }
           onClose={() => {
             giveFocusBack(menu)
             setMenu(null)
