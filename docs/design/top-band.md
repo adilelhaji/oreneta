@@ -154,8 +154,9 @@ La cerca de la conversa demanada des d'un altre mòdul (#344) és a
 
 - S'obre sota el botó, amb la vora inicial a la vora inicial del botó: cap a la
   dreta, o cap a l'esquerra en àrab (`startEdgeX` i `menuLeft`).
-- Fa 20 rem d'amplada, mai més que la finestra menys 8 px a cada costat, i com a
-  màxim l'alçada que queda fins a 8 px de la vora inferior; la resta es desplaça.
+- Fa 20 rem d'amplada, mai més ample que la finestra menys 8 px a cada costat,
+  i com a màxim l'alçada que queda fins a 8 px de la vora inferior; la resta es
+  desplaça.
   Les mides són en píxels sencers, perquè l'última fila no quedi tallada per mig
   píxel.
 - Al 200 % de l'aplicació la banda fa 72 px. A 1025 px, aquesta alçada surt de les
@@ -403,7 +404,7 @@ No molestis també es queda a la barra vertical fins a la peça 14.
   tanca primer la finestra amb el focus al botó, i la configuració l'hi torna en
   tancar-se. «Descarta» i «Torna-ho a provar» deixen el focus a l'entrada, que
   continua a la finestra: mentre la sol·licitud és en curs, «Torna-ho a provar»
-  és desactivat, i el focus no cau a la pàgina, on una tecla nua actuaria sobre
+  està desactivat, i el focus no cau a la pàgina, on una tecla nua actuaria sobre
   la conversa. La barra fa el mateix.
 - **Tecles:** una drecera amb Ctrl/⌘, Alt o una tecla de funció (la paleta, F6)
   actua des del botó, amb la finestra tancada, com al menú de l'aplicació. Les
