@@ -60,7 +60,6 @@
   "commands.aliases.account": "konto przełącz skrzynka pocztowa account switch mailbox",
   "commands.aliases.kanban": "kanban tablica kolumny board columns kanban board columns",
   "commands.aliases.module": "moduł modul przejdź do module go to",
-  "commands.aliases.palette.open": "paleta komend command palette",
   "commands.aliases.app.about": "o programie wersja about version",
   "commands.aliases.notifications": "nie przeszkadzać powiadomienia do not disturb notifications",
   "settingsSearch.aliases.appearance": "motyw wygląd kolor theme appearance color",

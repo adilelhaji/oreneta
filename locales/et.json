@@ -60,7 +60,6 @@
   "commands.aliases.account": "konto vaheta postkast account switch mailbox",
   "commands.aliases.kanban": "kanban stend veerud kanban board columns",
   "commands.aliases.module": "moodul mine module go to",
-  "commands.aliases.palette.open": "käsupalett command palette",
   "commands.aliases.app.about": "teave versioon about version",
   "commands.aliases.notifications": "ära sega teavitused do not disturb notifications",
   "settingsSearch.aliases.appearance": "kujundus välimus värv theme appearance color",

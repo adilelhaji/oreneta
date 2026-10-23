@@ -60,7 +60,6 @@
   "commands.aliases.account": "アカウント 切り替え メールボックス account switch mailbox",
   "commands.aliases.kanban": "カンバン ボード 列 kanban board columns",
   "commands.aliases.module": "モジュール 移動 module go to",
-  "commands.aliases.palette.open": "コマンドパレット command palette",
   "commands.aliases.app.about": "について バージョン about version",
   "commands.aliases.notifications": "おやすみモード 通知 do not disturb notifications",
   "settingsSearch.aliases.appearance": "テーマ 外観 色 theme appearance color",

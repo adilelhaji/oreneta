@@ -60,7 +60,6 @@
   "commands.aliases.account": "konts pārslēgt pastkaste account switch mailbox",
   "commands.aliases.kanban": "kanban tāfele kolonnas kanban board columns",
   "commands.aliases.module": "modulis doties uz module go to",
-  "commands.aliases.palette.open": "komandu palete command palette",
   "commands.aliases.app.about": "par versija about version",
   "commands.aliases.notifications": "netraucēt paziņojumi do not disturb notifications",
   "settingsSearch.aliases.appearance": "motīvs izskats krāsa theme appearance color",

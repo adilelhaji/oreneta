@@ -60,7 +60,6 @@
   "commands.aliases.account": "konto byt brevlåda account switch mailbox",
   "commands.aliases.kanban": "kanban tavla kolumner board columns kanban board columns",
   "commands.aliases.module": "modul gå till module go to",
-  "commands.aliases.palette.open": "kommandopalett command palette",
   "commands.aliases.app.about": "om version about version",
   "commands.aliases.notifications": "stör ej aviseringar do not disturb notifications",
   "settingsSearch.aliases.appearance": "tema utseende färg theme appearance color",

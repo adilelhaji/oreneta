@@ -60,7 +60,6 @@
   "commands.aliases.account": "account cambia casella di posta account switch mailbox",
   "commands.aliases.kanban": "kanban bacheca colonne kanban board columns",
   "commands.aliases.module": "modulo vai a module go to",
-  "commands.aliases.palette.open": "tavolozza comandi command palette",
   "commands.aliases.app.about": "informazioni versione about version",
   "commands.aliases.notifications": "non disturbare notifiche do not disturb notifications",
   "settingsSearch.aliases.appearance": "tema aspetto colore theme appearance color",

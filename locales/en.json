@@ -60,7 +60,6 @@
   "commands.aliases.account": "account switch mailbox",
   "commands.aliases.kanban": "kanban board columns",
   "commands.aliases.module": "module go to",
-  "commands.aliases.palette.open": "command palette",
   "commands.aliases.app.about": "about version",
   "commands.aliases.notifications": "do not disturb notifications",
   "settingsSearch.aliases.appearance": "theme appearance color",

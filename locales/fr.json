@@ -60,7 +60,6 @@
   "commands.aliases.account": "compte changer boîte aux lettres account switch mailbox",
   "commands.aliases.kanban": "kanban tableau colonnes kanban board columns",
   "commands.aliases.module": "module aller à module go to",
-  "commands.aliases.palette.open": "palette de commandes command palette",
   "commands.aliases.app.about": "à propos version about version",
   "commands.aliases.notifications": "ne pas déranger notifications do not disturb notifications",
   "settingsSearch.aliases.appearance": "thème apparence couleur theme appearance color",

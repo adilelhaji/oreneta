@@ -424,7 +424,6 @@ describe('the names of the band and the menu (ADR-0068 §1, #343)', () => {
       'appMenu.label',
       ...COMMAND_AREAS.map((area) => `appMenu.area.${area}`),
       'commands.aliases.module',
-      'commands.aliases.palette.open',
       'commands.aliases.app.about',
       'commands.aliases.notifications',
     ]
@@ -469,6 +468,8 @@ describe('the app menu and the keys of the app behind it (#343)', () => {
 
   // Down and Up on the button, then the arrows in the open menu: none of them
   // may also step the selection behind it, as AppHotkeys does with the arrows.
+  // None of the keys the button and the menu answer reaches the window, where
+  // AppHotkeys listens.
   const pressArrows = async (selection: () => string) => {
     const view = render(
       <>
@@ -477,25 +478,36 @@ describe('the app menu and the keys of the app behind it (#343)', () => {
       </>,
     )
     const button = view.getByRole('button', { name: 'App menu' })
+    const header = view.getByRole('banner', { name: 'Oreneta' })
+    const reached: string[] = []
+    const listen = (event: KeyboardEvent) => {
+      if (event.target instanceof Node && header.contains(event.target)) reached.push(event.key)
+    }
+    window.addEventListener('keydown', listen)
     button.focus()
     const before = selection()
-    for (const key of ['ArrowDown', 'ArrowUp']) {
-      fireEvent.keyDown(button, { key })
-      const menu = view.getByRole('menu', { name: 'App menu' })
-      expect(selection(), key).toBe(before)
-      for (const inside of ['ArrowDown', 'ArrowDown', 'ArrowUp', 'Home', 'End']) {
-        fireEvent.keyDown(document.activeElement!, { key: inside })
-        expect(menu.contains(document.activeElement), inside).toBe(true)
-        expect(selection(), `${key}, then ${inside} in the menu`).toBe(before)
+    try {
+      for (const key of ['ArrowDown', 'ArrowUp']) {
+        fireEvent.keyDown(button, { key })
+        const menu = view.getByRole('menu', { name: 'App menu' })
+        expect(selection(), key).toBe(before)
+        for (const inside of ['ArrowDown', 'ArrowDown', 'ArrowUp', 'Home', 'End']) {
+          fireEvent.keyDown(document.activeElement!, { key: inside })
+          expect(menu.contains(document.activeElement), inside).toBe(true)
+          expect(selection(), `${key}, then ${inside} in the menu`).toBe(before)
+        }
+        fireEvent.keyDown(window, { key: 'Escape' })
+        await settle()
+        expect(document.activeElement === button, key).toBe(true)
       }
-      fireEvent.keyDown(window, { key: 'Escape' })
-      await settle()
-      expect(document.activeElement === button, key).toBe(true)
+      // Enter and Space are the button's too.
+      fireEvent.keyDown(button, { key: 'Enter' })
+      fireEvent.keyDown(button, { key: ' ' })
+      expect(selection()).toBe(before)
+    } finally {
+      window.removeEventListener('keydown', listen)
     }
-    // Enter and Space are the button's too.
-    fireEvent.keyDown(button, { key: 'Enter' })
-    fireEvent.keyDown(button, { key: ' ' })
-    expect(selection()).toBe(before)
+    expect(reached).toEqual([])
     // Away from the menu, the same key does step it: the app is listening.
     button.blur()
     fireEvent.keyDown(document.body, { key: 'ArrowDown' })

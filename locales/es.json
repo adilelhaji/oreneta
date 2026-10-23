@@ -60,7 +60,6 @@
   "commands.aliases.account": "cuenta cambiar buzon account switch mailbox",
   "commands.aliases.kanban": "tablero columnas kanban kanban board columns",
   "commands.aliases.module": "módulo modulo ir a module go to",
-  "commands.aliases.palette.open": "paleta comandos command palette",
   "commands.aliases.app.about": "acerca de versión version about version",
   "commands.aliases.notifications": "no molestar silencio notificaciones do not disturb notifications",
   "settingsSearch.aliases.appearance": "apariencia tema color colores",

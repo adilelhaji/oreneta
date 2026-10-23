@@ -60,7 +60,6 @@
   "commands.aliases.account": "الحساب تبديل صندوق البريد account switch mailbox",
   "commands.aliases.kanban": "كانبان لوحة أعمدة kanban board columns",
   "commands.aliases.module": "وحدة الانتقال إلى module go to",
-  "commands.aliases.palette.open": "لوحة الأوامر command palette",
   "commands.aliases.app.about": "حول الإصدار about version",
   "commands.aliases.notifications": "عدم الإزعاج الإشعارات do not disturb notifications",
   "settingsSearch.aliases.appearance": "السمة المظهر اللون theme appearance color",

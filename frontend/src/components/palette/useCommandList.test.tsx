@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { act, cleanup, renderHook } from '@testing-library/react'
+import { messages } from '../../generated/locales'
 import i18n from '../../lib/i18n'
 import { DEFAULT_NOTIFICATION_PREFS } from '../../lib/quietHours'
 import { accounts$ } from '../../states/accounts'
@@ -170,7 +171,10 @@ describe("what the rail's More menu had and the palette lacked (#343)", () => {
     expect(byId(result.current, 'module.calendar').label).toBe('Ves a: Calendari')
     expect(keywords('module.calendar')).toContain('mòdul')
     expect(keywords('notifications.pause.off')).toContain('no molestis')
-    expect(keywords('palette.open')).toContain('paleta')
+    // The palette does not list "Command palette", so nothing searches its
+    // synonyms: it has none in the catalogs.
+    expect(keywords('palette.open')).toBe('command palette commands')
+    expect(Object.keys(messages.ca).filter((key) => key.startsWith('commands.aliases.palette'))).toEqual([])
     expect(keywords('app.about')).toContain('quant a')
     // No alias key is left for a command to read as its own words.
     expect(result.current.filter((command) => command.keywords?.includes('commands.aliases.module'))).toEqual([])

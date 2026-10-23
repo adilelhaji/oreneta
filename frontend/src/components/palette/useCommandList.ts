@@ -537,7 +537,11 @@ export function useCommandList(): Command[] {
         hint: disabled
           ? t(command.id === 'compose.new' ? 'commands.noSendableAccount' : 'accounts.graph.readOnly')
           : t('palette.kind.action'),
-        keywords: (command.keywords ?? '') + ' ' + t('commands.aliases.' + keywordId),
+        // The palette's search reads the catalog's synonyms; the app menu,
+        // which alone lists the menu-only commands, finds by name.
+        keywords: command.menuOnly
+          ? command.keywords
+          : (command.keywords ?? '') + ' ' + t('commands.aliases.' + keywordId),
         run: () => {
           if (unavailable(accounts$.peek())) return
           command.run()

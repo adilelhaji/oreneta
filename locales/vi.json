@@ -60,7 +60,6 @@
   "commands.aliases.account": "tài khoản chuyển đổi hộp thư account switch mailbox",
   "commands.aliases.kanban": "kanban bảng cột kanban board columns",
   "commands.aliases.module": "mô-đun đi tới module go to",
-  "commands.aliases.palette.open": "bảng lệnh command palette",
   "commands.aliases.app.about": "về phiên bản about version",
   "commands.aliases.notifications": "không làm phiền thông báo do not disturb notifications",
   "settingsSearch.aliases.appearance": "giao diện chủ đề màu sắc theme appearance color",

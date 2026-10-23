@@ -60,7 +60,6 @@
   "commands.aliases.account": "계정 전환 편지함 account switch mailbox",
   "commands.aliases.kanban": "칸반 보드 열 kanban board columns",
   "commands.aliases.module": "모듈 이동 module go to",
-  "commands.aliases.palette.open": "명령 팔레트 command palette",
   "commands.aliases.app.about": "정보 버전 about version",
   "commands.aliases.notifications": "방해 금지 알림 do not disturb notifications",
   "settingsSearch.aliases.appearance": "테마 모양 색상 theme appearance color",

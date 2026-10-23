@@ -60,7 +60,6 @@
   "commands.aliases.account": "账户 切换 邮箱 account switch mailbox",
   "commands.aliases.kanban": "看板 列 kanban board columns",
   "commands.aliases.module": "模块 转到 module go to",
-  "commands.aliases.palette.open": "命令面板 command palette",
   "commands.aliases.app.about": "关于 版本 about version",
   "commands.aliases.notifications": "勿扰 通知 do not disturb notifications",
   "settingsSearch.aliases.appearance": "主题 外观 颜色 theme appearance color",
