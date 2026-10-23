@@ -184,6 +184,14 @@
           {
             "sha": "e96fea042b5a60ac36266a5bdc3ece7cf8f5dd62",
             "result": "frontend/src/components/shell/SyncStatus.test.tsx"
+          },
+          {
+            "sha": "07f16b1a17f225af9f0be91f2a5022e12abbef2c",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "07f16b1a17f225af9f0be91f2a5022e12abbef2c",
+            "result": "frontend/src/components/sidenav/MailNavigationDestinations.test.tsx"
           }
         ],
         "native": [],
@@ -257,6 +265,14 @@
           {
             "sha": "e96fea042b5a60ac36266a5bdc3ece7cf8f5dd62",
             "result": "frontend/src/components/shell/SyncStatus.test.tsx"
+          },
+          {
+            "sha": "07f16b1a17f225af9f0be91f2a5022e12abbef2c",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "9e01c939a15b3147128280b6c8245fb7537579e2",
+            "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
         "native": [],
@@ -1765,6 +1781,14 @@
           {
             "sha": "11bb65d1785d3d4b47e60560ded51269424b74c9",
             "result": "frontend/src/components/shell/SyncStatus.test.tsx"
+          },
+          {
+            "sha": "9e01c939a15b3147128280b6c8245fb7537579e2",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "07f16b1a17f225af9f0be91f2a5022e12abbef2c",
+            "result": "frontend/src/components/sidenav/MailNavigationDestinations.test.tsx"
           }
         ],
         "native": [],

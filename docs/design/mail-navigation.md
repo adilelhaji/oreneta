@@ -130,7 +130,9 @@ Adjunts el mateix dia (vegeu [Persones](#persones-326), [Tasques](#tasques-329),
   selector «Canvia de carpeta» i al menú de cerques de la llista; el propietari
   va decidir el 2026-10-21 que passin a la subfinestra en un pas posterior
   (#319). La barra vertical i els taulers kanban no es mouen (peça 14); amb un
-  tauler obert, la subfinestra no es mostra, com abans.
+  tauler obert, la subfinestra no es mostra, com abans. Des de #353 (peça 14a)
+  els taulers hi són, i la subfinestra es manté amb un tauler obert (vegeu
+  [més avall](#el-que-feia-la-barra-vertical-353)).
 - **Regió i noms:** la subfinestra és el `<nav>` de la regió «carpetes» d'F6
   (`data-region="folders"`) i pren el nom de la seva fila de títol: «Comptes i
   carpetes», el mateix d'abans. El títol és un encapçalament de nivell 2, i
@@ -630,3 +632,125 @@ dos, de manera que el control que tenia el focus es desmuntava en travessar els
   `frontend/e2e/startup.e2e.ts` («#341»: el camp «De» d'Adjunts, que des de #344
   substitueix el de «Nom del fitxer», i una fila de llista de Tasques, amb un
   canvi real de la mida de la finestra).
+
+## El que feia la barra vertical (#353)
+
+Data: 2026-10-23. Peça 14a, la primera part del pas 4 de l'ordre de migració
+d'[ADR-0068](../adr/0068-marc-comu-de-l-aplicacio.md) (§4 i §5, «El que hi havia a
+la barra vertical»), amb les decisions del propietari de #352. La subfinestra de
+carpetes del correu, «Comptes i carpetes», fa ara el que només feia la barra
+vertical amb els comptes, els taulers i la safata d'entrada unificada. La barra
+vertical encara hi és i fa el mateix que abans: comparteix amb la subfinestra el
+codi, l'ordre i els menús, i se'n va a la peça 14b (#354), amb el selector de
+mòduls.
+
+- **Ordre del cos:** Preferits; la safata d'entrada unificada; «Taulers»;
+  «Comptes», amb els grups de comptes i després els comptes; «Carpetes». És
+  l'ordre de la barra vertical i el de Ctrl/⌘+1…9 (la safata unificada, si es
+  mostra; els taulers; els comptes visibles), que no canvien. La safata
+  unificada, que era la primera fila de «Comptes», queda damunt de «Taulers»,
+  sense títol propi: ADR-0068 posa els taulers entre ella i els grups, i amb un
+  títol entremig la safata, o els comptes, haurien quedat sota un títol que no
+  és el seu.
+- **Ordenar els comptes:** arrossegant-los amb el punter (dnd-kit, com a la
+  barra vertical) o, amb el focus en un compte, amb Alt+↑ i Alt+↓, que el mouen
+  una posició, com les preferides (ADR-0050): el focus s'hi queda i la regió
+  `aria-live` de la subfinestra en diu la posició nova («Alex s'ha mogut a la
+  posició 2 de 3»). Retorn i Espai continuen obrint el compte: a la barra
+  vertical comencen un arrossegament, perquè allà la fila no és un botó, però a
+  la subfinestra les files ja eren botons. Mentre el punter arrossega una fila,
+  dnd-kit ho anuncia en l'idioma de la interfície (la barra vertical ho diu en
+  anglès i amb l'identificador del compte), i Esc ho cancel·la. És l'ordre desat
+  (`account.reorder`), el de la barra vertical. Els comptes amagats hi conserven
+  el seu lloc i només es mouen els que es veuen; el càlcul
+  (`shownAccountOrder`, a `states/accounts.ts`) és el mateix per a totes dues.
+  Una llista d'un sol compte, o d'un sol tauler, no s'ordena.
+- **Menú contextual del compte:** el de la barra vertical
+  (`AccountContextMenu`): configuració del compte, marcar-ho tot com a llegit
+  (desactivat sense no llegits o en un compte de Microsoft Graph), silenciar les
+  notificacions, posar la comprovació en pausa o reprendre-la, i amagar el
+  compte. S'obre amb el clic dret, Maj+F10 i la tecla de menú, com el de les
+  carpetes, i en tancar-se el focus torna a la fila. L'element d'amagar diu
+  «Amaga el compte» (`mailNavigation.actions.hideAccount`), sense parlar de la
+  navegació lateral; la barra vertical conserva el seu text fins que se'n vagi.
+  Amagar fa servir la mateixa preferència, `hidden_sidenav_accounts`: el compte
+  surt de la subfinestra, de la barra vertical i de Ctrl/⌘+1…9, i es torna a
+  mostrar des de Configuració. El focus passa a la fila que ocupa el seu lloc i
+  la regió `aria-live` ho diu («S'ha amagat Alex. Es pot tornar a mostrar des de
+  Configuració.»). El compte obert continua a la subfinestra, com abans, i
+  conserva el focus.
+- **Comptador:** els no llegits de la safata d'entrada del compte, al final de
+  la fila, com a les carpetes, només quan «Mostra el comptador de no llegits»
+  (`showUnreadAccountBadge`) és activat, com a la barra vertical.
+- **Estat del compte:** un compte que ha de tornar a iniciar la sessió, en pausa
+  o silenciat porta una icona (una clau, una pausa o una campana barrada, del
+  color del text secundari, que a totes les superfícies compleix el contrast) i
+  les paraules, que el lector de pantalla llegeix amb el nom del compte: «Cal
+  tornar a iniciar la sessió» (`mailNavigation.status.reconnect`),
+  «Comprovacions del correu en pausa» (`connectivity.health.paused`, el text de
+  l'estat de la sincronització) i «Notificacions silenciades»
+  (`mailNavigation.status.muted`). Se'n diu un, el més urgent, com a la barra
+  vertical, i la indicació també el diu.
+- **Canals RSS:** la fila d'un compte RSS accepta un canal que s'hi arrossega
+  des de la llista d'un altre compte RSS i l'hi mou (`moveFeed`), amb els seus
+  elements i el seu estat de lectura; mentre s'hi té, la fila es marca amb la
+  vora discontínua de deixar anar. Mentre s'arrossega, el navegador només deixa
+  veure el tipus del que s'arrossega, no el contingut: la barra vertical el volia
+  llegir i a Chromium, que és el motor de WebView2, no acceptava mai el canal.
+  Ara totes dues el reconeixen pel tipus i, en deixar-lo anar, no el mouen al
+  compte d'on ve (`sidenav/accountNav.ts`).
+- **«Taulers»:** una secció (`region`) amb el títol «Taulers»
+  (`mailNavigation.boards`), entre la safata unificada i «Comptes», amb els
+  taulers kanban en el seu ordre, cadascun amb la seva imatge o, si no en té, la
+  icona de columnes. Un clic, Retorn o Espai obren el tauler com la barra
+  vertical (`openKanbanBoard`). S'ordenen com els comptes (el punter, Alt+↑ i
+  Alt+↓) amb `reorderKanbanBoards`, i tenen el menú de la barra vertical
+  (`BoardContextMenu`: configuració i supressió), també amb Maj+F10 i la tecla
+  de menú. Sense cap tauler, la secció no hi és; «Crea un tauler kanban»
+  continua al menú de l'aplicació.
+- **Amb un tauler obert,** la subfinestra es continua mostrant, com demana
+  ADR-0068 §4 (abans s'amagava), i hi marca el tauler (`aria-current`), no el
+  compte ni la carpeta on era el correu. Un compte, una carpeta, una preferida,
+  la safata unificada o un grup tornen al correu; el compte on era el correu hi
+  torna a la carpeta que mostrava, com des de la barra vertical. La subfinestra
+  de conversa del tauler és un percentatge de l'àrea del tauler (la fila menys la
+  barra vertical i les carpetes), amb els límits d'abans (del 25 al 60 % i
+  320 px com a mínim); abans ho era de la fila sencera.
+- **Safata d'entrada unificada:** la fila té el menú contextual de la barra
+  vertical, que ara comparteixen (`UnifiedInboxContextMenu`): «Mostra {nom}
+  conjuntament» per a cada grup de comptes i «Amaga la safata d'entrada
+  unificada» (`mailNavigation.actions.hideUnified`), amb la preferència
+  `show_unified_inbox_in_sidenav`. S'obre amb el clic dret, Maj+F10 i la tecla
+  de menú. El seu comptador es queda a la barra vertical: a la peça 14b passa a
+  la tira de mòduls (decisió 2 del propietari a #352).
+- **Sense canvis:** les preferències `show_unified_inbox_in_sidenav` i
+  `hidden_sidenav_accounts` (la clau i l'efecte), la seqüència de Ctrl/⌘+1…9,
+  l'arbre de carpetes, les preferides i els grups. Els textos de Configuració
+  que parlen de la navegació lateral («Mostra a la navegació lateral» i la
+  indicació del comptador) canvien a la peça 14b, quan la barra se'n va.
+- **Amplada, zoom i dreta a esquerra:** els noms acaben en «…» i la indicació
+  els mostra sencers; el comptador, l'estat i la imatge del tauler conserven la
+  mida. Tot és en propietats lògiques. Per sota de 1025 px la subfinestra no es
+  mostra, com abans; com que no es desmunta i a fora no hi ha cap control
+  equivalent (#341), les files noves no porten `data-focus-key`.
+- **Textos nous,** als 20 catàlegs: «Taulers» (`mailNavigation.boards`),
+  «Amaga el compte», «Amaga la safata d'entrada unificada», «Cal tornar a
+  iniciar la sessió», «Notificacions silenciades», «{name} s'ha mogut a la
+  posició {position} de {count}» (`mailNavigation.moved`), «S'està movent
+  {name}.» i «{name} es queda on era.» (`mailNavigation.drag.*`, els anuncis de
+  l'arrossegament) i «S'ha amagat {name}. Es pot tornar a mostrar des de
+  Configuració.» (`mailNavigation.hidden`).
+- **Proves:** `frontend/src/components/sidenav/MailNavigationDestinations.test.tsx`
+  (ordenar els comptes amb Alt+↑ i Alt+↓, el focus i l'anunci; el mateix ordre a
+  la barra vertical, amb els comptes amagats al seu lloc; el menú amb el ratolí,
+  Maj+F10 i la tecla de menú, i amagar; el comptador segons la preferència;
+  l'estat en paraules; deixar-hi anar un canal; la secció «Taulers»: llistar,
+  ordenar, obrir, marcar el tauler obert, el menú i que no hi sigui sense
+  taulers; el menú de la safata unificada; i les posicions de Ctrl/⌘+1…9) i
+  `frontend/e2e/startup.e2e.ts` («#353», a 1440 px: ordenar els comptes amb el
+  teclat i el punter, amb la barra vertical en el mateix ordre; el menú del
+  compte amb el ratolí, Maj+F10 i la tecla de menú, i amagar-lo; obrir un tauler
+  des de la subfinestra, que s'hi queda, amb el ratolí i el teclat, i el seu
+  menú; deixar anar un canal de la llista en un altre compte RSS; el menú de la
+  safata unificada; i, en àrab, l'estat i el menú en el sentit de lectura, axe
+  amb el menú obert i el 200 % de l'aplicació sense desplaçament horitzontal).
