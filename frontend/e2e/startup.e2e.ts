@@ -4,6 +4,7 @@ import { expect, test, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import { createFixture } from '../baseline/fixtures'
 import { defaultCustomInput, deriveThemeTokens } from '../src/lib/themes'
+import { SHORTCUT_SCHEMES } from '../src/lib/shortcuts'
 
 test.afterEach(async ({ page }) => {
   expect(await page.evaluate(() => (window as any).startupProbe?.unexpected ?? [])).toEqual([])
@@ -4962,6 +4963,39 @@ test('the app menu opens from the keyboard, moves, finds by typing and runs a co
   await page.keyboard.press('F6')
   await expect(menu).toHaveCount(0)
   expect(await regionAtFocus(page)).toBe('folders')
+  expect(errors).toEqual([])
+})
+
+test('Delete and Backspace in an open menu leave the selected conversation alone, in the Outlook scheme (#348)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, {
+    navigation: true,
+    preferences: { shortcut_overrides: SHORTCUT_SCHEMES.outlook },
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { button, menu } = await appMenuParts(page)
+  const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+  const reply = page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })
+  await row.click()
+  await expect(reply).toBeVisible()
+  await button.focus()
+  await page.keyboard.press('Enter')
+  await expect(menu).toBeVisible()
+  await expect(menu.locator('[role^="menuitem"]').first()).toBeFocused()
+  for (const key of ['Delete', 'Backspace', 'e']) await page.keyboard.press(key)
+  // The menu is still open and nothing was deleted or archived.
+  await expect(menu).toBeVisible()
+  await expect(row).toHaveAttribute('aria-current', 'true')
+  await expect(reply).toBeVisible()
+  const sent = await page.evaluate(() =>
+    (window as any).startupProbe.requests
+      .map((request: { command: string }) => request.command)
+      .filter((command: string) => command === 'mail.delete' || command === 'mail.archive'),
+  )
+  expect(sent).toEqual([])
   expect(errors).toEqual([])
 })
 

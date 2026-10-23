@@ -35,6 +35,7 @@ import {
 } from '../../states/mail'
 import { compose$, openComposeTab, openReplyInFullEditor, closeMessageTab } from '../../states/compose'
 import { handleEditUndoKeyDown } from '../../lib/editUndo'
+import { focusInMenu } from '../../lib/menuKeyboard'
 import { zoom } from '../../states/zoom'
 import { focusAdjacentRegion, modalDialogOpen, trackRegionFocus } from '../../lib/regions'
 import {
@@ -226,6 +227,21 @@ export function AppHotkeys({ setup = false }: { setup?: boolean }) {
       if (setup) {
         const action = matchShortcut(event)
         if (!action || !SETUP_SHORTCUTS.has(action)) return
+      }
+
+      // Keys typed inside an open menu are the menu's (Delete, Backspace, a
+      // letter the menu does not match, #348): a bare shortcut must not act on
+      // the conversation behind it. ⌘/Ctrl and Alt chords (⌘/Ctrl+K, which the
+      // app menu closes itself for), F-keys and Escape still pass through.
+      if (
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        event.key !== 'Escape' &&
+        !isFunctionKey(event.key) &&
+        focusInMenu(event.target instanceof Element ? event.target : null)
+      ) {
+        return
       }
 
       if (event.key === 'Escape' && !isTyping(event.target) && !modalOpen() && selectedBulkItems().length > 0) {

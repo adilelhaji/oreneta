@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { AppHotkeys } from './AppHotkeys'
-import { setShortcutOverrides } from '../../lib/shortcuts'
+import { SHORTCUT_SCHEMES, setShortcutOverrides, type ShortcutScheme } from '../../lib/shortcuts'
+import { mail$ } from '../../states/mail'
 import { ui$ } from '../../states/ui'
+import { MenuList } from '../menu/Menu'
+import { MenuItem } from '../menu/MenuItem'
 
 // F6 and Shift+F6 as AppHotkeys dispatches them (ADR-0068 §6). happy-dom draws
 // nothing, so every element counts as drawn here.
@@ -113,5 +116,106 @@ describe('F6 in AppHotkeys', () => {
     ui$.settingsOpen.set(true)
     expect(fireEvent.keyDown(byId('inbox'), { key: 'F8' })).toBe(false)
     expect(focusedId()).toBe('inbox')
+  })
+})
+
+// Keys typed in an open menu are the menu's (#348): none of them may delete,
+// archive or mark the conversation selected behind it, in any shortcut scheme.
+describe('keys inside an open menu', () => {
+  const calls: { command: string; payload: unknown }[] = []
+  const nextTick = () => new Promise((resolve) => setTimeout(resolve, 0))
+  const mailCalls = () => calls.filter((call) => call.command.startsWith('mail.'))
+
+  beforeEach(() => {
+    calls.length = 0
+    mail$.threads.set([
+      {
+        id: 'acc:inbox:thread:1#101',
+        account_id: 'acc',
+        folder_id: 'inbox',
+        thread_id: 'acc:inbox:thread:1',
+        from_name: 'Sender',
+        from_addr: 'sender@example.com',
+        to: 'me@example.com',
+        subject: 'Subject',
+        preview: '',
+        body: '',
+        date: 1_780_000_000,
+        unread: false,
+        starred: false,
+        has_attachments: false,
+      },
+    ])
+    mail$.messages.set([])
+    ui$.selectedAccount.set('acc')
+    ui$.selectedFolder.set('inbox')
+    ui$.selectedThread.set('acc:inbox:thread:1')
+    ;(window as any).go = {
+      main: {
+        App: {
+          Invoke: async (command: string, payload: unknown) => {
+            calls.push({ command, payload })
+            return {}
+          },
+        },
+      },
+    }
+  })
+
+  afterEach(() => {
+    delete (window as any).go
+    ui$.selectedThread.set('')
+  })
+
+  function withMenu() {
+    const view = render(
+      <>
+        <AppHotkeys />
+        <div data-thread-list>
+          <button id="row">Row</button>
+        </div>
+        <MenuList label="Test menu">
+          <MenuItem label="First" />
+          <MenuItem label="Second" />
+        </MenuList>
+      </>,
+    )
+    return {
+      row: view.container.querySelector<HTMLElement>('#row')!,
+      item: view.getByRole('menuitem', { name: 'First' }),
+    }
+  }
+
+  const schemes = Object.keys(SHORTCUT_SCHEMES) as ShortcutScheme[]
+  const keys = [{ key: 'Delete' }, { key: 'Backspace' }, { key: 'e' }, { key: '#', shiftKey: true }]
+
+  for (const scheme of schemes) {
+    it(`leave the selected conversation alone: ${scheme} scheme`, async () => {
+      setShortcutOverrides(SHORTCUT_SCHEMES[scheme])
+      const { item } = withMenu()
+      item.focus()
+      for (const init of keys) fireEvent.keyDown(item, init)
+      await nextTick()
+      expect(mailCalls()).toEqual([])
+      expect(ui$.selectedThread.peek()).toBe('acc:inbox:thread:1')
+      expect(mail$.threads.peek()).toHaveLength(1)
+    })
+  }
+
+  it('still delete from the conversation list (the control for the tests above)', async () => {
+    setShortcutOverrides(SHORTCUT_SCHEMES.outlook)
+    const { row } = withMenu()
+    row.focus()
+    fireEvent.keyDown(row, { key: 'Delete' })
+    await nextTick()
+    expect(mailCalls().map((call) => call.command)).toContain('mail.delete')
+  })
+
+  it('let Ctrl/Cmd+K through to the palette', () => {
+    const { item } = withMenu()
+    item.focus()
+    const mac = navigator.platform.includes('Mac')
+    fireEvent.keyDown(item, { key: 'k', ctrlKey: !mac, metaKey: mac })
+    expect(ui$.paletteOpen.peek()).toBe(true)
   })
 })
