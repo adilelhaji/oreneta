@@ -728,7 +728,10 @@ describe('the band below 769 px (#344)', () => {
     expect(document.activeElement).toBe(field(view))
     // It covers the band: the rest takes neither the focus nor the pointer.
     expect(start.hasAttribute('inert')).toBe(true)
-    expect(band(view).querySelector('[data-band-end]')!.hasAttribute('inert')).toBe(true)
+    // At the end, its controls; its live regions stay out of it, to keep announcing (#345).
+    const endControls = [...band(view).querySelectorAll('[data-band-end] button')]
+    expect(endControls.length).toBeGreaterThan(0)
+    for (const control of endControls) expect(control.closest('[inert]')).not.toBeNull()
     expect(button.className).toContain('invisible')
     type(field(view), 'budget')
     fireEvent.keyDown(field(view), { key: 'Escape' })

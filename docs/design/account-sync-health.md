@@ -103,3 +103,44 @@ omeses, i els avisos llargs s'ajusten dins de la finestra sense encongir-ne la
 icona. Una resposta per a una vista que l'usuari ha deixat no pot mostrar un
 avís de compleció a la vista nova. L'indicador de pendent descriu l'enviament
 de la sol·licitud, no la sincronització en segon pla.
+
+## On és l'estat: la banda superior (#345)
+
+Des de #345 (ADR-0068 §2, peça 13c; vegeu
+[top-band.md](top-band.md#el-final-de-la-banda-345)), l'estat de la
+sincronització és al final de la banda superior, i ja no en una regió sempre
+visible sota la capçalera.
+
+- **El resum** és un botó amb una icona i els mateixos textos que la regió
+  d'abans: «{count} requereixen atenció» o «Estat de la sincronització completa
+  desconegut». No hi ha cap text nou i mai no diu «Sincronitzat»: continua sense
+  haver-hi cap senyal de sincronització completa. Una sol·licitud en curs no
+  canvia el resum, com abans; una sense confirmar compta com a atenció, com
+  abans. Per sota de 1025 px es veu només la icona, amb el resum com a nom
+  accessible i com a indicació.
+- **L'anunci** és el d'abans: una sola regió `role="status"` cortesa i sencera,
+  amb el resum, ara visualment oculta al costat del botó. Hi és abans de cap
+  canvi, tant si hi ha la barra com si no, de manera que una fallada s'anuncia
+  una vegada i el focus no es mou. No és mai inerta: per sota de 769 px, quan el
+  camp de cerca cobreix la banda, només en són inerts els controls.
+- **El detall** (cada compte, la seva observació i les seves accions, i el
+  problema sense compte) s'obre des del botó en una finestra emergent no modal
+  ancorada al botó, amb les mateixes accions, els mateixos textos i les mateixes
+  regles: cap diagnòstic en brut, la configuració exacta del compte, cap
+  reintent per a un compte en pausa, per a un que ha de tornar a iniciar la
+  sessió ni per a un problema sense compte. «Torna-ho a provar» i «Descarta»
+  deixen el focus a l'entrada, també a la barra. Escapada la tanca i torna el
+  focus al botó.
+- **La barra d'amplada completa** sota la capçalera només hi és en el cas
+  destacat: un compte ha de tornar a iniciar la sessió, o hi ha una fallada o un
+  problema sense compte que no s'ha descartat. Es queda fins que es resol o es
+  descarta, amb el seu botó i el seu detall; una sessió per tornar a iniciar no
+  es pot descartar. Fora d'aquest cas no hi és, perquè ho diu la banda.
+  Descartar continua amagant l'avís destacat, no el registre: el resum de la
+  banda continua comptant la fallada descartada.
+- **Si no hi ha cap compte ni cap problema sense compte,** no es mostra res, com
+  abans, i la pantalla d'alta del primer compte no té l'estat.
+- **Proves:** `components/shell/SyncStatus.test.tsx` i les proves «#345»
+  d'entrada de producció (vegeu [top-band.md](top-band.md#proves)). Les proves
+  d'aquest document que trobaven el resum a la regió de sota la capçalera el
+  busquen ara a la banda, i la barra només quan hi ha una fallada.

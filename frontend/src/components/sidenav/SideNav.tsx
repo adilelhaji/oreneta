@@ -405,7 +405,8 @@ export function SideNav() {
 
       {/* Utilities */}
       <div className="flex flex-col gap-3 items-center">
-        <QuietIndicator />
+        {/* The band carries the status (#345); the rail keeps its button until piece 14. */}
+        <QuietIndicator placement="rail" />
         <button
           className={`flex h-10 w-10 items-center justify-center rounded-control transition-all duration-120 cursor-pointer ${
             moreMenu ? 'bg-white/20 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white'
