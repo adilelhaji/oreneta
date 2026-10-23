@@ -1,9 +1,30 @@
 import type { ReactNode } from 'react'
 import type { ShortcutId } from '../../lib/shortcuts'
 
+/**
+ * The areas the app menu groups the commands under, in the order it shows
+ * them (ADR-0068 §2). The palette lists the same commands and ignores them.
+ */
+export const COMMAND_AREAS = [
+  'modules',
+  'mail',
+  'conversation',
+  'accounts',
+  'folders',
+  'boards',
+  'theme',
+  'notifications',
+  'settings',
+  'app',
+] as const
+
+export type CommandArea = (typeof COMMAND_AREAS)[number]
+
 export type Command = {
   id: string
   label: string
+  /** Where the app menu shows the command. */
+  area: CommandArea
   icon: ReactNode
   /** Extra words matched by the search box but not shown. */
   keywords?: string
@@ -13,6 +34,11 @@ export type Command = {
   shortcut?: ShortcutId
   /** Marks the command that reflects the current state (shows a check). */
   active?: boolean
+  /**
+   * Listed by the app menu, not by the palette: "Command palette" would only
+   * open the palette that lists it (#343).
+   */
+  menuOnly?: true
   run: () => void
 }
 
@@ -47,6 +73,22 @@ function matchRank(command: Searchable, query: string): number {
 
 export function matchesCommand(command: Searchable, query: string): boolean {
   return Number.isFinite(matchRank(command, query))
+}
+
+/**
+ * The commands by area, in the order of {@link COMMAND_AREAS}, each command
+ * once. Inside an area the actions come first ("Open settings" before the
+ * sections it can open), each kind in its list's order. Areas with no
+ * command are left out.
+ */
+export function groupCommandsByArea<T extends Pick<Command, 'area' | 'kind'>>(
+  commands: T[],
+): { area: CommandArea; commands: T[] }[] {
+  const destination = (command: T) => (command.kind === 'setting' ? 1 : 0)
+  return COMMAND_AREAS.map((area) => ({
+    area,
+    commands: commands.filter((command) => command.area === area).sort((a, b) => destination(a) - destination(b)),
+  })).filter((group) => group.commands.length > 0)
 }
 
 /** Exact label/word hits precede fuzzy abbreviations; ties retain source order. */

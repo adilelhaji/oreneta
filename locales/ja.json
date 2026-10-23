@@ -59,6 +59,9 @@
   "commands.aliases.folder": "フォルダー メールボックス folder mailbox",
   "commands.aliases.account": "アカウント 切り替え メールボックス account switch mailbox",
   "commands.aliases.kanban": "カンバン ボード 列 kanban board columns",
+  "commands.aliases.module": "モジュール 移動 module go to",
+  "commands.aliases.app.about": "について バージョン about version",
+  "commands.aliases.notifications": "おやすみモード 通知 do not disturb notifications",
   "settingsSearch.aliases.appearance": "テーマ 外観 色 theme appearance color",
   "settingsSearch.aliases.typography": "フォント 文字 サイズ font text size",
   "settingsSearch.aliases.reading": "閲覧 密度 リスト reading density list",
@@ -2963,5 +2966,17 @@
   "settings.signature.placementAbove": "引用の上",
   "settings.signature.placementBelow": "引用の下",
   "shell.region.mail": "メール",
-  "shell.region.modules": "モジュール"
+  "shell.region.modules": "モジュール",
+  "shell.region.banner": "Oreneta",
+  "appMenu.label": "アプリメニュー",
+  "appMenu.area.modules": "モジュール",
+  "appMenu.area.mail": "メール",
+  "appMenu.area.conversation": "スレッド",
+  "appMenu.area.accounts": "アカウント",
+  "appMenu.area.folders": "フォルダー",
+  "appMenu.area.boards": "ボード",
+  "appMenu.area.theme": "テーマ",
+  "appMenu.area.notifications": "通知",
+  "appMenu.area.settings": "設定",
+  "appMenu.area.app": "アプリ"
 }

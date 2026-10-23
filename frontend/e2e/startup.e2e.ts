@@ -4373,8 +4373,9 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
 
 // Application regions and F6 (#306, ADR-0068 step 1). The regions of today's
 // shell carry `data-region`; F6 and Shift+F6 go round the ones on screen in
-// the frame's order (folders, modules, list, reader, sidebar), which is the
-// same in right to left. Within a region the focus goes back to where it was.
+// the frame's order (the top band since #343, folders, modules, list, reader,
+// sidebar), which is the same in right to left. Within a region the focus goes
+// back to where it was.
 const arCatalog = JSON.parse(
   readFileSync(fileURLToPath(new URL('../../locales/ar.json', import.meta.url)), 'utf8'),
 ) as Record<string, string>
@@ -4437,10 +4438,18 @@ for (const language of ['en', 'ca', 'ar']) {
     await markFocus(page, 'data-test-f6-start')
     expect(await regionAtFocus(page)).toBe('content')
 
-    expect(await regionWalk(page, 'F6', 5)).toEqual(['reader', 'sidebar', 'folders', 'modules', 'content'])
+    // The top band (#343) is the first region: after the sidebar, before the folders.
+    expect(await regionWalk(page, 'F6', 6)).toEqual(['reader', 'sidebar', 'search', 'folders', 'modules', 'content'])
     // Round once and back in the list, on the row it left.
     expect(await focusIsMarked(page, 'data-test-f6-start')).toBe(true)
-    expect(await regionWalk(page, 'Shift+F6', 5)).toEqual(['modules', 'folders', 'sidebar', 'reader', 'content'])
+    expect(await regionWalk(page, 'Shift+F6', 6)).toEqual([
+      'modules',
+      'folders',
+      'search',
+      'sidebar',
+      'reader',
+      'content',
+    ])
     expect(await focusIsMarked(page, 'data-test-f6-start')).toBe(true)
     expect(errors).toEqual([])
   })
@@ -4471,8 +4480,9 @@ test('F6 leaves a text field and the HTML message, and a modal dialog keeps the 
   expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('IFRAME')
   await page.keyboard.press('F6')
   expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('IFRAME')
-  // No sidebar is open, so after the reader comes the first region again.
-  expect(await regionAtFocus(page)).toBe('folders')
+  // No sidebar is open, so after the reader comes the first region again:
+  // the top band (#343).
+  expect(await regionAtFocus(page)).toBe('search')
   await frame.getByText('Wide synthetic invoice').click()
   await page.keyboard.press('Shift+F6')
   expect(await regionAtFocus(page)).toBe('content')
@@ -4532,13 +4542,15 @@ test('F6 skips the regions a narrow window hides, and keeps working at 200 perce
   await page.goto('/')
   await expect(page.locator('[data-thread-list]')).toBeVisible()
   const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
-  // One pane at a time: the rail, the mail navigation and the reader are not shown.
+  // One pane at a time: the rail, the mail navigation and the reader are not
+  // shown. The top band is, with its menu (#343).
   await row.focus()
-  expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'content', 'content'])
-  expect(await regionWalk(page, 'Shift+F6', 2)).toEqual(['content', 'content'])
+  expect(await regionWalk(page, 'F6', 3)).toEqual(['search', 'content', 'search'])
+  expect(await regionWalk(page, 'Shift+F6', 2)).toEqual(['content', 'search'])
   await row.click()
   await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
-  expect(await regionWalk(page, 'F6', 2)).toEqual(['reader', 'reader'])
+  // From the row the list hid, F6 starts again at the first region.
+  expect(await regionWalk(page, 'F6', 3)).toEqual(['search', 'reader', 'search'])
 
   // 1440 px at the app's own 200 %: the same frame, everything twice the size.
   await page.setViewportSize({ width: 1440, height: 1000 })
@@ -4548,13 +4560,13 @@ test('F6 skips the regions a narrow window hides, and keeps working at 200 perce
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
   await row.focus()
   const zoomed: string[] = []
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 5; i++) {
     await page.keyboard.press('F6')
     zoomed.push(await regionAtFocus(page))
     await expect(page.locator(':focus')).toBeInViewport()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   }
-  expect(zoomed).toEqual(['reader', 'folders', 'modules', 'content'])
+  expect(zoomed).toEqual(['reader', 'search', 'folders', 'modules', 'content'])
   await page.keyboard.press(`${mod}+Digit0`)
   expect(errors).toEqual([])
 })
@@ -4642,36 +4654,37 @@ for (const language of ['en', 'ca', 'ar']) {
     await page.getByRole('option', { name: /Morgan Rivera/ }).click()
     await expect(page.getByRole('heading', { name: 'Morgan Rivera' })).toBeVisible()
     // The groups are the folder pane (#326), beside the module: from the rail,
-    // F6 goes to the module, then the pane, then back to the rail.
+    // F6 goes to the module, the top band (#343), the pane, then back to the rail.
     await peopleButton.focus()
-    expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'folders', 'modules'])
+    expect(await regionWalk(page, 'F6', 4)).toEqual(['content', 'search', 'folders', 'modules'])
     await audit('people', catalog['people.title'])
 
     const tasksButton = page.getByTitle(catalog['tasks.title'], { exact: true })
     await tasksButton.click()
     await expect(page.getByText('Review the figures')).toBeVisible()
     // The lists are the folder pane (#329), beside the module: from the rail,
-    // F6 goes to the module, then the pane, then back to the rail.
+    // F6 goes to the module, the top band (#343), the pane, then back to the rail.
     await tasksButton.focus()
-    expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'folders', 'modules'])
+    expect(await regionWalk(page, 'F6', 4)).toEqual(['content', 'search', 'folders', 'modules'])
     await audit('tasks', catalog['tasks.title'])
 
     const notesButton = page.getByTitle(catalog['notes.title'], { exact: true })
     await notesButton.click()
     await page.getByRole('button', { name: /Meeting notes/ }).click()
     // The tags are the folder pane (#335), beside the module: from the rail,
-    // F6 goes to the module, then the pane, then back to the rail.
+    // F6 goes to the module, the top band (#343), the pane, then back to the rail.
     await notesButton.focus()
-    expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'folders', 'modules'])
+    expect(await regionWalk(page, 'F6', 4)).toEqual(['content', 'search', 'folders', 'modules'])
     await audit('notes', catalog['notes.title'])
 
     const calendarButton = page.getByTitle(catalog['calendar.title'], { exact: true })
     await calendarButton.click()
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     // Calendar's calendars are the folder pane (#323), beside the module:
-    // from the rail, F6 goes to the module, then the pane, then back to the rail.
+    // from the rail, F6 goes to the module, the top band (#343), the pane, then
+    // back to the rail.
     await calendarButton.focus()
-    expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'folders', 'modules'])
+    expect(await regionWalk(page, 'F6', 4)).toEqual(['content', 'search', 'folders', 'modules'])
     await audit('calendar', catalog['calendar.title'])
 
     await page.getByTitle(catalog['messaging.title'], { exact: true }).click()
@@ -4679,9 +4692,10 @@ for (const language of ['en', 'ca', 'ar']) {
     await expect(page.getByText('Hello Ana')).toBeVisible()
     await audit('chat', catalog['messaging.title'])
     // The conversations are the folder pane (#337), beside the module: from
-    // the rail, F6 goes to the module, then the pane, then back to the rail.
+    // the rail, F6 goes to the module, the top band (#343), the pane, then back
+    // to the rail.
     await page.getByTitle(catalog['messaging.title'], { exact: true }).focus()
-    expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'folders', 'modules'])
+    expect(await regionWalk(page, 'F6', 4)).toEqual(['content', 'search', 'folders', 'modules'])
 
     // A file in the list: its "open the message" button is what F6 reaches in
     // the content, now that the filters have moved to the pane.
@@ -4702,15 +4716,680 @@ for (const language of ['en', 'ca', 'ar']) {
     await attachmentsButton.click()
     await expect(page.getByText('report.pdf')).toBeVisible()
     // The filters are the folder pane (#339), beside the module: from the
-    // rail, F6 goes to the module, then the pane, then back to the rail.
+    // rail, F6 goes to the module, the top band (#343), the pane, then back to
+    // the rail.
     await attachmentsButton.focus()
-    expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'folders', 'modules'])
+    expect(await regionWalk(page, 'F6', 4)).toEqual(['content', 'search', 'folders', 'modules'])
     await audit('attachments', catalog['attachmentsView.title'])
 
     expect(found).toEqual([])
     expect(errors).toEqual([])
   })
 }
+
+// #343: the top band and the app menu (ADR-0068 §1 and §2, piece 13a). The
+// band is the first row of the <header> «Oreneta» (banner), between the title
+// bar and the notices, 2.25 rem tall in the frame's tone, and the first region
+// F6 reaches. Its «App menu» button opens a menu with every palette command,
+// grouped by area, and what the rail's More menu offers; the rail keeps its own
+// until piece 14.
+const APP_MENU_GROUPS = ['Modules', 'Mail', 'Accounts', 'Folders', 'Boards', 'Theme', 'Notifications', 'Settings', 'Application']
+// The rail's More menu, reachable from the app menu too (once each).
+const MORE_MENU_ITEMS = [
+  'Go to: Mail',
+  'Go to: Calendar',
+  'Go to: People',
+  'Go to: Tasks',
+  'Go to: Notes',
+  'Go to: Chat',
+  'Go to: Attachments',
+  'Command palette',
+  'Add account',
+  'Create kanban board',
+  'Sync mailbox',
+  'Do not disturb for 1 hour',
+  'Do not disturb until tomorrow',
+  'Do not disturb until turned off',
+  'Open settings',
+  'About Oreneta',
+]
+
+async function appMenuParts(page: Page, catalog: Record<string, string> = enCatalog) {
+  const banner = page.getByRole('banner', { name: catalog['shell.region.banner'], exact: true })
+  const band = banner.locator('[data-top-band]')
+  const button = banner.getByRole('button', { name: catalog['appMenu.label'], exact: true })
+  const menu = page.getByRole('menu', { name: catalog['appMenu.label'], exact: true })
+  return { banner, band, button, menu }
+}
+
+for (const width of [1440, 1025, 1024, 768]) {
+  test(`the top band holds the app menu, above the notices and the module, at ${width}px (#343)`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize({ width, height: 1000 })
+    const errors = await prepareStartup(page, true, { navigation: true })
+    await page.goto('/')
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    const { banner, band, button, menu } = await appMenuParts(page)
+
+    // One banner, named after the app, whose first row is the band: the
+    // region F6 calls `search`, 2.25 rem (36 px) tall, across the window.
+    await expect(page.getByRole('banner')).toHaveCount(1)
+    await expect(banner).toBeVisible()
+    await expect(band).toHaveAttribute('data-region', 'search')
+    const bandBox = await boxOf(band)
+    expect(Math.round(bandBox.height)).toBe(36)
+    expect(Math.round(bandBox.x)).toBe(0)
+    expect(Math.round(bandBox.width)).toBe(width)
+    // Title bar, header, notices, then the module (ADR-0068 §1): the band is
+    // outside <main>, and the account sync region sits under it.
+    await expect(page.locator('main [data-top-band]')).toHaveCount(0)
+    const sync = page.getByRole('region', { name: 'Account sync', exact: true })
+    await expect(sync).toBeVisible()
+    expect((await boxOf(sync)).y).toBeGreaterThanOrEqual(bandBox.y + bandBox.height - 1)
+    expect((await boxOf(page.getByRole('main'))).y).toBeGreaterThanOrEqual((await boxOf(sync)).y)
+    // The menu button at its start, on every width; the centre and the end
+    // are laid out for the search and the sync status (13b, 13c).
+    await expect(button).toBeVisible()
+    await expect(button).toHaveAttribute('aria-haspopup', 'menu')
+    await expect(button).toHaveAttribute('aria-expanded', 'false')
+    expect((await boxOf(button)).x).toBeLessThan(16)
+    await expect(band.locator('[data-band-centre]')).toHaveCount(1)
+    await expect(band.locator('[data-band-end]')).toHaveCount(1)
+    // The rail keeps its own More menu, and the two buttons are told apart.
+    await expect(page.getByRole('button', { name: 'More', exact: true }).first()).toBeAttached()
+
+    // The pointer opens it under the button, from its start edge, inside the window.
+    await button.click()
+    await expect(menu).toBeVisible()
+    await expect(button).toHaveAttribute('aria-expanded', 'true')
+    const items = menu.locator('[role^="menuitem"]')
+    await expect(items.first()).toBeFocused()
+    expect(Math.round((await items.first().boundingBox())!.height)).toBe(28)
+    const menuBox = await boxOf(menu)
+    const buttonBox = await boxOf(button)
+    expect(menuBox.y).toBeGreaterThanOrEqual(buttonBox.y + buttonBox.height - 1)
+    expect(menuBox.x).toBeGreaterThanOrEqual(0)
+    expect(menuBox.x).toBeLessThanOrEqual(buttonBox.x + 8)
+    expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(width)
+    expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(1000)
+    // Grouped by area, each group with its title.
+    const groups = await menu.getByRole('group').evaluateAll((elements) =>
+      elements.map((element) => document.getElementById(element.getAttribute('aria-labelledby')!)?.textContent),
+    )
+    expect(groups).toEqual(APP_MENU_GROUPS)
+    // What the rail's More menu offers is there, once.
+    for (const name of MORE_MENU_ITEMS)
+      await expect(menu.getByRole(name.startsWith('Go to:') ? 'menuitemradio' : 'menuitem', { name, exact: true })).toHaveCount(1)
+    await expect(menu.getByRole('menuitemradio', { name: 'Go to: Mail', exact: true })).toHaveAttribute('aria-checked', 'true')
+    // Long as it is, its last item scrolls into view inside the window.
+    await page.keyboard.press('End')
+    const last = menu.getByRole('menuitem', { name: 'About Oreneta', exact: true })
+    await expect(last).toBeFocused()
+    await expect(last).toBeInViewport({ ratio: 1 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await info.attach(`app-menu-${width}`, {
+      body: await page.screenshot({ path: info.outputPath(`app-menu-${width}.png`), animations: 'disabled' }),
+      contentType: 'image/png',
+    })
+    // Escape closes it and gives the focus back to the button.
+    await page.keyboard.press('Escape')
+    await expect(menu).toHaveCount(0)
+    await expect(button).toBeFocused()
+    await expect(button).toHaveAttribute('aria-expanded', 'false')
+    // A second click on the button closes it too.
+    await button.click()
+    await expect(menu).toBeVisible()
+    await button.click()
+    await expect(menu).toHaveCount(0)
+    expect(errors).toEqual([])
+  })
+}
+
+test('the app menu opens from the keyboard, moves, finds by typing and runs a command (#343)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { button, menu } = await appMenuParts(page)
+  const items = menu.locator('[role^="menuitem"]')
+  // A conversation open: the arrows that open and move the menu must not also
+  // step the list behind it, which the app's arrows do elsewhere.
+  const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+  const reply = page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })
+  await row.click()
+  await expect(reply).toBeVisible()
+  await expect(row).toHaveAttribute('aria-current', 'true')
+  const selectionKept = async (key: string) => {
+    await expect(row, key).toHaveAttribute('aria-current', 'true')
+    await expect(reply, key).toBeVisible()
+  }
+
+  // From outside every region, F6 goes to the first one: the band, on its button.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+  await page.keyboard.press('F6')
+  await expect(button).toBeFocused()
+  expect(await regionAtFocus(page)).toBe('search')
+
+  // Enter opens it on its first item; the arrows wrap; Home and End.
+  await page.keyboard.press('Enter')
+  await expect(menu).toBeVisible()
+  await expect(items.first()).toBeFocused()
+  await page.keyboard.press('ArrowUp')
+  await expect(items.last()).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(items.first()).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(items.nth(1)).toBeFocused()
+  await page.keyboard.press('End')
+  await expect(items.last()).toBeFocused()
+  await page.keyboard.press('Home')
+  await expect(items.first()).toBeFocused()
+  // Typing a name goes to it; keys typed in the menu do not reach the app.
+  await page.keyboard.type('open s')
+  await expect(menu.getByRole('menuitem', { name: 'Open settings', exact: true })).toBeFocused()
+  // Enter runs it, as the palette would: Settings opens, the menu is gone.
+  await page.keyboard.press('Enter')
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+  await expect(settings).toBeVisible()
+  await expect(menu).toHaveCount(0)
+  // Closing Settings gives the focus back to the app menu button.
+  await page.keyboard.press('Escape')
+  await expect(settings).toHaveCount(0)
+  await expect(button).toBeFocused()
+
+  // Space and Down open it too, and Up on its last item; Escape gives the
+  // focus back each time. None of them, nor the arrows in the menu, moves the
+  // conversation list.
+  for (const [key, edge] of [
+    ['Space', 'first'],
+    ['ArrowDown', 'first'],
+    ['ArrowUp', 'last'],
+  ] as const) {
+    await page.keyboard.press(key)
+    await expect(menu, key).toBeVisible()
+    await expect(edge === 'first' ? items.first() : items.last(), key).toBeFocused()
+    await selectionKept(key)
+    for (const inside of ['ArrowDown', 'ArrowDown', 'ArrowUp']) await page.keyboard.press(inside)
+    await expect(menu, key).toBeVisible()
+    await selectionKept(`${key}, then the arrows in the menu`)
+    await page.keyboard.press('Escape')
+    await expect(menu, key).toHaveCount(0)
+    await expect(button, key).toBeFocused()
+  }
+  // Ctrl/⌘+K from inside the menu: the menu closes first, so the palette gives
+  // the focus back to the button, not to an item that is gone.
+  await page.keyboard.press('Enter')
+  await expect(items.first()).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(items.nth(1)).toBeFocused()
+  await page.keyboard.press('Control+k')
+  const palette = page.getByRole('dialog', { name: 'Command palette', exact: true })
+  await expect(palette).toBeVisible()
+  await expect(menu).toHaveCount(0)
+  await expect(palette.getByRole('combobox')).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(palette).toHaveCount(0)
+  await expect(button).toBeFocused()
+  await selectionKept('Ctrl/⌘+K')
+  // Tab closes it and moves on from the button, not from the removed menu.
+  await page.keyboard.press('Enter')
+  await expect(items.first()).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(menu).toHaveCount(0)
+  await expect(button).not.toBeFocused()
+  expect(await page.evaluate(() => document.activeElement !== document.body)).toBe(true)
+  // F6 from inside the menu moves to the next region and closes it.
+  await button.focus()
+  await page.keyboard.press('Enter')
+  await expect(items.first()).toBeFocused()
+  await page.keyboard.press('F6')
+  await expect(menu).toHaveCount(0)
+  expect(await regionAtFocus(page)).toBe('folders')
+  expect(errors).toEqual([])
+})
+
+test('the app menu runs what the palette and the rail\'s More menu run (#343)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await page.evaluate(() => {
+    const replies = (window as any).startupProbe.replies
+    replies['calendar.list'] = {
+      calendars: [{ id: 'local-team', name: 'Team', is_default: true, enabled: true, kind: 'local', read_only: false, synced_at: 0 }],
+    }
+    replies['calendar.events'] = { events: [] }
+  })
+  const { button, menu } = await appMenuParts(page)
+  const choose = async (role: 'menuitem' | 'menuitemradio', name: string) => {
+    await button.click()
+    await menu.getByRole(role, { name, exact: true }).click()
+    await expect(menu).toHaveCount(0)
+  }
+
+  // A module, then mail again.
+  await choose('menuitemradio', 'Go to: Calendar')
+  await expect(page.getByRole('main', { name: 'Calendar', exact: true })).toBeVisible()
+  await button.click()
+  await expect(menu.getByRole('menuitemradio', { name: 'Go to: Calendar', exact: true })).toHaveAttribute('aria-checked', 'true')
+  await page.keyboard.press('Escape')
+  // An account from another module goes back to mail, as the rail does.
+  await choose('menuitemradio', 'Go to: Second account')
+  await expect(page.getByRole('main', { name: 'Mail', exact: true })).toBeVisible()
+  await choose('menuitemradio', 'Go to: Calendar')
+  await choose('menuitemradio', 'Go to: Mail')
+  await expect(page.getByRole('main', { name: 'Mail', exact: true })).toBeVisible()
+
+  // Do not disturb: the rail's indicator says so, and the menu now offers to resume.
+  await choose('menuitem', 'Do not disturb until turned off')
+  const resume = page.locator('aside').getByRole('button', { name: 'Resume notifications', exact: true })
+  await expect(resume).toBeVisible()
+  await choose('menuitem', 'Resume notifications')
+  await expect(resume).toHaveCount(0)
+
+  // About, and the palette, each from the menu.
+  await choose('menuitem', 'About Oreneta')
+  await expect(page.getByRole('dialog', { name: 'About Oreneta' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(button).toBeFocused()
+  await choose('menuitem', 'Command palette')
+  await expect(page.getByRole('dialog', { name: 'Command palette', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(button).toBeFocused()
+
+  // The rail's own More menu is unchanged (owner decision 1 on #342).
+  await page.locator('aside').getByTitle('More', { exact: true }).first().click()
+  await expect(page.getByRole('menu', { name: 'More', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  expect(errors).toEqual([])
+})
+
+// In Arabic the menu opens from the button's right edge, leftwards, stays in
+// the window and passes axe, menu open, at a wide and a narrow width.
+for (const width of [1440, 768]) {
+  test(`in Arabic the app menu opens towards the reading direction and passes axe: ${width}px (#343)`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize({ width, height: 1000 })
+    const errors = await prepareStartup(page, true, { navigation: true, language: 'ar' })
+    await page.goto('/')
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    const { banner, button, menu } = await appMenuParts(page, arCatalog)
+    await expect(banner).toBeVisible()
+    // The button at the start of the band: its right in Arabic.
+    const buttonBox = await boxOf(button)
+    expect(buttonBox.x + buttonBox.width).toBeGreaterThan(width - 16)
+    await button.focus()
+    await page.keyboard.press('Enter')
+    await expect(menu).toBeVisible()
+    const menuBox = await boxOf(menu)
+    expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(width)
+    expect(menuBox.x + menuBox.width).toBeGreaterThanOrEqual(buttonBox.x - 8)
+    expect(menuBox.x).toBeGreaterThanOrEqual(0)
+    await rtlInView(page, 'app menu')
+    await settled(page)
+    const inMenu = await new AxeBuilder({ page }).include('[role="menu"]').withTags(AXE_TAGS).analyze()
+    expect(inMenu.violations.map((violation) => `${violation.id}: ${violation.help}`)).toEqual([])
+    const whole = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+    const regions = await new AxeBuilder({ page }).withRules(REGION_RULES).analyze()
+    await info.attach(`axe-app-menu-ar-${width}`, {
+      body: JSON.stringify({ menu: inMenu.violations, page: whole.violations, regions: regions.violations }, null, 2),
+      contentType: 'application/json',
+    })
+    expect(
+      whole.violations
+        .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+        .map((violation) => `${violation.id} on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`),
+    ).toEqual([])
+    expect(regions.violations.map((violation) => violation.id)).toEqual([])
+    await info.attach(`app-menu-ar-${width}`, {
+      body: await page.screenshot({ path: info.outputPath(`app-menu-ar-${width}.png`), animations: 'disabled' }),
+      contentType: 'image/png',
+    })
+    await page.keyboard.press('Escape')
+    await expect(button).toBeFocused()
+    expect(errors).toEqual([])
+  })
+}
+
+// At the app's 200 %, the band is 4.5 rem (72 px). Its height comes out of the
+// panes under it: the page does not scroll, and mail's boundary controls stay
+// inside the window's height at 1025 px, the narrowest window with folders.
+// (At this size the conversation header already ran past the window's end
+// before the band, which moves nothing sideways; ADR-0068 §3's toolbar is what
+// changes that header.)
+test("at the app's 200 percent the band's height leaves mail's boundary controls on screen at 1025px (#343)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1025, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
+  const { band, button } = await appMenuParts(page)
+  expect(Math.round((await boxOf(band)).height)).toBe(72)
+  await expect(button).toBeInViewport({ ratio: 1 })
+  const pageFits = () =>
+    page.evaluate(
+      () => document.documentElement.scrollHeight <= innerHeight && document.documentElement.scrollWidth <= innerWidth,
+    )
+  const withinHeight = async (locator: ReturnType<Page['locator']>, name: string) => {
+    const box = await boxOf(locator)
+    expect(box.y, name).toBeGreaterThanOrEqual(0)
+    expect(box.y + box.height, name).toBeLessThanOrEqual(1000)
+  }
+  expect(await pageFits()).toBe(true)
+  const list = page.locator('[data-thread-list]')
+  await expect(list).toBeInViewport({ ratio: 0.95 })
+  const sent = page.getByRole('navigation', { name: 'Accounts and folders' }).getByRole('button', { name: 'Sent', exact: true })
+  await expect(sent).toBeInViewport({ ratio: 1 })
+  await expect(page.getByRole('button', { name: 'New message', exact: true })).toBeInViewport({ ratio: 1 })
+  await expect(page.getByTitle('Switch folder', { exact: true })).toBeInViewport({ ratio: 1 })
+
+  await page.getByRole('table').getByRole('button', { name: /Pilot checklist/ }).click()
+  const reply = page.getByPlaceholder('Write a message...')
+  await expect(reply).toBeInViewport({ ratio: 1 })
+  await withinHeight(page.getByRole('button', { name: 'More actions', exact: true }), 'More actions')
+  expect(await pageFits()).toBe(true)
+  await sent.click()
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as any).startupProbe.requests.filter((r: any) => r.command === 'mail.threadList').at(-1)?.payload,
+      ),
+    )
+    .toMatchObject({ account_id: 'synthetic-account', folder_id: 'Sent' })
+  expect(await pageFits()).toBe(true)
+  await page.keyboard.press(`${mod}+Digit0`)
+  expect(errors).toEqual([])
+})
+
+// A command that cannot run says why: in the tooltip, and as the item's
+// accessible description, which reaches the keyboard and a screen reader (#343).
+test('the app menu says why a command cannot run, as the description of its item (#343)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, graphAccount: true })
+  await page.goto('/')
+  const { button, menu } = await appMenuParts(page)
+  await button.click()
+  const compose = menu.getByRole('menuitem', { name: 'Compose new message', exact: true })
+  await expect(compose).toHaveAttribute('aria-disabled', 'true')
+  await expect(compose).toHaveAttribute('title', 'No account available for sending')
+  // Its own element says it, not only the tooltip (which Chromium also reads
+  // as a description, but not every screen reader does); it is not drawn and
+  // not part of the name.
+  await expect(compose).toHaveAttribute('aria-describedby', /.+/)
+  const reason = page.locator(`[id="${await compose.getAttribute('aria-describedby')}"]`)
+  await expect(reason).toHaveText('No account available for sending')
+  await expect(reason).toHaveClass('sr-only')
+  expect(await reason.evaluate((element) => element.getBoundingClientRect().width <= 1)).toBe(true)
+  await expect(compose).toHaveAccessibleDescription('No account available for sending')
+  await expect(menu.getByRole('menuitem', { name: 'Open settings', exact: true })).toHaveAccessibleDescription('')
+  // Clicked anyway, it does nothing and the menu stays.
+  await compose.click({ force: true })
+  await expect(menu).toBeVisible()
+  await page.keyboard.press('Escape')
+  expect(
+    await page.evaluate(() =>
+      (window as any).startupProbe.calls.filter((command: string) => ['mail.send', 'mail.saveDraft'].includes(command)),
+    ),
+  ).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// The first-account setup screen shows the band too, with the same app menu
+// (owner decision 2 on #343): the header «Oreneta», then the setup in <main>,
+// the `content` region. The menu holds what needs no account; F6 goes from the
+// band to the setup and back.
+const SETUP_MENU_GROUPS = ['appMenu.area.theme', 'appMenu.area.settings', 'appMenu.area.app']
+
+async function setupBandParts(page: Page, catalog: Record<string, string>) {
+  const parts = await appMenuParts(page, catalog)
+  const main = page.getByRole('main')
+  const email = main.getByRole('textbox', { name: catalog['accounts.fields.emailAddress'], exact: true })
+  return { ...parts, main, email }
+}
+
+test('the first-account setup screen has the top band, its app menu and F6 between the two (#343)', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page)
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Connect a Mail Account' })).toBeVisible()
+  const { banner, band, button, menu, main, email } = await setupBandParts(page, enCatalog)
+  // The focus still starts on the address.
+  await expect(email).toBeFocused()
+  // One banner and one <main>: the band on top, outside it, 2.25 rem tall.
+  await expect(page.getByRole('banner')).toHaveCount(1)
+  await expect(page.getByRole('main')).toHaveCount(1)
+  await expect(banner).toBeVisible()
+  await expect(band).toHaveAttribute('data-region', 'search')
+  await expect(main).toHaveAttribute('data-region', 'content')
+  await expect(page.locator('main [data-top-band]')).toHaveCount(0)
+  const bandBox = await boxOf(band)
+  expect(Math.round(bandBox.height)).toBe(36)
+  expect(Math.round(bandBox.width)).toBe(1440)
+  expect((await boxOf(main)).y).toBeGreaterThanOrEqual(bandBox.y + bandBox.height - 1)
+  expect((await boxOf(button)).x).toBeLessThan(16)
+
+  // F6 and Shift+F6: the band, then the setup, where the focus was.
+  await page.keyboard.press('F6')
+  await expect(button).toBeFocused()
+  expect(await regionAtFocus(page)).toBe('search')
+  await page.keyboard.press('F6')
+  await expect(email).toBeFocused()
+  expect(await regionAtFocus(page)).toBe('content')
+  await page.keyboard.press('Shift+F6')
+  await expect(button).toBeFocused()
+  await page.keyboard.press('Shift+F6')
+  await expect(email).toBeFocused()
+
+  // The app's zoom works there too.
+  const rootSize = () => page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+  expect(await rootSize()).toBe('16px')
+  await page.keyboard.press('Control+Equal')
+  await expect.poll(rootSize).not.toBe('16px')
+  await page.keyboard.press('Control+Digit0')
+  await expect.poll(rootSize).toBe('16px')
+
+  // The menu: what needs no account, grouped as in the window.
+  await button.click()
+  await expect(menu).toBeVisible()
+  const groups = await menu
+    .getByRole('group')
+    .evaluateAll((elements) =>
+      elements.map((element) => document.getElementById(element.getAttribute('aria-labelledby')!)?.textContent),
+    )
+  expect(groups).toEqual(SETUP_MENU_GROUPS.map((key) => enCatalog[key]))
+  for (const name of ['Open settings', 'Command palette', 'Keyboard shortcuts', 'About Oreneta'])
+    await expect(menu.getByRole('menuitem', { name, exact: true }), name).toHaveCount(1)
+  for (const name of [
+    'Add account',
+    'Go to: Mail',
+    'Go to: Calendar',
+    'Sync mailbox',
+    'Create kanban board',
+    'Do not disturb for 1 hour',
+  ])
+    await expect(
+      menu.getByRole('menuitem', { name, exact: true }).or(menu.getByRole('menuitemradio', { name, exact: true })),
+      name,
+    ).toHaveCount(0)
+  await expect(menu.locator('[aria-disabled="true"]')).toHaveCount(0)
+  await info.attach('setup-band-menu', {
+    body: await page.screenshot({ path: info.outputPath('setup-band-menu.png'), animations: 'disabled' }),
+    contentType: 'image/png',
+  })
+  // A theme, Settings and the palette work from it, and give the focus back.
+  await expect(page.locator('html')).not.toHaveClass(/dark/)
+  await menu.getByRole('menuitemradio', { name: 'Theme: Oreneta Dark', exact: true }).click()
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  await button.click()
+  await menu.getByRole('menuitem', { name: 'Open settings', exact: true }).click()
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+  await expect(settings).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(settings).toHaveCount(0)
+  await expect(button).toBeFocused()
+  await page.keyboard.press('Control+k')
+  const palette = page.getByRole('dialog', { name: 'Command palette', exact: true })
+  await expect(palette).toBeVisible()
+  await expect(palette.getByRole('option', { name: /^Add account/ })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(button).toBeFocused()
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// In Arabic: the button at the start of the band (its right), the menu opening
+// towards the reading direction, nothing outside the window, and axe clean with
+// the menu closed and open, with the region rules too.
+for (const width of [1440, 390]) {
+  test(`the setup screen's band in Arabic stays in the window and passes axe: ${width}px (#343)`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize({ width, height: 844 })
+    const errors = await prepareStartup(page, false, { language: 'ar' })
+    await page.goto('/')
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+    const { banner, button, menu, email } = await setupBandParts(page, arCatalog)
+    await expect(email).toBeFocused()
+    await expect(banner).toBeVisible()
+    const buttonBox = await boxOf(button)
+    expect(buttonBox.x + buttonBox.width).toBeGreaterThan(width - 16)
+    await rtlInView(page, 'setup screen')
+    await settled(page)
+    const audit = async (name: string) => {
+      const whole = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+      const regions = await new AxeBuilder({ page }).withRules(REGION_RULES).analyze()
+      await info.attach(`axe-setup-band-ar-${width}-${name}`, {
+        body: JSON.stringify({ page: whole.violations, regions: regions.violations }, null, 2),
+        contentType: 'application/json',
+      })
+      expect(
+        whole.violations
+          .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+          .map((violation) => `${violation.id} on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`),
+        name,
+      ).toEqual([])
+      expect(
+        regions.violations.map((violation) => violation.id),
+        name,
+      ).toEqual([])
+    }
+    await audit('closed')
+    // F6 to the band, Enter on the button: the menu opens leftwards, inside.
+    await page.keyboard.press('F6')
+    await expect(button).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(menu).toBeVisible()
+    await expect(menu.locator('[role^="menuitem"]').first()).toBeFocused()
+    const menuBox = await boxOf(menu)
+    expect(menuBox.x).toBeGreaterThanOrEqual(0)
+    expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(width)
+    expect(menuBox.x + menuBox.width).toBeGreaterThanOrEqual(buttonBox.x - 8)
+    const groups = await menu
+      .getByRole('group')
+      .evaluateAll((elements) =>
+        elements.map((element) => document.getElementById(element.getAttribute('aria-labelledby')!)?.textContent),
+      )
+    expect(groups).toEqual(SETUP_MENU_GROUPS.map((key) => arCatalog[key]))
+    await rtlInView(page, 'setup screen, menu open')
+    await settled(page)
+    const inMenu = await new AxeBuilder({ page }).include('[role="menu"]').withTags(AXE_TAGS).analyze()
+    expect(inMenu.violations.map((violation) => `${violation.id}: ${violation.help}`)).toEqual([])
+    await audit('menu open')
+    await info.attach(`setup-band-ar-${width}`, {
+      body: await page.screenshot({ path: info.outputPath(`setup-band-ar-${width}.png`), animations: 'disabled' }),
+      contentType: 'image/png',
+    })
+    await page.keyboard.press('Escape')
+    await expect(menu).toHaveCount(0)
+    await expect(button).toBeFocused()
+    expect(errors).toEqual([])
+  })
+}
+
+// On the setup screen, Settings' «Add account» goes back to the setup, which
+// is that flow already, instead of opening a second one over it that would
+// change its provider (#343).
+test("Settings' «Add account» on the setup screen goes back to the setup as it was (#343)", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page)
+  await page.goto('/')
+  const { button, menu, email } = await setupBandParts(page, enCatalog)
+  await email.fill('person@gmail.com')
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+  // The «+» of the mail accounts, then the one of the feeds.
+  for (const index of [0, 1]) {
+    await button.click()
+    await menu.getByRole('menuitem', { name: 'Open settings', exact: true }).click()
+    await expect(settings).toBeVisible()
+    await settings.getByTitle('Add account', { exact: true }).nth(index).click()
+    await expect(settings).toHaveCount(0)
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(email).toBeFocused()
+    await expect(email).toHaveValue('person@gmail.com')
+  }
+  // The setup carries on from what was typed.
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('button', { name: 'Sign in with Google' })).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+// A backup restored from Settings on the setup screen brings the first
+// account: the window replaces the setup behind Settings, which stays the same
+// dialog, still open, and gives the focus back to the app menu button when it
+// closes (#343).
+test('a backup restored from Settings on the setup screen keeps Settings, then gives the focus to the band (#343)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  // No account at first: the restore brings the synthetic one back.
+  await page.addInitScript(() => {
+    const replies = (window as any).startupProbe.replies
+    ;(window as any).restoredAccounts = replies['account.list']
+    replies['account.list'] = { accounts: [] }
+  })
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Connect a Mail Account' })).toBeVisible()
+  const { button, menu } = await appMenuParts(page)
+  await button.click()
+  await menu.getByRole('menuitem', { name: 'Backup', exact: true }).click()
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+  await expect(settings).toBeVisible()
+  await settings.evaluate((dialog) => dialog.setAttribute('data-test-kept', ''))
+  await page.evaluate(() => {
+    const replies = (window as any).startupProbe.replies
+    replies['backup.import'] = {
+      accounts: 1,
+      skipped: 0,
+      feeds: 0,
+      settings: 0,
+      secrets: 0,
+      pgp_keys: 0,
+      smime_identities: 0,
+    }
+    replies['account.list'] = (window as any).restoredAccounts
+  })
+  await settings.getByRole('button', { name: 'Restore', exact: true }).click()
+  await expect(page.getByText('Restored 1 account', { exact: true })).toBeVisible()
+  await expect(page.locator('[data-thread-list]')).toBeAttached()
+  await expect(page.getByRole('heading', { name: 'Connect a Mail Account' })).toHaveCount(0)
+  await expect(page.locator('[role="dialog"][data-test-kept]')).toHaveCount(1)
+  // (The focus is not kept in Settings: «Restore» disables itself while it
+  // works, and the browser drops the focus to the body, as in the window.)
+  await page.keyboard.press('Escape')
+  await expect(settings).toHaveCount(0)
+  await expect(button).toBeFocused()
+  expect(errors).toEqual([])
+})
 
 // #317: the common folder pane (ADR-0068 §4), mail first. One width for every
 // module, 260 px by default and 200 to 400, in px so the app's zoom grows the

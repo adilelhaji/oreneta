@@ -59,6 +59,9 @@
   "commands.aliases.folder": "carpeta bústia bustia folder mailbox",
   "commands.aliases.account": "compte canviar bústia bustia account switch mailbox",
   "commands.aliases.kanban": "tauler columnes kanban kanban board columns",
+  "commands.aliases.module": "mòdul modul anar module go to",
+  "commands.aliases.app.about": "quant a versió versio about version",
+  "commands.aliases.notifications": "no molestis silenci notificacions do not disturb notifications",
   "settingsSearch.aliases.appearance": "tema aparença aparenca color colors theme appearance color",
   "settingsSearch.aliases.typography": "tipografia lletra tipus mida text font text size",
   "settingsSearch.aliases.reading": "lectura densitat llista columnes reading density list",
@@ -2963,5 +2966,17 @@
   "settings.signature.placementAbove": "Damunt de la citació",
   "settings.signature.placementBelow": "Sota la citació",
   "shell.region.mail": "Correu",
-  "shell.region.modules": "Mòduls"
+  "shell.region.modules": "Mòduls",
+  "shell.region.banner": "Oreneta",
+  "appMenu.label": "Menú de l'aplicació",
+  "appMenu.area.modules": "Mòduls",
+  "appMenu.area.mail": "Correu",
+  "appMenu.area.conversation": "Conversa",
+  "appMenu.area.accounts": "Comptes",
+  "appMenu.area.folders": "Carpetes",
+  "appMenu.area.boards": "Taulers",
+  "appMenu.area.theme": "Tema",
+  "appMenu.area.notifications": "Notificacions",
+  "appMenu.area.settings": "Configuració",
+  "appMenu.area.app": "Aplicació"
 }

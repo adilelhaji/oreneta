@@ -217,6 +217,23 @@ límits, de dreta a esquerra, de regions i d'axe es mantenen, i se n'hi afegeixe
 a 1025, 1100 i 1440 px sense desplaçament horitzontal, l'amplada compartida, la barra a 1024 px, els
 valors dels filtres en travessar els 1025 px, l'àrab i el recorregut d'F6. És una nota d'evidència:
 cap fila no canvia d'estat.
+El 2026-10-22 (#343, peça 13a, pas 3 d'ADR-0068, `docs/design/top-band.md`) la finestra va
+incorporar la banda superior: la primera fila d'un `<header>` «Oreneta» (`banner`), entre la barra
+de títol i els avisos i fora de `<main>`, de 2,25 rem d'alçada i amb el botó «Menú de l'aplicació» a
+l'inici. El menú, fet amb la primitiva de la peça 7, té totes les ordres de la paleta agrupades per
+àrea i el que oferia el menú «Més» de la barra vertical, que s'hi queda fins a la peça 14 per decisió
+del propietari (#342). El que la paleta no tenia (els mòduls, el mode No molestis i «Quant a») hi ha
+entrat, de manera que hi ha una sola llista; «Paleta d'ordres» només surt al menú. La banda és la
+primera regió d'F6 (`search`), i el seu nom no coincideix amb el de cap altra regió en cap dels 20
+catàlegs. Per decisió del propietari (#343), la pantalla d'alta del primer compte també té la banda
+i el menú, només amb les ordres que no necessiten cap compte (la configuració, els temes i les de
+l'aplicació), i F6 hi va de la banda a l'alta. Les proves de límits, de dreta a esquerra, de zoom,
+de regions i d'axe es mantenen; el recorregut d'F6 de #306 passa ara per la banda, i se n'hi
+afegeixen de noves: la banda i el menú a 1440, 1025, 1024 i 768 px, el teclat i el ratolí (les
+fletxes del botó i del menú no mouen la selecció de la llista), executar-hi ordres, l'àrab amb axe i
+el menú obert, el 200 % a 1025 px i la pantalla d'alta amb la banda, en anglès i en àrab amb axe. És
+una nota d'evidència: cap fila no canvia d'estat (S01-04, SET-02, SET-27), i l'evidència nativa de
+Windows continua pendent.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per

@@ -59,6 +59,9 @@
   "commands.aliases.folder": "cartella casella di posta folder mailbox",
   "commands.aliases.account": "account cambia casella di posta account switch mailbox",
   "commands.aliases.kanban": "kanban bacheca colonne kanban board columns",
+  "commands.aliases.module": "modulo vai a module go to",
+  "commands.aliases.app.about": "informazioni versione about version",
+  "commands.aliases.notifications": "non disturbare notifiche do not disturb notifications",
   "settingsSearch.aliases.appearance": "tema aspetto colore theme appearance color",
   "settingsSearch.aliases.typography": "carattere testo dimensione font text size",
   "settingsSearch.aliases.reading": "lettura densità elenco reading density list",
@@ -2963,5 +2966,17 @@
   "settings.signature.placementAbove": "Sopra la citazione",
   "settings.signature.placementBelow": "Sotto la citazione",
   "shell.region.mail": "Posta",
-  "shell.region.modules": "Moduli"
+  "shell.region.modules": "Moduli",
+  "shell.region.banner": "Oreneta",
+  "appMenu.label": "Menu dell'app",
+  "appMenu.area.modules": "Moduli",
+  "appMenu.area.mail": "Posta",
+  "appMenu.area.conversation": "Conversazione",
+  "appMenu.area.accounts": "Account",
+  "appMenu.area.folders": "Cartelle",
+  "appMenu.area.boards": "Bacheche",
+  "appMenu.area.theme": "Tema",
+  "appMenu.area.notifications": "Notifiche",
+  "appMenu.area.settings": "Impostazioni",
+  "appMenu.area.app": "Applicazione"
 }

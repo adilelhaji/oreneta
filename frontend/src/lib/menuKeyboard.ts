@@ -160,9 +160,11 @@ export function focusMenuItem(item: HTMLElement) {
   const menu = item.closest<HTMLElement>('[role="menu"]')
   if (!menu || menu.scrollHeight <= menu.clientHeight) return
   const row = item.getBoundingClientRect()
-  const box = menu.getBoundingClientRect()
-  if (row.top < box.top) menu.scrollTop -= box.top - row.top
-  else if (row.bottom > box.bottom) menu.scrollTop += row.bottom - box.bottom
+  // What scrolls is shown inside the borders: the scrollport, not the box.
+  const top = menu.getBoundingClientRect().top + menu.clientTop
+  const bottom = top + menu.clientHeight
+  if (row.top < top) menu.scrollTop -= top - row.top
+  else if (row.bottom > bottom) menu.scrollTop += row.bottom - bottom
 }
 
 /** Focuses the first or last item of the menu in `surface`. False when it has none. */

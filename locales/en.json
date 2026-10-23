@@ -59,6 +59,9 @@
   "commands.aliases.folder": "folder mailbox",
   "commands.aliases.account": "account switch mailbox",
   "commands.aliases.kanban": "kanban board columns",
+  "commands.aliases.module": "module go to",
+  "commands.aliases.app.about": "about version",
+  "commands.aliases.notifications": "do not disturb notifications",
   "settingsSearch.aliases.appearance": "theme appearance color",
   "settingsSearch.aliases.typography": "font text size",
   "settingsSearch.aliases.reading": "reading density list",
@@ -2963,5 +2966,17 @@
   "settings.signature.placementAbove": "Above the quote",
   "settings.signature.placementBelow": "Below the quote",
   "shell.region.mail": "Mail",
-  "shell.region.modules": "Modules"
+  "shell.region.modules": "Modules",
+  "shell.region.banner": "Oreneta",
+  "appMenu.label": "App menu",
+  "appMenu.area.modules": "Modules",
+  "appMenu.area.mail": "Mail",
+  "appMenu.area.conversation": "Conversation",
+  "appMenu.area.accounts": "Accounts",
+  "appMenu.area.folders": "Folders",
+  "appMenu.area.boards": "Boards",
+  "appMenu.area.theme": "Theme",
+  "appMenu.area.notifications": "Notifications",
+  "appMenu.area.settings": "Settings",
+  "appMenu.area.app": "Application"
 }

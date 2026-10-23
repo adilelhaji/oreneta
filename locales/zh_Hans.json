@@ -59,6 +59,9 @@
   "commands.aliases.folder": "文件夹 邮箱 folder mailbox",
   "commands.aliases.account": "账户 切换 邮箱 account switch mailbox",
   "commands.aliases.kanban": "看板 列 kanban board columns",
+  "commands.aliases.module": "模块 转到 module go to",
+  "commands.aliases.app.about": "关于 版本 about version",
+  "commands.aliases.notifications": "勿扰 通知 do not disturb notifications",
   "settingsSearch.aliases.appearance": "主题 外观 颜色 theme appearance color",
   "settingsSearch.aliases.typography": "字体 文字 字号 font text size",
   "settingsSearch.aliases.reading": "阅读 密度 列表 reading density list",
@@ -2963,5 +2966,17 @@
   "settings.signature.placementAbove": "引用内容上方",
   "settings.signature.placementBelow": "引用内容下方",
   "shell.region.mail": "邮件",
-  "shell.region.modules": "模块"
+  "shell.region.modules": "模块",
+  "shell.region.banner": "Oreneta",
+  "appMenu.label": "应用菜单",
+  "appMenu.area.modules": "模块",
+  "appMenu.area.mail": "邮件",
+  "appMenu.area.conversation": "会话",
+  "appMenu.area.accounts": "账户",
+  "appMenu.area.folders": "文件夹",
+  "appMenu.area.boards": "看板",
+  "appMenu.area.theme": "主题",
+  "appMenu.area.notifications": "通知",
+  "appMenu.area.settings": "设置",
+  "appMenu.area.app": "应用"
 }

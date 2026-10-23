@@ -1,0 +1,222 @@
+# Banda superior i menú de l'aplicació (#343)
+
+Peça 13a del redisseny, pas 3 de l'ordre de migració
+d'[ADR-0068](../adr/0068-marc-comu-de-l-aplicacio.md) (§1, §2 i §9). Les
+decisions del propietari per a tota la peça 13 consten a
+[#342](https://github.com/adilelhaji/oreneta/issues/342): la barra vertical
+conserva el menú «Més» i l'indicador del mode No molestis fins a la peça 14, i
+la peça es lliura en tres PR (13a, la banda i el menú; 13b, la cerca, #344; 13c,
+l'estat de la sincronització i l'indicador del mode No molestis a la banda,
+#345). Les decisions que van sorgir durant la implementació de 13a consten a
+[#343](https://github.com/adilelhaji/oreneta/issues/343): el menú és pla, amb
+grups amb títol (decisió 1); la pantalla d'alta del primer compte també té la
+banda (decisió 2); i els problemes del correu al 200 % a 1025 px van a una
+incidència pròpia (decisió 3).
+
+Codi: `frontend/src/components/shell/AppHeader.tsx`,
+`components/shell/AppMenu.tsx`, `components/shell/AppFrame.tsx`,
+`components/shell/AppLayers.tsx`, `components/setup/SetupScreen.tsx`,
+`components/palette/paletteCommands.ts` (`area`, `menuOnly`, `COMMAND_AREAS`,
+`groupCommandsByArea`), `components/palette/useCommandList.ts`,
+`components/palette/CommandPalette.tsx`, `components/dialog/AppHotkeys.tsx`,
+`components/dialog/SettingsDialog.tsx` (`onAddAccount`),
+`lib/useDialogFocus.ts` i `App.tsx`.
+
+## La capçalera i la banda
+
+- **On és:** dins de la finestra, sota la barra de títol del sistema (a macOS,
+  sota `MacTitleBar`, sense cap patró nou de Wails) i damunt dels avisos
+  (`ConnectivityBanner`, `UpdateBanner`), fora de `<main>`. És l'ordre d'ADR-0068
+  §1: barra de títol, capçalera, avisos i la resta.
+- **Capçalera:** un `<header>` (`banner`) amb el nom «Oreneta», que és el nom de
+  l'aplicació i no es tradueix (`shell.region.banner`, igual en els 20 catàlegs).
+  La banda n'és la primera fila; la barra d'eines principal (§3) en serà la
+  segona quan existeixi la primitiva de la peça 8.
+- **Banda:** 2,25 rem d'alçada (`h-9`), és a dir, 36 px al 100 % i 72 px al 200 %
+  de l'aplicació, amb el to del marc d'avui (`--me-bg-header`) fins que #287 hi
+  posi el to «marc», i un divisor a sota. Té tres zones en fila: l'inici, amb el
+  botó «Menú de l'aplicació»; el centre, que ocupa l'espai que queda i on anirà
+  el camp de cerca (13b); i el final, on aniran l'indicador del mode No molestis
+  i l'estat de la sincronització (13c). De moment, el centre i el final estan
+  buits.
+- **Totes les amplades:** la banda i el botó es veuen a qualsevol amplada, també
+  per sota de 769 px; el botó de cerca i la icona de l'estat hi arriben amb 13b i
+  13c.
+- **Regió d'F6:** la banda és la regió `search`, la primera de `REGION_ORDER`
+  (vegeu [app-regions.md](app-regions.md)); F6 hi porta el focus al botó del menú.
+  13b hi afegeix el camp sense canviar la regió.
+- **La pantalla d'alta del primer compte** també té la banda, amb el mateix botó
+  «Menú de l'aplicació» (decisió 2 del propietari a #343): la barra de títol, la
+  capçalera «Oreneta» i, després, l'alta del compte dins de `<main>`, que és la
+  regió `content`. F6 i Maj+F6 van de la banda a l'alta i tornen. Vegeu
+  [la pantalla d'alta](#la-pantalla-dalta-del-primer-compte).
+
+## El menú de l'aplicació
+
+- **Botó:** «Menú de l'aplicació» (`appMenu.label`), amb `aria-haspopup="menu"` i
+  `aria-expanded`. El nom és diferent del «Més» de la barra vertical en tots els
+  catàlegs.
+- **Contingut:** totes les ordres de la paleta (`useCommandList`), cadascuna una
+  sola vegada, agrupades per àrea (`MenuGroup`, amb el títol de l'àrea com a nom
+  del grup). No hi ha cap segona llista: el que el menú «Més» de la barra vertical
+  tenia i la paleta no, ara és a `useCommandList`, i per això la paleta també ho
+  té. L'única excepció és «Paleta d'ordres», que només surt al menú
+  (`menuOnly`): a la paleta només obriria la mateixa paleta.
+- **Un menú pla** (decisió 1 del propietari a #343): una sola llista amb un grup
+  amb títol per a cada àrea, sense submenús. Amb comptes, carpetes i temes té
+  entre 70 i 100 elements i es desplaça; més endavant hi pot haver un submenú
+  per àrea.
+- **Àrees**, en aquest ordre (`COMMAND_AREAS`):
+
+  | Àrea | Títol | Ordres |
+  |---|---|---|
+  | `modules` | Mòduls | «Ves a: Correu» i un «Ves a: …» per a cada mòdul |
+  | `mail` | Correu | Redactar, l'enviament personalitzat, els pendents de resposta, sincronitzar, marcar-ho tot com a llegit, les dues cerques i els tres filtres |
+  | `conversation` | Conversa | Respondre, l'editor complet, arxivar, destacar, marcar com a no llegit, suprimir i tancar la pestanya; aquestes ordres només hi són quan escau |
+  | `accounts` | Comptes | Afegir un compte, la safata unificada i cada compte |
+  | `folders` | Carpetes | Cada carpeta del compte |
+  | `boards` | Taulers | Crear un tauler kanban i cada tauler |
+  | `theme` | Tema | Cada tema |
+  | `notifications` | Notificacions | Les tres pauses del mode No molestis o «Reprèn les notificacions» |
+  | `settings` | Configuració | «Obre la configuració» i, després, cada secció que pot obrir |
+  | `app` | Aplicació | La paleta d'ordres, les dreceres de teclat, el catàleg de disseny i «Quant a Oreneta» |
+
+  Dins d'una àrea, les accions van abans que les seccions de la configuració, i
+  cada tipus conserva l'ordre de la llista. La paleta no fa servir les àrees.
+- **El menú «Més» de la barra vertical** es troba també al menú de l'aplicació:
+  els mòduls, la paleta, afegir un compte, afegir un tauler, sincronitzar, el
+  mode No molestis, la configuració i «Quant a». Afegir un compte, afegir un
+  tauler, sincronitzar i la configuració ja eren ordres de la paleta i hi surten
+  una sola vegada, amb el que fa la paleta: afegir un tauler el crea de seguida
+  amb el nom per defecte, com «Crea un tauler kanban», sense el diàleg del nom
+  de la barra vertical, i el mostra al correu, encara que l'ordre s'hagi
+  executat des d'un altre mòdul.
+- **Ordres noves de la paleta:** un «Ves a: …» per a cada mòdul (ADR-0068 §5),
+  «Quant a Oreneta» i les del mode No molestis, amb els sinònims als catàlegs
+  (`commands.aliases.module`, `.app.about` i `.notifications`). «Paleta
+  d'ordres» és nova al menú, no a la paleta, i no té sinònims als catàlegs:
+  cap cerca no la busca.
+- **Destinacions del correu des d'un altre mòdul:** «Ves a: Correu», un compte,
+  un tauler, una carpeta o un tauler nou tornen al correu, com fa la barra
+  vertical. Abans, des del Calendari, la paleta canviava la selecció del correu
+  sense mostrar-la. Només es marquen quan el correu és a la pantalla: «Ves a:
+  Correu», un compte o una carpeta, sense cap tauler obert; un tauler, quan és
+  obert. Des d'un altre mòdul, cap d'aquestes no es marca.
+- **Estat:** les ordres que mostren un estat (el mòdul, el tema, el filtre, el
+  compte, la carpeta, el tauler) són `menuitemradio` amb `aria-checked`, i la
+  marcada té el text en el color d'accent i una marca al final. Les altres són
+  `menuitem`. Una ordre que no es pot fer (en un compte de només lectura) és
+  `aria-disabled`, no fa res i diu per què amb el text de la paleta: a la
+  indicació (`title`), per al punter, i com a descripció accessible
+  (`aria-describedby`, un text visualment ocult amb `sr-only` al costat de
+  l'element), per al teclat i els lectors de pantalla, on no arriba la
+  indicació. Les dreceres es mostren al final de la fila i no formen part del
+  nom.
+- **Executar una ordre:** primer el focus torna al botó i després s'executa
+  l'ordre, com fa la paleta. Així, un diàleg que s'obri (la configuració, «Quant
+  a», la paleta) torna el focus al botó en tancar-se, i una ordre que mou el focus
+  (la cerca, la resposta) el pren des del botó.
+
+## Teclat i focus
+
+- Retorn, Espai o Avall l'obren amb el focus al primer element, i Amunt, amb el
+  focus a l'últim. Dins del menú, Amunt, Avall, Inici, Fi i la cerca per lletra
+  són els de la [primitiva de menús](menus.md).
+- Les tecles a què respon el botó (Retorn, Espai, Avall i Amunt) s'hi queden, i
+  les fletxes del menú obert també: cap no arriba a les dreceres de l'aplicació
+  (`AppHotkeys`), que amb les fletxes passarien a la conversa següent de la
+  llista o a la targeta següent del tauler.
+- Una drecera amb Ctrl/⌘, Alt o una tecla de funció premuda dins del menú actua
+  des del botó: el menú es tanca i el focus hi torna abans que la drecera actuï.
+  Així, la paleta que obre Ctrl/⌘+K (o la configuració, amb Ctrl/⌘+,) torna el
+  focus al botó en tancar-se, i no a un element que ja no hi és.
+- Escapada el tanca i torna el focus al botó; Tab el tanca i avança des del botó.
+  També el tanquen un clic o un desplaçament fora, un canvi de mida de la
+  finestra, el focus en un altre lloc (F6, per exemple) i un segon clic al botó.
+- És un menú llarg que es desplaça. Per això el menú mateix és una parada de Tab
+  (`MenuList` amb `tabStop`), perquè la zona que es desplaça es pugui fer servir
+  amb el teclat (la regla `scrollable-region-focusable` d'axe); els elements
+  continuen fora de l'ordre de Tab. Quan el focus arriba a una fila, el menú es
+  desplaça fins que la fila es veu sencera dins de les vores.
+
+## Posició, dreta a esquerra i zoom
+
+- S'obre sota el botó, amb la vora inicial a la vora inicial del botó: cap a la
+  dreta, o cap a l'esquerra en àrab (`startEdgeX` i `menuLeft`).
+- Fa 20 rem d'amplada, mai més que la finestra menys 8 px a cada costat, i com a
+  màxim l'alçada que queda fins a 8 px de la vora inferior; la resta es desplaça.
+  Les mides són en píxels sencers, perquè l'última fila no quedi tallada per mig
+  píxel.
+- Al 200 % de l'aplicació la banda fa 72 px. A 1025 px, aquesta alçada surt de les
+  subfinestres: la pàgina no es desplaça i els controls dels límits del correu
+  continuen dins de l'alçada de la finestra.
+- **Límit conegut, anterior a la banda:** al 200 % i a 1025 px, «Més accions» de
+  la capçalera de la conversa ja quedava en part fora de la vora final. La banda
+  no mou res cap als costats; la barra d'eines principal (§3) és la peça que
+  canvia aquesta capçalera.
+
+## La pantalla d'alta del primer compte
+
+Decisió 2 del propietari a #343: sense cap compte, la finestra també té la
+banda.
+
+- **Estructura:** la pantalla d'alta i la finestra comparteixen el marc
+  (`components/shell/AppFrame.tsx`): la barra de títol (`MacTitleBar`), la
+  capçalera «Oreneta» amb la banda i el botó «Menú de l'aplicació», i les capes
+  (diàlegs, avisos emergents i confirmacions). A la pantalla d'alta, el marc té
+  a dins l'alta del compte, a `<main>`, que és la regió `content`
+  (`components/setup/SetupScreen.tsx`). Com abans, no hi ha els avisos de la
+  finestra (`ConnectivityBanner`, `UpdateBanner`).
+- **El marc no es torna a muntar** quan arriba el primer compte: només en canvia
+  el contingut. Un diàleg obert damunt de l'alta continua obert, com la
+  configuració després de restaurar una còpia de seguretat que porta un compte,
+  i en tancar-se torna el focus al control que l'havia obert, si encara hi és
+  (el botó del menú, sí; un camp de l'alta, que ha desaparegut amb ella, no, i
+  llavors el focus queda a la pàgina). El focus també hi torna quan havia caigut
+  al cos de la pàgina perquè «Restaura» es desactiva mentre treballa
+  (`useDialogFocus`), com als menús.
+- **El menú** és el mateix, amb les ordres que no necessiten cap compte: les
+  àrees `theme`, `settings` i `app` (la configuració i les seves seccions, els
+  temes, la paleta, les dreceres de teclat, el catàleg de disseny i «Quant a»).
+  Les que actuen sobre el correu, un mòdul o les notificacions (comptes,
+  carpetes, taulers, sincronitzar, el mode No molestis) no hi surten, en lloc de
+  sortir desactivades: sense compte no tenen sentit. Afegir un compte tampoc no
+  hi és: la pantalla ja serveix per a això. La paleta mostra les mateixes
+  ordres.
+- **Els diàlegs** (`components/shell/AppLayers.tsx`) són els de la finestra: la
+  configuració, la paleta, les dreceres, «Quant a», les novetats, les
+  confirmacions i els avisos emergents. Aquests avisos ara també surten a la
+  pantalla d'alta: abans no s'hi veien l'avís d'una arrencada fallida ni el
+  d'un error greu del motor (`core.fatal`).
+- **El «+» de la configuració** (al costat de «Comptes de correu» i de «Comptes
+  de canals») no obre un segon diàleg d'alta damunt d'una pantalla que ja és
+  l'alta: tanca la configuració i torna el focus a l'alta, on era (al principi, al
+  camp de l'adreça), sense canviar-ne el proveïdor ni el que s'hi havia escrit.
+- **Teclat:** només hi actuen les dreceres de l'aplicació (`AppHotkeys` amb
+  `setup`): la paleta, la configuració, les dreceres de teclat, el zoom
+  (Ctrl/⌘ amb =, - i 0), F6 i Maj+F6. Les fletxes, Escapada i Supr són de la
+  pàgina, i les dreceres del correu no hi fan res. F6 va de la banda a l'alta i
+  Maj+F6 torna.
+- El focus continua començant al camp de l'adreça, com abans.
+
+## Proves
+
+| Nivell | Què cobreix |
+|---|---|
+| N1 (`components/palette/paletteCommands.test.ts`) | L'ordre de les àrees, cada ordre una sola vegada, l'ordre dins d'una àrea i les accions abans de les seccions |
+| N2 (`components/palette/useCommandList.test.tsx`) | Cada ordre té una àrea i un identificador únic; els mòduls, la paleta, «Quant a» i el mode No molestis; les destinacions del correu des d'un altre mòdul (un compte, un tauler, una carpeta i un tauler nou), i cap marcada des d'un altre mòdul; «Paleta d'ordres» només al menú; sense compte, només la configuració, els temes i l'aplicació; els sinònims en anglès i en català |
+| N2 (`components/shell/AppHeader.test.tsx`) | La capçalera «Oreneta» i la banda (`search`, `h-9`, tres zones); el menú amb totes les ordres per àrea i el menú «Més»; els elements de ràdio; executar una ordre; una ordre desactivada, amb el motiu com a descripció; el teclat (també Amunt) i el retorn del focus; Avall i Amunt al botó i les fletxes del menú no mouen la selecció de la llista ni del tauler, i cap de les tecles que gestionen el botó i el menú no arriba a la finestra; Ctrl/⌘+K des del menú torna el focus al botó; «Paleta d'ordres» al menú i no a la paleta; el menú sense compte; com es tanca; la posició en les dues direccions i en una finestra estreta; els noms en els 20 catàlegs |
+| N2 (`components/setup/SetupScreen.test.tsx`) | La banda a la pantalla d'alta, damunt de `<main>` (`content`); F6 i Maj+F6; la configuració i la paleta des del menú i des del teclat; el zoom; les dreceres del correu (Ctrl/⌘+N no s'hi consumeix) i les fletxes no hi actuen; el «+» de la configuració torna a l'alta sense canviar-la; la configuració continua oberta, amb el focus, quan arriba el primer compte, i el torna al botó del menú en tancar-se |
+| N2 (`lib/useDialogFocus.test.tsx`) | En tancar-se, un diàleg torna el focus al control que l'havia obert, també quan havia caigut al cos de la pàgina; el focus que ha pres un altre control s'hi queda |
+| N1 (`lib/regions.test.ts`) | La banda és la primera regió, i des del menú F6 passa a la regió següent |
+| N2 (`components/menu/Menu.test.tsx`, `lib/menuKeyboard.test.ts`) | `tabStop`; el desplaçament fins a la fila sencera |
+| e2e (`startup.e2e.ts`, «#343») | La banda i el menú a 1440, 1025, 1024 i 768 px; el teclat i el ratolí, amb la mateixa conversa oberta després d'Avall, d'Amunt i de les fletxes del menú; Ctrl/⌘+K des del menú; executar la configuració, un mòdul, un compte, el mode No molestis, «Quant a» i la paleta; el motiu d'una ordre desactivada com a descripció; el menú «Més» de la barra vertical; l'àrab amb axe i el menú obert a 1440 i a 768 px; el 200 % a 1025 px; la pantalla d'alta amb la banda, el menú, F6, el zoom i axe, en anglès i en àrab; el «+» de la configuració a la pantalla d'alta; una còpia de seguretat restaurada des de la configuració a la pantalla d'alta, amb la configuració oberta i el focus de tornada al botó del menú. El recorregut d'F6 de «#306» comença a la banda |
+
+## Pendent
+
+- 13b (#344): el camp de cerca al centre de la banda.
+- 13c (#345): l'indicador del mode No molestis i l'estat de la sincronització al
+  final.
+- Peça 14: la barra vertical se'n va, amb el seu menú «Més» i el seu indicador.
+- El to «marc» (#287).
+- L'evidència nativa (N4) i amb lectors de pantalla continua pendent (#37).

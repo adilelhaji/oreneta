@@ -19,7 +19,15 @@ export function CommandPalette() {
   const id = useId()
 
   const commands = useCommandList()
-  const filtered = useMemo(() => filterCommands(commands, query), [commands, query])
+  // The palette does not list itself; the app menu does (#343).
+  const filtered = useMemo(
+    () =>
+      filterCommands(
+        commands.filter((command) => !command.menuOnly),
+        query,
+      ),
+    [commands, query],
+  )
 
   // Focus the search field whenever the palette opens.
   useEffect(() => {

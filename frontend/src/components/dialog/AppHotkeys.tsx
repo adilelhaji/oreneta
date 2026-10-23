@@ -198,16 +198,35 @@ function handleRailShortcut(action: ShortcutId): boolean {
   return true
 }
 
+// What acts on the first-account setup screen (#343): the shortcuts of the
+// app itself, which need no account. The others act on mail or on a module.
+const SETUP_SHORTCUTS: ReadonlySet<ShortcutId> = new Set([
+  'palette.open',
+  'settings.open',
+  'shortcuts.help',
+  'pane.next',
+  'pane.prev',
+  'view.zoomIn',
+  'view.zoomOut',
+  'view.zoomReset',
+])
+
 /**
  * Mounts the global keyboard shortcuts. Renders nothing. ⌘/Ctrl-modified
  * shortcuts work everywhere (even while typing); bare single-key shortcuts
  * (j/k/e/s/u/#/i/r) fire in the chat and kanban views when not typing and no
  * modal is open. Per-palette navigation (arrows/enter/esc) lives inside
- * CommandPalette.
+ * CommandPalette. On the first-account setup screen (`setup`) only the app's
+ * own shortcuts act, and the arrows, Escape and Delete stay the page's.
  */
-export function AppHotkeys() {
+export function AppHotkeys({ setup = false }: { setup?: boolean }) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (setup) {
+        const action = matchShortcut(event)
+        if (!action || !SETUP_SHORTCUTS.has(action)) return
+      }
+
       if (event.key === 'Escape' && !isTyping(event.target) && !modalOpen() && selectedBulkItems().length > 0) {
         event.preventDefault()
         clearBulkSelection()
@@ -487,7 +506,7 @@ export function AppHotkeys() {
       window.removeEventListener('pointerdown', clearThreadListDeleteScope)
       window.removeEventListener('oreneta.frameKeyDown', onFrameKeyDown)
     }
-  }, [])
+  }, [setup])
 
   return null
 }

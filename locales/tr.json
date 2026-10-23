@@ -59,6 +59,9 @@
   "commands.aliases.folder": "klasör posta kutusu folder mailbox",
   "commands.aliases.account": "hesap değiştir posta kutusu account switch mailbox",
   "commands.aliases.kanban": "kanban pano sütunlar board columns kanban board columns",
+  "commands.aliases.module": "modül git module go to",
+  "commands.aliases.app.about": "hakkında sürüm about version",
+  "commands.aliases.notifications": "rahatsız etme bildirimler do not disturb notifications",
   "settingsSearch.aliases.appearance": "tema görünüm renk theme appearance color",
   "settingsSearch.aliases.typography": "yazı tipi metin boyut font text size",
   "settingsSearch.aliases.reading": "okuma yoğunluk liste reading density list",
@@ -2963,5 +2966,17 @@
   "settings.signature.placementAbove": "Alıntının üstünde",
   "settings.signature.placementBelow": "Alıntının altında",
   "shell.region.mail": "Posta",
-  "shell.region.modules": "Modüller"
+  "shell.region.modules": "Modüller",
+  "shell.region.banner": "Oreneta",
+  "appMenu.label": "Uygulama menüsü",
+  "appMenu.area.modules": "Modüller",
+  "appMenu.area.mail": "Posta",
+  "appMenu.area.conversation": "İleti dizisi",
+  "appMenu.area.accounts": "Hesaplar",
+  "appMenu.area.folders": "Klasörler",
+  "appMenu.area.boards": "Panolar",
+  "appMenu.area.theme": "Tema",
+  "appMenu.area.notifications": "Bildirimler",
+  "appMenu.area.settings": "Ayarlar",
+  "appMenu.area.app": "Uygulama"
 }

@@ -59,6 +59,9 @@
   "commands.aliases.folder": "φάκελος γραμματοκιβώτιο folder mailbox",
   "commands.aliases.account": "λογαριασμός εναλλαγή γραμματοκιβώτιο account switch mailbox",
   "commands.aliases.kanban": "kanban πίνακας στήλες kanban board columns",
+  "commands.aliases.module": "ενότητα μετάβαση σε module go to",
+  "commands.aliases.app.about": "σχετικά έκδοση about version",
+  "commands.aliases.notifications": "μην ενοχλείτε ειδοποιήσεις do not disturb notifications",
   "settingsSearch.aliases.appearance": "θέμα εμφάνιση χρώμα theme appearance color",
   "settingsSearch.aliases.typography": "γραμματοσειρά κείμενο μέγεθος font text size",
   "settingsSearch.aliases.reading": "ανάγνωση πυκνότητα λίστα reading density list",
@@ -2963,5 +2966,17 @@
   "settings.signature.placementAbove": "Πάνω από το παράθεμα",
   "settings.signature.placementBelow": "Κάτω από το παράθεμα",
   "shell.region.mail": "Ταχυδρομείο",
-  "shell.region.modules": "Ενότητες"
+  "shell.region.modules": "Ενότητες",
+  "shell.region.banner": "Oreneta",
+  "appMenu.label": "Μενού εφαρμογής",
+  "appMenu.area.modules": "Ενότητες",
+  "appMenu.area.mail": "Ταχυδρομείο",
+  "appMenu.area.conversation": "Συνομιλία",
+  "appMenu.area.accounts": "Λογαριασμοί",
+  "appMenu.area.folders": "Φάκελοι",
+  "appMenu.area.boards": "Πίνακες",
+  "appMenu.area.theme": "Θέμα",
+  "appMenu.area.notifications": "Ειδοποιήσεις",
+  "appMenu.area.settings": "Ρυθμίσεις",
+  "appMenu.area.app": "Εφαρμογή"
 }

@@ -59,6 +59,9 @@
   "commands.aliases.folder": "المجلد صندوق البريد folder mailbox",
   "commands.aliases.account": "الحساب تبديل صندوق البريد account switch mailbox",
   "commands.aliases.kanban": "كانبان لوحة أعمدة kanban board columns",
+  "commands.aliases.module": "وحدة الانتقال إلى module go to",
+  "commands.aliases.app.about": "حول الإصدار about version",
+  "commands.aliases.notifications": "عدم الإزعاج الإشعارات do not disturb notifications",
   "settingsSearch.aliases.appearance": "السمة المظهر اللون theme appearance color",
   "settingsSearch.aliases.typography": "الخط النص الحجم font text size",
   "settingsSearch.aliases.reading": "القراءة الكثافة القائمة reading density list",
@@ -2963,5 +2966,17 @@
   "settings.signature.placementAbove": "فوق الاقتباس",
   "settings.signature.placementBelow": "تحت الاقتباس",
   "shell.region.mail": "البريد",
-  "shell.region.modules": "الوحدات"
+  "shell.region.modules": "الوحدات",
+  "shell.region.banner": "Oreneta",
+  "appMenu.label": "قائمة التطبيق",
+  "appMenu.area.modules": "الوحدات",
+  "appMenu.area.mail": "البريد",
+  "appMenu.area.conversation": "المحادثة",
+  "appMenu.area.accounts": "الحسابات",
+  "appMenu.area.folders": "المجلدات",
+  "appMenu.area.boards": "اللوحات",
+  "appMenu.area.theme": "السمة",
+  "appMenu.area.notifications": "الإشعارات",
+  "appMenu.area.settings": "الإعدادات",
+  "appMenu.area.app": "التطبيق"
 }
