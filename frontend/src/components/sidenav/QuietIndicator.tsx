@@ -28,27 +28,52 @@ export function useQuietState(): QuietState {
 }
 
 /**
- * The side navigation's sign that notifications are quiet (ADR-0049): shown
- * only while they are, and one click resumes them. Badges keep updating either
- * way, so the sign is what tells the person why nothing popped up.
+ * The sign that notifications are quiet (ADR-0049): shown only while they
+ * are, and one click resumes them. Badges keep updating either way, so the
+ * sign is what tells the person why nothing popped up.
+ *
+ * It sits at the end of the top band (ADR-0068 §2, #345), at every width.
+ * Until piece 14 retires the vertical rail, the rail shows it too (owner
+ * decision 1 on #342): both read the same state, so they appear, change and
+ * go together. The band's is the `status`, named by what it says; the rail's
+ * copy (`placement="rail"`) is only the button, so the status is not there
+ * twice for a screen reader. Both buttons resume, and both say the state in
+ * their tooltip.
  */
-export function QuietIndicator() {
+export function QuietIndicator({ placement = 'band' }: { placement?: 'band' | 'rail' }) {
   const { t } = useTranslation()
   const state = useQuietState()
   if (!state.quiet) return null
   const status = quietStatusText(state, t, notificationClock.now())
   const resume = t('notifications.dnd.resume', { defaultValue: 'Resume notifications' })
+  const button = (className: string, iconSize: number) => (
+    <button
+      type="button"
+      onClick={() => resumeNotifications()}
+      title={`${status} — ${resume}`}
+      aria-label={resume}
+      className={className}
+    >
+      <BellOff size={iconSize} strokeWidth={1.75} aria-hidden="true" />
+    </button>
+  )
+  if (placement === 'rail')
+    return (
+      <div data-quiet-indicator="rail" className="flex flex-col items-center">
+        {button(
+          'flex h-10 w-10 items-center justify-center rounded-control bg-white/20 text-white ring-2 ring-warning transition-colors duration-120 hover:bg-white/30 cursor-pointer',
+          18,
+        )}
+      </div>
+    )
   return (
-    <div role="status" aria-label={status} className="flex flex-col items-center">
-      <button
-        type="button"
-        onClick={() => resumeNotifications()}
-        title={`${status} — ${resume}`}
-        aria-label={resume}
-        className="flex h-10 w-10 items-center justify-center rounded-control bg-white/20 text-white ring-2 ring-warning transition-colors duration-120 hover:bg-white/30 cursor-pointer"
-      >
-        <BellOff size={18} strokeWidth={1.75} aria-hidden="true" />
-      </button>
+    <div role="status" aria-label={status} data-quiet-indicator="band" className="flex shrink-0 items-center">
+      {/* The warning tone on its own soft tone, which every theme keeps at
+          4.5:1 or more (lib/themes.test.ts), as the danger button does. */}
+      {button(
+        'flex h-8 w-8 items-center justify-center rounded-control-sm border border-warning/30 bg-warning-soft text-warning transition-colors duration-(--duration-fast) hover:border-warning cursor-pointer',
+        16,
+      )}
     </div>
   )
 }

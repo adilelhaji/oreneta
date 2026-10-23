@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it } from 'bun:test'
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import { ConnectivityBanner } from '../src/components/banner/ConnectivityBanner'
+import { SyncStatus } from '../src/components/shell/SyncStatus'
 import { accounts$ } from '../src/states/accounts'
 import { connectivity$, setSyncError } from '../src/states/connectivity'
 import { ui$ } from '../src/states/ui'
@@ -42,8 +43,15 @@ it('keeps dismissed failures discoverable and navigates the exact account withou
 
 it('announces failures without moving focus and does not offer untargeted or paused retries', () => {
   accounts$.set([{ ...account, paused: true }])
-  const view = render(<ConnectivityBanner />)
-  const toggle = view.getByRole('button', { name: 'Account sync' })
+  // With nothing prominent the status is the top band's alone (#345): its
+  // button opens the detail, and the bar under the header waits for a failure.
+  const view = render(
+    <>
+      <SyncStatus />
+      <ConnectivityBanner />
+    </>,
+  )
+  const toggle = view.getByRole('button', { name: 'Complete sync status unknown' })
   toggle.focus()
   act(() => setSyncError(null, 'credential'))
   expect(document.activeElement).toBe(toggle)

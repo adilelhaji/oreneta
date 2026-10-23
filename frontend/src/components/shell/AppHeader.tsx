@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useTranslation } from '../../lib/i18n'
+import { QuietIndicator } from '../sidenav/QuietIndicator'
 import { AppMenuButton } from './AppMenu'
 import { BandSearch } from './BandSearch'
+import { SyncStatus } from './SyncStatus'
 
 /**
  * The window's header (ADR-0068 §1 and §2): the `banner` landmark «Oreneta»,
@@ -11,14 +13,15 @@ import { BandSearch } from './BandSearch'
  * Its first row is the top band, 2.25 rem tall so it grows with the app's
  * zoom, in today's frame tone (`--me-bg-header`) until #287 adds the «marc»
  * one. The app menu sits at its start and the search field, scoped to the
- * module on screen, at its centre (#344); the end is laid out for the sync
- * status and do-not-disturb (13c, #345). The band is the first region F6
- * reaches: `search`. The main toolbar (§3) becomes the second row once the
- * piece 8 primitive exists.
+ * module on screen, at its centre (#344); its end holds the do-not-disturb
+ * indicator and the sync status (#345). The band is the first region F6
+ * reaches, `search`, and Tab goes through it from start to end. The main
+ * toolbar (§3) becomes the second row once the piece 8 primitive exists.
  *
- * On the first-account setup screen (`setup`) there is no module to search,
- * so the band has no search field: as in the app menu, what needs an
- * account is left out rather than shown disabled (#343, #344).
+ * On the first-account setup screen (`setup`) there is no module to search
+ * and no account to sync or be notified about, so the band has neither the
+ * search field nor its end: as in the app menu, what needs an account is
+ * left out rather than shown disabled (#343, #344, #345).
  */
 export function AppHeader({ setup = false }: { setup?: boolean }) {
   const { t } = useTranslation()
@@ -39,7 +42,17 @@ export function AppHeader({ setup = false }: { setup?: boolean }) {
         <div data-band-centre className="flex min-w-0 flex-1 items-center justify-center">
           {!setup && <BandSearch onCover={setCovered} />}
         </div>
-        <div data-band-end inert={inert} className="flex shrink-0 items-center gap-1" />
+        {/* At most 35 % of the band, so the search keeps its room: the
+            summary is cut short with «…», its whole text still the button's
+            name and tooltip. Nothing on the setup screen. */}
+        <div data-band-end inert={inert} className="flex min-w-0 max-w-[35%] shrink-0 items-center gap-1">
+          {!setup && (
+            <>
+              <QuietIndicator />
+              <SyncStatus />
+            </>
+          )}
+        </div>
       </div>
     </header>
   )
