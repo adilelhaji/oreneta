@@ -240,12 +240,13 @@ pantalla, que llegeix i escriu l'estat de cerca que ja tenia cada mòdul (el cor
 Persones, Tasques i el nom del fitxer d'Adjunts), amb els mateixos retards i els mateixos textos,
 mentre els camps propis dels mòduls desapareixen. El constructor de cerques i les cerques desades del
 correu s'obren des del final del camp. Ctrl/⌘+Maj+F i la `/` de l'esquema Gmail hi posen el focus, i
-Ctrl/⌘+F continua obrint la cerca de la conversa quan n'hi ha una a la pantalla. El Calendari i el Xat,
+Ctrl/⌘+F continua obrint la cerca de la conversa quan n'hi ha una a la pantalla; les ordres de cerca de
+la paleta i del menú porten primer al correu (decisió del propietari a #344). El Calendari i el Xat,
 que no tenen cerca, mostren el camp desactivat amb el motiu (decisió 3 del propietari a #342). Per
 sota de 769 px, un botó de la banda obre el camp damunt de la banda, i Escapada el tanca i torna el
 focus al botó. La pantalla d'alta del primer compte no té el camp. Les proves de límits, de dreta a
 esquerra, de zoom, de regions i d'axe es mantenen, amb els localitzadors que trobaven els camps dels
-mòduls canviats al de la banda, i se n'hi afegeixen de noves: la cerca des de la banda a cada mòdul,
+mòduls, ara apuntats al camp de la banda, i se n'hi afegeixen de noves: la cerca des de la banda a cada mòdul,
 el Calendari i el Xat desactivats amb axe, les dreceres, el botó a 768 px amb axe, l'àrab amb axe a
 1440 i 768 px i el 200 % a 1025 px. És una nota d'evidència: cap fila no canvia d'estat (S01-04,
 S01-05, SET-02, SET-27), i l'evidència nativa de Windows continua pendent.
