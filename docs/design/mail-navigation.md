@@ -277,10 +277,11 @@ que el filtre d'abans (ADR-0068 §4, fila de Persones).
   desplegable. Persones no té arrossegar i deixar anar ni menús contextuals a la
   columna, de manera que no se n'ha hagut de moure cap.
 - **Què queda a la llista:** la capçalera (títol, importar, exportar, «Contacte
-  nou», cerca i l'avís de possibles duplicats) i la llista de persones continuen
-  al mòdul, en una columna de 288 px al costat de la subfinestra (18 rem per
-  sota de 1025 px), i els detalls de la persona al seu costat. És el que l'ADR
-  anomena la llista, no les carpetes.
+  nou» i l'avís de possibles duplicats) i la llista de persones continuen al
+  mòdul, en una columna de 288 px al costat de la subfinestra (18 rem per sota
+  de 1025 px), i els detalls de la persona al seu costat. És el que l'ADR
+  anomena la llista, no les carpetes. La cerca, que també era a la capçalera,
+  és a la banda superior des de #344 ([top-band.md](top-band.md#la-cerca-344)).
 - **Regió i nom:** la subfinestra és la regió «carpetes» d'F6 de Persones i es diu
   «Grups de contactes» (`people.contactGroups`), una cadena pròpia de l'escriptori
   i diferent de `<main>` («Persones») i de «Grups» (el títol d'una secció de la
@@ -372,7 +373,10 @@ eren pestanyes sota la capçalera, passen a ser la subfinestra de carpetes comun
   llegint, les que no s'han pogut llegir i l'avís d'una llista afegida en
   actualitzar), l'estat de sincronització d'una llista amb servidor i els
   conflictes no són llistes, i continuen sobre les tasques, com abans. També la
-  capçalera (títol, «Mostra les completades», «Tasca nova») i la cerca. Tasques
+  capçalera (títol, «Mostra les completades», «Tasca nova»). La cerca, que
+  quedava a la barra de sota la capçalera, és a la banda superior des de #344
+  ([top-band.md](top-band.md#la-cerca-344)); a partir de 1025 px ja no hi ha
+  aquesta barra, i per sota hi queden les pestanyes. Tasques
   no té cap filtre d'estat a part de «Mostra les completades», ni reordenació de
   llistes, ni arrossegar i deixar anar, ni menús contextuals a les pestanyes, de
   manera que no se n'ha hagut de moure cap.
@@ -435,9 +439,11 @@ carpetes comuna (ADR-0068 §4, fila de Notes).
   abans d'entrar-hi seguia filtrant-la, sense cap botó per treure-la, i la
   paperera semblava buida. L'etiqueta triada es conserva i torna a aplicar-se en
   sortir de la paperera.
-- **Què queda a la llista:** la cerca (a dalt de la llista; passarà a la banda
-  superior en una peça posterior), «Paperera» i «Nota nova» a la capçalera, la
-  llista de notes i l'editor. La columna de la llista és de 320 px (20 rem a
+- **Què queda a la llista:** «Paperera» i «Nota nova» a la capçalera, la
+  llista de notes i l'editor. La cerca, que era a dalt de la llista, és a la
+  banda superior des de #344 ([top-band.md](top-band.md#la-cerca-344)); per
+  sota de 1025 px, a dalt de la llista només hi ha els botons d'etiqueta, i
+  només si n'hi ha. La columna de la llista és de 320 px (20 rem a
   1024 px i menys) i el mòdul demana 680 px com a base (la llista i els 360 px de
   la nota, el mínim del lector d'ADR-0068 §7): la subfinestra, que cedeix abans
   que res, s'encongeix fins a donar-los-hi. A 1025 px, amb la barra vertical de
@@ -524,6 +530,11 @@ sota la capçalera, passa a ser el cos de la subfinestra de carpetes comuna
   `w-full min-w-0`, perquè un compte amb una adreça llarga cedeixi davant de la
   subfinestra en lloc d'empènyer-ne el cos de costat. No hi ha cap cadena de
   filtre nova.
+- **Des de #344**, el nom del fitxer es cerca des de la banda superior («Cerca
+  adjunts pel nom del fitxer», [top-band.md](top-band.md#la-cerca-344)), amb el
+  mateix estat i el mateix retard. La subfinestra i, per sota de 1025 px, la barra
+  tenen els altres quatre filtres: remitent, tipus, quan i compte. La clau
+  `attachmentsView.searchName` («Nom del fitxer») ha sortit dels catàlegs.
 - **Títol:** la clau nova `attachmentsView.filters`, «Filtres d'adjunts»
   (traduïda als 20 catàlegs).
 - **Amplada:** la mateixa preferència `folder_pane_width` i el mateix separador que
@@ -573,8 +584,11 @@ dos, de manera que el control que tenia el focus es desmuntava en travessar els
   Cada mòdul la crida just després de `useWideWindow(FOLDER_PANE_MIN_WINDOW)`.
 - **Com s'assenyala:** un control que existeix en tots dos modes porta el mateix
   `data-focus-key` (`list:<id>`, `tag:<nom>`, `conversation:<jid>`,
-  `filter-name`, `group-filter`…), i el contenidor que fa de subfinestra per sota
-  de 1025 px porta `data-focus-return`.
+  `filter-sender`, `group-filter`…), i el contenidor que fa de subfinestra per sota
+  de 1025 px porta `data-focus-return`. `filter-name`, el nom del fitxer
+  d'Adjunts, se'n va amb #344, perquè el camp passa a la banda superior. A Notes,
+  des de #344, el contenidor de `data-focus-return` és la columna de la llista
+  sencera, i no la zona de la cerca i els botons d'etiqueta.
 - **Què fa:** cada cop que el focus entra en un control de la subfinestra o del
   contenidor de `data-focus-return`, en desa la clau. Després de cada clic torna
   a mirar on és el focus: un clic en una zona sense control el deixa a `<body>`,
@@ -594,14 +608,17 @@ dos, de manera que el control que tenia el focus es desmuntava en travessar els
   - Tasques: fila de llista i pestanya; «Llista nova», «Canvia el nom» i
     «Suprimeix».
   - Notes: fila d'etiqueta i botó d'etiqueta; «Totes les notes» no té botó i va
-    a la cerca.
+    al primer control de la columna de la llista: el primer botó d'etiqueta o, si
+    no n'hi ha cap, la primera nota. Abans anava a la cerca, que des de #344 és a
+    la banda superior.
   - Xat: tots els controls de la columna (el compte, el teu estat, les peticions
     per veure el teu estat i qui el pot veure, «Xateja amb (adreça)», el
     formulari d'«Uneix-te a un grup», les invitacions, les converses i «Elimina
     aquest compte de xat»). Es conserven l'estat sense desar, la llista de
     permisos oberta i les aturades demanades, perquè aquestes parts es tornen a
     muntar en canviar de lloc.
-  - Adjunts: els cinc filtres.
+  - Adjunts: els filtres. Des de #344 són quatre: el nom del fitxer es cerca des
+    de la banda superior, que no es mou i conserva el focus.
   - Persones: el grup en pantalla i el selector de grup; les accions del grup.
   - Calendari: cada calendari, les fletxes i els dies del minicalendari.
   - El correu no la necessita: la subfinestra del correu no es desmunta (només
@@ -610,5 +627,6 @@ dos, de manera que el control que tenia el focus es desmuntava en travessar els
 - **Proves:** els `*FolderPane.test.tsx` de cada mòdul (focus en una fila, creuar
   els 1025 px en els dos sentits, el control equivalent o el primer element
   enfocable de la regió que el substitueix, i focus extern sense alterar) i
-  `frontend/e2e/startup.e2e.ts` («#341»: el camp «Nom del fitxer» d'Adjunts i
-  una fila de llista de Tasques, amb un canvi real de la mida de la finestra).
+  `frontend/e2e/startup.e2e.ts` («#341»: el camp «De» d'Adjunts, que des de #344
+  substitueix el de «Nom del fitxer», i una fila de llista de Tasques, amb un
+  canvi real de la mida de la finestra).

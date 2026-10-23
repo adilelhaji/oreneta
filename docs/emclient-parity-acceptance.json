@@ -160,6 +160,14 @@
           {
             "sha": "ba52226747d1435bfd468c50f0178505e3006da5",
             "result": "frontend/src/components/shell/AppHeader.test.tsx"
+          },
+          {
+            "sha": "7eb4f1c814851795c73896d0315aefd74e567cde",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "59a036338f10e1ab1a37764ef53af35ea66cb65f",
+            "result": "frontend/src/components/shell/BandSearch.test.tsx"
           }
         ],
         "native": [],
@@ -212,6 +220,10 @@
           },
           {
             "sha": "5147dc16fc2e4e80bdf3b235caf5853aca63e3fc",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "7eb4f1c814851795c73896d0315aefd74e567cde",
             "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
@@ -357,6 +369,14 @@
           {
             "sha": "ba52226747d1435bfd468c50f0178505e3006da5",
             "result": "frontend/src/lib/regions.test.ts"
+          },
+          {
+            "sha": "7eb4f1c814851795c73896d0315aefd74e567cde",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "59a036338f10e1ab1a37764ef53af35ea66cb65f",
+            "result": "frontend/src/components/shell/BandSearch.test.tsx"
           }
         ],
         "native": [],
@@ -1681,6 +1701,14 @@
           {
             "sha": "ba52226747d1435bfd468c50f0178505e3006da5",
             "result": "frontend/src/components/shell/AppHeader.test.tsx"
+          },
+          {
+            "sha": "7eb4f1c814851795c73896d0315aefd74e567cde",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "59a036338f10e1ab1a37764ef53af35ea66cb65f",
+            "result": "frontend/src/components/shell/BandSearch.test.tsx"
           }
         ],
         "native": [],
