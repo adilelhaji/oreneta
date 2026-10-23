@@ -250,10 +250,7 @@ export function BandSearch({ onCover }: { onCover: (covered: boolean) => void })
           radius="lg"
           // A query applies while the field is closed: the button says so.
           active={!!value}
-          className={clsx(
-            'ms-auto aria-disabled:cursor-not-allowed aria-disabled:opacity-50',
-            overlay && 'invisible',
-          )}
+          className={clsx('ms-auto aria-disabled:cursor-not-allowed aria-disabled:opacity-50', overlay && 'invisible')}
           data-band-search-button=""
           // No search here: the button says why and does nothing, as a
           // command that cannot run does in the app menu.
@@ -344,9 +341,7 @@ export function BandSearch({ onCover }: { onCover: (covered: boolean) => void })
             )}
           </div>
           {!disabled && scope.trailing}
-          {overlay && (
-            <IconButton icon={X} label={t('search.band.close')} size="md" radius="lg" onClick={close} />
-          )}
+          {overlay && <IconButton icon={X} label={t('search.band.close')} size="md" radius="lg" onClick={close} />}
         </div>
       )}
       {disabled && (

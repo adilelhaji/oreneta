@@ -38,7 +38,14 @@ const account: Account = {
   conversation_html: false,
   load_remote_images: false,
 }
-const feeds: Account = { ...account, id: 'rss-feeds', email: 'feeds', display_name: 'Feeds', provider: 'rss', auth_type: 'rss' }
+const feeds: Account = {
+  ...account,
+  id: 'rss-feeds',
+  email: 'feeds',
+  display_name: 'Feeds',
+  provider: 'rss',
+  auth_type: 'rss',
+}
 
 const board: KanbanBoard = {
   id: 'kb-search',
@@ -79,7 +86,15 @@ beforeEach(async () => {
   settings$.savedSearches.set([])
   notes$.assign({ items: [], tags: [], loaded: false, search: '', tag: '', trash: false, selected: null })
   people$.assign({ people: [], loaded: true, loading: false, query: '', selectedId: '' })
-  tasks$.assign({ items: [], loaded: false, loading: false, lists: [], accountLists: [], selectedList: 'all', search: '' })
+  tasks$.assign({
+    items: [],
+    loaded: false,
+    loading: false,
+    lists: [],
+    accountLists: [],
+    selectedList: 'all',
+    search: '',
+  })
   attachmentList$.filter.assign({ account: '', name: '', sender: '', kind: '', within: 0 })
   thread$.searchOpen.set(false)
 })
@@ -594,9 +609,11 @@ describe('the band on the first-account setup screen (#344)', () => {
     const view = render(<AppHeader setup />)
     expect(within(band(view)).queryByRole('search')).toBeNull()
     expect(band(view).querySelectorAll('input')).toHaveLength(0)
-    expect(within(band(view)).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
-      'App menu',
-    ])
+    expect(
+      within(band(view))
+        .getAllByRole('button')
+        .map((button) => button.getAttribute('aria-label')),
+    ).toEqual(['App menu'])
     setWidth(600)
     cleanup()
     const narrow = render(<AppHeader setup />)
