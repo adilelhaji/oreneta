@@ -681,7 +681,7 @@ mòduls.
   conserva el focus.
 - **Comptador:** els no llegits de la safata d'entrada del compte, al final de
   la fila, com a les carpetes, només quan «Mostra el comptador de no llegits»
-  (`showUnreadAccountBadge`) és activat, com a la barra vertical.
+  (`showUnreadAccountBadge`) està activat, com a la barra vertical.
 - **Estat del compte:** un compte que ha de tornar a iniciar la sessió, en pausa
   o silenciat porta una icona (una clau, una pausa o una campana barrada, del
   color del text secundari, que a totes les superfícies compleix el contrast) i
@@ -689,11 +689,11 @@ mòduls.
   tornar a iniciar la sessió» (`mailNavigation.status.reconnect`),
   «Comprovacions del correu en pausa» (`connectivity.health.paused`, el text de
   l'estat de la sincronització) i «Notificacions silenciades»
-  (`mailNavigation.status.muted`). Se'n diu un, el més urgent, com a la barra
+  (`mailNavigation.status.muted`). Només se'n diu un, el més urgent, com a la barra
   vertical, i la indicació també el diu.
 - **Canals RSS:** la fila d'un compte RSS accepta un canal que s'hi arrossega
   des de la llista d'un altre compte RSS i l'hi mou (`moveFeed`), amb els seus
-  elements i el seu estat de lectura; mentre s'hi té, la fila es marca amb la
+  elements i el seu estat de lectura; mentre el canal és al damunt, la fila es marca amb la
   vora discontínua de deixar anar. Mentre s'arrossega, el navegador només deixa
   veure el tipus del que s'arrossega, no el contingut: la barra vertical el volia
   llegir i a Chromium, que és el motor de WebView2, no acceptava mai el canal.

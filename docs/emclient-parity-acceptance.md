@@ -276,10 +276,10 @@ de carpetes del correu, «Comptes i carpetes», va incorporar el que només feia
 continua igual fins a la peça 14b. Els comptes s'hi ordenen arrossegant-los o amb Alt+↑ i Alt+↓, amb
 l'anunci de la posició nova; obren el seu menú contextual amb el clic dret, Maj+F10 i la tecla de
 menú, i l'element d'amagar-los ja no parla de la navegació lateral; mostren els no llegits de la
-safata d'entrada quan el comptador és activat, i diuen en paraules si cal tornar a iniciar la sessió,
-si són en pausa o si són silenciats; i un compte RSS accepta un canal que s'hi deixa anar, cosa que la
+safata d'entrada quan el comptador està activat, i diuen en paraules si cal tornar a iniciar la sessió,
+si estan en pausa o silenciats; i un compte RSS accepta un canal que s'hi deixa anar, cosa que la
 barra vertical no aconseguia a Chromium i ara sí. La secció «Taulers», entre la safata unificada i els
-comptes, llista, ordena i obre els taulers kanban i en dona el menú, i amb un tauler obert la
+comptes, llista, ordena i obre els taulers kanban i n'ofereix el menú, i amb un tauler obert la
 subfinestra es continua mostrant i el marca (ADR-0068 §4). La fila de la safata unificada té el menú
 de la barra vertical. L'ordre és el de la barra vertical, les preferències no canvien i Ctrl/⌘+1…9
 obren les mateixes posicions. Les proves de límits, de dreta a esquerra, de zoom, de regions i d'axe
