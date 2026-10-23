@@ -75,6 +75,7 @@ import { useElementAtLeast } from '../resizer/useElementWidth'
 import { AUTO_TABLE_MIN_WIDTH, resolveListView } from './listView'
 import { accountGroups$ } from '../../states/accountGroups'
 import { endAlignedX } from '../../lib/direction'
+import { focusInMenu } from '../../lib/menuKeyboard'
 
 type ThreadListProps = {
   width?: number
@@ -348,7 +349,11 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
         mobilePane === 'threads' ? 'max-[769px]:flex' : 'max-[769px]:hidden'
       }`}
       onKeyDownCapture={(event) => {
-        if (event.key === 'Delete') restoreFocusAfterDeleteRef.current = true
+        // A Delete in a portaled menu (row or bulk) never deletes (#348), so it
+        // must not leave the flag set for the next selection change.
+        if (event.key === 'Delete' && !focusInMenu(event.target instanceof Element ? event.target : null)) {
+          restoreFocusAfterDeleteRef.current = true
+        }
       }}
       style={width ? ({ '--thread-list-width': `${width}px` } as CSSProperties) : undefined}
     >

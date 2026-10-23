@@ -165,6 +165,9 @@ describe('keys inside an open menu', () => {
   afterEach(() => {
     delete (window as any).go
     ui$.selectedThread.set('')
+    ui$.selectedAccount.set('')
+    ui$.selectedFolder.set('')
+    mail$.threads.set([])
   })
 
   function withMenu() {
@@ -201,6 +204,21 @@ describe('keys inside an open menu', () => {
       expect(mail$.threads.peek()).toHaveLength(1)
     })
   }
+
+  // No built-in scheme binds Backspace, so bind it to show it is kept from the
+  // conversation as well, and that the same key still deletes from the list.
+  it('leave the selected conversation alone when Backspace is bound to delete', async () => {
+    setShortcutOverrides({ 'thread.delete': { key: 'Backspace' } })
+    const { item, row } = withMenu()
+    item.focus()
+    fireEvent.keyDown(item, { key: 'Backspace' })
+    await nextTick()
+    expect(mailCalls()).toEqual([])
+    row.focus()
+    fireEvent.keyDown(row, { key: 'Backspace' })
+    await nextTick()
+    expect(mailCalls().map((call) => call.command)).toContain('mail.delete')
+  })
 
   it('still delete from the conversation list (the control for the tests above)', async () => {
     setShortcutOverrides(SHORTCUT_SCHEMES.outlook)
