@@ -3,12 +3,17 @@ import { act, cleanup, fireEvent, render, renderHook, within } from '@testing-li
 import i18n, { t } from '../../lib/i18n'
 import { messages, supportedI18nLanguages } from '../../generated/locales'
 import { DEFAULT_NOTIFICATION_PREFS } from '../../lib/quietHours'
+import { isMac } from '../../lib/shortcuts'
 import { accounts$ } from '../../states/accounts'
 import { compose$ } from '../../states/compose'
+import { kanban$ } from '../../states/kanban'
+import { mail$ } from '../../states/mail'
 import { notificationClock } from '../../states/notifications'
-import { settings$ } from '../../states/settings'
+import { settings$, type KanbanBoard } from '../../states/settings'
 import { ui$ } from '../../states/ui'
-import type { Account } from '../../types'
+import type { Account, Message } from '../../types'
+import { AppHotkeys } from '../dialog/AppHotkeys'
+import { CommandPalette } from '../palette/CommandPalette'
 import { COMMAND_AREAS, groupCommandsByArea } from '../palette/paletteCommands'
 import { useCommandList } from '../palette/useCommandList'
 import { AppHeader } from './AppHeader'
@@ -229,6 +234,15 @@ describe('the app menu (#343)', () => {
     const compose = view.getByRole('menuitem', { name: 'Compose new message' })
     expect(compose.getAttribute('aria-disabled')).toBe('true')
     expect(compose.getAttribute('title')).toBe('No account available for sending')
+    // The reason is also its accessible description, which reaches the
+    // keyboard and a screen reader as a tooltip does not; the name stays its own.
+    const reason = document.getElementById(compose.getAttribute('aria-describedby') ?? '')
+    expect(reason?.textContent).toBe('No account available for sending')
+    expect(reason?.className).toBe('sr-only')
+    expect(compose.contains(reason)).toBe(false)
+    expect(spoken(compose)).toBe('Compose new message')
+    // An item that can run has none.
+    expect(view.getByRole('menuitem', { name: 'Open settings' }).hasAttribute('aria-describedby')).toBe(false)
     fireEvent.click(compose)
     expect(compose$.tabs.peek()).toHaveLength(0)
     expect(view.getByRole('menu', { name: 'App menu' })).toBeTruthy()
@@ -263,6 +277,12 @@ describe('the app menu (#343)', () => {
     expect(view.queryByRole('menu')).toBeNull()
     expect(document.activeElement).toBe(button)
     expect(button.getAttribute('aria-expanded')).toBe('false')
+    // Up opens it on its last item.
+    fireEvent.keyDown(button, { key: 'ArrowUp' })
+    const last = itemsOf(view.getByRole('menu', { name: 'App menu' })).at(-1)!
+    // Identity as a boolean: a failed toBe between two elements hangs Bun's diff.
+    expect(document.activeElement === last).toBe(true)
+    expect(spoken(last)).toBe('About Oreneta')
   })
 
   it('closes on a second click of the button, a click outside, and the focus leaving it', async () => {
@@ -417,5 +437,156 @@ describe('the names of the band and the menu (ADR-0068 §1, #343)', () => {
       const titles = COMMAND_AREAS.map((area) => messages[language][`appMenu.area.${area}`].toLocaleLowerCase())
       expect(new Set(titles).size, language).toBe(COMMAND_AREAS.length)
     }
+  })
+})
+
+describe('the app menu and the keys of the app behind it (#343)', () => {
+  const thread = (id: string) =>
+    ({ thread_id: id, id, account_id: account.id, folder_id: 'INBOX' }) as unknown as Message
+  const board: KanbanBoard = {
+    id: 'board-review',
+    name: 'Review',
+    columns: [{ accountId: account.id, folderId: 'INBOX' }],
+  }
+  let savedBoards: KanbanBoard[] = []
+  beforeEach(() => {
+    savedBoards = settings$.kanbanBoards.peek()
+    // Nothing modal: AppHotkeys keeps the arrows then.
+    ui$.assign({ setupOpen: false, shortcutsOpen: false, addFeedAccount: '', editFeed: null, confirm: null })
+    ui$.filters.set([])
+    mail$.threads.set([thread('t1'), thread('t2'), thread('t3')])
+    ui$.selectedThread.set('t2')
+  })
+  afterEach(() => {
+    kanban$.activeBoardId.set('')
+    kanban$.paneThreadId.set('')
+    kanban$.paneColumnKey.set('')
+    kanban$.threads.set({})
+    settings$.kanbanBoards.set(savedBoards)
+    mail$.threads.set([])
+    ui$.selectedThread.set('')
+  })
+
+  // Down and Up on the button, then the arrows in the open menu: none of them
+  // may also step the selection behind it, as AppHotkeys does with the arrows.
+  const pressArrows = async (selection: () => string) => {
+    const view = render(
+      <>
+        <AppHotkeys />
+        <AppHeader />
+      </>,
+    )
+    const button = view.getByRole('button', { name: 'App menu' })
+    button.focus()
+    const before = selection()
+    for (const key of ['ArrowDown', 'ArrowUp']) {
+      fireEvent.keyDown(button, { key })
+      const menu = view.getByRole('menu', { name: 'App menu' })
+      expect(selection(), key).toBe(before)
+      for (const inside of ['ArrowDown', 'ArrowDown', 'ArrowUp', 'Home', 'End']) {
+        fireEvent.keyDown(document.activeElement!, { key: inside })
+        expect(menu.contains(document.activeElement), inside).toBe(true)
+        expect(selection(), `${key}, then ${inside} in the menu`).toBe(before)
+      }
+      fireEvent.keyDown(window, { key: 'Escape' })
+      await settle()
+      expect(document.activeElement === button, key).toBe(true)
+    }
+    // Enter and Space are the button's too.
+    fireEvent.keyDown(button, { key: 'Enter' })
+    fireEvent.keyDown(button, { key: ' ' })
+    expect(selection()).toBe(before)
+    // Away from the menu, the same key does step it: the app is listening.
+    button.blur()
+    fireEvent.keyDown(document.body, { key: 'ArrowDown' })
+    expect(selection()).not.toBe(before)
+  }
+
+  it('Down on the button opens the menu and leaves the conversation list where it was', async () => {
+    await pressArrows(() => ui$.selectedThread.peek())
+    expect(ui$.selectedThread.peek()).toBe('t3')
+  })
+
+  it('Down on the button opens the menu and leaves the open card of a board where it was', async () => {
+    settings$.kanbanBoards.set([board])
+    kanban$.threads.set({ [`${account.id}\nINBOX`]: [thread('t1'), thread('t2'), thread('t3')] })
+    kanban$.activeBoardId.set(board.id)
+    kanban$.paneThreadId.set('t2')
+    await pressArrows(() => kanban$.paneThreadId.peek())
+    expect(kanban$.paneThreadId.peek()).toBe('t3')
+  })
+
+  it('opens the palette from inside the menu and, closing it, gives the focus back to the button', async () => {
+    const view = render(
+      <>
+        <AppHotkeys />
+        <AppHeader />
+        <CommandPalette />
+      </>,
+    )
+    const button = view.getByRole('button', { name: 'App menu' })
+    fireEvent.click(button)
+    const item = itemsOf(view.getByRole('menu', { name: 'App menu' }))[2]
+    item.focus()
+    await act(async () => {
+      fireEvent.keyDown(item, { key: 'k', ctrlKey: !isMac, metaKey: isMac })
+    })
+    expect(ui$.paletteOpen.peek()).toBe(true)
+    expect(!!view.container.querySelector('[role="menu"]')).toBe(false)
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+    // The palette takes the focus once it is drawn.
+    await act(async () => await new Promise((resolve) => setTimeout(resolve, 0)))
+    const field = view.getByRole('combobox', { name: 'Command palette' })
+    expect(document.activeElement === field).toBe(true)
+    await act(async () => {
+      fireEvent.keyDown(field, { key: 'Escape' })
+    })
+    expect(ui$.paletteOpen.peek()).toBe(false)
+    expect(document.activeElement === button).toBe(true)
+  })
+
+  it('lists "Command palette" in the menu, and not in the palette', () => {
+    ui$.paletteOpen.set(true)
+    const view = render(
+      <>
+        <AppHeader />
+        <CommandPalette />
+      </>,
+    )
+    const options = [...view.container.querySelectorAll('[role="option"] .block:first-child')].map(
+      (label) => label.textContent,
+    )
+    expect(options).toContain('Keyboard shortcuts')
+    expect(options).not.toContain('Command palette')
+    fireEvent.click(view.getByRole('button', { name: 'App menu' }))
+    const names = itemsOf(view.getByRole('menu', { name: 'App menu' })).map(spoken)
+    expect(names.filter((name) => name === 'Command palette')).toHaveLength(1)
+  })
+})
+
+describe('the band on the first-account setup screen (#343)', () => {
+  it('holds the same app menu, with only what needs no account', () => {
+    accounts$.set([])
+    const { view, menu } = openMenu()
+    expect(view.getByRole('banner', { name: 'Oreneta' })).toBeTruthy()
+    const groups = within(menu).getAllByRole('group')
+    expect(groups.map((group) => document.getElementById(group.getAttribute('aria-labelledby')!)?.textContent)).toEqual(
+      ['Theme', 'Settings', 'Application'],
+    )
+    const names = itemsOf(menu).map(spoken)
+    for (const name of ['Open settings', 'Command palette', 'Keyboard shortcuts', 'About Oreneta'])
+      expect(names, name).toContain(name)
+    for (const name of [
+      'Add account',
+      'Go to: Mail',
+      'Go to: Calendar',
+      'Sync mailbox',
+      'Compose new message',
+      'Create kanban board',
+      'Do not disturb for 1 hour',
+    ])
+      expect(names, name).not.toContain(name)
+    // Nothing in it is inert: what cannot run without an account is not there.
+    expect(menu.querySelectorAll('[aria-disabled="true"]')).toHaveLength(0)
   })
 })

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useId, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { Check, Menu } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
-import { formatShortcut, isMac } from '../../lib/shortcuts'
+import { formatShortcut, isBareShortcut, isMac, matchShortcut } from '../../lib/shortcuts'
 import { menuLeft, startEdgeX } from '../../lib/direction'
+import { focusMenuEdge } from '../../lib/menuKeyboard'
 import { IconButton } from '../button/IconButton'
 import { MenuGroup, MenuList } from '../menu/Menu'
 import { MenuItem } from '../menu/MenuItem'
@@ -17,20 +18,23 @@ const MARGIN = 8
 const WIDTH_REM = 20
 
 type Anchor = { x: number; y: number }
+/** The item the focus starts on. */
+type Edge = 'first' | 'last'
 
 /**
  * The «Menú de l'aplicació» button at the start of the top band (ADR-0068 §2).
- * Enter, Space or Down opens the menu with the focus on its first item;
- * Escape closes it and gives the focus back to the button.
+ * Enter, Space or Down opens the menu with the focus on its first item, and Up
+ * on its last; Escape closes it and gives the focus back to the button.
  */
 export function AppMenuButton() {
   const { t } = useTranslation()
   const [anchor, setAnchor] = useState<Anchor | null>(null)
+  const [edge, setEdge] = useState<Edge>('first')
   const button = useRef<HTMLButtonElement | null>(null)
   const menuId = useId()
   const label = t('appMenu.label')
 
-  const open = () => {
+  const open = (from: Edge = 'first') => {
     const trigger = button.current
     if (!trigger) return
     // The menu gives the focus back to what had it when it opened: make that
@@ -40,6 +44,7 @@ export function AppMenuButton() {
     // Its inline-start edge goes to the button's, so it opens towards the
     // end of the line: rightwards, or leftwards in right to left.
     setAnchor({ x: startEdgeX(rect), y: rect.bottom })
+    setEdge(from)
   }
   const close = () => setAnchor(null)
 
@@ -58,13 +63,21 @@ export function AppMenuButton() {
         aria-controls={anchor ? menuId : undefined}
         onClick={() => (anchor ? close() : open())}
         onKeyDown={(event) => {
-          // Enter and Space click the button; Down opens the menu too.
-          if (event.key !== 'ArrowDown' || event.altKey || event.ctrlKey || event.metaKey) return
+          if (event.altKey || event.ctrlKey || event.metaKey) return
+          // The keys the button answers end here: the app's arrows would also
+          // step the conversation list or the board behind it (AppHotkeys).
+          // Enter and Space click it.
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.stopPropagation()
+            return
+          }
+          if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
           event.preventDefault()
-          if (!anchor) open()
+          event.stopPropagation()
+          if (!anchor) open(event.key === 'ArrowDown' ? 'first' : 'last')
         }}
       />
-      {anchor && <AppMenu id={menuId} label={label} anchor={anchor} opener={button} onClose={close} />}
+      {anchor && <AppMenu id={menuId} label={label} anchor={anchor} edge={edge} opener={button} onClose={close} />}
     </>
   )
 }
@@ -79,12 +92,14 @@ function AppMenu({
   id,
   label,
   anchor,
+  edge,
   opener,
   onClose,
 }: {
   id: string
   label: string
   anchor: Anchor
+  edge: Edge
   opener: RefObject<HTMLButtonElement | null>
   onClose: () => void
 }) {
@@ -108,6 +123,28 @@ function AppMenu({
     document.addEventListener('focusin', onFocusIn)
     return () => document.removeEventListener('focusin', onFocusIn)
   }, [inside])
+  // A shortcut pressed in the menu acts from the button, the menu closed: a
+  // dialog it opens (the palette with Ctrl/⌘+K, Settings) gives the focus back
+  // to the button, not to an item that is gone. It runs before AppHotkeys,
+  // which listens on the window. A shortcut with no Ctrl/⌘, Alt or function
+  // key is left alone: in the menu, a letter finds an item.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!inside(event.target) || event.target === opener.current) return
+      const action = matchShortcut(event)
+      if (!action || isBareShortcut(action)) return
+      opener.current?.focus({ preventScroll: true })
+      closeRef.current()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [inside, opener])
+  // Opened with Up, it starts on the last item. MenuList's own layout effect,
+  // which runs first, has put the focus on the first. Neither the edge nor
+  // the id changes while the menu is open.
+  useLayoutEffect(() => {
+    if (edge === 'last') focusMenuEdge(document.getElementById(id), 'last')
+  }, [edge, id])
 
   const run = (command: Command) => {
     // Back on the button first, as the palette does: a dialog the command
@@ -161,6 +198,9 @@ function AppMenu({
 }
 
 function CommandItem({ command, onRun }: { command: Command; onRun: (command: Command) => void }) {
+  const reasonId = useId()
+  // Why it cannot run (a read-only account), as the palette says it.
+  const reason = command.disabled ? command.hint : undefined
   const icon = (
     <span aria-hidden="true" className="flex w-4 shrink-0 justify-center text-secondary">
       {command.icon}
@@ -183,17 +223,30 @@ function CommandItem({ command, onRun }: { command: Command; onRun: (command: Co
     label: command.label,
     trailing,
     disabled: command.disabled,
-    // Why it cannot run (a read-only account), as the palette says it.
-    title: command.disabled ? command.hint : undefined,
+    // The tooltip for the pointer; the description for the keyboard and
+    // assistive technology, which a tooltip does not reach.
+    title: reason,
+    describedBy: reason ? reasonId : undefined,
     onClick: () => onRun(command),
   }
-  if (command.active === undefined) return <MenuItem {...shared} />
+  const item =
+    command.active === undefined ? (
+      <MenuItem {...shared} />
+    ) : (
+      <MenuItem
+        {...shared}
+        role="menuitemradio"
+        checked={command.active}
+        appearance={command.active ? menuItemCurrentClass : undefined}
+      />
+    )
+  if (!reason) return item
   return (
-    <MenuItem
-      {...shared}
-      role="menuitemradio"
-      checked={command.active}
-      appearance={command.active ? menuItemCurrentClass : undefined}
-    />
+    <>
+      {item}
+      <span id={reasonId} role="none" className="sr-only">
+        {reason}
+      </span>
+    </>
   )
 }
