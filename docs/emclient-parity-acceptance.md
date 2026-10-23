@@ -255,7 +255,8 @@ sincronització dels comptes i l'indicador del mode No molestis van passar al fi
 superior. L'estat és un botó amb una icona i el resum d'abans («{count} requereixen atenció» o
 «Estat de la sincronització completa desconegut», mai «Sincronitzat»), només la icona per sota de
 1025 px, amb el resum com a nom i com a indicació, i la mateixa regió `role="status"` cortesa,
-visualment oculta, de manera que els anuncis no canvien. El botó obre el detall d'abans (cada compte,
+visualment oculta i mai inerta (tampoc quan la cerca cobreix la banda per sota de 769 px), de
+manera que els anuncis no canvien. El botó obre el detall d'abans (cada compte,
 la seva observació i les seves accions) en una finestra emergent no modal ancorada al botó, que
 segueix la direcció de lectura i queda dins de la finestra; Escapada la tanca i torna el focus al
 botó. La barra d'amplada completa sota la capçalera només hi és quan un compte ha de tornar a
@@ -264,8 +265,10 @@ descartar. L'indicador del mode No molestis és també a la barra vertical fins 
 del propietari a #342). Les proves de límits, de dreta a esquerra, de zoom, de regions i d'axe es
 mantenen, amb els localitzadors que trobaven la regió de la sincronització sota la capçalera, ara
 apuntats a la banda, i se n'hi afegeixen de noves: cada estat del resum, la finestra emergent amb el
-teclat i el ratolí a 1440, 1025, 1024 i 768 px, la barra destacada, l'àrab amb axe i la finestra
-oberta, el 200 % a 1025 px i el mode No molestis a la banda. És una nota d'evidència: cap fila no
+teclat i el ratolí a 1440, 1025, 1024 i 768 px, la barra destacada a 1440 i 768 px, l'àrab amb axe
+i la finestra oberta, el 200 % de 769 a 1025 px, el mode No molestis a la banda, les regions d'estat
+a l'arbre d'accessibilitat amb la cerca damunt de la banda i el focus que «Torna-ho a provar» deixa a
+l'entrada. És una nota d'evidència: cap fila no
 canvia d'estat (S01-04, S01-05, SET-01, SET-27), i l'evidència nativa de Windows i amb lectors de
 pantalla continua pendent.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai

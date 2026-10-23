@@ -121,13 +121,16 @@ visible sota la capçalera.
 - **L'anunci** és el d'abans: una sola regió `role="status"` cortesa i sencera,
   amb el resum, ara visualment oculta al costat del botó. Hi és abans de cap
   canvi, tant si hi ha la barra com si no, de manera que una fallada s'anuncia
-  una vegada i el focus no es mou.
+  una vegada i el focus no es mou. No és mai inerta: per sota de 769 px, quan el
+  camp de cerca cobreix la banda, només en són inerts els controls.
 - **El detall** (cada compte, la seva observació i les seves accions, i el
   problema sense compte) s'obre des del botó en una finestra emergent no modal
   ancorada al botó, amb les mateixes accions, els mateixos textos i les mateixes
   regles: cap diagnòstic en brut, la configuració exacta del compte, cap
-  reintent per a un compte en pausa, que ha de tornar a iniciar la sessió o
-  sense compte. Escapada la tanca i torna el focus al botó.
+  reintent per a un compte en pausa, per a un que ha de tornar a iniciar la
+  sessió ni per a un problema sense compte. «Torna-ho a provar» i «Descarta»
+  deixen el focus a l'entrada, també a la barra. Escapada la tanca i torna el
+  focus al botó.
 - **La barra d'amplada completa** sota la capçalera només hi és en el cas
   destacat: un compte ha de tornar a iniciar la sessió, o hi ha una fallada o un
   problema sense compte que no s'ha descartat. Es queda fins que es resol o es
@@ -135,8 +138,8 @@ visible sota la capçalera.
   es pot descartar. Fora d'aquest cas no hi és, perquè ho diu la banda.
   Descartar continua amagant l'avís destacat, no el registre: el resum de la
   banda continua comptant la fallada descartada.
-- **Sense cap compte** ni cap problema sense compte no es mostra res, com abans,
-  i la pantalla d'alta del primer compte no té l'estat.
+- **Si no hi ha cap compte ni cap problema sense compte,** no es mostra res, com
+  abans, i la pantalla d'alta del primer compte no té l'estat.
 - **Proves:** `components/shell/SyncStatus.test.tsx` i les proves «#345»
   d'entrada de producció (vegeu [top-band.md](top-band.md#proves)). Les proves
   d'aquest document que trobaven el resum a la regió de sota la capçalera el

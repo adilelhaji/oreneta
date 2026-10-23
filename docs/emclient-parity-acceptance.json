@@ -176,6 +176,14 @@
           {
             "sha": "11bb65d1785d3d4b47e60560ded51269424b74c9",
             "result": "frontend/src/components/shell/SyncStatus.test.tsx"
+          },
+          {
+            "sha": "e96fea042b5a60ac36266a5bdc3ece7cf8f5dd62",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "e96fea042b5a60ac36266a5bdc3ece7cf8f5dd62",
+            "result": "frontend/src/components/shell/SyncStatus.test.tsx"
           }
         ],
         "native": [],
@@ -240,6 +248,14 @@
           },
           {
             "sha": "11bb65d1785d3d4b47e60560ded51269424b74c9",
+            "result": "frontend/src/components/shell/SyncStatus.test.tsx"
+          },
+          {
+            "sha": "e96fea042b5a60ac36266a5bdc3ece7cf8f5dd62",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "e96fea042b5a60ac36266a5bdc3ece7cf8f5dd62",
             "result": "frontend/src/components/shell/SyncStatus.test.tsx"
           }
         ],
@@ -351,6 +367,14 @@
           },
           {
             "sha": "11bb65d1785d3d4b47e60560ded51269424b74c9",
+            "result": "frontend/src/components/shell/SyncStatus.test.tsx"
+          },
+          {
+            "sha": "e96fea042b5a60ac36266a5bdc3ece7cf8f5dd62",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "e96fea042b5a60ac36266a5bdc3ece7cf8f5dd62",
             "result": "frontend/src/components/shell/SyncStatus.test.tsx"
           }
         ],

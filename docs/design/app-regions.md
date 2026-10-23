@@ -9,9 +9,9 @@ que hi ha a cada regió, no aquest mecanisme.
 Codi: `frontend/src/lib/regions.ts`, `states/ui.ts` (`ui$.module`), `App.tsx`,
 `components/dialog/AppHotkeys.tsx`, `lib/shortcuts.ts`,
 `components/chat/HtmlFrame.tsx`, `components/sidenav/SideNav.tsx`,
-`components/banner/UpdateBanner.tsx`, `components/shell/AppHeader.tsx` (la
-banda superior, des de #343), `components/shell/BandSearch.tsx` (la cerca de la
-banda, des de #344), `components/shell/SyncStatus.tsx` i
+`components/banner/UpdateBanner.tsx`, `components/shell/AppHeader.tsx` (la banda
+superior, des de #343), `components/shell/BandSearch.tsx` (la cerca de la banda,
+des de #344), `components/shell/SyncStatus.tsx` i
 `components/banner/ConnectivityBanner.tsx` (l'estat de la sincronització a la
 banda i la barra sota la capçalera, des de #345) i els `data-region` de les
 vistes de cada mòdul.
@@ -53,8 +53,8 @@ vistes de cada mòdul.
 - La capçalera (#343) és el `<header>` «Oreneta», el punt de referència `banner`
   de la finestra. Es pinta després de `MacTitleBar` i abans de la barra de la
   sincronització (quan hi és) i d'`UpdateBanner`, fora de `<main>`, com demana
-  ADR-0068 §1 (barra de títol, capçalera, avisos i la resta). El seu nom és el de
-  l'aplicació, igual en els 20 catàlegs, i no coincideix amb el de cap altra
+  ADR-0068 §1 (barra de títol, capçalera, avisos i la resta). El seu nom és el
+  de l'aplicació, igual en els 20 catàlegs, i no coincideix amb el de cap altra
   regió en cap idioma, com comprova una prova; el del botó «Menú de l'aplicació»
   tampoc no coincideix amb el «Més» de la barra vertical.
 - La cerca de la banda (#344) és el punt de referència `search`, «Cerca»
@@ -64,14 +64,16 @@ vistes de cada mòdul.
 - El final de la banda (#345) no afegeix cap punt de referència: l'indicador del
   mode No molestis i el botó de l'estat de la sincronització són dins de la
   capçalera i de la regió `search` d'F6, i la finestra emergent del detall és un
-  `dialog` no modal, que no és cap punt de referència, dins de la banda. La regió
-  «Sincronització dels comptes» d'abans, que sempre hi era quan hi havia comptes,
-  ara només hi és en el cas destacat, com a barra d'amplada completa sota la
-  capçalera, amb el nom d'abans, diferent del de la capçalera, del de la cerca i
-  del nom del botó del menú en els 20 catàlegs, com comproven les proves de #343
-  i #344. Hi ha una sola regió `role="status"` per a l'estat de la sincronització,
-  la de la banda, i una per al mode No molestis, també la de la banda: la barra
-  vertical en mostra el botó, no l'estat (vegeu
+  `dialog` no modal, que no és cap punt de referència, dins de la banda. La
+  regió «Sincronització dels comptes» d'abans, que sempre hi era quan hi havia
+  comptes, ara només hi és en el cas destacat, com a barra d'amplada completa
+  sota la capçalera, amb el nom d'abans, diferent del de la capçalera, del de la
+  cerca i del nom del botó del menú en els 20 catàlegs, com comproven les proves
+  de #343 i #344. Hi ha una sola regió `role="status"` per a l'estat de la
+  sincronització, la de la banda, i una per al mode No molestis, també la de la
+  banda: la barra vertical en mostra el botó, no l'estat. Per sota de 769 px,
+  quan el camp de cerca cobreix la banda, només en són inerts els controls; les
+  dues regions d'estat continuen a l'arbre d'accessibilitat (vegeu
   [top-band.md](top-band.md#el-final-de-la-banda-345)).
 - La pantalla d'alta del primer compte (#343) té la mateixa capçalera, amb la
   banda (`search`), i després l'alta del compte dins de `<main>`, que és la
@@ -137,14 +139,14 @@ vistes de cada mòdul.
   l'aplicació» o a l'últim element que hi tenia el focus, com ara el camp de
   cerca, que hi és des de #344, o el botó de l'estat de la sincronització, al
   final de la banda des de #345. F6 des de la finestra emergent de l'estat la
-  tanca i passa a la regió següent. Encara no hi ha barra
-  d'eines. Al correu, doncs, l'ordre és aquest: banda, carpetes, barra vertical,
-  llista, lector i barra lateral; a la resta de mòduls, banda, carpetes, barra
-  vertical i el mòdul. La barra vertical es pinta abans que les carpetes,
-  però F6 hi arriba després: és l'ordre del marc nou, on els mòduls són al peu
-  de les carpetes (pas 4), i així no canvia d'un pas a l'altre. ADR-0068 §6 diu
-  que és l'ordre del document: al marc nou tots dos coincideixen, i mentre la
-  barra vertical es pinti abans que les carpetes, mana la llista de l'ADR.
+  tanca i passa a la regió següent. Encara no hi ha barra d'eines. Al correu,
+  doncs, l'ordre és aquest: banda, carpetes, barra vertical, llista, lector i
+  barra lateral; a la resta de mòduls, banda, carpetes, barra vertical i el
+  mòdul. La barra vertical es pinta abans que les carpetes, però F6 hi arriba
+  després: és l'ordre del marc nou, on els mòduls són al peu de les carpetes
+  (pas 4), i així no canvia d'un pas a l'altre. ADR-0068 §6 diu que és l'ordre
+  del document: al marc nou tots dos coincideixen, i mentre la barra vertical es
+  pinti abans que les carpetes, mana la llista de l'ADR.
 - **Cicle:** després de l'última regió, F6 torna a la primera. Des de fora de
   qualsevol regió, F6 va a la primera i Maj+F6, a l'última.
 - **Se salten** les regions que no es veuen (perquè l'amplada les amaga o perquè

@@ -15,8 +15,8 @@ incidència pròpia (decisió 3). La cerca de la banda (13b) és a
 [#344](https://github.com/adilelhaji/oreneta/issues/344), on consten també les
 dues decisions del propietari sobre la cerca; vegeu [La cerca](#la-cerca-344).
 L'estat de la sincronització i l'indicador del mode No molestis al final de la
-banda (13c) són a [#345](https://github.com/adilelhaji/oreneta/issues/345); vegeu
-[El final de la banda](#el-final-de-la-banda-345).
+banda (13c) són a [#345](https://github.com/adilelhaji/oreneta/issues/345);
+vegeu [El final de la banda](#el-final-de-la-banda-345).
 
 Codi: `frontend/src/components/shell/AppHeader.tsx`,
 `components/shell/AppMenu.tsx`, `components/shell/BandSearch.tsx` (la cerca,
@@ -25,37 +25,37 @@ Codi: `frontend/src/components/shell/AppHeader.tsx`,
 `components/palette/paletteCommands.ts` (`area`, `menuOnly`, `COMMAND_AREAS`,
 `groupCommandsByArea`), `components/palette/useCommandList.ts`,
 `components/palette/CommandPalette.tsx`, `components/dialog/AppHotkeys.tsx`,
-`components/dialog/SettingsDialog.tsx` (`onAddAccount`),
-`lib/useDialogFocus.ts` i `App.tsx`. El final de la banda (#345) és a
-`components/shell/SyncStatus.tsx` (l'estat de la sincronització i la seva finestra
-emergent), `components/banner/ConnectivityBanner.tsx` (el resum, el detall i la
-barra sota la capçalera) i `components/sidenav/QuietIndicator.tsx` (el mode No
-molestis). La cerca de la conversa demanada des d'un
-altre mòdul (#344) és a `components/chat/MessagePane.tsx` i a `states/thread.ts`.
+`components/dialog/SettingsDialog.tsx` (`onAddAccount`), `lib/useDialogFocus.ts`
+i `App.tsx`. El final de la banda (#345) és a `components/shell/SyncStatus.tsx`
+(l'estat de la sincronització i la seva finestra emergent),
+`components/banner/ConnectivityBanner.tsx` (el resum, el detall i la barra sota
+la capçalera) i `components/sidenav/QuietIndicator.tsx` (el mode No molestis).
+La cerca de la conversa demanada des d'un altre mòdul (#344) és a
+`components/chat/MessagePane.tsx` i a `states/thread.ts`.
 
 ## La capçalera i la banda
 
 - **On és:** dins de la finestra, sota la barra de títol del sistema (a macOS,
   sota `MacTitleBar`, sense cap patró nou de Wails) i damunt dels avisos (la
-  barra de la sincronització, quan cal, i `UpdateBanner`), fora de `<main>`. És l'ordre d'ADR-0068
-  §1: barra de títol, capçalera, avisos i la resta.
+  barra de la sincronització, quan cal, i `UpdateBanner`), fora de `<main>`. És
+  l'ordre d'ADR-0068 §1: barra de títol, capçalera, avisos i la resta.
 - **Capçalera:** un `<header>` (`banner`) amb el nom «Oreneta», que és el nom de
   l'aplicació i no es tradueix (`shell.region.banner`, igual en els 20 catàlegs).
   La banda n'és la primera fila; la barra d'eines principal (§3) en serà la
   segona quan existeixi la primitiva de la peça 8.
-- **Banda:** 2,25 rem d'alçada (`h-9`), és a dir, 36 px al 100 % i 72 px al 200 %
-  de l'aplicació, amb el to del marc d'avui (`--me-bg-header`) fins que #287 hi
-  posi el to «marc», i un divisor a sota. Té tres zones en fila: l'inici, amb el
-  botó «Menú de l'aplicació»; el centre, que ocupa l'espai que queda i té el camp
-  de cerca (13b, [La cerca](#la-cerca-344)); i el final, amb l'indicador del mode
-  No molestis i l'estat de la sincronització (13c,
+- **Banda:** 2,25 rem d'alçada (`h-9`), és a dir, 36 px al 100 % i 72 px al
+  200 % de l'aplicació, amb el to del marc d'avui (`--me-bg-header`) fins que
+  #287 hi posi el to «marc», i un divisor a sota. Té tres zones en fila:
+  l'inici, amb el botó «Menú de l'aplicació»; el centre, que ocupa l'espai que
+  queda i té el camp de cerca (13b, [La cerca](#la-cerca-344)); i el final, amb
+  l'indicador del mode No molestis i l'estat de la sincronització (13c,
   [El final de la banda](#el-final-de-la-banda-345)).
 - **Totes les amplades:** la banda i el botó es veuen a qualsevol amplada, també
   per sota de 769 px, on el camp de cerca deixa lloc a un botó de cerca (13b) i
   l'estat de la sincronització és una icona (13c).
 - **Regió d'F6:** la banda és la regió `search`, la primera de `REGION_ORDER`
-  (vegeu [app-regions.md](app-regions.md)); F6 hi porta el focus al botó del menú.
-  El camp de cerca (13b) i el final (13c) hi són sense canviar la regió.
+  (vegeu [app-regions.md](app-regions.md)); F6 hi porta el focus al botó del
+  menú. El camp de cerca (13b) i el final (13c) hi són sense canviar la regió.
 - **La pantalla d'alta del primer compte** també té la banda, amb el mateix botó
   «Menú de l'aplicació» (decisió 2 del propietari a #343): la barra de títol, la
   capçalera «Oreneta» i, després, l'alta del compte dins de `<main>`, que és la
@@ -335,16 +335,17 @@ Decisions del propietari a [#344](https://github.com/adilelhaji/oreneta/issues/3
 
 Peça 13c. ADR-0068 §2 («Al final») i la seva decisió 8: l'estat de la
 sincronització a la banda, només amb els textos d'avui i sense «Sincronitzat».
-Decisió 1 del propietari a [#342](https://github.com/adilelhaji/oreneta/issues/342):
-l'indicador del mode No molestis també es queda a la barra vertical fins a la
-peça 14.
+Decisió 1 del propietari a
+[#342](https://github.com/adilelhaji/oreneta/issues/342): l'indicador del mode
+No molestis també es queda a la barra vertical fins a la peça 14.
 
-- **Què hi ha:** l'indicador del mode No molestis, només mentre les notificacions
-  estan en silenci, i després, a la vora final, l'estat de la sincronització. El
-  final ocupa com a màxim el 35 % de l'amplada de la banda, perquè el camp de
-  cerca hi conservi l'espai: un resum que no hi cap acaba en «…» i es llegeix
-  sencer al nom accessible i a la indicació. Al 100 %, a 1025 px, el resum hi cap
-  sencer en català, anglès, alemany, castellà i francès; al 200 % s'escurça.
+- **Què hi ha:** l'indicador del mode No molestis, només mentre les
+  notificacions estan en silenci, i després, a la vora final, l'estat de la
+  sincronització. El final ocupa com a màxim el 35 % de l'amplada de la banda,
+  perquè el camp de cerca hi conservi l'espai: un resum que no hi cap acaba en
+  «…» i es llegeix sencer al nom accessible i a la indicació. Al 100 %, a
+  1025 px, el resum hi cap sencer en català, anglès, alemany, castellà i
+  francès; al 200 % s'escurça.
 - **L'estat de la sincronització** (`SyncStatus`) és un botó amb una icona i el
   resum que ja mostrava la regió d'avui. Els únics textos són els d'avui:
   - «{count} requereixen atenció»: els comptes que han de tornar a iniciar la
@@ -355,10 +356,10 @@ peça 14.
   Mai «Sincronitzat»: no hi ha cap senyal que ho demostri
   ([account-sync-health.md](account-sync-health.md)). Una sol·licitud en curs no
   canvia el resum, com abans; la diu el detall del compte.
-- **La icona** és un triangle d'avís quan alguna cosa requereix atenció i, si no,
-  les dues fletxes de la sincronització, que no afirmen res. En el cas destacat
-  (vegeu [La barra](#la-barra-sota-la-capçalera)), el botó pren el to de perill
-  de la barra, el text de perill sobre el seu to suau, que tots els temes
+- **La icona** és un triangle d'avís quan alguna cosa requereix atenció i, si
+  no, les dues fletxes de la sincronització, que no afirmen res. En el cas
+  destacat (vegeu [La barra](#la-barra-sota-la-capçalera)), el botó pren el to
+  de perill de la barra, el text de perill sobre el to suau, que tots els temes
   mantenen a 4,5:1 o més.
 - **Amplades:** a partir de 1025 px, la icona i el resum; per sota, també per
   sota de 769 px, només la icona, amb el resum com a nom accessible i com a
@@ -370,32 +371,40 @@ peça 14.
   hagi la barra o no, i per això cada canvi s'anuncia una sola vegada, com
   abans, sense moure el focus. El resum de la barra ja no és una regió en
   directe.
-- **Sense cap compte** ni cap problema sense compte no es mostra res, com abans.
+- **Mai inerta:** per sota de 769 px, quan el camp de cerca cobreix la banda,
+  només en són inerts els controls (el botó i la finestra emergent); la regió
+  continua a l'arbre d'accessibilitat i anuncia una fallada que arriba mentre
+  s'escriu.
+- **Si no hi ha cap compte ni cap problema sense compte,** no es mostra res, com
+  abans.
 
 ### La finestra emergent
 
-- El botó (`aria-haspopup="dialog"`, `aria-expanded`) obre el detall d'avui:
-  la nota de la sessió i cada compte, amb la seva observació i les seves accions
+- El botó (`aria-haspopup="dialog"`, `aria-expanded`) obre el detall d'avui: la
+  nota de la sessió i cada compte, amb la seva observació i les seves accions
   («Configuració del compte» o, si la fallada era del servidor intermediari,
   «Configuració de xarxa» o la del servidor intermediari del compte; «Torna-ho a
   provar»; «Descarta»), i el problema sense compte. És una finestra no modal
-  (`role="dialog"` sense `aria-modal`), amb el nom «Sincronització dels
-  comptes» (`connectivity.health.title`), i no és cap punt de referència.
+  (`role="dialog"` sense `aria-modal`), amb el nom «Sincronització dels comptes»
+  (`connectivity.health.title`), i no és cap punt de referència.
 - **Posició:** sota el botó, amb la vora final a la vora final del botó: com que
-  el botó acaba la banda, s'obre cap a l'inici de la línia, cap a l'esquerra o, en
-  àrab, cap a la dreta (`endAlignedX` i `menuLeft`). Fa 24 rem d'amplada, mai
-  més que la finestra menys 8 px a cada costat, i com a màxim l'alçada que queda
-  fins a 8 px de la vora inferior; la resta es desplaça. No es talla ni entre 769
-  i 1024 px ni per sota de 769 px.
+  el botó acaba la banda, s'obre cap a l'inici de la línia, cap a l'esquerra o,
+  en àrab, cap a la dreta (`endAlignedX` i `menuLeft`). Fa 24 rem d'amplada, mai
+  més ampla que la finestra menys 8 px a cada costat, i com a màxim l'alçada que
+  queda fins a 8 px de la vora inferior; la resta es desplaça. No es talla ni
+  entre 769 i 1024 px ni per sota de 769 px.
 - **Focus:** en obrir-se, amb el ratolí o amb el teclat, el focus va a la
   finestra, i Tab en recorre les accions. Escapada la tanca i torna el focus al
   botó. També la tanquen un segon clic al botó, un clic fora i el focus en un
   altre lloc (Tab més enllà de l'última acció, F6), que deixen el focus on ha
-  anat, i un desplaçament fora o un canvi de mida de la finestra, que tornen al
-  botó el focus que hi havia a dins.
+  anat, i un desplaçament de la pàgina o un canvi de mida de la finestra, que
+  tornen al botó el focus que hi havia a dins.
 - **Les accions** fan el mateix que a la barra. La que obre la configuració
   tanca primer la finestra amb el focus al botó, i la configuració l'hi torna en
-  tancar-se. «Descarta» deixa el focus a l'entrada, que continua a la finestra.
+  tancar-se. «Descarta» i «Torna-ho a provar» deixen el focus a l'entrada, que
+  continua a la finestra: mentre la sol·licitud és en curs, «Torna-ho a provar»
+  és desactivat, i el focus no cau a la pàgina, on una tecla nua actuaria sobre
+  la conversa. La barra fa el mateix.
 - **Tecles:** una drecera amb Ctrl/⌘, Alt o una tecla de funció (la paleta, F6)
   actua des del botó, amb la finestra tancada, com al menú de l'aplicació. Les
   altres tecles (una lletra, les fletxes, Supr) es queden a la finestra: no
@@ -410,8 +419,9 @@ peça 14.
   pot descartar. Fora d'aquest cas, la barra no hi és: ho diu la banda.
 - És la d'avui: la regió «Sincronització dels comptes», amb el to de perill, el
   seu botó, el resum i el detall, que s'obre a sota. Mentre la finestra emergent
-  és oberta, la barra plega el seu detall: només n'hi ha un, i les sol·licituds
-  s'anuncien una sola vegada.
+  és oberta, la barra plega el seu detall, en el mateix pintat en què la
+  finestra apareix: no n'hi ha mai dos, i les sol·licituds s'anuncien una sola
+  vegada.
 - Si la barra se'n va amb el focus a dins (s'hi ha descartat l'última fallada),
   el focus passa al botó de la banda, que encara diu el que se sap, en lloc de
   quedar a la pàgina.
@@ -421,14 +431,15 @@ peça 14.
 - **A la banda:** el mateix indicador de la barra vertical, amb el mateix estat
   (`useQuietState`) i els mateixos textos: «No molestis fins a…», «El mode No
   molestis està activat fins que el desactivis» o «Hores de silenci fins a…». Un
-  botó amb la campana barrada, en el to d'avís sobre el seu to suau, i un clic
-  reprèn les notificacions. Hi és a totes les amplades, també per sota de 769
-  px, on la barra vertical no es veu.
+  botó amb la campana barrada, en el to d'avís sobre el to suau, i un clic
+  reprèn les notificacions. Hi és a totes les amplades, també per sota de
+  769 px, on la barra vertical no es veu.
 - **A la barra vertical,** fins a la peça 14, es veu el mateix botó: tots dos
   llegeixen el mateix estat, i apareixen, canvien i se'n van alhora. El de la
-  banda és la regió `role="status"` amb el nom de l'estat; el de la barra vertical
-  és només el botó, amb l'estat a la indicació, perquè un lector de pantalla no
-  trobi l'estat dues vegades.
+  banda és la regió `role="status"` amb el nom de l'estat; el de la barra
+  vertical és només el botó, amb l'estat a la indicació, perquè un lector de
+  pantalla no trobi l'estat dues vegades. Quan la cerca cobreix la banda, a la
+  banda només el botó és inert, no la regió d'estat.
 
 ### Teclat, F6, dreta a esquerra i zoom
 
@@ -439,8 +450,8 @@ peça 14.
 - En àrab, el final de la banda és a l'esquerra, i la finestra s'obre des del
   botó cap a la dreta.
 - Al 200 % de l'aplicació a 1025 px, el final no passa del 35 % de la banda, el
-  camp de cerca hi conserva més de 100 px i la finestra emergent queda dins de la
-  finestra, sense desplaçament horitzontal.
+  camp de cerca hi conserva més de 100 px i la finestra emergent queda dins de
+  la finestra, sense desplaçament horitzontal.
 - **La pantalla d'alta del primer compte** no té el final: no hi ha cap compte
   per sincronitzar ni del qual rebre notificacions. És el criteri del menú i del
   camp de cerca en aquesta pantalla.
@@ -464,8 +475,8 @@ peça 14.
 | N2 (proves dels mòduls, #344) | `AppHeader.test.tsx`, `TaskLists.test.tsx` i `PeopleView.test.tsx` escriuen al camp de la banda; `NotesFolderPane`, `PeopleFolderPane`, `TasksFolderPane` i `AttachmentsFolderPane` comproven que el mòdul ja no té el camp, i les proves de #341 fan servir un altre control que no es mou (o, a Adjunts, el remitent) |
 | e2e (`startup.e2e.ts`, «#343») | La banda i el menú a 1440, 1025, 1024 i 768 px; el teclat i el ratolí, amb la mateixa conversa oberta després d'Avall, d'Amunt i de les fletxes del menú; Ctrl/⌘+K des del menú; executar la configuració, un mòdul, un compte, el mode No molestis, «Quant a» i la paleta; el motiu d'una ordre desactivada com a descripció; el menú «Més» de la barra vertical; l'àrab amb axe i el menú obert a 1440 i a 768 px; el 200 % a 1025 px; la pantalla d'alta amb la banda, el menú, F6, el zoom i axe, en anglès i en àrab; el «+» de la configuració a la pantalla d'alta; una còpia de seguretat restaurada des de la configuració a la pantalla d'alta, amb la configuració oberta i el focus de tornada al botó del menú. El recorregut d'F6 de «#306» comença a la banda |
 | e2e (`startup.e2e.ts`, «#344») | Cercar des de la banda al correu (la consulta de `mail.threadList`, Escapada, el constructor i les cerques desades), en un tauler (l'abast, «Cerca» al menú d'una columna i Escapada), a Notes, a Persones, a Tasques i a Adjunts, i cada mòdul amb la seva consulta; el camp d'Adjunts conserva el focus i el text en travessar els 1025 px; el Calendari i el Xat desactivats amb el motiu, amb axe; Ctrl/⌘+Maj+F, Ctrl/⌘+F (amb una conversa oberta i sense, i en un altre mòdul) i la `/`; a 768 px, el botó, el camp damunt de la banda, axe, Escapada, «Tanca la cerca» i F6, i el camp que es tanca en passar al Calendari des de la paleta; l'àrab amb axe a 1440 px (també al Calendari) i a 768 px; el 200 % a 1025 px i 1024, 900 i 769 px al 100 %, sense desplaçament horitzontal. Els recorreguts d'F6 de «#306» escriuen al camp de la banda, i les proves d'Adjunts de «#339» i «#341» el fan servir per al nom del fitxer |
-| N2 (`components/shell/SyncStatus.test.tsx`, #345) | Res sense cap compte i el botó amb el primer; el resum de cada estat (desconegut, atenció, sol·licitud en curs, sense confirmar, fallada, sessió per tornar a iniciar, problema sense compte), mai «Sincronitzat», en els 20 catàlegs; una sola regió en directe, sense moure el focus; la icona sola per sota de 1025 px, amb el nom i la indicació, i en travessar els 1025 px; la finestra emergent: el detall, el focus, Escapada, un segon clic, un clic fora, el focus fora, un desplaçament fora i un canvi de mida, la configuració amb el focus de tornada al botó, les tecles, la posició en les dues direccions i a 900, 768 i 320 px; la barra només en el cas destacat, sense regió en directe, el focus al botó quan se'n va, una sessió que no es pot descartar, el problema sense compte i el detall plegat amb la finestra oberta; el mode No molestis a la banda i a la barra vertical, una sola regió d'estat; l'ordre de Tab; cap punt de referència nou; la pantalla d'alta sense el final |
-| e2e (`startup.e2e.ts`, «#345») | El final de la banda a 1440, 1025, 1024 i 768 px: el resum o la icona sola, una sola regió en directe, la finestra emergent amb el ratolí, dins de la finestra, Escapada i els clics; el teclat: Tab des del botó del menú, Retorn, Espai, Escapada, F6 i Maj+F6, i la configuració amb el focus de tornada al botó; una fallada torna la barra, que plega el seu detall amb la finestra oberta i se'n va en descartar-la, i una sessió per tornar a iniciar no es pot descartar, amb les regles de regions d'axe; l'àrab amb axe i la finestra oberta a 1440 i 768 px; el 200 % a 1025 px; el mode No molestis a la banda a 1440 i 768 px. Les proves de «#343», de l'actualització manual i de les observacions de la sincronització busquen l'estat a la banda, i la barra només quan hi ha una fallada; la de no molestar troba la regió d'estat a la banda |
+| N2 (`components/shell/SyncStatus.test.tsx`, #345) | Res sense cap compte i el botó amb el primer; el resum de cada estat (desconegut, atenció, sol·licitud en curs, sense confirmar, fallada, sessió per tornar a iniciar, problema sense compte), mai «Sincronitzat», en els 20 catàlegs; una sola regió en directe, sense moure el focus; la icona sola per sota de 1025 px, amb el nom i la indicació, i en travessar els 1025 px; la finestra emergent: el detall, el focus, Escapada, un segon clic, un clic fora, el focus fora, un desplaçament de la pàgina i un canvi de mida, la configuració amb el focus de tornada al botó, les tecles, la posició en les dues direccions i a 900, 768 i 320 px; la barra només en el cas destacat, sense regió en directe, el focus al botó quan se'n va, una sessió que no es pot descartar, el problema sense compte i el detall plegat amb la finestra oberta; el mode No molestis a la banda i a la barra vertical, una sola regió d'estat; l'ordre de Tab; cap punt de referència nou; la pantalla d'alta sense el final; per sota de 769 px, amb la cerca damunt de la banda, les dues regions d'estat fora de cap element inert i els controls inerts; «Torna-ho a provar» deixa el focus a l'entrada, a la finestra i a la barra, i una tecla nua no surt de la finestra; la barra plega el seu detall en el mateix pintat en què apareix la finestra |
+| e2e (`startup.e2e.ts`, «#345») | El final de la banda a 1440, 1025, 1024 i 768 px: el resum o la icona sola, una sola regió en directe, la finestra emergent amb el ratolí, dins de la finestra, Escapada i els clics; el teclat: Tab des del botó del menú, Retorn, Espai, Escapada, F6 i Maj+F6, i la configuració amb el focus de tornada al botó; una fallada torna la barra, a 1440 i 768 px, que plega el seu detall amb la finestra oberta i se'n va en descartar-la, i una sessió per tornar a iniciar no es pot descartar, amb les regles de regions d'axe; l'àrab amb axe i la finestra oberta a 1440 i 768 px; el 200 % a 1025, 1024, 900 i 769 px amb el mode No molestis activat; el mode No molestis a la banda a 1440 i 768 px. Les proves de «#343», de l'actualització manual i de les observacions de la sincronització busquen l'estat a la banda, i la barra només quan hi ha una fallada; la del mode No molestis troba la regió d'estat a la banda; a 768 px, amb la cerca damunt de la banda, una fallada s'anuncia: les dues regions d'estat són a l'arbre d'accessibilitat de Chromium i els controls no; «Torna-ho a provar» deixa el focus a l'entrada, a la finestra i a la barra, i la `j` no mou la conversa oberta |
 | N2 (`baseline/connectivityHealth.test.tsx`) | L'anunci d'una fallada sense moure el focus, ara des del botó de la banda (#345) |
 
 ## Pendent
