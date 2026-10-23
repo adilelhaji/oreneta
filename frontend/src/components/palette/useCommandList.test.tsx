@@ -5,10 +5,11 @@ import { DEFAULT_NOTIFICATION_PREFS } from '../../lib/quietHours'
 import { accounts$ } from '../../states/accounts'
 import { compose$ } from '../../states/compose'
 import { kanban$ } from '../../states/kanban'
+import { mail$ } from '../../states/mail'
 import { notificationClock } from '../../states/notifications'
-import { settings$ } from '../../states/settings'
+import { settings$, type KanbanBoard } from '../../states/settings'
 import { ui$ } from '../../states/ui'
-import type { Account } from '../../types'
+import type { Account, Folder } from '../../types'
 import { COMMAND_AREAS } from './paletteCommands'
 import { useCommandList } from './useCommandList'
 
@@ -37,6 +38,9 @@ const second: Account = {
   email: 'second@example.test',
 }
 const realNow = notificationClock.now
+const folder = (id: string, name: string): Folder => ({ id, name, account_id: account.id, role: '', unread: 0 })
+const board = { id: 'board-review', name: 'Review', columns: [{ accountId: account.id, folderId: 'INBOX' }] }
+let savedBoards: KanbanBoard[] = []
 
 beforeEach(async () => {
   await i18n.changeLanguage('en')
@@ -52,6 +56,10 @@ beforeEach(async () => {
   kanban$.activeBoardId.set('')
   compose$.tabs.set([])
   compose$.activeTab.set('')
+  savedBoards = settings$.kanbanBoards.peek()
+  settings$.kanbanBoards.set([board])
+  mail$.folders.set([folder('INBOX', 'Inbox'), folder('Sent', 'Sent')])
+  ui$.selectedFolder.set('INBOX')
 })
 
 afterEach(() => {
@@ -62,6 +70,9 @@ afterEach(() => {
   ui$.selectedThread.set('')
   ui$.paletteOpen.set(false)
   ui$.aboutOpen.set(false)
+  kanban$.activeBoardId.set('')
+  settings$.kanbanBoards.set(savedBoards)
+  mail$.folders.set([])
   delete (window as any).go
 })
 
@@ -177,5 +188,98 @@ describe('mail destinations from another module (#343)', () => {
     act(() => byId(result.current, 'account.unified').run())
     expect(ui$.module.peek()).toBe('mail')
     expect(ui$.selectedAccount.peek()).toBe('unified')
+  })
+})
+
+describe('mail destinations from another module, continued (#343)', () => {
+  it('opens a board or a folder in mail, as the rail does', () => {
+    ui$.module.set('notes')
+    const result = list()
+    act(() => byId(result.current, `kanban.${board.id}`).run())
+    expect(ui$.module.peek()).toBe('mail')
+    expect(kanban$.activeBoardId.peek()).toBe(board.id)
+    kanban$.activeBoardId.set('')
+    ui$.module.set('people')
+    act(() => byId(result.current, 'folder.Sent').run())
+    expect(ui$.module.peek()).toBe('mail')
+    expect(ui$.selectedFolder.peek()).toBe('Sent')
+  })
+
+  it('creates a board at once, with the default name, and shows it in mail', () => {
+    ui$.module.set('calendar')
+    const result = list()
+    act(() => byId(result.current, 'kanban.create').run())
+    expect(ui$.module.peek()).toBe('mail')
+    const boards = settings$.kanbanBoards.peek()
+    expect(boards).toHaveLength(2)
+    expect(boards[1].name).toBe('Kanban board')
+    expect(kanban$.activeBoardId.peek()).toBe(boards[1].id)
+  })
+
+  it('checks none of them while another module is on screen', () => {
+    const checked = () =>
+      list()
+        .current.filter((command) => command.active && /^(account|folder|kanban|view)\./.test(command.id))
+        .map((command) => command.id)
+    // In mail: the account and its folder, or the board over them.
+    expect(checked()).toEqual(['view.mail', `account.${account.id}`, 'folder.INBOX'])
+    kanban$.activeBoardId.set(board.id)
+    expect(checked()).toEqual([`kanban.${board.id}`])
+    ui$.selectedAccount.set('unified')
+    kanban$.activeBoardId.set('')
+    expect(checked()).toEqual(['view.mail', 'account.unified', 'folder.INBOX'])
+    // From Calendar, with the same selection and with a board kept open, none.
+    ui$.module.set('calendar')
+    expect(checked()).toEqual([])
+    kanban$.activeBoardId.set(board.id)
+    expect(checked()).toEqual([])
+    ui$.selectedAccount.set(account.id)
+    expect(checked()).toEqual([])
+    expect(byId(list().current, 'module.calendar').active).toBe(true)
+  })
+})
+
+describe('the palette and the app menu (#343)', () => {
+  it('leaves "Command palette" to the menu: the palette does not list itself', () => {
+    const commands = list().current
+    expect(commands.filter((command) => command.menuOnly).map((command) => command.id)).toEqual(['palette.open'])
+  })
+})
+
+describe('with no account, on the setup screen (#343)', () => {
+  it('offers only what needs none: the settings, the themes and the app', () => {
+    accounts$.set([])
+    const commands = list().current
+    expect([...new Set(commands.map((command) => command.area))].sort()).toEqual(['app', 'settings', 'theme'])
+    const ids = commands.map((command) => command.id)
+    for (const id of [
+      'settings.open',
+      'settings.section.appearance',
+      'theme.oreneta-light',
+      'palette.open',
+      'shortcuts.help',
+      'design.catalogue',
+      'app.about',
+    ])
+      expect(ids, id).toContain(id)
+    for (const id of [
+      'account.add',
+      'compose.new',
+      'mail.sync',
+      'view.mail',
+      'module.calendar',
+      'kanban.create',
+      `kanban.${board.id}`,
+      'folder.INBOX',
+      'notifications.pause.off',
+      'filter.all',
+    ])
+      expect(ids, id).not.toContain(id)
+    expect(commands.filter((command) => command.disabled)).toEqual([])
+    // The first account brings the rest back.
+    accounts$.set([account])
+    const back = list().current.map((command) => command.id)
+    expect(back).toContain('account.add')
+    expect(back).toContain('compose.new')
   })
 })

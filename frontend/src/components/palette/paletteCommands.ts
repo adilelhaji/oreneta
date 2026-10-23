@@ -34,6 +34,11 @@ export type Command = {
   shortcut?: ShortcutId
   /** Marks the command that reflects the current state (shows a check). */
   active?: boolean
+  /**
+   * Listed by the app menu, not by the palette: "Command palette" would only
+   * open the palette that lists it (#343).
+   */
+  menuOnly?: true
   run: () => void
 }
 

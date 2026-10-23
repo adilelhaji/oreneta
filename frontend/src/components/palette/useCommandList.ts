@@ -74,7 +74,7 @@ import {
 } from '../../states/mail'
 import { compose$, openComposeTab, openReplyInFullEditor, closeMessageTab } from '../../states/compose'
 import { RAIL_SHORTCUT_IDS, type ShortcutId } from '../../lib/shortcuts'
-import type { Command } from './paletteCommands'
+import type { Command, CommandArea } from './paletteCommands'
 import { merge$ } from '../../states/merge'
 import { awaiting$ } from '../../states/awaiting'
 import { pauseNotifications, resumeNotifications, type PauseChoice } from '../../states/notifications'
@@ -90,6 +90,10 @@ const MODULES: { key: Exclude<AppModule, 'mail'>; title: string; icon: typeof Ma
   { key: 'chat', title: 'messaging.title', icon: MessagesSquare, keywords: 'chat messaging xmpp' },
   { key: 'attachments', title: 'attachmentsView.title', icon: Paperclip, keywords: 'attachments files' },
 ]
+
+// The areas whose commands work with no account. The others act on mail, on
+// a module or on notifications, which all come with an account (#343).
+const NO_ACCOUNT_AREAS: ReadonlySet<CommandArea> = new Set(['theme', 'settings', 'app'])
 
 // Builds the full, ordered command list from current app state: the one list
 // the palette and the app menu both show (ADR-0068 §2). Each entry's `run`
@@ -132,6 +136,9 @@ export function useCommandList(): Command[] {
       ui$.module.set('mail')
       fn()
     }
+    // A mail destination is checked only while mail is on screen; a folder
+    // or an account, only with no board over it.
+    const inMailView = activeModule === 'mail'
 
     const list: Command[] = [
       {
@@ -222,6 +229,7 @@ export function useCommandList(): Command[] {
         icon: icon(SquareChevronRight),
         keywords: 'command palette commands',
         shortcut: 'palette.open',
+        menuOnly: true,
         run: run(() => openCommandPalette()),
       },
       {
@@ -239,7 +247,7 @@ export function useCommandList(): Command[] {
         area: 'modules',
         icon: icon(List),
         keywords: 'layout list conversation account',
-        active: activeModule === 'mail' && !activeBoardId,
+        active: inMailView && !activeBoardId,
         run: run(inMail(() => closeKanbanBoard())),
       },
       // The other modules (ADR-0068 §5: a "Go to: …" for each), as the rail's
@@ -277,7 +285,9 @@ export function useCommandList(): Command[] {
         area: 'boards',
         icon: icon(Plus),
         keywords: 'new board columns',
-        run: run(() => createKanbanBoard()),
+        // Created at once with the default name, as before, and shown in mail,
+        // where the boards are.
+        run: run(inMail(() => createKanbanBoard())),
       },
       ...boards.map(
         (board, boardIndex): Command => ({
@@ -287,7 +297,7 @@ export function useCommandList(): Command[] {
           icon: icon(Columns3),
           keywords: 'kanban board columns',
           shortcut: railShortcut(boardIndex + 2),
-          active: activeBoardId === board.id,
+          active: inMailView && activeBoardId === board.id,
           run: run(inMail(() => selectKanbanBoard(board.id))),
         }),
       ),
@@ -439,7 +449,7 @@ export function useCommandList(): Command[] {
         icon: icon(Users),
         keywords: 'all accounts switch',
         shortcut: railShortcut(1),
-        active: !activeBoardId && selectedAccount === 'unified',
+        active: inMailView && !activeBoardId && selectedAccount === 'unified',
         run: run(inMail(() => openMailAccount('unified'))),
       })
     }
@@ -451,7 +461,7 @@ export function useCommandList(): Command[] {
         icon: icon(Mail),
         keywords: `account switch ${account.email}`,
         shortcut: railShortcut(boards.length + accountIndex + 2),
-        active: !activeBoardId && selectedAccount === account.id,
+        active: inMailView && !activeBoardId && selectedAccount === account.id,
         run: run(inMail(() => openMailAccount(account.id))),
       })
     }
@@ -464,7 +474,7 @@ export function useCommandList(): Command[] {
         area: 'folders',
         icon: icon(Inbox),
         keywords: 'open mailbox',
-        active: selectedFolder === folder.id,
+        active: inMailView && !activeBoardId && selectedFolder === folder.id,
         run: run(inMail(() => ui$.selectedFolder.set(folder.id))),
       })
     }
@@ -492,7 +502,10 @@ export function useCommandList(): Command[] {
     const writeCommands = new Set(['mail.markAllRead'])
     const sendCommands = new Set(['reply.focus', 'compose.replyFull'])
     const messageCommands = new Set(['thread.archive', 'thread.star', 'thread.unread', 'thread.delete'])
-    return list.map((command) => {
+    // With no account yet (the first-account setup screen, #343), only what
+    // needs none: the settings, the themes and the app's own commands.
+    const available = accounts.length === 0 ? list.filter((command) => NO_ACCOUNT_AREAS.has(command.area)) : list
+    return available.map((command) => {
       if (command.kind === 'setting') return command
       const keywordId = command.id.startsWith('theme.')
         ? 'theme'
