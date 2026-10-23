@@ -250,19 +250,17 @@ Decisions del propietari a [#344](https://github.com/adilelhaji/oreneta/issues/3
   com abans, i no se'n fa una de sola.
 - **Correu:** la indicació del camp (`title`) explica els operadors, com abans.
   Al final del camp hi ha els dos botons d'abans (decisió 1), amb el mateix
-  comportament: «Opcions de
-  cerca» (el constructor, que no hi és en un compte de canals; vegeu
-  [search-builder.md](search-builder.md)) i «Desa aquesta cerca» o «Cerques
-  desades». Amb Escapada es buida la cerca i el focus surt del camp, com feia el
-  de la llista.
-  «Esborra la cerca» la buida i torna el focus al camp; abans el focus es perdia
-  amb el botó.
+  comportament: «Opcions de cerca» (el constructor, que no hi és en un compte de
+  canals; vegeu [search-builder.md](search-builder.md)) i «Desa aquesta cerca»
+  o «Cerques desades». Amb Escapada es buida la cerca i el focus surt del camp,
+  com feia el de la llista. «Esborra la cerca» la buida i torna el focus al
+  camp; abans el focus es perdia amb el botó.
 - **Un tauler obert al correu:** el camp cerca al tauler, i al final té el
   selector «Abast de la cerca» (totes les columnes o una). Triar una columna
   plegada la desplega, com abans. «Cerca», al menú d'accions d'una columna,
   tria la columna i posa el focus al camp de la banda. Amb Escapada es buida la
-  cerca i, si ja és buida, el focus surt del camp. La capçalera del tauler ja no té el
-  camp ni el botó «Cerca al tauler».
+  cerca i, si ja és buida, el focus surt del camp. La capçalera del tauler ja no
+  té el camp ni el botó «Cerca al tauler».
 - **Calendari i Xat:** el camp hi és desactivat (`disabled`), amb el motiu com a
   text de mostra, com a indicació i com a descripció accessible
   (`aria-describedby`): «El Calendari encara no té cerca» i «El Xat encara no té
