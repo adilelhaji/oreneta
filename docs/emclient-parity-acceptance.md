@@ -278,14 +278,16 @@ l'anunci de la posició nova; obren el seu menú contextual amb el clic dret, Ma
 menú, i l'element d'amagar-los ja no parla de la navegació lateral; mostren els no llegits de la
 safata d'entrada quan el comptador està activat, i diuen en paraules si cal tornar a iniciar la sessió,
 si estan en pausa o silenciats; i un compte RSS accepta un canal que s'hi deixa anar, cosa que la
-barra vertical no aconseguia a Chromium i ara sí. La secció «Taulers», entre la safata unificada i els
+barra vertical no aconseguia a Chromium i ara sí. El grup «Taulers», entre la safata unificada i els
 comptes, llista, ordena i obre els taulers kanban i n'ofereix el menú, i amb un tauler obert la
-subfinestra es continua mostrant i el marca (ADR-0068 §4). La fila de la safata unificada té el menú
-de la barra vertical. L'ordre és el de la barra vertical, les preferències no canvien i Ctrl/⌘+1…9
+subfinestra es continua mostrant i el marca (ADR-0068 §4); la subfinestra de conversa del tauler hi
+conserva els 360 px del lector, i les carpetes cedeixen abans que les columnes. La fila de la safata
+unificada té el menú de la barra vertical. L'ordre és el de la barra vertical, les preferències no canvien i Ctrl/⌘+1…9
 obren les mateixes posicions. Les proves de límits, de dreta a esquerra, de zoom, de regions i d'axe
 es mantenen, i se n'hi afegeixen de noves: unitàries de cada element i, a 1440 px, ordenar els comptes
 amb el teclat i el punter, el menú del compte, obrir un tauler des de la subfinestra, deixar anar un
-canal, el menú de la safata unificada, i l'àrab amb axe i el 200 %. És una nota d'evidència: cap fila
+canal, el menú de la safata unificada, i l'àrab amb axe i el 200 %; i, a 1025 i 1280 px, un missatge
+nou al costat d'un tauler, sencer. És una nota d'evidència: cap fila
 no canvia d'estat (S01-04, S01-05, SET-27), i l'evidència nativa de Windows continua pendent.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies

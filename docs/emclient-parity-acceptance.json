@@ -192,6 +192,14 @@
           {
             "sha": "07f16b1a17f225af9f0be91f2a5022e12abbef2c",
             "result": "frontend/src/components/sidenav/MailNavigationDestinations.test.tsx"
+          },
+          {
+            "sha": "0aa8f4de1db7966b268c4f1ee0feb1fef0f9c785",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "0aa8f4de1db7966b268c4f1ee0feb1fef0f9c785",
+            "result": "frontend/src/components/sidenav/MailNavigationDestinations.test.tsx"
           }
         ],
         "native": [],
@@ -273,6 +281,14 @@
           {
             "sha": "9e01c939a15b3147128280b6c8245fb7537579e2",
             "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "0aa8f4de1db7966b268c4f1ee0feb1fef0f9c785",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "0aa8f4de1db7966b268c4f1ee0feb1fef0f9c785",
+            "result": "frontend/src/lib/paneResize.test.ts"
           }
         ],
         "native": [],

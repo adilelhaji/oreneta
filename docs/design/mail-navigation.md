@@ -644,14 +644,15 @@ vertical encara hi és i fa el mateix que abans: comparteix amb la subfinestra e
 codi, l'ordre i els menús, i se'n va a la peça 14b (#354), amb el selector de
 mòduls.
 
-- **Ordre del cos:** Preferits; la safata d'entrada unificada; «Taulers»;
-  «Comptes», amb els grups de comptes i després els comptes; «Carpetes». És
-  l'ordre de la barra vertical i el de Ctrl/⌘+1…9 (la safata unificada, si es
-  mostra; els taulers; els comptes visibles), que no canvien. La safata
-  unificada, que era la primera fila de «Comptes», queda damunt de «Taulers»,
-  sense títol propi: ADR-0068 posa els taulers entre ella i els grups, i amb un
-  títol entremig la safata, o els comptes, haurien quedat sota un títol que no
-  és el seu.
+- **Ordre del cos:** Preferits; «Comptes», amb la safata d'entrada unificada,
+  «Taulers», els grups de comptes i els comptes; «Carpetes». És l'ordre de la
+  barra vertical i el de Ctrl/⌘+1…9 (la safata unificada, si es mostra; els
+  taulers; els comptes visibles), que no canvien. La safata unificada continua
+  sent la primera fila de «Comptes». «Taulers» no és cap títol (ni cap regió):
+  és un grup amb nom (`role="group"`, amb l'etiqueta visible «Taulers»), entre
+  la safata unificada i els grups, com demana ADR-0068. Així, qui va de títol en
+  títol troba la safata, els taulers, els grups i els comptes sota «Comptes», i
+  no sota «Preferits» ni sota un títol que no és el seu.
 - **Ordenar els comptes:** arrossegant-los amb el punter (dnd-kit, com a la
   barra vertical) o, amb el focus en un compte, amb Alt+↑ i Alt+↓, que el mouen
   una posició, com les preferides (ADR-0050): el focus s'hi queda i la regió
@@ -678,7 +679,8 @@ mòduls.
   mostrar des de Configuració. El focus passa a la fila que ocupa el seu lloc i
   la regió `aria-live` ho diu («S'ha amagat Alex. Es pot tornar a mostrar des de
   Configuració.»). El compte obert continua a la subfinestra, com abans, i
-  conserva el focus.
+  conserva el focus; com que la fila no se n'ha anat, no es diu res. Amb la
+  safata unificada passa el mateix.
 - **Comptador:** els no llegits de la safata d'entrada del compte, al final de
   la fila, com a les carpetes, només quan «Mostra el comptador de no llegits»
   (`showUnreadAccountBadge`) està activat, com a la barra vertical.
@@ -697,25 +699,41 @@ mòduls.
   vora discontínua de deixar anar. Mentre s'arrossega, el navegador només deixa
   veure el tipus del que s'arrossega, no el contingut: la barra vertical el volia
   llegir i a Chromium, que és el motor de WebView2, no acceptava mai el canal.
-  Ara totes dues el reconeixen pel tipus i, en deixar-lo anar, no el mouen al
-  compte d'on ve (`sidenav/accountNav.ts`).
-- **«Taulers»:** una secció (`region`) amb el títol «Taulers»
-  (`mailNavigation.boards`), entre la safata unificada i «Comptes», amb els
+  Ara totes dues el reconeixen pel tipus, i el compte d'on ve el diu la llista,
+  que el desa en començar l'arrossegament i l'oblida en acabar-lo
+  (`states/feeds.ts`): sobre aquest compte el canal no s'accepta ni la fila es
+  marca (`sidenav/accountNav.ts`).
+- **«Taulers»:** un grup amb l'etiqueta «Taulers» (`mailNavigation.boards`),
+  dins de «Comptes», entre la safata unificada i els grups de comptes, amb els
   taulers kanban en el seu ordre, cadascun amb la seva imatge o, si no en té, la
   icona de columnes. Un clic, Retorn o Espai obren el tauler com la barra
   vertical (`openKanbanBoard`). S'ordenen com els comptes (el punter, Alt+↑ i
   Alt+↓) amb `reorderKanbanBoards`, i tenen el menú de la barra vertical
   (`BoardContextMenu`: configuració i supressió), també amb Maj+F10 i la tecla
-  de menú. Sense cap tauler, la secció no hi és; «Crea un tauler kanban»
+  de menú. Quan se'n suprimeix un des del menú, el focus passa al tauler
+  següent o, si no n'hi ha, a l'anterior; si era l'últim, al tauler buit nou que
+  n'ocupa el lloc. Sense cap tauler, el grup no hi és; «Crea un tauler kanban»
   continua al menú de l'aplicació.
 - **Amb un tauler obert,** la subfinestra es continua mostrant, com demana
   ADR-0068 §4 (abans s'amagava), i hi marca el tauler (`aria-current`), no el
   compte ni la carpeta on era el correu. Un compte, una carpeta, una preferida,
   la safata unificada o un grup tornen al correu; el compte on era el correu hi
-  torna a la carpeta que mostrava, com des de la barra vertical. La subfinestra
-  de conversa del tauler és un percentatge de l'àrea del tauler (la fila menys la
-  barra vertical i les carpetes), amb els límits d'abans (del 25 al 60 % i
-  320 px com a mínim); abans ho era de la fila sencera.
+  torna a la carpeta que mostrava, com des de la barra vertical.
+- **La subfinestra de conversa del tauler** és un percentatge de l'àrea del
+  tauler (la fila menys la barra vertical i les carpetes), amb els límits d'abans
+  (del 25 al 60 %); abans ho era de la fila sencera. El percentatge que es
+  recorda (`kanban_pane_width`) no canvia de valor, però ara és una part d'aquesta
+  àrea, de manera que el mateix valor la fa una mica més estreta. A partir de
+  769 px no es pinta mai més estreta que els 360 px del lector que hi ha a dins
+  (abans, 320 px, i el lector, que en conserva 360, en quedava tallat, amb
+  «Envia» fora de la pantalla); per sota, en conserva 320. L'àrea demana una
+  columna, de l'amplada triada, i els 360 px del lector: on la fila no hi arriba,
+  les carpetes cedeixen fins al seu mínim abans que les columnes, com al costat
+  de la llista de converses. A 1025 px, amb les carpetes a 260 o 400 px, les
+  carpetes queden a uns 245 px, i el tauler i la conversa, a 360 px cadascun. El
+  separador «Canvia la mida de la conversa» desapareix només quan la finestra fa
+  menys de 600 px (llavors la conversa ocupa tota l'amplada) o quan a l'àrea no
+  queda res per triar, no quan l'àrea fa menys de 600 px.
 - **Safata d'entrada unificada:** la fila té el menú contextual de la barra
   vertical, que ara comparteixen (`UnifiedInboxContextMenu`): «Mostra {nom}
   conjuntament» per a cada grup de comptes i «Amaga la safata d'entrada
@@ -744,13 +762,20 @@ mòduls.
   (ordenar els comptes amb Alt+↑ i Alt+↓, el focus i l'anunci; el mateix ordre a
   la barra vertical, amb els comptes amagats al seu lloc; el menú amb el ratolí,
   Maj+F10 i la tecla de menú, i amagar; el comptador segons la preferència;
-  l'estat en paraules; deixar-hi anar un canal; la secció «Taulers»: llistar,
-  ordenar, obrir, marcar el tauler obert, el menú i que no hi sigui sense
-  taulers; el menú de la safata unificada; i les posicions de Ctrl/⌘+1…9) i
+  l'estat en paraules; deixar-hi anar un canal, i que el compte d'on ve no
+  l'accepti; el grup «Taulers»: llistar, ordenar, obrir, marcar el tauler obert,
+  el menú, el focus en suprimir-ne un i que no hi sigui sense taulers; el menú de
+  la safata unificada; i les posicions de Ctrl/⌘+1…9),
+  `frontend/src/lib/paneResize.test.ts` (el mínim de 360 px de la subfinestra
+  de conversa del tauler, i 320 per sota de 769 px, i el que demana l'àrea) i
   `frontend/e2e/startup.e2e.ts` («#353», a 1440 px: ordenar els comptes amb el
   teclat i el punter, amb la barra vertical en el mateix ordre; el menú del
   compte amb el ratolí, Maj+F10 i la tecla de menú, i amagar-lo; obrir un tauler
   des de la subfinestra, que s'hi queda, amb el ratolí i el teclat, i el seu
-  menú; deixar anar un canal de la llista en un altre compte RSS; el menú de la
-  safata unificada; i, en àrab, l'estat i el menú en el sentit de lectura, axe
-  amb el menú obert i el 200 % de l'aplicació sense desplaçament horitzontal).
+  menú; suprimir un tauler des del seu menú, amb el focus al següent; deixar
+  anar un canal de la llista en un altre compte RSS, refusat sobre el seu; el
+  menú de la safata unificada; en àrab, l'estat i el menú en el
+  sentit de lectura, axe amb el menú obert i el 200 % de l'aplicació sense
+  desplaçament horitzontal; i, a 1025 px amb les carpetes a 260 i 400 px i a
+  1280 px, un missatge nou al costat d'un tauler sencer, amb «Envia» dins de la
+  subfinestra, el separador i les columnes amb una columna sencera).
