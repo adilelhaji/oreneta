@@ -185,11 +185,11 @@ banda.
 - **Els diàlegs** (`components/shell/AppLayers.tsx`) són els de la finestra: la
   configuració, la paleta, les dreceres, «Quant a», les novetats, les
   confirmacions i els avisos emergents. Aquests avisos ara també surten a la
-  pantalla d'alta: abans, el d'una arrencada que fallava i el d'un error greu
-  del motor (`core.fatal`) no s'hi veien.
+  pantalla d'alta: abans no s'hi veien l'avís d'una arrencada fallida ni el
+  d'un error greu del motor (`core.fatal`).
 - **El «+» de la configuració** (al costat de «Comptes de correu» i de «Comptes
-  de canals») no obre un segon diàleg d'alta damunt de la pantalla, que ja ho
-  és: tanca la configuració i torna el focus a l'alta, on era (al principi, al
+  de canals») no obre un segon diàleg d'alta damunt d'una pantalla que ja és
+  l'alta: tanca la configuració i torna el focus a l'alta, on era (al principi, al
   camp de l'adreça), sense canviar-ne el proveïdor ni el que s'hi havia escrit.
 - **Teclat:** només hi actuen les dreceres de l'aplicació (`AppHotkeys` amb
   `setup`): la paleta, la configuració, les dreceres de teclat, el zoom
@@ -204,7 +204,7 @@ banda.
 |---|---|
 | N1 (`components/palette/paletteCommands.test.ts`) | L'ordre de les àrees, cada ordre una sola vegada, l'ordre dins d'una àrea i les accions abans de les seccions |
 | N2 (`components/palette/useCommandList.test.tsx`) | Cada ordre té una àrea i un identificador únic; els mòduls, la paleta, «Quant a» i el mode No molestis; les destinacions del correu des d'un altre mòdul (un compte, un tauler, una carpeta i un tauler nou), i cap marcada des d'un altre mòdul; «Paleta d'ordres» només al menú; sense compte, només la configuració, els temes i l'aplicació; els sinònims en anglès i en català |
-| N2 (`components/shell/AppHeader.test.tsx`) | La capçalera «Oreneta» i la banda (`search`, `h-9`, tres zones); el menú amb totes les ordres per àrea i el menú «Més»; els elements de ràdio; executar una ordre; una ordre desactivada, amb el motiu com a descripció; el teclat (també Amunt) i el retorn del focus; Avall i Amunt al botó i les fletxes del menú no mouen la selecció de la llista ni del tauler, i cap de les tecles que responen el botó i el menú no arriba a la finestra; Ctrl/⌘+K des del menú torna el focus al botó; «Paleta d'ordres» al menú i no a la paleta; el menú sense compte; com es tanca; la posició en les dues direccions i en una finestra estreta; els noms en els 20 catàlegs |
+| N2 (`components/shell/AppHeader.test.tsx`) | La capçalera «Oreneta» i la banda (`search`, `h-9`, tres zones); el menú amb totes les ordres per àrea i el menú «Més»; els elements de ràdio; executar una ordre; una ordre desactivada, amb el motiu com a descripció; el teclat (també Amunt) i el retorn del focus; Avall i Amunt al botó i les fletxes del menú no mouen la selecció de la llista ni del tauler, i cap de les tecles que gestionen el botó i el menú no arriba a la finestra; Ctrl/⌘+K des del menú torna el focus al botó; «Paleta d'ordres» al menú i no a la paleta; el menú sense compte; com es tanca; la posició en les dues direccions i en una finestra estreta; els noms en els 20 catàlegs |
 | N2 (`components/setup/SetupScreen.test.tsx`) | La banda a la pantalla d'alta, damunt de `<main>` (`content`); F6 i Maj+F6; la configuració i la paleta des del menú i des del teclat; el zoom; les dreceres del correu (Ctrl/⌘+N no s'hi consumeix) i les fletxes no hi actuen; el «+» de la configuració torna a l'alta sense canviar-la; la configuració continua oberta, amb el focus, quan arriba el primer compte, i el torna al botó del menú en tancar-se |
 | N2 (`lib/useDialogFocus.test.tsx`) | En tancar-se, un diàleg torna el focus al control que l'havia obert, també quan havia caigut al cos de la pàgina; el focus que ha pres un altre control s'hi queda |
 | N1 (`lib/regions.test.ts`) | La banda és la primera regió, i des del menú F6 passa a la regió següent |
