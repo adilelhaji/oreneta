@@ -167,4 +167,27 @@ describe("the conversation's search asked for from another module (#344)", () =>
     expect(thread$.searchOpen.peek()).toBe(false)
     expect(searchField(view)).toHaveLength(0)
   })
+
+  it('does not open it again after the pane showed no conversation for a while', async () => {
+    requestThreadSearch(pilot.thread_id)
+    render(
+      <StrictMode>
+        <Mail />
+      </StrictMode>,
+    )
+    await waitFor(() => expect(thread$.searchOpen.peek()).toBe(true))
+    act(() => thread$.searchOpen.set(false))
+    // Another folder empties the selection; the pane stays mounted.
+    act(() => ui$.selectedThread.set(''))
+    act(() => ui$.selectedThread.set(pilot.thread_id))
+    await act(async () => await new Promise((resolve) => setTimeout(resolve, 20)))
+    expect(thread$.searchOpen.peek()).toBe(false)
+  })
+
+  it('drops a request mail never answered once the person leaves mail', () => {
+    act(() => ui$.module.set('mail'))
+    requestThreadSearch(pilot.thread_id)
+    act(() => ui$.module.set('notes'))
+    expect(pendingThreadSearch()).toBe('')
+  })
 })

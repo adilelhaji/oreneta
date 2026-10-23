@@ -225,8 +225,10 @@ Decisions del propietari a [#344](https://github.com/adilelhaji/oreneta/issues/3
    conversa i es demana abans de passar al correu. La subfinestra la respon quan
    mostra una conversa: si és la mateixa, obre la cerca, i ho recorda, de manera
    que la torna a obrir si l'efecte de muntatge es repeteix (StrictMode, en
-   desenvolupament); si és una altra, la descarta. Ni una conversa diferent ni
-   tornar al correu més tard no tornen a obrir la cerca. Les dreceres no
+   desenvolupament); si és una altra, la descarta. La cerca no es torna a obrir
+   en mostrar una altra conversa, ni quan una carpeta deixa la subfinestra sense
+   conversa, ni en retornar al correu més tard; i una petició que el correu no
+   ha atès es descarta en sortir del correu. Les dreceres no
    canvien: Ctrl/⌘+Maj+F cerca al mòdul en pantalla, i Ctrl/⌘+F, al correu,
    obre la cerca de la conversa si n'hi ha una a la pantalla.
 

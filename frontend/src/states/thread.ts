@@ -1,4 +1,5 @@
 import { observable } from '@legendapp/state'
+import { ui$ } from './ui'
 
 export type ConversationMode = 'plain' | 'html'
 
@@ -66,6 +67,12 @@ export function takeThreadSearchRequest(threadId: string): boolean {
 export function clearThreadSearchRequest() {
   threadSearchFor = ''
 }
+
+// A request the pane never answered (mail showed no conversation for it) is
+// dropped when the person leaves mail, so it cannot open a search minutes later.
+ui$.module.onChange(({ value }) => {
+  if (value !== 'mail') threadSearchFor = ''
+})
 
 export function revealRemote(messageId: string) {
   thread$.revealedRemote[messageId].set(true)

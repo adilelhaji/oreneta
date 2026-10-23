@@ -159,7 +159,12 @@ export function MessagePane() {
   const searchAskedFor = useRef('')
   useEffect(() => {
     resetThreadView()
-    if (!activeThreadId) return
+    // No conversation shown: whatever was answered is over, so coming back to
+    // the same conversation later does not open its search again.
+    if (!activeThreadId) {
+      searchAskedFor.current = ''
+      return
+    }
     if (takeThreadSearchRequest(activeThreadId)) searchAskedFor.current = activeThreadId
     else if (searchAskedFor.current !== activeThreadId) searchAskedFor.current = ''
     if (searchAskedFor.current) openThreadSearch()
