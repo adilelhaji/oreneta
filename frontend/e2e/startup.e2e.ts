@@ -7530,6 +7530,124 @@ test('below 769px a band button opens the search over the band; Escape closes it
   expect(errors).toEqual([])
 })
 
+test('below 769px the field over the band closes when the palette goes to a module with no search (#344)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 768, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.addInitScript(() => {
+    ;(window as any).startupProbe.replies['calendar.events'] = { events: [] }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { band, search, field } = await bandSearch(page)
+  const { button: menuButton, menu } = await appMenuParts(page)
+  const button = band.locator('[data-band-search-button]')
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  await button.click()
+  await expect(field).toBeFocused()
+  await field.fill('budget')
+  // From the field, the palette goes to Calendar, which has no search.
+  await page.keyboard.press(`${mod}+k`)
+  const palette = page.getByRole('dialog', { name: 'Command palette', exact: true })
+  await palette.getByRole('combobox').fill('Go to: Calendar')
+  await expect(palette.getByRole('option').first()).toContainText('Go to: Calendar')
+  await page.keyboard.press('Enter')
+  await expect(palette).toHaveCount(0)
+  await expect(page.getByRole('main', { name: 'Calendar', exact: true })).toBeVisible()
+  // No disabled field is left over the band: it is closed, the band takes the
+  // focus and the pointer again, and the focus is on the button, which says why.
+  await expect(search).toHaveCount(0)
+  await expect(band.locator('[data-band-start]')).not.toHaveAttribute('inert', '')
+  await expect(button).toHaveAttribute('aria-disabled', 'true')
+  await expect(button).toHaveAccessibleDescription('Calendar has no search yet')
+  await expect(button).toBeFocused()
+  // Pressing it opens nothing.
+  await page.keyboard.press('Enter')
+  await expect(search).toHaveCount(0)
+  // The menu works again, and back in mail the field is closed with its query.
+  await menuButton.click()
+  await menu.getByRole('menuitemradio', { name: 'Go to: Mail', exact: true }).click()
+  await expect(page.getByRole('main', { name: 'Mail', exact: true })).toBeVisible()
+  await expect(search).toHaveCount(0)
+  await expect(button).toHaveAccessibleName('Search messages...')
+  await button.click()
+  await expect(field).toHaveValue('budget')
+  await expect(field).toBeFocused()
+  expect(errors).toEqual([])
+})
+
+// Owner decision on #344: «Search all messages» and «Search current thread»,
+// in the palette and in the app menu, go to mail first and search there.
+test("the palette's and the menu's search commands go to mail first, from Calendar and from Notes (#344)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.addInitScript(() => {
+    ;(window as any).startupProbe.replies['calendar.events'] = { events: [] }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { search, field } = await bandSearch(page)
+  const { button, menu } = await appMenuParts(page)
+  const mail = page.getByRole('main', { name: 'Mail', exact: true })
+  const conversationSearch = page.getByPlaceholder('Search thread', { exact: true }).filter({ visible: true })
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  const palette = page.getByRole('dialog', { name: 'Command palette', exact: true })
+  const fromPalette = async (name: string) => {
+    await page.keyboard.press(`${mod}+k`)
+    await palette.getByRole('combobox').fill(name)
+    await expect(palette.getByRole('option').first()).toContainText(name)
+    await page.keyboard.press('Enter')
+    await expect(palette).toHaveCount(0)
+  }
+
+  // From Calendar, the menu's «Search all messages»: mail, and mail's field.
+  await openModule(page, 'Calendar')
+  await button.click()
+  await menu.getByRole('menuitem', { name: 'Search all messages', exact: true }).click()
+  await expect(mail).toBeVisible()
+  await expect(search).toHaveAttribute('data-search-scope', 'mail')
+  await expect(field).toBeFocused()
+  // From Notes, the palette's, the same.
+  await openModule(page, 'Notes')
+  await fromPalette('Search all messages')
+  await expect(mail).toBeVisible()
+  await expect(field).toBeFocused()
+  await expect(field).toHaveAccessibleName('Search messages...')
+
+  // With no conversation open, «Search current thread» from Calendar ends in mail's field too.
+  await openModule(page, 'Calendar')
+  await fromPalette('Search current thread')
+  await expect(mail).toBeVisible()
+  await expect(field).toBeFocused()
+  await expect(conversationSearch).toHaveCount(0)
+  // With one open in mail, from Notes (palette) and from Calendar (menu): its own search.
+  await page.getByRole('table').getByRole('button', { name: /Pilot checklist/ }).click()
+  await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+  await openModule(page, 'Notes')
+  await fromPalette('Search current thread')
+  await expect(mail).toBeVisible()
+  await expect(conversationSearch).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(conversationSearch).toHaveCount(0)
+  await openModule(page, 'Calendar')
+  await button.click()
+  await menu.getByRole('menuitem', { name: 'Search current thread', exact: true }).click()
+  await expect(mail).toBeVisible()
+  await expect(conversationSearch).toBeFocused()
+  await page.keyboard.press('Escape')
+
+  // The shortcuts are unchanged: in Notes, Ctrl/⌘+Shift+F searches Notes.
+  await openModule(page, 'Notes')
+  await page.getByTitle('Notes', { exact: true }).focus()
+  await page.keyboard.press(`${mod}+Shift+F`)
+  await expect(field).toBeFocused()
+  await expect(field).toHaveAccessibleName('Search notes')
+  expect(errors).toEqual([])
+})
+
 for (const width of [1440, 768]) {
   test(`in Arabic the band search follows the reading direction and passes axe: ${width}px (#344)`, async ({
     page,
