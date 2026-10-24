@@ -9556,15 +9556,17 @@ test('app sidebar: its state and width survive a restart, and F6 goes through it
 
   // In Calendar, the band's button hides the strip, expands it from nothing
   // and hides it again, all saved (owner decision D4 on #360); its
-  // `aria-expanded` is true only while it is expanded, and its tooltip says
-  // what a press does. F6 from the module strip goes through the module, the
-  // sidebar, the band and the folders.
+  // `aria-expanded` is true only while it is expanded, and its description
+  // and tooltip say what a press does. F6 from the module strip goes through
+  // the module, the sidebar, the band and the folders.
   await page.getByTitle(catalog['calendar.title'], { exact: true }).click()
   await expect(page.getByRole('main', { name: catalog['calendar.title'], exact: true })).toBeVisible()
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(toggle).toHaveAccessibleDescription(catalog['commands.sidebar.hide'])
   await expect(toggle).toHaveAttribute('title', catalog['commands.sidebar.hide'])
   await toggle.click()
   await expect(sidebar).toHaveCount(0)
+  await expect(toggle).toHaveAccessibleDescription(catalog['commands.sidebar.show'])
   await expect(toggle).toHaveAttribute('title', catalog['commands.sidebar.show'])
   await expect.poll(async () => (await storedPrefs(page)).app_sidebar_state).toBe('hidden')
   await toggle.click()
@@ -9594,26 +9596,24 @@ test('app sidebar: its state and width survive a restart, and F6 goes through it
   await expect(sidebar).toHaveAttribute('data-layout', 'strip')
   await sidebar.getByRole('button', { name: stripIconName(catalog, 'sidebar.agenda'), exact: true }).click()
   await expect(sidebar).toHaveAttribute('data-layout', 'overlay')
-  await page.locator('[data-frame-row] > div.absolute').click({ position: { x: 20, y: 300 } })
+  await page.locator('[data-sidebar-backdrop]').click({ position: { x: 20, y: 300 } })
   await expect(sidebar).toHaveAttribute('data-layout', 'strip')
   await page.setViewportSize({ width: 1440, height: 900 })
   await expect(sidebar).toHaveAttribute('data-layout', 'beside')
   expect((await storedPrefs(page)).app_sidebar_state).toBe('expanded')
 
-  // There, the band's button hides the strip (saved), and from nothing it
-  // opens an overlay, which is not saved: hidden it stays.
+  // There, the band's button hides the strip (saved), and brings it back
+  // (saved `minimized`, owner decision D7), with the focus kept on it.
   await page.setViewportSize({ width: 1100, height: 900 })
   await expect(sidebar).toHaveAttribute('data-layout', 'strip')
   await toggle.click()
   await expect(sidebar).toHaveCount(0)
   await expect.poll(async () => (await storedPrefs(page)).app_sidebar_state).toBe('hidden')
   await toggle.click()
-  await expect(sidebar).toHaveAttribute('data-layout', 'overlay')
-  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
-  await page.keyboard.press('Escape')
-  await expect(sidebar).toHaveCount(0)
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await expect(toggle).toBeFocused()
-  expect((await storedPrefs(page)).app_sidebar_state).toBe('hidden')
+  await expect.poll(async () => (await storedPrefs(page)).app_sidebar_state).toBe('minimized')
   expect(errors).toEqual([])
 })
 
@@ -9775,7 +9775,74 @@ test('app sidebar: under its overlay the module is inert, F6 goes between the ba
   await expect(sidebar).toHaveAttribute('data-layout', 'strip')
   await expect(main).not.toHaveAttribute('inert')
   await expect(row).toBeFocused()
+  // A command aimed at the module closes the overlay first: `r` puts the
+  // focus in the quick reply, which is no longer inert.
+  await page.keyboard.press('i')
+  await expect(sidebar).toHaveAttribute('data-layout', 'overlay')
+  await page.keyboard.press('r')
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await expect(main).not.toHaveAttribute('inert')
+  await expect(page.getByPlaceholder(enCatalog['composer.placeholders.quickMessage'], { exact: true })).toBeFocused()
   // Nothing of it was saved.
   expect((await storedPrefs(page)).app_sidebar_state).toBeUndefined()
+  expect(errors).toEqual([])
+})
+
+// Owner decision D7 on #360: where the sidebar does not fit beside the
+// content, hiding its strip is undone by the band's button and by the app
+// menu's command, which bring the strip back and save `minimized`, kept after
+// a restart; the overlay stays the strip icons' (and `i`'s).
+test('at 1024px the band button hides the strip and brings it back, saved across a restart (#361)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 900 })
+  const errors = await agendaSidebarStartup(page, { language: 'en' })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { toggle, sidebar } = sidebarParts(page, enCatalog)
+  const saved = async () => (await storedPrefs(page)).app_sidebar_state
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(toggle).toHaveAccessibleDescription(enCatalog['commands.sidebar.hide'])
+
+  // Hidden, and still hidden after a restart.
+  await toggle.click()
+  await expect(sidebar).toHaveCount(0)
+  await expect.poll(saved).toBe('hidden')
+  await page.reload()
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await expect(sidebar).toHaveCount(0)
+  await expect(toggle).toHaveAccessibleDescription(enCatalog['commands.sidebar.show'])
+
+  // The band's button: the strip again, not an overlay, and the module stays usable.
+  await toggle.click()
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(toggle).toHaveAccessibleDescription(enCatalog['commands.sidebar.hide'])
+  await expect(toggle).toBeFocused()
+  await expect(page.getByRole('main')).not.toHaveAttribute('inert')
+  await expect.poll(saved).toBe('minimized')
+  await page.reload()
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+
+  // The app menu's command does the same, both ways.
+  const command = async (name: string) => {
+    await page.getByRole('button', { name: enCatalog['appMenu.label'], exact: true }).click()
+    await page.getByRole('menuitem', { name, exact: true }).click()
+  }
+  await command(enCatalog['commands.sidebar.hide'])
+  await expect(sidebar).toHaveCount(0)
+  await expect.poll(saved).toBe('hidden')
+  await command(enCatalog['commands.sidebar.show'])
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await expect.poll(saved).toBe('minimized')
+
+  // The overlay is its icon's, and is not saved.
+  await sidebar.getByRole('button', { name: stripIconName(enCatalog, 'sidebar.agenda'), exact: true }).click()
+  await expect(sidebar).toHaveAttribute('data-layout', 'overlay')
+  await page.keyboard.press('Escape')
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  expect(await saved()).toBe('minimized')
   expect(errors).toEqual([])
 })

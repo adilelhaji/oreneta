@@ -5,6 +5,7 @@ import { accounts$ } from '../../states/accounts'
 import { calendar$, type CalendarEvent } from '../../states/calendar'
 import { tasks$, type Task } from '../../states/tasks'
 import { ui$ } from '../../states/ui'
+import { sidebar$ } from '../../states/sidebar'
 
 const at = (day: number, hour = 0, minute = 0, second = 0) => new Date(2026, 9, day, hour, minute, second).getTime()
 const sec = (ms: number) => Math.floor(ms / 1000)
@@ -130,6 +131,18 @@ describe('sidebar agenda widget (#212)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Offsite/ }))
     expect(calendar$.anchor.get()).toBe(at(16))
     expect(calendar$.viewing.get()).toMatchObject({ subject: 'Offsite' })
+  })
+
+  // In Calendar the module does not change, so nothing else closes the app
+  // sidebar's overlay, whose module is inert under it: the event does (#361).
+  it('closes the app sidebar overlay before it opens an event in the calendar under it', async () => {
+    ui$.module.set('calendar')
+    sidebar$.overlay.set(true)
+    const screen = render(<SidebarAgenda now={() => NOW} />)
+    await waitFor(() => expect(screen.getByText('Dentist')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /Dentist/ }))
+    expect(sidebar$.overlay.get()).toBe(false)
+    expect(calendar$.viewing.get()).toMatchObject({ subject: 'Dentist' })
   })
 
   it('opens a task in its editor, keeping its conversation', async () => {

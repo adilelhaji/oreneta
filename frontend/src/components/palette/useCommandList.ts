@@ -80,7 +80,7 @@ import { merge$ } from '../../states/merge'
 import { awaiting$ } from '../../states/awaiting'
 import { pauseNotifications, resumeNotifications, type PauseChoice } from '../../states/notifications'
 import { useQuietState } from '../sidenav/QuietIndicator'
-import { sidebarDrawn, toggleAppSidebar } from '../../states/sidebar'
+import { closeSidebarOverlay, sidebarDrawn, toggleAppSidebar } from '../../states/sidebar'
 import { useSidebarShown } from '../shell/useSidebarShown'
 
 // The modules after mail, in the order of the module strip (ADR-0068 §5). Mail
@@ -126,7 +126,16 @@ export function useCommandList(): Command[] {
   const sidebarOpen = sidebarDrawn(useSidebarShown())
 
   return useMemo<Command[]>(() => {
+    // A command acts on the window, mostly on the module, which is inert under
+    // the app sidebar's overlay: the overlay goes first (ADR-0069 §2), as the
+    // module's own hotkeys close it (states/sidebar.ts, states/compose.ts).
+    // The sidebar's own command decides about the overlay itself.
     const run = (fn: () => void) => () => {
+      closeCommandPalette()
+      closeSidebarOverlay()
+      fn()
+    }
+    const runOnSidebar = (fn: () => void) => () => {
       closeCommandPalette()
       fn()
     }
@@ -302,7 +311,7 @@ export function useCommandList(): Command[] {
         area: 'app',
         icon: icon(PanelRight),
         keywords: 'sidebar agenda conversation details panel widgets',
-        run: run(() => toggleAppSidebar()),
+        run: runOnSidebar(() => toggleAppSidebar()),
       },
       {
         id: 'app.about',

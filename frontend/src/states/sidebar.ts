@@ -1,5 +1,6 @@
 import { observable } from '@legendapp/state'
 import { settings$, type AppSidebarState } from './settings'
+import { thread$ } from './thread'
 import { isConversationSection, ui$, type ConversationSection, type SidebarSection } from './ui'
 
 // The app's sidebar (ADR-0069): one `<aside>` at the end of the frame row, in
@@ -153,17 +154,30 @@ export function minimizeSidebar() {
 }
 
 /**
+ * Whether showing the sidebar from nothing drawn brings its strip back (owner
+ * decision D7 on #360): it is hidden where it does not fit beside the content
+ * but its strip does, from 769 px. Hiding the strip is then undone by showing
+ * it again, saved as `minimized`, rather than by an overlay.
+ */
+function stripComesBack(): boolean {
+  return settings$.appSidebarState.peek() === 'hidden' && !sidebar$.fits.peek() && sidebar$.strip.peek()
+}
+
+/**
  * The band's «Barra lateral» button, the palette and the app menu (owner
- * decision D4 on #360): a show-and-hide of the whole sidebar. Whatever is
- * drawn of it goes: expanded beside the content or minimised to its strip, it
- * is hidden (saved); as an overlay, the overlay closes (not saved). With
- * nothing drawn it expands: beside the content where it fits (saved), or as
- * an overlay (not saved). The strip's icons are what expand it from the strip.
+ * decisions D4 and D7 on #360): a show-and-hide of the whole sidebar.
+ * Whatever is drawn of it goes: expanded beside the content or minimised to
+ * its strip, it is hidden (saved); as an overlay, the overlay closes (not
+ * saved). With nothing drawn it is shown: expanded beside the content where it
+ * fits (saved); where it does not, its strip again (saved `minimized`), whose
+ * icons open the overlay; and with no strip either (below 769 px), as an
+ * overlay (not saved).
  */
 export function toggleAppSidebar() {
   const shown = currentSidebarShown()
   if (shown === 'overlay') closeSidebarOverlay()
   else if (shown === 'beside' || shown === 'strip') settings$.appSidebarState.set('hidden')
+  else if (stripComesBack()) settings$.appSidebarState.set('minimized')
   else expandSidebar()
 }
 
@@ -187,7 +201,9 @@ export function openSidebarPanel(panel: SidebarPanelId) {
  * `i` (`thread.details`) in mail, and the conversation header's details
  * buttons (ADR-0069 §2): with the sidebar expanded on the Conversa panel, it
  * minimises it, or closes it as Escape does where it is an overlay; otherwise
- * it expands it on the Conversa panel.
+ * it expands it on the Conversa panel. Hidden where it does not fit beside,
+ * it brings the strip back on the Conversa panel (saved `minimized`, owner
+ * decision D7 on #360), from which `i` again opens the overlay.
  */
 export function toggleConversationPanel() {
   // No conversation on screen (a reader or compose tab over it, the list in
@@ -197,9 +213,18 @@ export function toggleConversationPanel() {
   const onConversation = isConversationSection(ui$.sidebarSection.peek())
   if (onConversation && shown === 'overlay') closeSidebarOverlay()
   else if (onConversation && shown === 'beside') minimizeSidebar()
-  else openSidebarPanel('conversation')
+  else if (stripComesBack()) {
+    selectSidebarPanel('conversation')
+    settings$.appSidebarState.set('minimized')
+  } else openSidebarPanel('conversation')
 }
 
-// The overlay covers the module it was opened over: another module (the
-// calendar, for an event opened from the agenda) is shown without it.
+// The overlay covers the module it was opened over, which is inert under it.
+// What brings the module forward closes it: another module (the calendar, for
+// an event opened from the agenda), and a command that focuses a field of the
+// module (`r` and the palette's «Reply», the conversation's search). A tab of
+// the conversation pane coming forward (a new message, a reply in the full
+// editor) closes it from states/compose.ts, which this module cannot import.
 ui$.module.onChange(() => closeSidebarOverlay())
+ui$.replyFocus.onChange(() => closeSidebarOverlay())
+thread$.searchFocus.onChange(() => closeSidebarOverlay())

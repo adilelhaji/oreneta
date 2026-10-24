@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
-import { settings$ } from './settings'
+import { compose$ } from './compose'
+import { settings$, type AppSidebarState } from './settings'
 import {
   closeSidebarOverlay,
   minimizeSidebar,
@@ -8,11 +9,15 @@ import {
   selectSidebarPanel,
   shownSidebar,
   sidebar$,
+  sidebarDrawn,
+  sidebarExpanded,
   toggleAppSidebar,
   toggleConversationPanel,
   type SidebarPanelId,
+  type SidebarShown,
 } from './sidebar'
-import { parseSidebarSection, restoreUiSession, ui$, UI_SESSION_KEYS, type SidebarSection } from './ui'
+import { openThreadSearch, thread$ } from './thread'
+import { focusQuickReply, parseSidebarSection, restoreUiSession, ui$, UI_SESSION_KEYS, type SidebarSection } from './ui'
 
 // The app's sidebar (ADR-0069 §2, #361): its remembered panel, how it is
 // drawn, and which actions change the saved state.
@@ -124,47 +129,62 @@ describe('what changes the saved state (ADR-0069 §2)', () => {
   const drawn = () =>
     shownSidebar(settings$.appSidebarState.get(), sidebar$.fits.get(), sidebar$.strip.get(), sidebar$.overlay.get())
 
-  // Owner decision D4 on #360: the band button shows and hides the whole sidebar.
-  it('the band button hides whatever is drawn, the strip too, and expands it from nothing: all saved', () => {
-    room(true)
-    expect(drawn()).toBe('strip')
-    toggleAppSidebar()
-    expect(settings$.appSidebarState.get()).toBe('hidden')
-    expect(drawn()).toBe('none')
-    toggleAppSidebar()
-    expect(settings$.appSidebarState.get()).toBe('expanded')
-    expect(drawn()).toBe('beside')
-    toggleAppSidebar()
-    expect(settings$.appSidebarState.get()).toBe('hidden')
-    expect(sidebar$.overlay.get()).toBe(false)
-    // A saved `expanded` drawn as the strip, where it does not fit: hidden too.
-    settings$.appSidebarState.set('expanded')
-    room(false)
-    expect(drawn()).toBe('strip')
-    toggleAppSidebar()
-    expect(settings$.appSidebarState.get()).toBe('hidden')
-    expect(sidebar$.overlay.get()).toBe(false)
+  // Owner decisions D4 and D7 on #360: the band button shows and hides the
+  // whole sidebar, and hiding the strip where the sidebar does not fit beside
+  // is undone by the same button. Each row: the saved state, whether it fits
+  // beside, whether the strip can be drawn, and whether an overlay is open;
+  // what is drawn, then what one press draws and saves. Before the press, its
+  // `aria-expanded` and the action its description and the command name.
+  const BAND_BUTTON: [AppSidebarState, boolean, boolean, boolean, SidebarShown, SidebarShown, AppSidebarState][] = [
+    // Where it fits beside (1100 px and up, with room for the module).
+    ['expanded', true, true, false, 'beside', 'none', 'hidden'],
+    ['minimized', true, true, false, 'strip', 'none', 'hidden'],
+    ['hidden', true, true, false, 'none', 'beside', 'expanded'],
+    // Where only the strip fits (769 px and up): the strip comes back (D7).
+    ['expanded', false, true, false, 'strip', 'none', 'hidden'],
+    ['minimized', false, true, false, 'strip', 'none', 'hidden'],
+    ['hidden', false, true, false, 'none', 'strip', 'minimized'],
+    ['minimized', false, true, true, 'overlay', 'strip', 'minimized'],
+    // With no strip (below 769 px): the overlay, never saved.
+    ['expanded', false, false, false, 'none', 'overlay', 'expanded'],
+    ['minimized', false, false, false, 'none', 'overlay', 'minimized'],
+    ['hidden', false, false, false, 'none', 'overlay', 'hidden'],
+    ['hidden', false, false, true, 'overlay', 'none', 'hidden'],
+  ]
+  it('the band button: what one press does in each state and room, and what it saves', () => {
+    for (const [state, fits, strip, overlay, before, after, saved] of BAND_BUTTON) {
+      const row = `${state}, ${fits ? 'fits' : 'does not fit'}, ${strip ? 'strip' : 'no strip'}${overlay ? ', overlay' : ''}`
+      sidebar$.set({ fits, strip, conversationOpen: true, overlay })
+      settings$.appSidebarState.set(state)
+      expect(drawn(), row).toBe(before)
+      // `aria-expanded` only beside or as an overlay; the action says a press.
+      expect(sidebarExpanded(before), row).toBe(before === 'beside' || before === 'overlay')
+      expect(sidebarDrawn(before), row).toBe(before !== 'none')
+      toggleAppSidebar()
+      expect(drawn(), row).toBe(after)
+      expect(settings$.appSidebarState.get(), row).toBe(saved)
+    }
   })
 
-  it('where it does not fit and nothing is drawn, the band button opens an overlay and closes it, neither saved', () => {
+  it('hiding the strip where the sidebar does not fit beside is undone by the band button, saved (D7)', async () => {
     room(false)
-    settings$.appSidebarState.set('hidden')
-    toggleAppSidebar()
-    expect(drawn()).toBe('overlay')
-    expect(settings$.appSidebarState.get()).toBe('hidden')
-    toggleAppSidebar()
-    expect(drawn()).toBe('none')
-    expect(settings$.appSidebarState.get()).toBe('hidden')
-    // Below 769 px there is no strip: minimised draws nothing, and the button
-    // opens the overlay; once closed, nothing again.
     settings$.appSidebarState.set('minimized')
-    room(false, false)
+    await Promise.resolve()
+    writes = []
+    toggleAppSidebar()
     expect(drawn()).toBe('none')
     toggleAppSidebar()
+    expect(drawn()).toBe('strip')
+    expect(sidebar$.overlay.get()).toBe(false)
+    await Promise.resolve()
+    expect(written('app_sidebar_state')).toEqual(['hidden', 'minimized'])
+    // From the strip, its icon still opens the overlay, which is not saved.
+    openSidebarPanel('agenda')
     expect(drawn()).toBe('overlay')
-    closeSidebarOverlay()
-    expect(drawn()).toBe('none')
-    expect(settings$.appSidebarState.get()).toBe('minimized')
+    toggleAppSidebar()
+    expect(drawn()).toBe('strip')
+    await Promise.resolve()
+    expect(written('app_sidebar_state')).toEqual(['hidden', 'minimized'])
   })
 
   it('a strip icon expands it on its panel, saved; where it does not fit, as an overlay, not saved', () => {
@@ -203,6 +223,27 @@ describe('what changes the saved state (ADR-0069 §2)', () => {
     settings$.appSidebarState.set('hidden')
     toggleConversationPanel()
     expect(settings$.appSidebarState.get()).toBe('expanded')
+  })
+
+  it('`i` where it does not fit: hidden, the strip back on Conversa, saved; from the strip, the overlay (D7)', () => {
+    room(false)
+    settings$.appSidebarState.set('hidden')
+    ui$.sidebarSection.set('agenda')
+    toggleConversationPanel()
+    expect(drawn()).toBe('strip')
+    expect(settings$.appSidebarState.get()).toBe('minimized')
+    expect(ui$.sidebarSection.get()).toBe('overview')
+    toggleConversationPanel()
+    expect(drawn()).toBe('overlay')
+    toggleConversationPanel()
+    expect(drawn()).toBe('strip')
+    expect(settings$.appSidebarState.get()).toBe('minimized')
+    // With no strip (below 769 px), hidden: the overlay, as before.
+    settings$.appSidebarState.set('hidden')
+    room(false, false)
+    toggleConversationPanel()
+    expect(drawn()).toBe('overlay')
+    expect(settings$.appSidebarState.get()).toBe('hidden')
   })
 
   it('`i` as an overlay opens it on Conversa and closes it as Escape does: the saved state stays', () => {
@@ -263,6 +304,26 @@ describe('what changes the saved state (ADR-0069 §2)', () => {
         expect(written('app_sidebar_state')).toEqual([])
       }
     }
+  })
+
+  // Review finding 2 of round 3: what a command opens or focuses in the
+  // module is under the overlay, whose module is inert; the overlay goes.
+  it('closes the overlay for a command aimed at the module: the reply, the conversation search, a tab', async () => {
+    const opens: [string, () => void][] = [
+      ['the quick reply', focusQuickReply],
+      ['the conversation search', openThreadSearch],
+      ['a tab of the conversation pane', () => compose$.activeTab.set('compose-1')],
+    ]
+    for (const [what, open] of opens) {
+      room(false)
+      openSidebarPanel('agenda')
+      expect(sidebar$.overlay.get(), what).toBe(true)
+      open()
+      expect(sidebar$.overlay.get(), what).toBe(false)
+      expect(settings$.appSidebarState.get(), what).toBe('minimized')
+    }
+    compose$.activeTab.set('')
+    thread$.searchOpen.set(false)
   })
 
   it('closing the overlay, or going to another module, leaves the saved state as it was', async () => {

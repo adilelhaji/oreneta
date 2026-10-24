@@ -53,6 +53,7 @@ import { formatFullTimestamp } from '../components/chat/messageHelpers'
 import { closeComposeSession, forgetComposeSession, pruneComposeSessions } from './composeSessions'
 import { offerCertificateTrust } from './certificateTrust'
 import { discardLocalDraft, flushLocalDrafts, hydrateLocalDrafts, scheduleLocalDraftSave } from './localDraftSync'
+import { closeSidebarOverlay } from './sidebar'
 
 // Compose/reader-tab + draft state. Reader tabs open using the account's
 // conversation view preference; compose tabs hold a full-editor draft. The
@@ -243,6 +244,13 @@ export const compose$ = observable({
 ui$.selectedThread.onChange(({ value }) => {
   if (compose$.activeTab.peek() === '') compose$.conversationThread.set(value)
 })
+
+// A tab of the conversation pane coming forward (a new message, a reply or a
+// forward in the full editor, a message in its own tab, or back to the
+// conversation) is in the module, which is inert under the app sidebar's
+// overlay: the overlay goes first (ADR-0069 §2), as it does for the other
+// commands aimed at the module (states/sidebar.ts).
+compose$.activeTab.onChange(() => closeSidebarOverlay())
 
 // Return to the Current conversation tab, restoring the thread it was showing
 // before a thread tab took over selectedThread.

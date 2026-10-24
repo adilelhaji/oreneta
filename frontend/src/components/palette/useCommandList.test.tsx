@@ -9,6 +9,7 @@ import { kanban$ } from '../../states/kanban'
 import { mail$ } from '../../states/mail'
 import { notificationClock } from '../../states/notifications'
 import { settings$, type KanbanBoard } from '../../states/settings'
+import { currentSidebarShown, sidebar$ } from '../../states/sidebar'
 import { ui$ } from '../../states/ui'
 import type { Account, Folder } from '../../types'
 import { COMMAND_AREAS } from './paletteCommands'
@@ -285,5 +286,38 @@ describe('with no account, on the setup screen (#343)', () => {
     const back = list().current.map((command) => command.id)
     expect(back).toContain('account.add')
     expect(back).toContain('compose.new')
+  })
+})
+
+// Under the app sidebar's overlay the module is inert (ADR-0069 §2, #361):
+// a command closes the overlay before it acts, except the sidebar's own.
+describe("the app sidebar's overlay (#361)", () => {
+  afterEach(() => {
+    sidebar$.set({ fits: false, strip: false, conversationOpen: false, overlay: false })
+    settings$.appSidebarState.set('minimized')
+    compose$.tabs.set([])
+    compose$.activeTab.set('')
+  })
+  const command = (id: string) => list().current.find((entry) => entry.id === id)!
+
+  it('closes the overlay before a command acts on the module, whatever the command', () => {
+    for (const id of ['compose.new', 'filter.unread', 'settings.open', 'module.calendar']) {
+      ui$.module.set('mail')
+      sidebar$.set({ fits: false, strip: true, conversationOpen: false, overlay: true })
+      const entry = command(id)
+      act(() => entry.run())
+      expect(sidebar$.overlay.get(), id).toBe(false)
+    }
+    ui$.settingsOpen.set(false)
+    ui$.filters.set([])
+  })
+
+  it("leaves the overlay to the sidebar's own command, which closes it and hides nothing", () => {
+    sidebar$.set({ fits: false, strip: true, conversationOpen: false, overlay: true })
+    const entry = command('view.sidebar')
+    expect(entry.label).toBe('Hide sidebar')
+    act(() => entry.run())
+    expect(currentSidebarShown()).toBe('strip')
+    expect(settings$.appSidebarState.get()).toBe('minimized')
   })
 })

@@ -276,7 +276,12 @@ export function AppSidebar({ row, content, panels: offered = SIDEBAR_PANELS }: A
           {saved !== 'hidden' && layout.strip && (
             <div aria-hidden="true" style={stripWidth} className="shrink-0 border-s border-border bg-header" />
           )}
-          <div className="absolute inset-0 z-[44] bg-black/40 animate-fade-in" onClick={closeSidebarOverlay} />
+          {/* The scrim of the shared Dialog, darker in a dark theme. */}
+          <div
+            data-sidebar-backdrop
+            className="absolute inset-0 z-[44] bg-black/40 animate-fade-in dark:bg-black/60"
+            onClick={closeSidebarOverlay}
+          />
         </>
       )}
       {/* As an overlay it sits above the module and its header (z-40), whose

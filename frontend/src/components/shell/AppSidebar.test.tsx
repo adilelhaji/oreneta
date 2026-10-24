@@ -9,6 +9,7 @@ import { kanban$ } from '../../states/kanban'
 import { mail$ } from '../../states/mail'
 import { hydrateSettings, settings$ } from '../../states/settings'
 import { sidebar$ } from '../../states/sidebar'
+import { thread$ } from '../../states/thread'
 import { APP_MODULES, ui$, type AppModule } from '../../states/ui'
 import type { Message } from '../../types'
 import { AppHotkeys } from '../dialog/AppHotkeys'
@@ -16,6 +17,8 @@ import { CalendarDays } from 'lucide-react'
 import { AppSidebar, SIDEBAR_PANELS, type SidebarPanelDef } from './AppSidebar'
 import { BandSearch } from './BandSearch'
 import { SidebarToggle } from './SidebarToggle'
+import { useSidebarShown } from './useSidebarShown'
+import { isMac } from '../../lib/shortcuts'
 
 // The app's sidebar (ADR-0069 §1 and §2, #361): one <aside> «Barra lateral»
 // after <main>, in every module, expanded, minimised or hidden; the band's
@@ -55,6 +58,15 @@ function contentOf(module: AppModule): SidebarContent {
   return kanban$.paneThreadId.peek() ? 'board-pane' : 'board'
 }
 
+// <main> as App.tsx draws it: inert under the sidebar's overlay.
+function ModuleMain() {
+  return (
+    <main aria-label="Module" inert={useSidebarShown() === 'overlay'}>
+      <button type="button">In the module</button>
+    </main>
+  )
+}
+
 // The frame row: <main>, then the sidebar; the band's search and button above it.
 function Frame({
   hotkeys = false,
@@ -73,9 +85,7 @@ function Frame({
         <SidebarToggle />
       </header>
       <div ref={row} data-frame-row>
-        <main aria-label="Module">
-          <button type="button">In the module</button>
-        </main>
+        <ModuleMain />
         <AppSidebar row={row} content={contentOf(ui$.module.peek())} panels={panels} />
       </div>
       {hotkeys && <AppHotkeys />}
@@ -85,6 +95,16 @@ function Frame({
 
 const aside = (screen: ReturnType<typeof render>) => screen.container.querySelector<HTMLElement>('[data-app-sidebar]')
 const bandButton = (screen: ReturnType<typeof render>) => screen.getByRole('button', { name: 'Sidebar' })
+// What a press of the band button does, as its accessible description says it:
+// the text it is described by (aria-describedby, which screen readers say
+// whatever they make of a title; the title is the tooltip).
+const bandAction = (screen: ReturnType<typeof render>) => {
+  const described = document.getElementById(bandButton(screen).getAttribute('aria-describedby') ?? '')?.textContent
+  const description = (['Hide sidebar', 'Show sidebar'] as const).find((action) =>
+    screen.queryByRole('button', { name: 'Sidebar', description: action }),
+  )
+  return described === description ? description : { described, description }
+}
 
 beforeEach(async () => {
   await i18n.changeLanguage('en')
@@ -225,17 +245,20 @@ describe('what changes the saved state, and what does not (ADR-0069 §2)', () =>
   it('beside the content: the band button hides it, strip included, and the strip icons and minimise button, each saved', async () => {
     const screen = render(<Frame />)
     expect(aside(screen)!.dataset.layout).toBe('strip')
-    // Not expanded, though the strip is drawn: the button says it would hide it.
+    // Not expanded, though the strip is drawn: the button says, in its
+    // description and its tooltip, that a press hides it.
     expect(bandButton(screen).getAttribute('aria-expanded')).toBe('false')
+    expect(bandAction(screen)).toBe('Hide sidebar')
     expect(bandButton(screen).getAttribute('title')).toBe('Hide sidebar')
     fireEvent.click(bandButton(screen))
     expect(aside(screen)).toBeNull()
     expect(bandButton(screen).getAttribute('aria-expanded')).toBe('false')
+    expect(bandAction(screen)).toBe('Show sidebar')
     expect(bandButton(screen).getAttribute('title')).toBe('Show sidebar')
     fireEvent.click(bandButton(screen))
     expect(aside(screen)!.dataset.layout).toBe('beside')
     expect(bandButton(screen).getAttribute('aria-expanded')).toBe('true')
-    expect(bandButton(screen).getAttribute('title')).toBe('Hide sidebar')
+    expect(bandAction(screen)).toBe('Hide sidebar')
     // The minimise button: to the strip, with the focus on its icon.
     const minimise = screen.getByRole('button', { name: 'Minimize sidebar' })
     minimise.focus()
@@ -328,11 +351,13 @@ describe('what changes the saved state, and what does not (ADR-0069 §2)', () =>
     fireEvent.keyDown(document.body, { key: 'i' })
     expect(aside(screen)!.dataset.layout).toBe('strip')
 
-    // Its own close button, and the band button, which closes it too.
+    // Its own close button, and the band button, which closes it too: as an
+    // overlay it says so.
     fireEvent.click(screen.getByRole('button', { name: 'Open the Agenda panel' }))
     fireEvent.click(screen.getByRole('button', { name: 'Close (Esc)' }))
     expect(aside(screen)!.dataset.layout).toBe('strip')
     fireEvent.click(screen.getByRole('button', { name: 'Open the Agenda panel' }))
+    expect(bandAction(screen)).toBe('Hide sidebar')
     fireEvent.click(bandButton(screen))
     expect(aside(screen)!.dataset.layout).toBe('strip')
 
@@ -341,36 +366,54 @@ describe('what changes the saved state, and what does not (ADR-0069 §2)', () =>
     expect(written('app_sidebar_state')).toEqual([])
   })
 
-  it('hidden where it does not fit: the band button opens an overlay, not saved, and gets the focus back after Escape', async () => {
-    settings$.appSidebarState.set('hidden')
-    await Promise.resolve()
-    writes = []
+  // Owner decision D7 on #360: hiding the strip is undone by the same button.
+  it('where it does not fit, the band button hides the strip and brings it back, saved, with the focus kept', async () => {
     setWidth(1024)
     const screen = render(<Frame />)
-    expect(aside(screen)).toBeNull()
+    expect(aside(screen)!.dataset.layout).toBe('strip')
     const button = bandButton(screen)
     button.focus()
     fireEvent.click(button)
+    expect(aside(screen)).toBeNull()
+    expect(bandAction(screen)).toBe('Show sidebar')
+    fireEvent.click(button)
+    // The strip, not an overlay; not expanded, and a press would hide it again.
+    expect(aside(screen)!.dataset.layout).toBe('strip')
+    expect(sidebar$.overlay.get()).toBe(false)
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+    expect(bandAction(screen)).toBe('Hide sidebar')
+    expect(document.activeElement).toBe(button)
+    await waitFor(() => expect(written('app_sidebar_state')).toEqual(['hidden', 'minimized']))
+    // The overlay is the strip icon's.
+    fireEvent.click(screen.getByRole('button', { name: 'Open the Agenda panel' }))
     expect(aside(screen)!.dataset.layout).toBe('overlay')
     expect(button.getAttribute('aria-expanded')).toBe('true')
-    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Agenda' }))
-    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
-    expect(aside(screen)).toBeNull()
-    expect(document.activeElement).toBe(button)
-    await Promise.resolve()
-    expect(settings$.appSidebarState.get()).toBe('hidden')
-    expect(written('app_sidebar_state')).toEqual([])
   })
 
-  it('below 769 px there is no strip: the band button opens an overlay, hidden again once closed', () => {
-    setWidth(600)
-    const screen = render(<Frame />)
-    expect(aside(screen)).toBeNull()
-    fireEvent.click(bandButton(screen))
-    expect(aside(screen)!.dataset.layout).toBe('overlay')
-    fireEvent.keyDown(document.body, { key: 'Escape' })
-    expect(aside(screen)).toBeNull()
-    expect(written('app_sidebar_state')).toEqual([])
+  it('below 769 px there is no strip: the band button opens an overlay, not saved, and gets the focus back after Escape', async () => {
+    for (const state of ['minimized', 'hidden'] as const) {
+      settings$.appSidebarState.set(state)
+      await Promise.resolve()
+      writes = []
+      setWidth(600)
+      const screen = render(<Frame />)
+      expect(aside(screen)).toBeNull()
+      expect(bandAction(screen)).toBe('Show sidebar')
+      const button = bandButton(screen)
+      button.focus()
+      fireEvent.click(button)
+      expect(aside(screen)!.dataset.layout).toBe('overlay')
+      expect(button.getAttribute('aria-expanded')).toBe('true')
+      expect(bandAction(screen)).toBe('Hide sidebar')
+      expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Agenda' }))
+      fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+      expect(aside(screen)).toBeNull()
+      expect(document.activeElement).toBe(button)
+      await Promise.resolve()
+      expect(settings$.appSidebarState.get()).toBe(state)
+      expect(written('app_sidebar_state')).toEqual([])
+      cleanup()
+    }
   })
 
   // Review finding D: «New message to» opens in the conversation pane.
@@ -400,6 +443,85 @@ describe('what changes the saved state, and what does not (ADR-0069 §2)', () =>
     await Promise.resolve()
     expect(written('app_sidebar_state')).toEqual([])
     ui$.query.set('')
+  })
+
+  // Review finding 5 of round 3: the other ways out of the Conversa overlay.
+  it('closes the Conversa overlay before the gallery opens an image of the conversation', () => {
+    setWidth(1024)
+    openConversation()
+    const image = { filename: 'photo.png', mime: 'image/png', size: 4, key: null, url: 'data:image/png;base64,AAAA' }
+    mail$.messages.set([{ ...thread, attachments: [image] }])
+    const screen = render(<Frame hotkeys />)
+    fireEvent.keyDown(window, { key: 'i' })
+    expect(aside(screen)!.dataset.layout).toBe('overlay')
+    fireEvent.click(screen.getByText('1 media item'))
+    fireEvent.click(screen.getByTitle('photo.png'))
+    expect(aside(screen)!.dataset.layout).toBe('strip')
+    expect(thread$.galleryIndex.get()).toBe(0)
+    thread$.galleryIndex.set(null)
+  })
+
+  it("closes the Conversa overlay for a conversation opened from a person's history", async () => {
+    setWidth(1024)
+    openConversation()
+    const invoke = (window as any).go.main.App.Invoke
+    ;(window as any).go.main.App.Invoke = async (command: string, payload: any) =>
+      command === 'context.person'
+        ? {
+            address: 'ana@x.test',
+            conversations: [
+              { thread_id: 'work#INBOX#earlier', folder: 'INBOX', subject: 'Earlier budget', date: 1, from_them: true },
+            ],
+            events: [],
+            files: [],
+            coverage: { messages: 1, downloaded: 1 },
+          }
+        : invoke(command, payload)
+    const screen = render(<Frame hotkeys />)
+    fireEvent.keyDown(window, { key: 'i' })
+    fireEvent.contextMenu(screen.getByText('ana@x.test'))
+    fireEvent.click(screen.getByRole('menuitem', { name: /History with Ana/ }))
+    await waitFor(() => expect(screen.getByText('Earlier budget')).toBeTruthy())
+    expect(aside(screen)!.dataset.layout).toBe('overlay')
+    fireEvent.click(screen.getByText('Earlier budget'))
+    expect(aside(screen)!.dataset.layout).toBe('strip')
+    expect(ui$.selectedThread.get()).toBe('work#INBOX#earlier')
+  })
+
+  // F: the module under the overlay is inert, and the focus goes back into it.
+  it('makes the module inert under the overlay, and gives the focus back into it once it is not', () => {
+    setWidth(1024)
+    openConversation()
+    const screen = render(<Frame hotkeys />)
+    const main = screen.getByRole('main')
+    const inModule = screen.getByRole('button', { name: 'In the module' })
+    inModule.focus()
+    fireEvent.keyDown(window, { key: 'i' })
+    expect(aside(screen)!.dataset.layout).toBe('overlay')
+    expect(main.hasAttribute('inert')).toBe(true)
+    // The focus went to the overlay, out of the inert module.
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Conversation' }))
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+    expect(main.hasAttribute('inert')).toBe(false)
+    expect(document.activeElement).toBe(inModule)
+    // Beside the content, nothing is inert.
+    setWidth(1440)
+    act(() => window.dispatchEvent(new Event('resize')))
+    fireEvent.click(screen.getByRole('button', { name: 'Open the Agenda panel' }))
+    expect(aside(screen)!.dataset.layout).toBe('beside')
+    expect(main.hasAttribute('inert')).toBe(false)
+  })
+
+  // Review finding 2 of round 3: Ctrl/⌘+N opens a new message in the module.
+  it('closes the overlay when Ctrl/⌘+N opens a new message, under it', () => {
+    setWidth(1024)
+    const screen = render(<Frame hotkeys />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open the Agenda panel' }))
+    expect(screen.getByRole('main').hasAttribute('inert')).toBe(true)
+    fireEvent.keyDown(window, { key: 'n', code: 'KeyN', ...(isMac ? { metaKey: true } : { ctrlKey: true }) })
+    expect(compose$.tabs.get().some((tab) => tab.kind === 'compose')).toBe(true)
+    expect(aside(screen)!.dataset.layout).toBe('strip')
+    expect(screen.getByRole('main').hasAttribute('inert')).toBe(false)
   })
 
   // Review finding E: one Escape stack for the overlay and the band's search.
