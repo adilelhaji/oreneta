@@ -20,7 +20,7 @@ import {
   type Participant,
 } from '../../states/calendar'
 import { ScopeAsk } from './ScopeAsk'
-import { isAnswerableInvitation } from '../../lib/calendarInvitation'
+import { answerLabel, answerOf, isAnswerableInvitation } from '../../lib/calendarInvitation'
 import { accounts$ } from '../../states/accounts'
 import { forwardArrow } from '../../lib/direction'
 
@@ -214,7 +214,7 @@ export function EventDetails() {
                         directory often gives no address the server will share. */}
                     <span dir="auto" className="min-w-0 truncate text-primary">{person.name || person.addr}</span>
                     {person.response && (
-                      <span className="shrink-0 text-2xs text-secondary">{responseLabel(person.response, t)}</span>
+                      <span className="shrink-0 text-2xs text-secondary">{responseLabel(person.response)}</span>
                     )}
                   </li>
                 ))}
@@ -243,7 +243,7 @@ export function EventDetails() {
               {answered
                 ? t('calendar.yourAnswer', {
                     defaultValue: 'Your answer: {answer}',
-                    answer: responseLabel(event.my_response, t),
+                    answer: responseLabel(event.my_response),
                   })
                 : t('calendar.invitationPending', { defaultValue: 'You have been invited.' })}
             </p>
@@ -418,11 +418,7 @@ function answeredAs(stored: string, choice: 'accept' | 'tentative' | 'decline'):
 }
 
 /// Servers answer with their own vocabulary; these are the three answers that
-/// mean something to a reader.
-function responseLabel(response: string, t: ReturnType<typeof useTranslation>['t']): string {
-  const normalised = response.toLowerCase()
-  if (normalised.includes('accept')) return t('calendar.accepted', { defaultValue: 'Accepted' })
-  if (normalised.includes('decline')) return t('calendar.declined', { defaultValue: 'Declined' })
-  if (normalised.includes('tentative')) return t('calendar.tentative', { defaultValue: 'Tentative' })
-  return t('calendar.noAnswer', { defaultValue: 'No answer yet' })
+/// mean something to a reader (lib/calendarInvitation, as the Dia panel says them).
+function responseLabel(response: string): string {
+  return answerLabel(answerOf(response))
 }

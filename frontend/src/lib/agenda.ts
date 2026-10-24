@@ -21,10 +21,17 @@ const startOfDay = (ms: number) => {
 }
 
 /** Local midnight `days` days after the day `ms` falls on, safe across DST. */
-const addDays = (ms: number, days: number) => {
+export const addDays = (ms: number, days: number) => {
   const date = new Date(ms)
   return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days).getTime()
 }
+
+/**
+ * One occurrence of an event: the same one asked of two overlapping windows,
+ * or merged twice, is still one meeting.
+ */
+export const occurrenceKey = (event: CalendarEvent) =>
+  `event:${event.accountId}:${event.calendar_id}:${event.id}:${event.start}`
 
 /** The days shown, as epoch seconds: today's local midnight to the end of the last day. */
 export function agendaWindow(now: number, days = AGENDA_WIDGET_DAYS): { from: number; to: number } {
@@ -85,9 +92,7 @@ export function buildAgenda(
       first = startOfDay(event.start * 1000)
     }
     if (first >= end) continue
-    // The same occurrence asked of two overlapping windows, or merged twice,
-    // is still one meeting.
-    const key = `event:${event.accountId}:${event.calendar_id}:${event.id}:${event.start}`
+    const key = occurrenceKey(event)
     if (seen.has(key)) continue
     seen.add(key)
     const day = Math.max(first, today)
