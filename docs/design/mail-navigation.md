@@ -167,7 +167,10 @@ Adjunts el mateix dia (vegeu [Persones](#persones-326), [Tasques](#tasques-329),
   arriba a 460 px. Que les carpetes i la llista
   cedeixin també davant d'aquesta barra és la peça 12 (ADR-0069 §2); el
   propietari va acceptar el 2026-10-21 que fins aleshores la barra tingui aquest
-  espai menys.
+  espai menys. Des de #361 és així: la barra lateral de l'aplicació va al costat
+  del contingut segons ADR-0069 §2, les carpetes i després la llista li cedeixen
+  espai, i a 1440 px hi arriba a 560 px (vegeu
+  [contextual-sidebar.md](contextual-sidebar.md#la-barra-lateral-de-laplicació-361)).
 - **Proves:** `frontend/src/components/shell/FolderPane.test.tsx` (regió i nom,
   títol amb indicació, peu i lloc del selector, amplada en px, teclat i punter
   en totes dues direccions, mida dibuixada, amplada desada, recuperada i
@@ -176,7 +179,12 @@ Adjunts el mateix dia (vegeu [Persones](#persones-326), [Tasques](#tasques-329),
   `frontend/src/components/sidenav/MailNavigation.test.tsx` (el correu dins de
   la subfinestra i les indicacions dels noms) i `frontend/e2e/startup.e2e.ts`
   («#317»: teclat, punter, reinici i zoom del 200 % a 1440 px; qui cedeix a
-  1025, 1100, 1200 i 1440 px; àrab).
+  1025, 1100, 1200 i 1440 px; àrab). Des de #361 la taula de qui cedeix es mesura
+  dues vegades: amb la barra lateral de l'aplicació amagada, amb les expectatives
+  d'abans, i amb la seva tira, minimitzada per defecte, que pren 40 px a la fila,
+  de manera que tot passa 40 px més tard: a 1025, 1100 i 1140 px la llista fa 425,
+  500 i 540 px amb les carpetes a 200 px, a 1180 px les carpetes en fan 220 amb la
+  llista sencera, i a 1200 px, 240.
 
 ### Calendari (#323)
 
@@ -1008,4 +1016,8 @@ arrencar) i `index.css` (els colors de la barra estreta).
   les carpetes fan els 260 px sencers a 1200 px (abans, 220), i hi ha una fila nova
   a 1140 px, la primera amplada amb la llista sencera i les carpetes a 220 px. La
   resta de les proves de límits, de zoom, de dreta a esquerra i d'axe es mantenen
-  amb les mateixes expectatives.
+  amb les mateixes expectatives. Des de #361, la prova del desbordament de la tira
+  al 200 % a 1025 px amaga la barra lateral de l'aplicació, la tira de la qual
+  (80 px al 200 %) faria cedir 35 px a la subfinestra; i les proves de les
+  subfinestres de Persones, Tasques, Notes, Xat i Adjunts compten l'espai del mòdul
+  sense la tira de la barra lateral.

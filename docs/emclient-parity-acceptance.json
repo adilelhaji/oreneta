@@ -325,6 +325,14 @@
           {
             "sha": "387d0bfc5ca761b89b897263942eb978bb7f9a4b",
             "result": "frontend/src/components/shell/ModuleSwitcher.test.tsx"
+          },
+          {
+            "sha": "01360f26f2d27c83cee8d44d75987ce50963451e",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "01360f26f2d27c83cee8d44d75987ce50963451e",
+            "result": "frontend/src/lib/paneResize.test.ts"
           }
         ],
         "native": [],
@@ -1657,6 +1665,30 @@
           {
             "sha": "846cbc5f994dda622376372f89de3bc00daba97b",
             "result": "frontend/src/lib/paneResize.test.ts"
+          },
+          {
+            "sha": "01360f26f2d27c83cee8d44d75987ce50963451e",
+            "result": "frontend/src/components/shell/AppSidebar.test.tsx"
+          },
+          {
+            "sha": "01360f26f2d27c83cee8d44d75987ce50963451e",
+            "result": "frontend/src/components/chat/ConversationDetailsPanel.test.tsx"
+          },
+          {
+            "sha": "01360f26f2d27c83cee8d44d75987ce50963451e",
+            "result": "frontend/src/states/sidebar.test.ts"
+          },
+          {
+            "sha": "01360f26f2d27c83cee8d44d75987ce50963451e",
+            "result": "frontend/src/states/settings.test.ts"
+          },
+          {
+            "sha": "01360f26f2d27c83cee8d44d75987ce50963451e",
+            "result": "frontend/src/lib/paneResize.test.ts"
+          },
+          {
+            "sha": "01360f26f2d27c83cee8d44d75987ce50963451e",
+            "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
         "native": [],
@@ -1865,6 +1897,14 @@
           {
             "sha": "54558d3854a99cb3dd7c87c848a3a0570ecd7300",
             "result": "frontend/src/components/shell/ModuleSwitcher.test.tsx"
+          },
+          {
+            "sha": "01360f26f2d27c83cee8d44d75987ce50963451e",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "01360f26f2d27c83cee8d44d75987ce50963451e",
+            "result": "frontend/src/components/shell/AppSidebar.test.tsx"
           }
         ],
         "native": [],

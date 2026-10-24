@@ -319,6 +319,37 @@ correu al 200 % i de 1440 a 1000 px i tornada, la barra estreta al 200 % a 1024 
 desplaçament horitzontal, el teclat en català i en àrab i les regles de regions d'axe al marc
 nou. És una nota d'evidència: cap fila no canvia d'estat (S01-04, S01-05, SET-01, SET-27), i
 l'evidència nativa de Windows i amb lectors de pantalla continua pendent.
+El 2026-10-24 (#361, peça 12a, pas 5 d'ADR-0068 i ADR-0069, `docs/design/contextual-sidebar.md`) la
+barra lateral de detalls d'una conversa va passar a ser la barra lateral de l'aplicació: un sol
+`<aside>` «Barra lateral» al final de la fila del marc, després de `<main>`, a tots els mòduls, amb
+el panell Agenda (el d'ADR-0059, sense canvis) i, amb una conversa oberta al correu o en un tauler,
+el panell Conversa (el resum, la multimèdia, els fitxers i l'historial d'una persona, com abans). Un
+selector de panells al peu, una llista de pestanyes amb les fletxes en el sentit de lectura, hi passa
+d'un a l'altre. L'agenda s'hi obre sense cap conversa oberta, en arrencar i des de Calendari,
+Tasques, Persones i Notes. La barra té tres estats, desats a la preferència nova
+`app_sidebar_state`: desplegada, minimitzada en una tira de 2,5 rem amb una icona per panell (el
+valor per defecte, en un perfil nou i en actualitzar) i amagada. El botó «Barra lateral» del final
+de la banda superior, l'ordre «Mostra la barra lateral» del menú de l'aplicació i de la paleta, les
+icones de la tira, el botó de minimitzar i la tecla `i` l'obren i la tanquen; la capa que la mostra on
+no hi cap al costat del contingut no es desa, i en arrencar no s'obre mai sola. Va al costat del
+contingut segons la regla d'ADR-0069 §2 (al correu a partir de 1120 px, als altres mòduls a partir de
+1100 px), amb les carpetes i després la llista que li cedeixen espai, i si no hi cap és una capa del
+85 % de la finestra com a màxim. `session_sidebar_section_main` desa el tipus de panell, amb els
+valors nous `day` i `person`. Les proves de #212 es mantenen, amb el botó i la regió nous i les
+mateixes expectatives, i se n'hi afegeixen de noves: unitàries de la regla a 1100, 1120, 1180 i
+1440 px, de la preferència i de la taula de conversió; de components (la barra a cada mòdul, què
+canvia l'estat desat i què no, l'arrencada amb `expanded` en una finestra estreta i el selector de
+panells amb el teclat i en àrab); i, al punt d'entrada de producció, a 600, 1024, 1100, 1180 i
+1440 px, en clar i en fosc, en català i en àrab, al 200 % a 1440 i 1024 px, l'estat i l'amplada
+després de reiniciar, F6 i Maj+F6 a través de la barra i axe de la barra. La tira, que hi és per
+defecte, és una regió d'F6 més i pren 40 px a la fila: els recorreguts d'F6 de «#306» la inclouen, la
+taula de #317 la mesura amb la barra amagada (les expectatives d'abans) i amb la tira (40 px més
+tard: 220 px de carpetes a 1180 px), les proves de les subfinestres de carpetes de Persones,
+Tasques, Notes, Xat i Adjunts mesuren l'espai del mòdul sense la tira, les de «#345» esperen l'estat
+de la sincronització just abans del botó «Barra lateral», i la del desbordament de la tira de mòduls
+al 200 % a 1025 px amaga la barra lateral. És una nota d'evidència: cap fila no canvia d'estat
+(SET-23 continua `partial`; S01-05 i SET-27 tampoc no canvien), i els panells Dia i Persona (12b i
+12c) i l'evidència nativa de Windows i amb lectors de pantalla continuen pendents.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per
