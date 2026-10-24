@@ -324,7 +324,13 @@ describe('Notes in the common folder pane (ADR-0068 §4, #335)', () => {
     expect(written('folder_pane_width').at(-1)).toBe(200)
     expect(pane(screen).style.width).toBe('200px')
     // The module's column gives way after the pane: it is the flex basis.
-    expect(content(screen).className).toContain('flex-[1_1_680px]')
+    expect(content(screen).style.flex).toBe('1 1 680px')
+    // Not a hard minimum: too short a row (the system's 200 % zoom) shrinks it
+    // rather than scroll sideways; the app's sidebar goes beside only with room
+    // for it (ADR-0069 §2, owner decision D3 on #360).
+    expect(content(screen).style.minWidth).toBe('')
+    // The list's 320 px from NOTES_LIST_PX, and the note beside it at 360 px.
+    expect(screen.getByRole('region', { name: 'Notes' }).style.width).toBe('320px')
     expect(pane(screen).style.flexShrink).toBe('1000')
     cleanup()
 

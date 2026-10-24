@@ -20,7 +20,7 @@ import {
   closeKanbanPane,
 } from '../../states/kanban'
 import { openThreadSearch } from '../../states/thread'
-import { toggleConversationPanel } from '../../states/sidebar'
+import { sidebar$, toggleConversationPanel } from '../../states/sidebar'
 import {
   syncMail,
   selectAdjacentThread,
@@ -467,7 +467,9 @@ export function AppHotkeys({ setup = false }: { setup?: boolean }) {
         case 'thread.details':
           // The app sidebar's Conversa panel (ADR-0069 §2): expanded on it,
           // minimised (or, as an overlay, closed); otherwise expanded on it.
-          if (!threadSearchVisible()) return
+          // Only while it is there: a conversation on screen, not under a
+          // reader or compose tab, nor below 769 px with the list in its place.
+          if (!sidebar$.conversationOpen.peek()) return
           event.preventDefault()
           toggleConversationPanel()
           break

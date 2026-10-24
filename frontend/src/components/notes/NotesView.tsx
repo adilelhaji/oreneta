@@ -3,6 +3,7 @@ import { Pin, Plus, StickyNote, Trash2 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { intlLocale, useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
+import { moduleContentStyle, NOTES_LIST_PX } from '../../lib/paneResize'
 import { loadNotes, noteTitle, notes$ } from '../../states/notes'
 import { Button } from '../button/Button'
 import { EmptyState } from '../empty-state/EmptyState'
@@ -58,9 +59,11 @@ export function NotesView() {
       <div
         data-region="content"
         // Beside the pane the module asks for its list (320 px) and the editor's
-        // minimum (360 px, ADR-0068 §7) as its basis: the pane, whose shrink
-        // factor dwarfs this one's, gives way first.
-        className={clsx('flex min-h-0 min-w-0 flex-col bg-app', inPane ? 'flex-[1_1_680px]' : 'flex-1')}
+        // minimum (360 px, ADR-0068 §7) as its basis, and keeps it: the pane,
+        // whose shrink factor dwarfs this one's, gives way first, and the app's
+        // sidebar never takes it (ADR-0069 §2).
+        className={clsx('flex min-h-0 min-w-0 flex-col bg-app', !inPane && 'flex-1')}
+        style={inPane ? moduleContentStyle('notes') : undefined}
       >
         <header className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-header px-4 py-3">
           <CompactNavigation />
@@ -102,9 +105,10 @@ export function NotesView() {
               // 20 rem, as before; beside the folder pane it is in px, like the
               // pane, so at the app's 200 % the note keeps its room (ADR-0068 §7).
               'flex min-h-0 w-full flex-col border-e border-border min-[900px]:shrink-0',
-              inPane ? 'min-[900px]:w-[320px]' : 'min-[900px]:w-80',
+              !inPane && 'min-[900px]:w-80',
               opened && 'max-[899px]:hidden',
             )}
+            style={inPane ? { width: `${NOTES_LIST_PX}px` } : undefined}
           >
             {/* The search is in the top band (ADR-0068 §2, #344); below 1025 px
                 the tags stay as chips above the list. */}

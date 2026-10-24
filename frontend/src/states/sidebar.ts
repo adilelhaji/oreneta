@@ -22,6 +22,12 @@ export const sidebar$ = observable({
   /** Whether the minimised strip is drawn where the sidebar is not expanded beside. */
   strip: false,
   /**
+   * Whether a conversation is open on screen, so that the Conversa panel is
+   * there (AppSidebar reads it): without one, `i` and the conversation
+   * header's details buttons have nothing to show.
+   */
+  conversationOpen: false,
+  /**
    * An overlay opened where the sidebar does not fit beside the content. It is
    * a way of showing the sidebar, not a preference: opening and closing it
    * leave the saved state alone (ADR-0069 §2).
@@ -147,20 +153,28 @@ export function minimizeSidebar() {
 }
 
 /**
- * The band's «Barra lateral» button, the palette and the app menu: hide the
- * sidebar expanded beside the content (saved), close its overlay (not saved),
- * or else expand it.
+ * The band's «Barra lateral» button, the palette and the app menu (owner
+ * decision D4 on #360): a show-and-hide of the whole sidebar. Whatever is
+ * drawn of it goes: expanded beside the content or minimised to its strip, it
+ * is hidden (saved); as an overlay, the overlay closes (not saved). With
+ * nothing drawn it expands: beside the content where it fits (saved), or as
+ * an overlay (not saved). The strip's icons are what expand it from the strip.
  */
 export function toggleAppSidebar() {
   const shown = currentSidebarShown()
   if (shown === 'overlay') closeSidebarOverlay()
-  else if (shown === 'beside') settings$.appSidebarState.set('hidden')
+  else if (shown === 'beside' || shown === 'strip') settings$.appSidebarState.set('hidden')
   else expandSidebar()
 }
 
 /** Whether the sidebar is expanded, beside the content or as an overlay: the band button's `aria-expanded`. */
 export function sidebarExpanded(shown: SidebarShown): boolean {
   return shown === 'beside' || shown === 'overlay'
+}
+
+/** Whether any of the sidebar is drawn, the strip included: what the band button would hide. */
+export function sidebarDrawn(shown: SidebarShown): boolean {
+  return shown !== 'none'
 }
 
 /** A strip icon: expands the sidebar on its panel. */
@@ -176,6 +190,9 @@ export function openSidebarPanel(panel: SidebarPanelId) {
  * it expands it on the Conversa panel.
  */
 export function toggleConversationPanel() {
+  // No conversation on screen (a reader or compose tab over it, the list in
+  // its place below 769 px): there is no Conversa panel to show or hide.
+  if (!sidebar$.conversationOpen.peek()) return
   const shown = currentSidebarShown()
   const onConversation = isConversationSection(ui$.sidebarSection.peek())
   if (onConversation && shown === 'overlay') closeSidebarOverlay()

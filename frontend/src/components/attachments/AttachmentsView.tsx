@@ -22,6 +22,7 @@ import { useWideWindow } from '../resizer/useElementWidth'
 import { useFolderPaneFocus } from '../shell/folderPaneFocus'
 import { FOLDER_PANE_MIN_WINDOW, FolderPane } from '../shell/FolderPane'
 import { clsx } from '../../lib/utils'
+import { moduleContentStyle } from '../../lib/paneResize'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
 import type { Attachment } from '../../types'
 
@@ -256,9 +257,11 @@ export function AttachmentsView() {
       <div
         data-region="content"
         // Beside the pane the module asks for the list's minimum (360 px,
-        // ADR-0068 §7) as its basis: the pane, whose shrink factor dwarfs
-        // this one's, gives way first.
-        className={clsx('flex min-h-0 min-w-0 flex-col bg-app', inPane ? 'flex-[1_1_360px]' : 'flex-1')}
+        // ADR-0068 §7) as its basis, and keeps it: the pane, whose shrink
+        // factor dwarfs this one's, gives way first, and the app's sidebar
+        // never takes it (ADR-0069 §2).
+        className={clsx('flex min-h-0 min-w-0 flex-col bg-app', !inPane && 'flex-1')}
+        style={inPane ? moduleContentStyle('attachments') : undefined}
       >
         <header className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-header px-4 py-3">
           <CompactNavigation />

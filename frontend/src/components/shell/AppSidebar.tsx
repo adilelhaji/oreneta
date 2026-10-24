@@ -1,4 +1,13 @@
-import { useEffect, useId, useLayoutEffect, useRef, type CSSProperties, type ReactNode, type RefObject } from 'react'
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+} from 'react'
 import { useValue } from '@legendapp/state/react'
 import { CalendarDays, MessagesSquare, PanelRightClose, X, type LucideIcon } from 'lucide-react'
 import { handleGroupArrowKeys } from '../../lib/direction'
@@ -34,9 +43,7 @@ import { SidebarAgenda } from '../chat/SidebarAgenda'
 import { PaneResizer } from '../resizer/PaneResizer'
 import { useElementWidth, useWideWindow, useWindowWidth } from '../resizer/useElementWidth'
 import { FOLDER_PANE_MIN_WINDOW } from './FolderPane'
-
-/** The narrow module bar of 769–1024 px, 3 rem wide (ModuleSwitcher's `bar`). */
-const NARROW_BAR_REM = 3
+import { MODULE_BAR_REM } from './ModuleSwitcher'
 
 export type SidebarPanelDef = {
   id: SidebarPanelId
@@ -121,20 +128,21 @@ export function AppSidebar({ row, content, panels: offered = SIDEBAR_PANELS }: A
   const overlay = useValue(sidebar$.overlay)
   const storedWidth = useValue(settings$.detailsPanelWidth)
   const section = useValue(ui$.sidebarSection)
-  // Read so the strip and the narrow bar follow the app's zoom: they are in rem.
-  useValue(settings$.fontScale)
+  // The strip and the narrow bar are in rem: what a rem is, read again only
+  // when the app's zoom changes.
+  const fontScale = useValue(settings$.fontScale)
+  const rem = useMemo(rootRem, [fontScale])
   const conversationOpen = useConversationOpen()
   const windowWidth = useWindowWidth()
   const rowWidth = useElementWidth(row)
   const folders = useWideWindow(FOLDER_PANE_MIN_WINDOW)
   const narrowBar = useWideWindow(SIDEBAR_STRIP_MIN_WINDOW) && !folders
-  const rem = rootRem()
   const layout = appSidebarLayout({
     window: windowWidth,
     row: rowWidth,
     content,
     folders,
-    bar: narrowBar ? NARROW_BAR_REM * rem : 0,
+    bar: narrowBar ? MODULE_BAR_REM * rem : 0,
     strip: SIDEBAR_STRIP_REM * rem,
   })
   const shown = shownSidebar(saved, layout.beside, layout.strip, overlay)
@@ -156,11 +164,13 @@ export function AppSidebar({ row, content, panels: offered = SIDEBAR_PANELS }: A
   useLayoutEffect(() => {
     sidebar$.fits.set(layout.beside)
     sidebar$.strip.set(layout.strip)
-  }, [layout.beside, layout.strip])
+    sidebar$.conversationOpen.set(conversationOpen)
+  }, [layout.beside, layout.strip, conversationOpen])
   useEffect(
     () => () => {
       sidebar$.fits.set(false)
       sidebar$.strip.set(false)
+      sidebar$.conversationOpen.set(false)
       closeSidebarOverlay()
     },
     [],
@@ -196,16 +206,27 @@ export function AppSidebar({ row, content, panels: offered = SIDEBAR_PANELS }: A
       const opener = takeOverlayOpener()
       // Only a focus that went with the overlay: one another surface took (a
       // dialog opened from the agenda, the band button) stays there.
-      const active = document.activeElement
-      if (active && active !== document.body && active.isConnected) return
-      if (
-        opener instanceof HTMLElement &&
-        opener.isConnected &&
-        !opener.matches(':disabled') &&
-        !opener.closest('[hidden], [inert], [aria-hidden="true"]')
-      ) {
-        opener.focus({ preventScroll: true })
-      } else if (shown === 'strip') stripIcon()?.focus({ preventScroll: true })
+      const fell = () => {
+        const active = document.activeElement
+        return !active || active === document.body || !active.isConnected
+      }
+      if (!fell()) return
+      const usable = (element: Element | null): element is HTMLElement =>
+        element instanceof HTMLElement &&
+        element.isConnected &&
+        !element.matches(':disabled') &&
+        !element.closest('[hidden], [inert], [aria-hidden="true"]')
+      const giveBack = () => {
+        if (usable(opener)) opener.focus({ preventScroll: true })
+        else if (shown === 'strip') stripIcon()?.focus({ preventScroll: true })
+      }
+      // The module under the overlay stops being inert in this same drawing;
+      // should it still be, the focus goes back once it is not.
+      if (opener instanceof HTMLElement && opener.isConnected && opener.closest('[inert]')) {
+        queueMicrotask(() => {
+          if (fell()) giveBack()
+        })
+      } else giveBack()
       return
     }
     if (refocus === 'tab' && shown === 'beside') selectedTab()?.focus({ preventScroll: true })
@@ -214,6 +235,8 @@ export function AppSidebar({ row, content, panels: offered = SIDEBAR_PANELS }: A
 
   if (shown === 'none') return null
   const label = t('sidebar.label')
+  // The width the layout counts the strip at.
+  const stripWidth = { width: `${SIDEBAR_STRIP_REM}rem` }
 
   if (shown === 'strip') {
     return (
@@ -223,7 +246,8 @@ export function AppSidebar({ row, content, panels: offered = SIDEBAR_PANELS }: A
         data-region="sidebar"
         data-app-sidebar
         data-layout="strip"
-        className="flex w-10 shrink-0 flex-col items-center gap-1 border-s border-border bg-header py-1"
+        style={stripWidth}
+        className="flex shrink-0 flex-col items-center gap-1 border-s border-border bg-header py-1"
       >
         {panels.map((entry) => (
           <IconButton
@@ -250,7 +274,7 @@ export function AppSidebar({ row, content, panels: offered = SIDEBAR_PANELS }: A
         <>
           {/* The strip keeps its room under the overlay, so the module does not move. */}
           {saved !== 'hidden' && layout.strip && (
-            <div aria-hidden="true" className="w-10 shrink-0 border-s border-border bg-header" />
+            <div aria-hidden="true" style={stripWidth} className="shrink-0 border-s border-border bg-header" />
           )}
           <div className="absolute inset-0 z-[44] bg-black/40 animate-fade-in" onClick={closeSidebarOverlay} />
         </>

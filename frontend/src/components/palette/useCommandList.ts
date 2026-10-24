@@ -80,7 +80,7 @@ import { merge$ } from '../../states/merge'
 import { awaiting$ } from '../../states/awaiting'
 import { pauseNotifications, resumeNotifications, type PauseChoice } from '../../states/notifications'
 import { useQuietState } from '../sidenav/QuietIndicator'
-import { sidebarExpanded, toggleAppSidebar } from '../../states/sidebar'
+import { sidebarDrawn, toggleAppSidebar } from '../../states/sidebar'
 import { useSidebarShown } from '../shell/useSidebarShown'
 
 // The modules after mail, in the order of the module strip (ADR-0068 §5). Mail
@@ -121,8 +121,9 @@ export function useCommandList(): Command[] {
   const quiet = useQuietState().quiet
   // A manual mail check in flight (`syncMail`): its command waits, and says so.
   const syncing = useValue(ui$.busy)
-  // The app's sidebar, expanded beside the content or as an overlay (ADR-0069 §2).
-  const sidebarOpen = sidebarExpanded(useSidebarShown())
+  // Whether any of the app's sidebar is drawn, its strip included: what the
+  // band's button, and this command, would hide (ADR-0069 §2, decision D4).
+  const sidebarOpen = sidebarDrawn(useSidebarShown())
 
   return useMemo<Command[]>(() => {
     const run = (fn: () => void) => () => {
@@ -293,8 +294,9 @@ export function useCommandList(): Command[] {
         run: run(() => ui$.catalogueOpen.set(true)),
       },
       {
-        // As the band's «Barra lateral» button (ADR-0069 §2): shows the app's
-        // sidebar, or hides it. There is none on the first-account setup.
+        // As the band's «Barra lateral» button (ADR-0069 §2, decision D4):
+        // hides whatever is drawn of the app's sidebar, or shows it. There is
+        // none on the first-account setup.
         id: 'view.sidebar',
         label: sidebarOpen ? t('commands.sidebar.hide') : t('commands.sidebar.show'),
         area: 'app',

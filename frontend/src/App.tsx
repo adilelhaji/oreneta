@@ -24,8 +24,8 @@ import { MessagePane } from './components/chat/MessagePane'
 import { KanbanPaneResizer } from './components/resizer/PaneResizers'
 import { useWideWindow } from './components/resizer/useElementWidth'
 import { kanbanAreaBase, KANBAN_PANE_MIN_PX, KANBAN_PANE_NARROW_MIN_PX, type SidebarContent } from './lib/paneResize'
-import { clsx } from './lib/utils'
 import { AppSidebar } from './components/shell/AppSidebar'
+import { useSidebarShown } from './components/shell/useSidebarShown'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ConnectivityBanner } from './components/banner/ConnectivityBanner'
 import { UpdateBanner } from './components/banner/UpdateBanner'
@@ -72,7 +72,10 @@ export default function App() {
   const showKanbanMessagePane = !!kanbanPaneThreadId || composeTabs.some((tab) => tab.id === activeComposeTab)
   // What the module keeps beside the app's sidebar (ADR-0069 §2).
   const sidebarContent: SidebarContent =
-    activeModule !== 'mail' ? 'module' : !activeBoardId ? 'mail' : showKanbanMessagePane ? 'board-pane' : 'board'
+    activeModule !== 'mail' ? activeModule : !activeBoardId ? 'mail' : showKanbanMessagePane ? 'board-pane' : 'board'
+  // Under the sidebar's overlay the module is inert: Tab and F6 stay out of
+  // what the backdrop covers, and the overlay gives the focus back on closing.
+  const overlay = useSidebarShown() === 'overlay'
 
   // No account yet: the first-account setup, in the same frame as the
   // window's, which stays mounted when the first account arrives (#343).
@@ -93,16 +96,14 @@ export default function App() {
               inside <main>. The row is what the sidebar measures, and where
               its overlay sits. */}
           <div ref={rowRef} data-frame-row className="relative flex min-h-0 w-full flex-1 overflow-hidden">
+            {/* Each module keeps its own minimum beside the sidebar
+                (moduleContentStyle, ADR-0069 §2); mail's are its list's and
+                its reader's. */}
             <main
               ref={mainRef}
               aria-label={moduleNames[activeModule]}
-              className={clsx(
-                'flex min-h-0 min-w-0 flex-1 overflow-hidden',
-                // Outside mail the module keeps 360 px beside the sidebar
-                // (ADR-0069 §2, owner decision 5), which also makes the folder
-                // pane give way first, as mail's reader does.
-                activeModule !== 'mail' && 'min-[769px]:[&>[data-region=content]]:min-w-[360px]',
-              )}
+              inert={overlay}
+              className="flex min-h-0 min-w-0 flex-1 overflow-hidden"
             >
               {narrowBar && (
                 <ErrorBoundary label="module bar">

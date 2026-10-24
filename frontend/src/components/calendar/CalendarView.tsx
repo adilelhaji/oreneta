@@ -42,6 +42,8 @@ import { EventContextMenu, type EventContextMenuState } from './EventContextMenu
 import { settings$ } from '../../states/settings'
 import { accounts$ } from '../../states/accounts'
 import { isoWeekday } from '../../lib/calendarWeek'
+import { clsx } from '../../lib/utils'
+import { moduleContentStyle } from '../../lib/paneResize'
 
 /// The calendar surface: one header — period, navigation, view switcher — over
 /// whichever view is chosen. The editor and the context menu live here so
@@ -98,7 +100,14 @@ export function CalendarView() {
           </div>
         </FolderPane>
       )}
-      <div data-region="content" className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
+      <div
+        data-region="content"
+        // Beside the pane the views keep the reader's 360 px, which they had
+        // no minimum of their own for: the pane gives way first, and the app's
+        // sidebar never takes them (ADR-0069 §2).
+        className={clsx('flex min-h-0 min-w-0 flex-col bg-app', !inPane && 'flex-1')}
+        style={inPane ? moduleContentStyle('calendar') : undefined}
+      >
         <EventEditor />
         <EventDetails />
         {menu && <EventContextMenu state={menu} onClose={() => setMenu(null)} />}

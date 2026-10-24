@@ -483,25 +483,36 @@ export function ConversationPanel() {
       // show the feed host instead; otherwise show the sender name.
       scopeSubtitle={isRSS ? activeThread.from_addr : activeThread.from_name || activeThread.from_addr}
       loading={loading}
-      onOpenImage={(index) => thread$.galleryIndex.set(index)}
+      onOpenImage={(index) => {
+        // The gallery is the conversation pane's, under an overlay's inert
+        // module: the overlay goes first, as for the message itself.
+        closeSidebarOverlay()
+        thread$.galleryIndex.set(index)
+      }}
       onShowInConversation={(messageId) => {
         thread$.pendingScrollMessageId.set(messageId)
         thread$.galleryIndex.set(null)
         // The message is what is wanted now: an overlay over it goes.
         closeSidebarOverlay()
       }}
-      onComposeTo={(person) =>
+      onComposeTo={(person) => {
+        // The new message opens in the conversation pane: an overlay over it goes.
+        closeSidebarOverlay()
         openComposeTab({
           accountId,
           to: person.name && person.name !== person.email ? `${person.name} <${person.email}>` : person.email,
         })
-      }
+      }}
+      // The list of those messages is under an overlay: it closes it.
       onViewMessagesWith={(person) => openCorrespondentMail(accountId, activeThread.folder_id, person.email)}
       accountId={accountId}
       onOpenConversation={(threadId, folder) => {
+        // A conversation from the person's history, under an overlay too.
+        closeSidebarOverlay()
         openMailAccount(accountId, folder, false)
         ui$.selectedThread.set(threadId)
       }}
+      // Calendar is another module, which closes an overlay as it opens.
       onOpenEvent={(start) => {
         calendar$.anchor.set(startOfDay(new Date(start * 1000)).getTime())
         calendar$.view.set('day')

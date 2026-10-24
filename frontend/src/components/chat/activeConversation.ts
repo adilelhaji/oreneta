@@ -54,23 +54,31 @@ export function useActiveConversation() {
 }
 
 /**
+ * Whether the conversation pane shows a conversation in mail now: in a board,
+ * only with its conversation pane open, and not under a reader or compose tab.
+ * The same answer as `useActiveConversation`, read where a selector tracks it.
+ */
+function conversationShown(): boolean {
+  if (ui$.module.get() !== 'mail') return false
+  if (kanban$.activeBoardId.get() && !kanban$.paneThreadId.get()) return false
+  const activeTab = compose$.activeTab.get()
+  const tab = compose$.tabs.get().find((candidate) => candidate.id === activeTab)
+  if (tab?.kind === 'reader' || tab?.kind === 'compose') return false
+  if (tab?.kind === 'thread' && tab.threadId === ui$.selectedThread.get()) return true
+  return !!getActiveThread()
+}
+
+/**
  * Whether a conversation is open on screen, for the sidebar's Conversa panel
  * (ADR-0069 §1): in mail, or in a board with its conversation pane open, and
  * not under a reader or compose tab. Below 769 px the conversation pane shows
- * only in place of the list (`ui$.mobilePane`).
+ * only in place of the list (`ui$.mobilePane`). A boolean selector, so a
+ * change of the thread list or of the messages that leaves the answer as it
+ * was draws nothing again.
  */
 export function useConversationOpen(): boolean {
-  const module = useValue(ui$.module)
-  const boardId = useValue(kanban$.activeBoardId)
-  const paneThreadId = useValue(kanban$.paneThreadId)
-  const mobilePane = useValue(ui$.mobilePane)
   const bothPanes = useWideWindow(769)
-  const { activeThread, activeDocumentTab } = useActiveConversation()
-  return (
-    module === 'mail' &&
-    !!activeThread &&
-    !activeDocumentTab &&
-    (!boardId || !!paneThreadId) &&
-    (bothPanes || mobilePane === 'conversation')
-  )
+  const mobilePane = useValue(ui$.mobilePane)
+  const shown = useValue(conversationShown)
+  return shown && (bothPanes || mobilePane === 'conversation')
 }

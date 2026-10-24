@@ -71,21 +71,59 @@ export const SIDEBAR_STRIP_MIN_WINDOW = 769
 export const SIDEBAR_STRIP_REM = 2.5
 /** A board's column, in place of mail's list (ADR-0069 §2). */
 export const BOARD_COLUMN_ROOM = 280
-/** What a module that is not mail keeps beside the sidebar (ADR-0069 §2, owner decision 5). */
+/** What a module that is not mail keeps beside the sidebar where its piece fixed nothing else: the reader's 360 px. */
 export const CONTENT_ROOM = READER_ROOM
+/** People's list beside the folder pane, in px (#326): 18 rem before, now in px like the pane. */
+export const PEOPLE_LIST_PX = 288
+/** Notes' list beside the folder pane, in px (#335): 20 rem before, now in px like the pane. */
+export const NOTES_LIST_PX = 320
+
+/**
+ * What each module that is not mail keeps beside the folder pane, and so
+ * beside the app's sidebar (ADR-0069 §2 and its decision 5, «until its piece
+ * fixes another»; owner decision D3 on #360). People and Notes keep the room
+ * their pieces fixed: the list and, beside it, the person or the note at the
+ * reader's 360 px. Calendar and Tasks fixed no minimum, and Chat and
+ * Attachments fixed 360 px (the conversation, the list): 360 px for all four.
+ */
+export const MODULE_CONTENT_MIN = {
+  calendar: CONTENT_ROOM,
+  people: PEOPLE_LIST_PX + READER_ROOM,
+  tasks: CONTENT_ROOM,
+  notes: NOTES_LIST_PX + READER_ROOM,
+  chat: CONTENT_ROOM,
+  attachments: CONTENT_ROOM,
+} as const
+
+export type ContentModule = keyof typeof MODULE_CONTENT_MIN
+
+/**
+ * A module's content beside the folder pane (from 1025 px): it asks for its
+ * minimum as its flex basis, so the folder pane, whose shrink factor dwarfs
+ * this one's, gives way first, down to its 200 px. The app's sidebar goes
+ * beside it only where the row leaves those 200 px and this minimum
+ * (`appSidebarLayout`), so it never takes the room. It is not a hard minimum:
+ * in a row too short even for that (the system's 200 % zoom), the content
+ * gives way too rather than scroll the window sideways (ADR-0068 §7).
+ */
+export function moduleContentStyle(module: ContentModule): { flex: string } {
+  return { flex: `1 1 ${MODULE_CONTENT_MIN[module]}px` }
+}
 
 /**
  * What the module shows beside the sidebar, which decides the room it keeps:
  * mail's list and reader; a board's column and, when a conversation is open on
- * it, the board's conversation pane; another module's content.
+ * it, the board's conversation pane; another module's own content.
  */
-export type SidebarContent = 'mail' | 'board' | 'board-pane' | 'module'
+export type SidebarContent = 'mail' | 'board' | 'board-pane' | ContentModule
 
 const CONTENT_MIN: Record<SidebarContent, number> = {
   mail: THREAD_LIST_WIDTH.min + READER_ROOM,
   board: BOARD_COLUMN_ROOM,
+  // The board's conversation pane counts only with a card open, at 360 px
+  // from 769 px: below, where there is no strip, the sidebar is an overlay.
   'board-pane': BOARD_COLUMN_ROOM + KANBAN_PANE_MIN_PX,
-  module: CONTENT_ROOM,
+  ...MODULE_CONTENT_MIN,
 }
 
 /** What the frame row has, for the app's sidebar to fit in (ADR-0069 §2). */
@@ -117,7 +155,8 @@ export type SidebarLayout = {
  * narrow module bar, the folder pane at its minimum (200 px, only where it is
  * drawn), and what the module keeps — mail's list (280 px) and reader
  * (360 px), a board's column (280 px) and its conversation pane (360 px from
- * 769 px) when one is open, or another module's 360 px.
+ * 769 px) when one is open, or another module's own minimum
+ * (MODULE_CONTENT_MIN: 648 px in People, 680 px in Notes, 360 px elsewhere).
  */
 export function sidebarRest(room: SidebarRoom): number {
   const row = room.row && room.row > 0 ? room.row : room.window
@@ -132,8 +171,9 @@ export function sidebarRest(room: SidebarRoom): number {
  * way to it, down to their minimums. Otherwise it can only be an overlay, at
  * most 85 % of the window, which an action opens and the layout never does.
  * In mail, with the minimums, that is from 1120 px: at 1100 px the rest is
- * 260, at 1180 px 340 and at 1440 px 600 (so 560); in another module at
- * 1100 px it is 540.
+ * 260, at 1180 px 340 and at 1440 px 600 (so 560). At 1100 px it is 540 in
+ * Calendar, Tasks, Chat and Attachments, 252 in People (beside from 1128 px)
+ * and 220 in Notes (beside from 1160 px).
  *
  * The minimised strip is always beside, from 769 px, where there is room for
  * it next to what the module keeps (at the app's 200 %, the narrow bar and the

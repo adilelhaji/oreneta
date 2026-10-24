@@ -91,7 +91,7 @@ afterEach(() => {
   mail$.messages.set([])
   settings$.detailsPanelWidth.set(340)
   settings$.appSidebarState.set('minimized')
-  sidebar$.set({ fits: false, strip: false, overlay: false })
+  sidebar$.set({ fits: false, strip: false, conversationOpen: false, overlay: false })
   ;(window as any).happyDOM.setViewport({ width: 1024, height: 768 })
 })
 

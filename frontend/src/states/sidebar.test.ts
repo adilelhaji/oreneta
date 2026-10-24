@@ -35,7 +35,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  sidebar$.set({ fits: false, strip: false, overlay: false })
+  sidebar$.set({ fits: false, strip: false, conversationOpen: false, overlay: false })
   settings$.appSidebarState.set('minimized')
   // The Conversa subsection last shown goes back to the summary too.
   ui$.sidebarSection.set('overview')
@@ -119,35 +119,52 @@ describe('how the sidebar is drawn', () => {
 })
 
 describe('what changes the saved state (ADR-0069 §2)', () => {
-  const room = (fits: boolean, strip = true) => sidebar$.set({ fits, strip, overlay: false })
+  const room = (fits: boolean, strip = true, conversationOpen = true) =>
+    sidebar$.set({ fits, strip, conversationOpen, overlay: false })
+  const drawn = () =>
+    shownSidebar(settings$.appSidebarState.get(), sidebar$.fits.get(), sidebar$.strip.get(), sidebar$.overlay.get())
 
-  it('the band button hides it beside the content, and expands it again: both saved', () => {
+  // Owner decision D4 on #360: the band button shows and hides the whole sidebar.
+  it('the band button hides whatever is drawn, the strip too, and expands it from nothing: all saved', () => {
     room(true)
-    toggleAppSidebar()
-    expect(settings$.appSidebarState.get()).toBe('expanded')
+    expect(drawn()).toBe('strip')
     toggleAppSidebar()
     expect(settings$.appSidebarState.get()).toBe('hidden')
+    expect(drawn()).toBe('none')
     toggleAppSidebar()
     expect(settings$.appSidebarState.get()).toBe('expanded')
+    expect(drawn()).toBe('beside')
+    toggleAppSidebar()
+    expect(settings$.appSidebarState.get()).toBe('hidden')
+    expect(sidebar$.overlay.get()).toBe(false)
+    // A saved `expanded` drawn as the strip, where it does not fit: hidden too.
+    settings$.appSidebarState.set('expanded')
+    room(false)
+    expect(drawn()).toBe('strip')
+    toggleAppSidebar()
+    expect(settings$.appSidebarState.get()).toBe('hidden')
     expect(sidebar$.overlay.get()).toBe(false)
   })
 
-  it('where it does not fit, the band button opens and closes an overlay, which is not saved', () => {
+  it('where it does not fit and nothing is drawn, the band button opens an overlay and closes it, neither saved', () => {
     room(false)
-    toggleAppSidebar()
-    expect(sidebar$.overlay.get()).toBe(true)
-    expect(settings$.appSidebarState.get()).toBe('minimized')
-    toggleAppSidebar()
-    expect(sidebar$.overlay.get()).toBe(false)
-    expect(settings$.appSidebarState.get()).toBe('minimized')
-    // Below 769 px, hidden: an overlay too, and hidden again once closed.
     settings$.appSidebarState.set('hidden')
-    room(false, false)
     toggleAppSidebar()
-    expect(shownSidebar('hidden', false, false, sidebar$.overlay.get())).toBe('overlay')
-    closeSidebarOverlay()
-    expect(shownSidebar('hidden', false, false, sidebar$.overlay.get())).toBe('none')
+    expect(drawn()).toBe('overlay')
     expect(settings$.appSidebarState.get()).toBe('hidden')
+    toggleAppSidebar()
+    expect(drawn()).toBe('none')
+    expect(settings$.appSidebarState.get()).toBe('hidden')
+    // Below 769 px there is no strip: minimised draws nothing, and the button
+    // opens the overlay; once closed, nothing again.
+    settings$.appSidebarState.set('minimized')
+    room(false, false)
+    expect(drawn()).toBe('none')
+    toggleAppSidebar()
+    expect(drawn()).toBe('overlay')
+    closeSidebarOverlay()
+    expect(drawn()).toBe('none')
+    expect(settings$.appSidebarState.get()).toBe('minimized')
   })
 
   it('a strip icon expands it on its panel, saved; where it does not fit, as an overlay, not saved', () => {
@@ -198,11 +215,54 @@ describe('what changes the saved state (ADR-0069 §2)', () => {
     expect(sidebar$.overlay.get()).toBe(false)
     expect(settings$.appSidebarState.get()).toBe('expanded')
     // On the Agenda overlay, `i` moves it to Conversa rather than closing it.
-    selectSidebarPanel('agenda')
-    toggleAppSidebar()
+    openSidebarPanel('agenda')
     toggleConversationPanel()
     expect(sidebar$.overlay.get()).toBe(true)
     expect(ui$.sidebarSection.get()).toBe('overview')
+  })
+
+  // Review finding C: under a reader or compose tab, or below 769 px with the
+  // list in its place, there is no Conversa panel.
+  it('`i` does nothing without a conversation on screen: no panel, no overlay, nothing saved', async () => {
+    for (const fits of [true, false]) {
+      room(fits, true, false)
+      settings$.appSidebarState.set('minimized')
+      ui$.sidebarSection.set('agenda')
+      await Promise.resolve()
+      writes = []
+      toggleConversationPanel()
+      toggleConversationPanel()
+      expect(sidebar$.overlay.get()).toBe(false)
+      expect(settings$.appSidebarState.get()).toBe('minimized')
+      expect(ui$.sidebarSection.get()).toBe('agenda')
+      await Promise.resolve()
+      expect(writes).toEqual([])
+    }
+  })
+
+  // Owner decision D5 on #360: an overlay is a way of showing the sidebar, never a preference.
+  it('never saves `expanded` from an overlay, whatever opened it', async () => {
+    const opens: [string, () => void][] = [
+      ['the band button', toggleAppSidebar],
+      ['a strip icon', () => openSidebarPanel('agenda')],
+      ['`i`', toggleConversationPanel],
+    ]
+    for (const state of ['minimized', 'hidden'] as const) {
+      for (const [, open] of opens) {
+        // Nothing drawn for the band button (below 769 px, or hidden); the
+        // strip for its icons.
+        room(false, state === 'minimized' && open !== toggleAppSidebar)
+        settings$.appSidebarState.set(state)
+        await Promise.resolve()
+        writes = []
+        open()
+        expect(sidebar$.overlay.get()).toBe(true)
+        closeSidebarOverlay()
+        await Promise.resolve()
+        expect(settings$.appSidebarState.get()).toBe(state)
+        expect(written('app_sidebar_state')).toEqual([])
+      }
+    }
   })
 
   it('closing the overlay, or going to another module, leaves the saved state as it was', async () => {
@@ -211,9 +271,9 @@ describe('what changes the saved state (ADR-0069 §2)', () => {
       settings$.appSidebarState.set(state)
       await Promise.resolve()
       writes = []
-      toggleAppSidebar()
+      openSidebarPanel('agenda')
       closeSidebarOverlay()
-      toggleAppSidebar()
+      openSidebarPanel('agenda')
       ui$.module.set('calendar')
       expect(sidebar$.overlay.get()).toBe(false)
       ui$.module.set('mail')

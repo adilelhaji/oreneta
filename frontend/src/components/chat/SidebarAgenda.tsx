@@ -20,6 +20,7 @@ import {
   type Task,
   type TaskList,
 } from '../../states/tasks'
+import { closeSidebarOverlay } from '../../states/sidebar'
 import { ui$ } from '../../states/ui'
 import { AccountListNotices } from '../tasks/AccountTaskLists'
 
@@ -85,8 +86,11 @@ export async function readAgenda(now: number, refresh: boolean): Promise<Agenda>
 /**
  * Opens an event where it lives: its day in the calendar, with the event
  * open. An all-day event's day is its date, not the instant it is stored at.
+ * The calendar is what is wanted then: an overlay of the app's sidebar goes,
+ * also when the calendar was already on screen under it (ADR-0069).
  */
 function openAgendaEvent(event: CalendarEvent) {
+  closeSidebarOverlay()
   openCalendarOn(event.all_day ? new Date(allDayLocalDays(event)[0]) : new Date(event.start * 1000))
   openEvent(event)
 }
