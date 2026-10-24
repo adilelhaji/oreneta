@@ -1745,6 +1745,34 @@
           {
             "sha": "e4820e90509a125c296ce124d429b9e972115888",
             "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "04452885e56852257c382d057e4a1537156ed2ad",
+            "result": "frontend/src/states/person.test.ts"
+          },
+          {
+            "sha": "04452885e56852257c382d057e4a1537156ed2ad",
+            "result": "frontend/src/components/chat/PersonPanel.test.tsx"
+          },
+          {
+            "sha": "04452885e56852257c382d057e4a1537156ed2ad",
+            "result": "frontend/src/components/chat/PersonHistory.test.tsx"
+          },
+          {
+            "sha": "04452885e56852257c382d057e4a1537156ed2ad",
+            "result": "frontend/src/components/chat/ConversationDetailsPanel.test.tsx"
+          },
+          {
+            "sha": "04452885e56852257c382d057e4a1537156ed2ad",
+            "result": "frontend/src/components/shell/AppSidebar.test.tsx"
+          },
+          {
+            "sha": "04452885e56852257c382d057e4a1537156ed2ad",
+            "result": "frontend/src/states/sidebar.test.ts"
+          },
+          {
+            "sha": "04452885e56852257c382d057e4a1537156ed2ad",
+            "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
         "native": [],

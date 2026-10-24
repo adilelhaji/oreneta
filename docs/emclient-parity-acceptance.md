@@ -373,6 +373,22 @@ paleta i des del menú, anar a un mòdul, carpeta, compte, tauler o filtre) tanq
 perquè sota la capa el mòdul està inert; les que actuen fora del mòdul, com la configuració oberta des
 de la paleta, la deixen oberta i el focus hi torna. Continua sent una nota d'evidència: cap fila no
 canvia d'estat.
+El 2026-10-25 (#363, peça 12c, ADR-0069 §4, `docs/design/contextual-sidebar.md`) l'historial d'una
+persona de #86 va passar a ser el panell Persona de la barra lateral de l'aplicació, a tots els
+mòduls. Al correu, amb una conversa oberta, és la persona que hi participa i no és cap compte propi
+o, si n'hi ha diverses, la que es tria de la llista, al compte de la conversa; a Persones, el
+contacte seleccionat, al compte de la seva llibreta o, si la llibreta no és de cap compte, al compte
+que es tria, sense que el panell en triï cap tot sol; als altres mòduls, o sense selecció, un estat
+buit diu què s'ha de seleccionar. «Historial amb …» del menú d'un participant obre el panell, i
+`session_sidebar_section_main` desa `person`, mai la persona. El contingut i les regles de #86 (l'adreça
+sencera, la cobertura indicada i la resposta tardana d'un altre compte descartada) no canvien, i
+ara el dibuix que segueix un canvi de compte tampoc no conté l'historial de l'anterior. Les proves de
+#86 es mantenen amb la mateixa intenció, i se n'hi afegeixen de noves: unitàries
+(`states/person.test.ts`), de components (`PersonPanel.test.tsx` i les de `PersonHistory`,
+`ConversationDetailsPanel`, `AppSidebar` i `states/sidebar`) i, al punt d'entrada de producció, el
+panell des del Correu i des de Persones a 1440 px, en català i en àrab, amb axe. És una nota
+d'evidència: SET-23 continua `partial`, i el panell Dia (12b) i l'evidència nativa de Windows i amb
+lectors de pantalla continuen pendents.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per
