@@ -5048,6 +5048,55 @@ test('Delete and Backspace in an open menu leave the selected conversation alone
   expect(errors).toEqual([])
 })
 
+test('Delete in the Outlook scheme leaves the selected conversation alone from Calendar (#355)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, {
+    navigation: true,
+    preferences: { shortcut_overrides: SHORTCUT_SCHEMES.outlook },
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await page.evaluate(() => {
+    const replies = (window as any).startupProbe.replies
+    replies['calendar.list'] = {
+      calendars: [
+        {
+          id: 'local-team',
+          name: 'Team',
+          is_default: true,
+          enabled: true,
+          kind: 'local',
+          read_only: false,
+          synced_at: 0,
+        },
+      ],
+    }
+    replies['calendar.events'] = { events: [] }
+  })
+  const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+  await row.click()
+  await expect(row).toHaveAttribute('aria-current', 'true')
+  const { button, menu } = await appMenuParts(page)
+  await button.click()
+  await menu.getByRole('menuitemradio', { name: 'Go to: Calendar', exact: true }).click()
+  const calendar = page.getByRole('main', { name: 'Calendar', exact: true })
+  await expect(calendar).toBeVisible()
+  // A button of the calendar has the focus: Delete is not the conversation's.
+  const control = calendar.getByRole('button').first()
+  await control.focus()
+  await expect(control).toBeFocused()
+  await page.keyboard.press('Delete')
+  await page.keyboard.press('Backspace')
+  const sent = () =>
+    page.evaluate(() =>
+      (window as any).startupProbe.requests
+        .map((request: { command: string }) => request.command)
+        .filter((command: string) => command === 'mail.delete'),
+    )
+  expect(await sent()).toEqual([])
+  expect(errors).toEqual([])
+})
+
 test('the app menu runs what the palette and the rail\'s More menu ran (#343, #354)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   const errors = await prepareStartup(page, true, { navigation: true })

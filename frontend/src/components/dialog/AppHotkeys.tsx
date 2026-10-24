@@ -60,11 +60,12 @@ function threadSearchVisible(): boolean {
 }
 
 // Is the user currently typing into a field? Bare single-key shortcuts must
-// stand down so they don't clobber text entry.
+// stand down so they don't clobber text entry. A native <select> counts: its
+// letter keys pick an option and its arrows step through them (#355).
 function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
   if (!el) return false
-  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable
+  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable
 }
 
 function modalOpen(): boolean {
@@ -120,8 +121,15 @@ function handleKanbanArrowNavigation(key: string, target: EventTarget | null): b
 
 let threadListDeleteScope = false
 
+// Where a conversation is the obvious target of Delete: its list, or the
+// reading pane beside it (#355).
 function inThreadList(el: Element | null): boolean {
-  return !!el?.closest('[data-thread-list]')
+  return !!el?.closest('[data-thread-list], [data-region="reader"]')
+}
+
+/** The keys that delete, whatever shortcut they are bound to. */
+function isDeleteKey(key: string): boolean {
+  return key === 'Delete' || key === 'Backspace'
 }
 
 function bodyFocused(): boolean {
@@ -134,10 +142,12 @@ function clearThreadListDeleteScope(event: Event) {
 }
 
 // Delete is destructive, so unlike the other bare shortcuts it requires focus
-// to be inside the thread list. After deleting the focused row, browsers can
-// drop focus to body; keep allowing repeated Delete only until the user focuses
-// or clicks outside the thread list.
+// to be inside the thread list or the reading pane of the mail module, for
+// every scheme and override (#355). After deleting the focused row, browsers
+// can drop focus to body; keep allowing repeated Delete only until the user
+// focuses or clicks outside them.
 function deleteKeyFocusAllowed(): boolean {
+  if (ui$.module.peek() !== 'mail') return false
   const el = document.activeElement
   if (inThreadList(el)) {
     threadListDeleteScope = true
@@ -326,6 +336,9 @@ export function AppHotkeys({ setup = false }: { setup?: boolean }) {
       // and only act in the chat view with no modal open.
       if (isBareShortcut(action)) {
         if (isTyping(event.target) || !bareShortcutsActive()) return
+        // Whatever it is bound to, a Delete or Backspace shortcut acts only
+        // where the conversation is the obvious target (#355).
+        if (isDeleteKey(shortcutChord(action).key) && !deleteKeyFocusAllowed()) return
       } else if (isFunctionKey(shortcutChord(action).key) && (modalOpen() || modalDialogOpen())) {
         // F1–F12 type nothing, so they work while typing (ADR-0068 §6), but a
         // single key still stands down while a modal dialog is open: it keeps

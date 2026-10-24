@@ -237,3 +237,153 @@ describe('keys inside an open menu', () => {
     expect(ui$.paletteOpen.peek()).toBe(true)
   })
 })
+
+// Delete and Backspace bound to the delete shortcut act only where the
+// conversation is the obvious target: its list or the reading pane in mail
+// (#355). Every other control, a native <select> included, leaves it alone.
+describe('Delete outside the conversation list', () => {
+  const calls: string[] = []
+  const nextTick = () => new Promise((resolve) => setTimeout(resolve, 0))
+  const deleted = () => calls.filter((command) => command === 'mail.delete')
+
+  beforeEach(() => {
+    calls.length = 0
+    mail$.threads.set([
+      {
+        id: 'acc:inbox:thread:1#101',
+        account_id: 'acc',
+        folder_id: 'inbox',
+        thread_id: 'acc:inbox:thread:1',
+        from_name: 'Sender',
+        from_addr: 'sender@example.com',
+        to: 'me@example.com',
+        subject: 'Subject',
+        preview: '',
+        body: '',
+        date: 1_780_000_000,
+        unread: false,
+        starred: false,
+        has_attachments: false,
+      },
+    ])
+    mail$.messages.set([])
+    ui$.selectedAccount.set('acc')
+    ui$.selectedFolder.set('inbox')
+    ui$.selectedThread.set('acc:inbox:thread:1')
+    ;(window as any).go = {
+      main: {
+        App: {
+          Invoke: async (command: string) => {
+            calls.push(command)
+            return {}
+          },
+        },
+      },
+    }
+  })
+
+  afterEach(() => {
+    delete (window as any).go
+    ui$.module.set('mail')
+    ui$.selectedThread.set('')
+    ui$.selectedAccount.set('')
+    ui$.selectedFolder.set('')
+    mail$.threads.set([])
+  })
+
+  function surface() {
+    const view = render(
+      <>
+        <AppHotkeys />
+        <section data-region="content" data-thread-list>
+          <button id="row">Row</button>
+        </section>
+        <div data-region="reader">
+          <button id="reader-button">Reply</button>
+          <textarea id="reader-field" />
+        </div>
+        <main>
+          <button id="people">New contact</button>
+          <button id="toolbar">Toolbar</button>
+          <select id="font">
+            <option>Sans</option>
+            <option>Serif</option>
+          </select>
+        </main>
+      </>,
+    )
+    return (id: string) => view.container.querySelector<HTMLElement>(`#${id}`)!
+  }
+
+  const schemes = Object.keys(SHORTCUT_SCHEMES) as ShortcutScheme[]
+  // Gmail binds #, not Delete: bind Delete as well so that every scheme is
+  // tried with the key under test.
+  const withDelete = (scheme: ShortcutScheme) => ({
+    ...SHORTCUT_SCHEMES[scheme],
+    ...(scheme === 'gmail' ? { 'thread.delete': { key: 'Delete' } } : {}),
+  })
+
+  for (const scheme of schemes) {
+    for (const key of ['Delete', 'Backspace']) {
+      // The default scheme has no Backspace binding: bind it, as an override would.
+      const bindings = () => (key === 'Backspace' ? { 'thread.delete': { key } } : withDelete(scheme))
+
+      it(`${key} leaves the conversation alone on a People button, a toolbar button and a select: ${scheme} scheme`, async () => {
+        setShortcutOverrides(bindings())
+        const el = surface()
+        ui$.module.set('people')
+        el('people').focus()
+        fireEvent.keyDown(el('people'), { key })
+        ui$.module.set('mail')
+        for (const id of ['toolbar', 'font']) {
+          el(id).focus()
+          fireEvent.keyDown(el(id), { key })
+        }
+        await nextTick()
+        expect(deleted()).toEqual([])
+        expect(ui$.selectedThread.peek()).toBe('acc:inbox:thread:1')
+      })
+
+      for (const place of ['row', 'reader-button']) {
+        it(`${key} still deletes from the ${place === 'row' ? 'list' : 'reading pane'}: ${scheme} scheme`, async () => {
+          setShortcutOverrides(bindings())
+          const el = surface()
+          el(place).focus()
+          fireEvent.keyDown(el(place), { key })
+          await nextTick()
+          expect(deleted()).toHaveLength(1)
+        })
+      }
+    }
+
+    it(`Delete from the reading pane of another module does nothing: ${scheme} scheme`, async () => {
+      setShortcutOverrides(withDelete(scheme))
+      const el = surface()
+      ui$.module.set('calendar')
+      el('reader-button').focus()
+      fireEvent.keyDown(el('reader-button'), { key: 'Delete' })
+      el('row').focus()
+      fireEvent.keyDown(el('row'), { key: 'Delete' })
+      await nextTick()
+      expect(deleted()).toEqual([])
+    })
+  }
+
+  it('Delete in a text field of the reading pane edits text, not the conversation', async () => {
+    setShortcutOverrides(SHORTCUT_SCHEMES.outlook)
+    const el = surface()
+    el('reader-field').focus()
+    fireEvent.keyDown(el('reader-field'), { key: 'Delete' })
+    await nextTick()
+    expect(deleted()).toEqual([])
+  })
+
+  it('a select counts as typing for the other bare shortcuts', async () => {
+    setShortcutOverrides(SHORTCUT_SCHEMES.outlook)
+    const el = surface()
+    el('font').focus()
+    fireEvent.keyDown(el('font'), { key: 'e' })
+    await nextTick()
+    expect(calls.filter((command) => command === 'mail.archive')).toEqual([])
+  })
+})
