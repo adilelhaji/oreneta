@@ -49,7 +49,8 @@ afterEach(() => {
   delete (window as any).go
 })
 
-const SHIPPED: SidebarPanelId[] = ['agenda', 'conversation']
+// The panels AppSidebar lists today: Persona since #363, Dia still to come (12b).
+const SHIPPED: SidebarPanelId[] = ['agenda', 'person', 'conversation']
 
 describe('the remembered panel (session_sidebar_section_main)', () => {
   it('keeps the panel type, Dia and Persona included, and reads anything else as the Agenda', () => {
@@ -87,9 +88,14 @@ describe('the remembered panel (session_sidebar_section_main)', () => {
   })
 
   it('shows Dia and Persona as themselves once they are there, and as the Agenda until then', () => {
+    // Persona is there since #363, with a conversation open and without.
+    expect(resolveSidebarPanel('person', true, SHIPPED)).toBe('person')
+    expect(resolveSidebarPanel('person', false, SHIPPED)).toBe('person')
+    expect(resolveSidebarPanel('day', true, SHIPPED)).toBe('agenda')
+    expect(resolveSidebarPanel('day', false, SHIPPED)).toBe('agenda')
     for (const section of ['day', 'person'] as const) {
-      expect(resolveSidebarPanel(section, true, SHIPPED)).toBe('agenda')
-      expect(resolveSidebarPanel(section, false, SHIPPED)).toBe('agenda')
+      expect(resolveSidebarPanel(section, true, ['agenda', 'conversation'])).toBe('agenda')
+      expect(resolveSidebarPanel(section, false, ['agenda', 'conversation'])).toBe('agenda')
     }
     const later: SidebarPanelId[] = ['agenda', 'day', 'person', 'conversation']
     expect(resolveSidebarPanel('day', false, later)).toBe('day')

@@ -9,8 +9,8 @@ import { isConversationSection, ui$, type ConversationSection, type SidebarSecti
 
 /**
  * The panels of the app's sidebar (ADR-0069 §1). The ones this version shows
- * are listed by AppSidebar; Dia and Persona arrive with their pieces (12b and
- * 12c), and until then a stored `day` or `person` shows the Agenda.
+ * are listed by AppSidebar; Dia arrives with its piece (12b), and until then a
+ * stored `day` shows the Agenda.
  */
 export type SidebarPanelId = 'agenda' | 'day' | 'person' | 'conversation'
 
@@ -44,7 +44,7 @@ export function panelOfSection(section: SidebarSection): SidebarPanelId {
 /**
  * The panel shown for the stored section (ADR-0069 §2): the Conversa panel,
  * on its subsection, only with a conversation open, and otherwise the Agenda;
- * a panel `panels` does not have (Dia and Persona, for now) is the Agenda too.
+ * a panel `panels` does not have (Dia, for now) is the Agenda too.
  */
 export function resolveSidebarPanel(
   section: SidebarSection,

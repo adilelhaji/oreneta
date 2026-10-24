@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent } from 'react'
+import { useMemo, useState, type MouseEvent } from 'react'
 import { useValue } from '@legendapp/state/react'
 import {
   ChevronLeft,
@@ -16,10 +16,10 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { openExternal } from '../../lib/native'
-import { calendar$, startOfDay } from '../../states/calendar'
-import { compose$, openComposeTab, withoutHydratedQuickReplyDraft } from '../../states/compose'
-import { openCorrespondentMail, openMailAccount } from '../../states/kanban'
-import { downloadAttachment, mail$ } from '../../states/mail'
+import { openComposeTab } from '../../states/compose'
+import { openCorrespondentMail } from '../../states/kanban'
+import { downloadAttachment } from '../../states/mail'
+import { showParticipantHistory } from '../../states/person'
 import { closeSidebarOverlay } from '../../states/sidebar'
 import { thread$ } from '../../states/thread'
 import { isConversationSection, ui$, type ConversationSection } from '../../states/ui'
@@ -27,10 +27,10 @@ import { Avatar } from '../avatar/Avatar'
 import { IconButton } from '../button/IconButton'
 import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { MenuItem } from '../menu/MenuItem'
-import { useActiveConversation } from './activeConversation'
+import { useActiveConversation, useConversationMessages } from './activeConversation'
 import { buildParticipants, buildThreadMedia } from './conversationMedia'
 import { fileIconFor, formatFileSize } from './messageHelpers'
-import { PersonHistory } from './PersonHistory'
+import { focusSidebarTab } from './PersonPanel'
 
 export type ConversationMediaItem = {
   type: 'image' | 'video'
@@ -75,18 +75,20 @@ interface ConversationDetailsPanelProps {
   onShowInConversation: (messageId: string) => void
   onComposeTo: (person: Participant) => void
   onViewMessagesWith: (person: Participant) => void
-  /** The open conversation's account: a person's history is this account's only (#86). */
-  accountId?: string
-  onOpenConversation?: (threadId: string, folder: string) => void
-  onOpenEvent?: (start: number) => void
+  /**
+   * «History with …» in a participant's menu: that person's history (#86),
+   * which is the sidebar's Persona panel (ADR-0069 §4); without it, the menu
+   * does not offer it.
+   */
+  onShowHistory?: (person: Participant) => void
 }
 
 /**
  * The Conversa panel of the app's sidebar (ADR-0069 §1): the conversation's
  * summary (its participants), media and files, the subsections the details
  * sidebar had (ADR-0059). The subsection is remembered across restarts
- * (`session_sidebar_section_main`); one person's history (#86) sits on top of
- * it and is not, as it needs that person, until the Persona panel (12c).
+ * (`session_sidebar_section_main`). One person's history (#86) is the
+ * Persona panel's (§4), which a participant's menu opens.
  */
 export function ConversationDetailsPanel({
   media,
@@ -99,25 +101,13 @@ export function ConversationDetailsPanel({
   onShowInConversation,
   onComposeTo,
   onViewMessagesWith,
-  accountId,
-  onOpenConversation,
-  onOpenEvent,
+  onShowHistory,
 }: ConversationDetailsPanelProps) {
   const { t } = useTranslation()
   const stored = useValue(ui$.sidebarSection)
-  const section: ConversationSection = isConversationSection(stored) ? stored : 'overview'
-  const [person, setPerson] = useState<Participant | null>(null)
-  const view = person ? 'person' : section
-  const setView = (next: ConversationSection) => {
-    setPerson(null)
-    ui$.sidebarSection.set(next)
-  }
+  const view: ConversationSection = isConversationSection(stored) ? stored : 'overview'
+  const setView = (next: ConversationSection) => ui$.sidebarSection.set(next)
   const [personMenu, setPersonMenu] = useState<{ x: number; y: number; person: Participant } | null>(null)
-
-  // Another conversation may not have this person in it.
-  useEffect(() => {
-    setPerson(null)
-  }, [scopeTitle])
 
   return (
     <>
@@ -127,11 +117,7 @@ export function ConversationDetailsPanel({
           <div className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
             <div className="min-w-0">
               <h3 className="truncate text-sm font-bold text-primary">
-                {view === 'media'
-                  ? t('chat.media')
-                  : view === 'person' && person
-                    ? t('person.title', { name: person.name || person.email, defaultValue: 'With {name}' })
-                    : t('chat.files')}
+                {view === 'media' ? t('chat.media') : t('chat.files')}
               </h3>
               <p className="mt-0.5 truncate text-caption font-medium text-secondary" title={scopeTitle}>
                 {scopeTitle}
@@ -167,13 +153,6 @@ export function ConversationDetailsPanel({
               onOpenFiles={() => setView('files')}
               onComposeTo={onComposeTo}
               onOpenPersonMenu={setPersonMenu}
-            />
-          ) : view === 'person' && person && accountId && onOpenConversation && onOpenEvent ? (
-            <PersonHistory
-              accountId={accountId}
-              address={person.email}
-              onOpenConversation={onOpenConversation}
-              onOpenEvent={onOpenEvent}
             />
           ) : view === 'media' ? (
             media.length === 0 ? (
@@ -254,7 +233,9 @@ export function ConversationDetailsPanel({
                         <FileIcon size={16} />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p dir="auto" className="truncate text-xs font-semibold text-primary">{file.filename}</p>
+                        <p dir="auto" className="truncate text-xs font-semibold text-primary">
+                          {file.filename}
+                        </p>
                         <p className="text-2xs text-secondary">{formatFileSize(file.size)}</p>
                       </div>
                       {downloadable && (
@@ -292,7 +273,7 @@ export function ConversationDetailsPanel({
           className="fixed z-[81] min-w-[180px] rounded-control border border-border bg-chats p-1 shadow-overlay"
           onContextMenu={(event) => event.preventDefault()}
         >
-          {accountId && onOpenConversation && (
+          {onShowHistory && (
             <MenuItem
               icon={<MessageSquare size={14} className="text-accent-fg" strokeWidth={1.75} />}
               label={t('person.history', {
@@ -300,7 +281,7 @@ export function ConversationDetailsPanel({
                 defaultValue: 'History with {name}',
               })}
               onClick={() => {
-                setPerson(personMenu.person)
+                onShowHistory(personMenu.person)
                 setPersonMenu(null)
               }}
             />
@@ -415,14 +396,18 @@ function PeopleList({
           <Avatar name={person.name} email={person.email} size={36} />
           <div className="min-w-0 flex-1">
             <p className="flex items-center gap-1.5 truncate text-xs font-semibold text-primary selectable-text">
-              <span dir="auto" className="truncate">{person.name}</span>
+              <span dir="auto" className="truncate">
+                {person.name}
+              </span>
               {person.isSelf && (
                 <span className="shrink-0 rounded-full bg-accent/15 px-1.5 py-px text-2xs font-bold uppercase tracking-wide text-accent-fg">
                   {t('chat.you')}
                 </span>
               )}
             </p>
-            <p dir="auto" className="truncate text-caption text-secondary selectable-text">{person.email}</p>
+            <p dir="auto" className="truncate text-caption text-secondary selectable-text">
+              {person.email}
+            </p>
           </div>
           <button
             type="button"
@@ -450,17 +435,11 @@ function EmptyHint({ text }: { text: string }) {
 export function ConversationPanel() {
   const { t } = useTranslation()
   const { accounts, activeThread, isRSS } = useActiveConversation()
-  const messages = useValue(mail$.messages)
-  const threadLoading = useValue(mail$.threadLoading)
   const revealedRemote = useValue(thread$.revealedRemote)
-  const quickReplyDraftId = useValue(compose$.quickReplyDraftId)
-  const quickReplyDraftSaved = useValue(compose$.quickReplyDraftSaved)
   // As the conversation pane shows them, so a media item's gallery index is
-  // the one of the pane's gallery.
-  const displayMessages = useMemo(
-    () => withoutHydratedQuickReplyDraft(messages, quickReplyDraftId, quickReplyDraftSaved),
-    [messages, quickReplyDraftId, quickReplyDraftSaved],
-  )
+  // the one of the pane's gallery. A freshly selected conversation still
+  // loading: the lists are the previous one's.
+  const { displayMessages, loading } = useConversationMessages(activeThread)
   const { mediaItems, fileItems } = useMemo(
     () => buildThreadMedia(displayMessages, accounts, revealedRemote),
     [displayMessages, accounts, revealedRemote],
@@ -471,8 +450,6 @@ export function ConversationPanel() {
   )
   if (!activeThread) return null
   const accountId = activeThread.account_id
-  // A freshly selected conversation still loading: the lists are the previous one's.
-  const loading = threadLoading && !messages.some((message) => message.thread_id === activeThread.thread_id)
   return (
     <ConversationDetailsPanel
       media={mediaItems}
@@ -505,18 +482,16 @@ export function ConversationPanel() {
       }}
       // The list of those messages is under an overlay: it closes it.
       onViewMessagesWith={(person) => openCorrespondentMail(accountId, activeThread.folder_id, person.email)}
-      accountId={accountId}
-      onOpenConversation={(threadId, folder) => {
-        // A conversation from the person's history, under an overlay too.
-        closeSidebarOverlay()
-        openMailAccount(accountId, folder, false)
-        ui$.selectedThread.set(threadId)
-      }}
-      // Calendar is another module, which closes an overlay as it opens.
-      onOpenEvent={(start) => {
-        calendar$.anchor.set(startOfDay(new Date(start * 1000)).getTime())
-        calendar$.view.set('day')
-        ui$.module.set('calendar')
+      // The Persona panel, with this person in this conversation's account
+      // (#86); the sidebar stays as it is drawn, and the focus goes to its tab.
+      onShowHistory={(person) => {
+        showParticipantHistory({
+          thread: activeThread.thread_id,
+          account: accountId,
+          address: person.email,
+          name: person.name,
+        })
+        focusSidebarTab('person')
       }}
     />
   )

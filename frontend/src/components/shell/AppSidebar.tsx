@@ -9,7 +9,7 @@ import {
   type RefObject,
 } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { CalendarDays, MessagesSquare, PanelRightClose, X, type LucideIcon } from 'lucide-react'
+import { CalendarDays, MessagesSquare, PanelRightClose, UserRound, X, type LucideIcon } from 'lucide-react'
 import { handleGroupArrowKeys } from '../../lib/direction'
 import { useTranslation, type t as translate } from '../../lib/i18n'
 import {
@@ -39,6 +39,7 @@ import { ui$ } from '../../states/ui'
 import { IconButton } from '../button/IconButton'
 import { useConversationOpen } from '../chat/activeConversation'
 import { ConversationPanel } from '../chat/ConversationDetailsPanel'
+import { PersonPanel } from '../chat/PersonPanel'
 import { SidebarAgenda } from '../chat/SidebarAgenda'
 import { PaneResizer } from '../resizer/PaneResizer'
 import { useElementWidth, useWideWindow, useWindowWidth } from '../resizer/useElementWidth'
@@ -59,9 +60,10 @@ export type SidebarPanelDef = {
 
 /**
  * The panels of the sidebar, in the order of its tabs (ADR-0069 §1). Adding
- * one is one entry here: Dia and Persona come with 12b and 12c, before
- * Conversa, which is there only with a conversation open (in mail, or in a
- * board with its conversation pane).
+ * one is one entry here: Dia comes with 12b, after the Agenda. Persona is in
+ * every module, with an empty state where there is nobody (§4), and Conversa
+ * is there only with a conversation open (in mail, or in a board with its
+ * conversation pane).
  */
 export const SIDEBAR_PANELS: readonly SidebarPanelDef[] = [
   {
@@ -76,6 +78,13 @@ export const SIDEBAR_PANELS: readonly SidebarPanelDef[] = [
         <SidebarAgenda />
       </div>
     ),
+  },
+  {
+    id: 'person',
+    icon: UserRound,
+    label: (t) => t('sidebar.person'),
+    available: () => true,
+    content: () => <PersonPanel />,
   },
   {
     id: 'conversation',
@@ -358,6 +367,7 @@ export function AppSidebar({ row, content, panels: offered = SIDEBAR_PANELS }: A
                 type="button"
                 role="tab"
                 id={tabId(entry.id)}
+                data-sidebar-tab={entry.id}
                 aria-selected={selected}
                 aria-controls={panelElementId}
                 title={name}

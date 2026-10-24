@@ -130,6 +130,15 @@ beforeEach(async () => {
           if (command === 'app.prefsSet') writes.push(payload)
           if (command === 'calendar.events') return { events: [] }
           if (command === 'tasks.list') return { tasks: [] }
+          // The Persona panel's history (#86), empty unless a test says otherwise.
+          if (command === 'context.person')
+            return {
+              address: payload.address,
+              conversations: [],
+              events: [],
+              files: [],
+              coverage: { messages: 0, downloaded: 0 },
+            }
           return {}
         },
       },
@@ -168,18 +177,19 @@ describe('one sidebar, in every module (ADR-0069 §1)', () => {
       // At the end of the frame row, after <main>, not inside it.
       expect(sidebar.previousElementSibling?.tagName).toBe('MAIN')
       expect(screen.getByRole('main').contains(sidebar)).toBe(false)
-      // Minimised by default: the strip, with the Agenda's icon, and no
-      // Conversa without a conversation.
+      // Minimised by default: the strip, with the icons of the Agenda and of
+      // the Persona panel (#363), and no Conversa without a conversation.
       expect(sidebar.dataset.layout).toBe('strip')
       // As wide as the layout counts it (SIDEBAR_STRIP_REM).
       expect(sidebar.style.width).toBe('2.5rem')
       expect(screen.getByRole('button', { name: 'Open the Agenda panel' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Open the Person panel' })).toBeTruthy()
       expect(screen.queryByRole('button', { name: 'Open the Conversation panel' })).toBeNull()
-      // Expanded from its icon: the Agenda panel, its tab the only one.
+      // Expanded from its icon: the Agenda panel, beside the Persona tab.
       fireEvent.click(screen.getByRole('button', { name: 'Open the Agenda panel' }))
       expect(aside(screen)!.dataset.layout).toBe('beside')
       expect(screen.getByRole('heading', { name: 'Agenda' })).toBeTruthy()
-      expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Agenda'])
+      expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Agenda', 'Person'])
       cleanup()
       settings$.appSidebarState.set('minimized')
     }
@@ -189,17 +199,17 @@ describe('one sidebar, in every module (ADR-0069 §1)', () => {
     settings$.appSidebarState.set('expanded')
     openConversation()
     let screen = render(<Frame />)
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Agenda', 'Conversation'])
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Agenda', 'Person', 'Conversation'])
     cleanup()
 
     // A board with no conversation pane open: no Conversa.
     kanban$.activeBoardId.set('board')
     screen = render(<Frame />)
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Agenda'])
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Agenda', 'Person'])
     cleanup()
     kanban$.paneThreadId.set(thread.thread_id)
     screen = render(<Frame />)
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Agenda', 'Conversation'])
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Agenda', 'Person', 'Conversation'])
     cleanup()
 
     // The conversation chosen in mail is not on screen in another module.
@@ -207,7 +217,7 @@ describe('one sidebar, in every module (ADR-0069 §1)', () => {
     kanban$.paneThreadId.set('')
     ui$.module.set('calendar')
     screen = render(<Frame />)
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Agenda'])
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Agenda', 'Person'])
     expect(screen.queryByRole('tab', { name: 'Conversation' })).toBeNull()
     cleanup()
 
@@ -218,9 +228,9 @@ describe('one sidebar, in every module (ADR-0069 §1)', () => {
     screen = render(<Frame />)
     fireEvent.click(bandButton(screen))
     expect(aside(screen)!.dataset.layout).toBe('overlay')
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Agenda'])
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Agenda', 'Person'])
     act(() => ui$.mobilePane.set('conversation'))
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Agenda', 'Conversation'])
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Agenda', 'Person', 'Conversation'])
     ui$.mobilePane.set('threads')
   })
 
@@ -597,6 +607,9 @@ describe('the panel selector (ADR-0069 §1, ADR-0061)', () => {
     )
     tabs(screen)[0].focus()
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' })
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Person' }))
+    expect(ui$.sidebarSection.get()).toBe('person')
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' })
     expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Conversation' }))
     expect(ui$.sidebarSection.get()).toBe('overview')
     // Round: past the last, the first.
@@ -610,19 +623,19 @@ describe('the panel selector (ADR-0069 §1, ADR-0061)', () => {
     expect(list.contains(document.activeElement)).toBe(true)
   })
 
-  // A third panel, as Dia will be (12b): one entry in the list, and with
-  // three tabs the arrows say which way the line runs.
+  // Another panel, as Dia will be (12b): one entry in the list, and with
+  // four tabs the arrows say which way the line runs.
   const withDay: readonly SidebarPanelDef[] = [
     SIDEBAR_PANELS[0],
     { id: 'day', icon: CalendarDays, label: () => 'Day', available: () => true, content: () => <p>One day</p> },
     ...SIDEBAR_PANELS.slice(1),
   ]
 
-  it('adds a panel with one entry, and goes through three in reading order', () => {
+  it('adds a panel with one entry, and goes through them in reading order', () => {
     settings$.appSidebarState.set('expanded')
     openConversation()
     const screen = render(<Frame panels={withDay} />)
-    expect(tabs(screen).map((tab) => tab.textContent)).toEqual(['Agenda', 'Day', 'Conversation'])
+    expect(tabs(screen).map((tab) => tab.textContent)).toEqual(['Agenda', 'Day', 'Person', 'Conversation'])
     tabs(screen)[0].focus()
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' })
     expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Day' }))
@@ -640,12 +653,14 @@ describe('the panel selector (ADR-0069 §1, ADR-0061)', () => {
     settings$.appSidebarState.set('expanded')
     openConversation()
     const screen = render(<Frame panels={withDay} />)
-    const [agenda, day, conversation] = tabs(screen)
+    const [agenda, day, person, conversation] = tabs(screen)
     agenda.focus()
     fireEvent.keyDown(agenda, { key: 'ArrowLeft' })
     expect(document.activeElement).toBe(day)
     expect(day.getAttribute('aria-selected')).toBe('true')
     fireEvent.keyDown(day, { key: 'ArrowLeft' })
+    expect(document.activeElement).toBe(person)
+    fireEvent.keyDown(person, { key: 'ArrowLeft' })
     expect(document.activeElement).toBe(conversation)
     // Round: past the last, the first.
     fireEvent.keyDown(conversation, { key: 'ArrowLeft' })
