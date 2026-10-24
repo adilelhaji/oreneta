@@ -373,7 +373,7 @@ paleta i des del menú, anar a un mòdul, carpeta, compte, tauler o filtre) tanq
 perquè sota la capa el mòdul està inert; les que actuen fora del mòdul, com la configuració oberta des
 de la paleta, la deixen oberta i el focus hi torna. Continua sent una nota d'evidència: cap fila no
 canvia d'estat.
-El 2026-10-25 (#362, peça 12b del redisseny, ADR-0069 §3, `docs/design/contextual-sidebar.md`) la
+El 2026-10-24 (#362, peça 12b del redisseny, ADR-0069 §3, `docs/design/contextual-sidebar.md`) la
 barra lateral de l'aplicació va incorporar el panell Dia, a tots els mòduls, entre l'Agenda i la
 Conversa: els esdeveniments d'un dia dels calendaris activats de tots els comptes, sense els
 cancel·lats, amb els de tot el dia a dalt per les seves dates, la resta per hora d'inici i, avui, una
@@ -381,7 +381,7 @@ línia amb l'hora actual; dia anterior, dia següent i «Avui». A Calendari s'o
 i no el segueix després; als altres mòduls, avui. Llegeix com l'agenda, amb el mateix codi, ara
 compartit (`calendar.events` des de la memòria cau, actualització en segon pla, relectura amb
 `calendar.synced`, a mitjanit i en canviar de dia); diu quan un calendari no s'ha pogut llegir i quan
-una actualització ha fallat, fins que una sincronització d'aquell compte cobreix el dia, i només diu
+una actualització ha fallat, fins que una sincronització d'aquell compte cobreixi el dia, i només diu
 «Cap esdeveniment» quan totes les lectures han anat bé. Cada esdeveniment és un botó natiu amb el nom
 complet (títol, hora, calendari i la resposta a la reunió) que obre el calendari en aquell dia amb la
 fitxa. `session_sidebar_section_main` desa `day` i el recupera. Hi ha proves noves: unitàries del dia

@@ -9,7 +9,7 @@ participants, afegeix «Historial amb …» per a cada participant.
   el seu origen: la conversa, el dia al calendari o el missatge del fitxer.
 - **Aïllament:** només el compte de la conversa oberta. Un altre compte que
   tingui correu de la mateixa persona no hi apareix, i una resposta lenta per al
-  compte anterior no es pinta al nou.
+  compte anterior no es dibuixa al nou.
 - **Adreça completa:** `ana@x.test` no coincideix amb `diana@x.test`. La
   consulta filtra per subcadena i després es comprova l'adreça exacta.
 - **El que hi ha aquí:** s'indica de quants missatges desats surt i quants
@@ -348,7 +348,7 @@ resposta a una reunió, amb les paraules de la fitxa de l'esdeveniment).
   memòria cau, amb una actualització en segon pla, per al dia i un dia més a
   cada costat (per les dates de tot el dia desades a mitjanit UTC). Es torna a
   llegir amb `calendar.synced`, a mitjanit i en canviar de dia, i una resposta
-  tardana del dia que ja no es mostra no s'hi pinta.
+  tardana del dia que ja no es mostra no s'hi dibuixa.
 - **Navegació:** «Dia anterior», «Avui» i «Dia següent», al costat de la data
   (amb «Avui ·» al davant quan el dia és avui). Quan el dia canvia, la data es
   torna a dir (`aria-live`).
@@ -395,6 +395,6 @@ resposta a una reunió, amb les paraules de la fitxa de l'esdeveniment).
 | N1 (`lib/dayPanel.test.ts`, també a America/Sao_Paulo i Australia/Sydney a la CI) | L'ordre del dia (els de tot el dia per les seves dates, la resta per inici, final i títol); el que és d'un altre dia, una reunió que acaba a mitjanit i una sense durada a mitjanit; un esdeveniment de tot el dia en la seva data a qualsevol hora, i una sèrie de dates en cadascuna; els cancel·lats; la mateixa ocurrència dues vegades; la línia de l'hora, només avui, també un avui sense res i passada la mitjanit; el dia d'inici; els dies i la finestra demanada a través del canvi d'hora del 25 d'octubre |
 | N1 (`lib/calendarInvitation.test.ts`) | La resposta de cada servidor llegida com una de les tres o com «encara sense resposta», i res per a una reunió pròpia (també l'«accepted» de Google) |
 | N1 (`states/sidebar.test.ts`) | `day` restaurat i mostrat com el panell Dia, amb una conversa oberta i sense |
-| N2 (`components/chat/SidebarDay.test.tsx`, també als dos fusos) | El dia de tots els comptes (no dels canals), amb la línia de l'hora; els noms complets i l'estat; obrir un esdeveniment en el dia del panell, també un del dia abans i un de tot el dia, i la capa que es tanca a Calendari; el dia d'inici a Calendari (el seleccionat, sense seguir-lo després) i als altres mòduls (avui); dia anterior, següent i «Avui», cadascun amb la seva lectura; una resposta tardana que no es pinta; la lectura parcial; «Cap esdeveniment» només amb les lectures bé; l'avís de dades desactualitzades fins a una sincronització del compte que cobreixi el dia; la relectura amb `calendar.synced` i a mitjanit, sense canviar de dia |
+| N2 (`components/chat/SidebarDay.test.tsx`, també als dos fusos) | El dia de tots els comptes (no dels canals), amb la línia de l'hora; els noms complets i l'estat; obrir un esdeveniment en el dia del panell, també un del dia abans i un de tot el dia, i la capa que es tanca a Calendari; el dia d'inici a Calendari (el seleccionat, sense seguir-lo després) i als altres mòduls (avui); dia anterior, següent i «Avui», cadascun amb la seva lectura; una resposta tardana que no es dibuixa; la lectura parcial; «Cap esdeveniment» només amb les lectures bé; l'avís de dades desactualitzades fins a una sincronització del compte que cobreixi el dia; la relectura amb `calendar.synced` i a mitjanit, sense canviar de dia |
 | N2 (`components/shell/AppSidebar.test.tsx`) | La pestanya i la icona Dia a cada mòdul, entre l'Agenda i la Conversa; el selector de panells amb el teclat i en àrab amb tots tres; `day` desat que es recupera amb una conversa oberta i sense; la icona de la tira que el desplega amb el focus a la pestanya |
 | e2e (`startup.e2e.ts`, «#362») | A 1440 px, en clar i en fosc, en català i en àrab: el panell des de la icona de la tira al correu, al costat del contingut i al final de la línia, sense desplaçament horitzontal, amb axe; avui amb el festiu i la línia de l'hora, el dia anterior amb «Cap esdeveniment», «Avui» i el dia següent amb la reunió; Retorn a la reunió, que obre el Calendari en aquell dia amb la fitxa; a Calendari, el panell que s'obre en el dia seleccionat i no el segueix després, amb axe; `day` desat i recuperat després de reiniciar |
