@@ -224,7 +224,7 @@ mateixa que llegeix `MessagePane`), `states/settings.ts` (`app_sidebar_state`) i
   és una capa, la tanca i no desa res. Si no se'n dibuixa res, la mostra: al
   costat si hi cap, i desa `expanded`; on no hi cap, hi torna a posar la tira i
   desa `minimized`, de manera que amagar la tira es desfà amb el mateix botó; i
-  on tampoc no hi ha tira (per sota de 769 px), com a capa, sense desar res.
+  on tampoc no hi ha tira (per sota de 769 px), l'obre com a capa, sense desar res.
   Desplegar-la des de la tira és cosa de les icones de la tira, que obren la
   capa on no hi cap. Decideix el que es veu: amb `expanded` desat i la tira
   dibuixada perquè la barra no hi cap, el botó també l'amaga i desa `hidden`. A
@@ -279,11 +279,11 @@ mateixa que llegeix `MessagePane`), `states/settings.ts` (`app_sidebar_state`) i
   la conversa» d'una imatge o d'un fitxer, abans d'obrir una imatge a la galeria
   del lector, amb «Mostra els missatges amb …» d'un participant, amb «Missatge
   nou per a …» d'un participant (la redacció s'obre al lector) i amb una
-  conversa de l'historial d'una persona. També amb les ordres que van al mòdul,
+  conversa de l'historial d'una persona. Es tanca també amb les ordres que van al mòdul,
   que sota la capa no farien res que es veiés: qualsevol ordre de la paleta o
   del menú de l'aplicació (excepte la de la barra, que ja decideix sobre la
-  capa), `r` i «Respon», que posen el focus a la resposta ràpida, la cerca de
-  la conversa, i qualsevol pestanya del lector que passa al davant (un missatge
+  capa); `r` i «Respon», que posen el focus a la resposta ràpida; la cerca de
+  la conversa; i qualsevol pestanya del lector que passa al davant (un missatge
   nou amb Ctrl/⌘+N, una resposta a l'editor complet, un missatge a la seva
   pestanya o tornar a la conversa). Ho fan les dades mateixes
   (`states/sidebar.ts`, `states/compose.ts`) i el punt d'entrada de les ordres

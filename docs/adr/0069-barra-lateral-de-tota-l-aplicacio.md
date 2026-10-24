@@ -150,9 +150,9 @@
   mostra com a capa. Les icones de la tira la despleguen des de la tira. El nom
   del botó és el de la regió i la seva descripció diu què farà un clic («Amaga
   la barra lateral» o «Mostra la barra lateral»), perquè amb la tira dibuixada
-  `aria-expanded` és fals i un clic l'amaga. Una ordre a la paleta i al menú de
+  `aria-expanded` és fals i un clic l'amaga. Hi ha una ordre a la paleta i al menú de
   l'aplicació, que fa el mateix que el botó, i la tecla
-  `i` (`thread.details`) al correu: si la barra està desplegada al panell
+  `i` (`thread.details`) al correu. La tecla, si la barra està desplegada al panell
   Conversa, la minimitza (o, si és una capa, la tanca com Esc); si està
   amagada i al costat només hi cap la tira, hi torna a posar la tira en el
   panell Conversa (esmena #361, decisió D7); si no, la desplega al panell
