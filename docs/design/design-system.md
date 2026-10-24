@@ -31,7 +31,7 @@ les llistes i el lector. Els camps fan servir per defecte el to del contingut;
 | Selecció | `--me-bg-active` | `bg-active` | Fila, carpeta o mòdul seleccionat | `#d6e3fb` | `#243a5e` |
 | Divisor | `--me-border` | `border-border` | Separadors d'1 px entre subfinestres i files | `#d3dbe8` | `#30415b` |
 | Vora de camp | `--me-border-input` | `border-input` | Contorn de camps, desplegables i caselles | `#6b7a93` | `#7d91b4` |
-| Barra de mòduls | `--me-bg-sidenav` | `bg-sidenav` | Barra de comptes i mòduls | `#15316e` | `#08111f` |
+| Barra de mòduls | `--me-bg-sidenav` | `bg-sidenav` | La barra estreta de mòduls, de 769 a 1024 px (des de #354; abans, la barra vertical de comptes i mòduls) | `#15316e` | `#08111f` |
 
 El divisor només separa; no és prou visible per marcar on comença un camp. Per això
 els camps, els desplegables i les caselles fan servir la vora de camp, i el divisor es
@@ -110,8 +110,10 @@ llegeix. Una vora de camp ja desada es conserva tal com és.
 ## Anell de focus
 
 Un sol anell per a tot el que rep el focus del teclat: 2 px de color d'accent sòlid
-(`--me-accent-fg`), a 2 px de l'element (0 px dins dels camps). A la barra de mòduls,
-que és fosca, l'anell fa servir el farciment de l'accent (vegeu [Pendent](#pendent)). Abans era l'accent al 75 % d'opacitat, de manera
+(`--me-accent-fg`), a 2 px de l'element (0 px dins dels camps). A la barra estreta de
+mòduls, que és fosca, l'anell pren l'extrem clar de la paleta, com les icones (vegeu
+[La barra estreta de mòduls](#la-barra-estreta-de-mòduls-354)); a la tira de mòduls,
+sobre la subfinestra de carpetes, és el de sempre, dibuixat a dins de cada botó. Abans era l'accent al 75 % d'opacitat, de manera
 que el contrast depenia del fons. La casella ja no hi afegeix un halo translúcid propi, i
 en passar-hi el punter conserva la vora de camp en lloc de barrejar-la amb l'accent.
 
@@ -196,13 +198,33 @@ colors desats (accent, text i superfícies); no es reescriu cap color desat, i u
 `--me-accent-fg` ja desat es conserva. La prova de `lib/themes.test.ts` ja no té cap
 llista d'excepcions: comprova els 16 temes, les paletes de mostra i la restauració.
 
-## Pendent
+## La barra estreta de mòduls (#354)
 
-L'anell de focus sobre la barra de mòduls (`--me-bg-sidenav`) fa servir el farciment de
-l'accent i no `--me-accent-fg`: com que la barra és fosca, enfosquir l'accent baixaria
-l'anell de Mist, Dawn i Honey per sota de 3:1 (#311). Tot i així, no arriba a 3:1 en
-alguns temes, Oreneta Light inclòs (2,03:1). La barra canvia amb la peça del selector de
-mòduls (ADR-0068); el seu anell es resol allà.
+Decisió 4 del propietari a [#352](https://github.com/adilelhaji/oreneta/issues/352): el
+color «Barra de mòduls» (`--me-bg-sidenav`) només pinta la barra estreta de mòduls, entre
+769 i 1024 px; la tira de mòduls, al peu de la subfinestra de carpetes, pren el color de
+la subfinestra. El camp de l'editor de temes es diu «Barra de mòduls» (abans «Navegació
+lateral») i el token conserva el nom, de manera que els temes personalitzats desats
+conserven el seu valor. La franja `MacTitleBar` de macOS pren el to de la banda superior.
+
+La barra és fosca en els 16 temes integrats. Les seves icones i el seu anell de focus
+prenen l'extrem clar de la paleta (`--module-bar-fg`, a `index.css`): el marc
+(`--me-bg-app`) als temes clars i el text principal (`--me-text-primary`) als foscos. Hi
+arriben a 10,22:1 a Oreneta Light i a 16,07:1 a Oreneta Dark, a 10:1 o més en tots els
+temes, i a 6,85:1 o més sota el to del pas del punter (el mateix color al 15 %). Abans, l'anell de la
+barra vertical era el farciment de l'accent, i no arribava a 3:1 en quatre temes
+(Oreneta Light, 2,03:1; Indigo, Paper i Lilac). El botó actiu és la selecció
+(`--me-bg-active`) amb la icona i la barra d'accent en `--me-accent-fg`, que hi arriben a
+4,5:1, i el comptador, el text sobre l'accent. Ho comprova `lib/themes.test.ts`.
+
+Un tema personalitzat pot triar una barra clara, on aquest extrem clar no es llegiria.
+L'editor ho avisa, com fa amb el text i l'accent, quan les icones (el marc en un tema clar,
+el text principal en un de fosc) no arriben a 4,5:1 sobre el color triat: «Les icones es
+llegeixen malament sobre la barra de mòduls ({ratio}:1; cal com a mínim 4,5:1).»
+(`theme.lowContrast.moduleBar`). `contrastShortfalls` en fa la comprovació amb l'aspecte
+del tema, que els tokens no porten, i l'avís no impedeix desar el tema.
+
+## Pendent
 
 `--me-accent-fg` es calcula sobre les superfícies del tema, però encara no sobre la
 bombolla de sortida del xat ni sobre els tints d'accent més forts (`bg-accent/15`,
@@ -221,7 +243,7 @@ d'alta del xat (`MessagingView`), que pinta amb `bg-header`.
 ## Verificació
 
 - Proves unitàries: `lib/themes.test.ts` (contrast dels 16 temes, accent com a text i
-  anell, anell de la barra de mòduls, tons de marc i contingut, valors aprovats d'Oreneta, derivació i restauració de temes
+  anell, icones, pas del punter i anell de la barra estreta de mòduls, tons de marc i contingut, valors aprovats d'Oreneta, derivació i restauració de temes
   personalitzats, sincronia entre `index.css` i el registre), `lib/color.test.ts`
   (`composite`) i `components/design-primitives.test.tsx` (vores dels camps).
 - Proves d'entrada de producció: el catàleg de disseny comprova el color sòlid de

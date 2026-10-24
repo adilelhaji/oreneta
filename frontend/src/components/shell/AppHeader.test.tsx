@@ -157,7 +157,7 @@ describe('the app menu (#343)', () => {
     expect(itemsOf(menu)).toHaveLength(commands.length)
   })
 
-  it("takes in the rail's More menu, each item once", () => {
+  it("takes in what the rail's More menu offered, each item once (#343, #354)", () => {
     const { menu } = openMenu()
     const names = itemsOf(menu).map(spoken)
     for (const name of [
@@ -416,7 +416,7 @@ describe('the names of the band and the menu (ADR-0068 §1, #343)', () => {
     for (const language of supportedI18nLanguages) expect(messages[language]['shell.region.banner']).toBe('Oreneta')
   })
 
-  it("names the menu button apart from the rail's More, the palette and every region, in all 20 catalogs", () => {
+  it("names the menu button apart from the module switcher's More, the palette and every region, in all 20 catalogs", () => {
     expect(clashes('appMenu.label', [...regions, 'common.more', 'palette.label', 'threads.actions.title'])).toEqual([])
     expect(messages.ca['appMenu.label']).toBe("Menú de l'aplicació")
     expect(messages.en['appMenu.label']).toBe('App menu')

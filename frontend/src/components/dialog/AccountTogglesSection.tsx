@@ -92,7 +92,7 @@ export function AccountTogglesSection({ account, isRSS }: { account: Account; is
         />
         <ToggleRow
           icon={<Eye size={16} strokeWidth={1.75} />}
-          title={t('settings.account.showInSideNav')}
+          title={t('settings.account.showInMailNavigation')}
           hint={t('settings.account.showInSideNavHint')}
           checked={inSideNav}
           onChange={() => setAccountSideNavHidden(account.id, inSideNav)}

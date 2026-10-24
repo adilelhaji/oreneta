@@ -271,6 +271,54 @@ a l'arbre d'accessibilitat amb la cerca damunt de la banda i el focus que «Torn
 l'entrada. És una nota d'evidència: cap fila no
 canvia d'estat (S01-04, S01-05, SET-01, SET-27), i l'evidència nativa de Windows i amb lectors de
 pantalla continua pendent.
+El 2026-10-23 (#353, peça 14a, pas 4 d'ADR-0068, `docs/design/mail-navigation.md`) la subfinestra
+de carpetes del correu, «Comptes i carpetes», va incorporar el que només feia la barra vertical, que
+continua igual fins a la peça 14b. Els comptes s'hi ordenen arrossegant-los o amb Alt+↑ i Alt+↓, amb
+l'anunci de la posició nova; obren el seu menú contextual amb el clic dret, Maj+F10 i la tecla de
+menú, i l'element d'amagar-los ja no parla de la navegació lateral; mostren els no llegits de la
+safata d'entrada quan el comptador està activat, i diuen en paraules si cal tornar a iniciar la sessió,
+si estan en pausa o silenciats; i un compte RSS accepta un canal que s'hi deixa anar, cosa que la
+barra vertical no aconseguia a Chromium i ara sí. El grup «Taulers», entre la safata unificada i els
+comptes, llista, ordena i obre els taulers kanban i n'ofereix el menú, i amb un tauler obert la
+subfinestra es continua mostrant i el marca (ADR-0068 §4); la subfinestra de conversa del tauler hi
+conserva els 360 px del lector, i les carpetes cedeixen abans que les columnes. La fila de la safata
+unificada té el menú de la barra vertical. L'ordre és el de la barra vertical, les preferències no canvien i Ctrl/⌘+1…9
+obren les mateixes posicions. Les proves de límits, de dreta a esquerra, de zoom, de regions i d'axe
+es mantenen, i se n'hi afegeixen de noves: unitàries de cada element i, a 1440 px, ordenar els comptes
+amb el teclat i el punter, el menú del compte, obrir un tauler des de la subfinestra, deixar anar un
+canal, el menú de la safata unificada, i l'àrab amb axe i el 200 %; i, a 1025 i 1280 px, un missatge
+nou que es veu sencer al costat d'un tauler. És una nota d'evidència: cap fila
+no canvia d'estat (S01-04, S01-05, SET-27), i l'evidència nativa de Windows continua pendent.
+El 2026-10-24 (#354, peça 14b, pas 4 d'ADR-0068, `docs/design/mail-navigation.md`) la barra
+vertical se'n va, i els mòduls passen al selector de mòduls: a partir de 1025 px, una tira de
+mòduls de 2,5 rem al peu de la subfinestra de carpetes de cada mòdul, del color de la
+subfinestra; entre 769 i 1024 px, una barra estreta d'icones de 3 rem, l'única superfície amb el
+color «Barra de mòduls» (abans «Navegació lateral», decisió del propietari a #352); i per sota de
+769 px, el menú de l'aplicació. Totes dues formes són el `<nav>` «Mòduls», la regió `modules`
+d'F6, amb Correu, Calendari, Persones, Tasques, Notes, Xat i Adjunts: l'actiu marcat
+(`aria-current="page"`), el comptador de la safata d'entrada unificada al Correu i el del Xat, i
+el que no hi cap a «Més», en l'ordre de la tira i mai el mòdul actiu; cada botó és una parada de
+Tab i les fletxes els recorren en el sentit de lectura. El menú «Més» de la barra vertical i els
+de per sota de 769 px se'n van: el que oferien és al menú de l'aplicació, que també diu, com
+abans, quan hi ha una comprovació del correu en curs. Els textos de Configuració ja no parlen de
+la navegació lateral; les preferències i Ctrl/⌘+1…9 no canvien. Les proves de límits, de dreta a
+esquerra, de zoom, de regions i d'axe es mantenen, amb els localitzadors de la barra vertical
+apuntats al `<nav>` «Mòduls», al menú de l'aplicació i a la banda; les que mesuren amplades
+guanyen els 60 px de la barra vertical: a la taula de #317, la llista passa de 405 a 465 px a
+1025 px i de 480 a 540 px a 1100 px, les carpetes fan els 260 px sencers a 1200 px (abans, 220)
+i hi ha una fila nova a 1140 px, on les carpetes en fan 220 i la llista és sencera; i la resta,
+amb les mateixes expectatives. Després de la revisió, el focus no cau a la pàgina en tornar al
+correu des d'un mòdul que és a «Més», ni quan la finestra travessa els 1025 px amb el focus
+al selector; un missatge que arriba a la conversa oberta mentre no es veu el Xat compta com a no
+llegit; i l'editor de temes avisa quan les icones no es llegeixen sobre la barra de mòduls. Se
+n'hi afegeixen de noves: unitàries del desbordament amb una amplada simulada, dels comptadors,
+del focus, del teclat en els dos sentits, de Ctrl/⌘+1…9, del xat en arrencar i de l'avís de
+l'editor, i, al punt d'entrada de producció, la tira, la barra estreta i el menú compacte a
+1025, 1024, 769 i 768 px, el desbordament al 200 % a 1440 i 1025 px, el focus en tornar al
+correu al 200 % i de 1440 a 1000 px i tornada, la barra estreta al 200 % a 1024 px sense
+desplaçament horitzontal, el teclat en català i en àrab i les regles de regions d'axe al marc
+nou. És una nota d'evidència: cap fila no canvia d'estat (S01-04, S01-05, SET-01, SET-27), i
+l'evidència nativa de Windows i amb lectors de pantalla continua pendent.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per

@@ -375,10 +375,11 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       // a button in the top band below 769 px.)
       await expect(page.locator('[data-thread-list]')).toBeVisible()
       const openArea = async (name: string) => {
-        // Narrow: the areas are items of the More menu (#289).
+        // Narrow: the areas are items of the app menu, since the More menu
+        // went (#289, #354).
         if (width < 769) {
-          await page.getByRole('button', { name: 'Más', exact: true }).click()
-          await page.getByRole('menuitem', { name, exact: true }).click()
+          await page.getByRole('button', { name: 'Menú de la aplicación', exact: true }).click()
+          await page.getByRole('menuitemradio', { name: `Ir a: ${name}`, exact: true }).click()
         } else {
           await page.getByRole('button', { name, exact: true }).click()
         }
@@ -446,13 +447,15 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       await bounds()
       await expect(page.getByRole('button', { name: 'Nuevo evento', exact: true })).toBeVisible()
       if (width < 769) {
-        const more = page.getByRole('button', { name: 'Más', exact: true })
+        // What the compact More menu offered is in the app menu (#354): its
+        // items reach the window's edges at a zoom of two.
+        const more = page.getByRole('button', { name: 'Menú de la aplicación', exact: true })
         await more.click()
-        const settings = page.getByRole('menuitem', { name: /Ajustes/ })
+        const settings = page.getByRole('menuitem', { name: 'Abrir ajustes', exact: true })
         await settings.scrollIntoViewIfNeeded()
         await expect(settings).toBeInViewport({ ratio: 1 })
         expect(await settings.evaluate((element) => {
-          const box = element.parentElement!.getBoundingClientRect()
+          const box = element.closest('[role="menu"]')!.getBoundingClientRect()
           return box.left >= 0 && box.top >= 0 && box.right <= innerWidth && box.bottom <= innerHeight
         })).toBe(true)
         const lastItem = page.getByRole('menuitem', { name: 'Acerca de Oreneta', exact: true })
@@ -962,8 +965,9 @@ test('a read receipt request is asked about in a bar that blocks nothing, and se
 })
 
 // SET-01 / ADR-0049: General → Notifications. Do not disturb is turned on from
-// the More menu, the side navigation says so, and one click there resumes.
-test('do not disturb shows an indicator in the side navigation and Resume clears it', async ({ page }) => {
+// the app menu, which took in the rail's More menu (#354), the band says so,
+// and one click there resumes.
+test('do not disturb turned on from the app menu shows the band indicator and Resume clears it', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   const errors = await prepareStartup(page, true, { navigation: true })
   await page.goto('/')
@@ -979,10 +983,12 @@ test('do not disturb shows an indicator in the side navigation and Resume clears
   const indicator = page.getByRole('status', { name: 'Do not disturb is on until you turn it off' })
   await expect(indicator).toHaveCount(0)
 
-  // The side navigation's own More button (the narrow-window header has one too).
-  await page.locator('aside').getByTitle('More', { exact: true }).first().click()
+  // The rail's More menu went with the rail (#354): the app menu offers the same.
+  await page.getByRole('banner').getByRole('button', { name: 'App menu', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Do not disturb until turned off', exact: true }).click()
   await expect(indicator).toBeVisible()
+  // The band's is the one indicator: the rail's copy went with the rail.
+  await expect(page.locator('[data-quiet-indicator]')).toHaveCount(1)
   await expect.poll(async () => (await quietPushes()).at(-1)).toMatchObject({ indefinite: true, quiet: true })
   await expect
     .poll(() =>
@@ -1856,8 +1862,9 @@ test('mail layout at 200-percent desktop zoom equivalent (1440 physical / 720 CS
 })
 
 // Right-to-left layout for Arabic (#226, ADR-0061), on the production entry.
-// The shell mirrors (side rail on the right, the list to the right of the
-// reader, the way back on the right with its chevron turned), nothing spills
+// The shell mirrors (the modules on the right, in the folder pane's strip or
+// the narrow bar, the list to the right of the reader, the way back on the
+// right with its chevron turned), nothing spills
 // past either edge at 100% or 200%, axe finds nothing critical or serious,
 // and a Latin subject keeps reading left to right inside the Arabic list.
 const RTL_SUBJECT = 'مراجعة الميزانية: تخطيط الربع الرابع'
@@ -1904,10 +1911,13 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       }
 
       if (width >= 769) {
-        // The rail hugs the right edge and the list sits to the right of the reader.
-        const rail = page.locator('main > aside').first()
-        const railBox = (await rail.boundingBox())!
-        expect(Math.round(railBox.x + railBox.width)).toBeGreaterThanOrEqual(width - 1)
+        // The modules hug the right edge (the narrow bar at 1024 px, the strip
+        // at the foot of the folder pane at 1440, #354), and the list sits to
+        // the right of the reader.
+        const modules = page.locator('nav[data-region="modules"]')
+        await expect(modules).toHaveCount(1)
+        const modulesBox = (await modules.boundingBox())!
+        expect(Math.round(modulesBox.x + modulesBox.width)).toBeGreaterThanOrEqual(width - 1)
         const listBox = (await list.boundingBox())!
         const readerBox = (await page.locator('[data-message-pane]').boundingBox())!
         expect(listBox.x).toBeGreaterThan(readerBox.x)
@@ -2073,11 +2083,13 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
           contentType: 'image/png',
         })
       }
-      // The rail on a wide window; the "More" menu on a narrow one.
+      // The module switcher on a wide window; the app menu on a narrow one (#354).
       const openArea = async (name: string) => {
         if (width < 769) {
-          await page.getByRole('button', { name: 'المزيد', exact: true }).first().click()
-          await page.getByRole('menuitem', { name, exact: true }).last().click()
+          await page.getByRole('button', { name: arCatalog['appMenu.label'], exact: true }).click()
+          await page
+            .getByRole('menuitemradio', { name: arCatalog['commands.goTo'].replace('{name}', name), exact: true })
+            .click()
         } else {
           await page.getByTitle(name, { exact: true }).click()
         }
@@ -2299,8 +2311,10 @@ test('switching from Arabic back to English restores left to right without a rel
   await page.goto('/')
   const html = page.locator('html')
   await expect(html).toHaveAttribute('dir', 'rtl')
-  const rail = page.locator('main > aside').first()
-  expect(Math.round((await rail.boundingBox())!.x)).toBeGreaterThan(1300)
+  // The module strip at the foot of the folder pane, on the right (#354).
+  const modules = page.locator('nav[data-region="modules"]')
+  const modulesBox = (await modules.boundingBox())!
+  expect(Math.round(modulesBox.x + modulesBox.width)).toBeGreaterThanOrEqual(1439)
   const navigations: string[] = []
   page.on('framenavigated', (frame) => {
     if (frame === page.mainFrame()) navigations.push(frame.url())
@@ -2313,7 +2327,7 @@ test('switching from Arabic back to English restores left to right without a rel
   await expect(html).toHaveAttribute('dir', 'ltr')
   await expect(html).toHaveAttribute('lang', 'en')
   await page.keyboard.press('Escape')
-  expect(Math.round((await rail.boundingBox())!.x)).toBe(0)
+  expect(Math.round((await modules.boundingBox())!.x)).toBe(0)
   expect(navigations).toEqual([])
   expect(errors).toEqual([])
 })
@@ -2787,7 +2801,7 @@ test('manual discovery, rejected credentials and retry use the existing account 
   await expect(page.getByLabel('Password', { exact: true })).toHaveValue('synthetic-password')
   await expect(page.getByLabel('IMAP Host', { exact: true })).toHaveValue('imap.example.test')
   await page.getByRole('button', { name: 'Save Account', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'More', exact: true })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Modules', exact: true })).toBeVisible()
   const saves = await page.evaluate(() => (window as any).startupProbe.saves)
   expect(saves).toHaveLength(2)
   expect(saves[1].payload).toMatchObject({
@@ -2822,8 +2836,9 @@ for (const discovery of ['guess', 'failure'] as const) {
 test('manual options allow RSS without an email and the same wizard opens inside the app', async ({ page }) => {
   await prepareStartup(page, true)
   await page.goto('/')
-  await page.getByRole('button', { name: 'More', exact: true }).click()
-  await page.getByText('Add account', { exact: true }).click()
+  // The rail's More menu went with the rail (#354): Add account is in the app menu.
+  await page.getByRole('button', { name: 'App menu', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Add account', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Add Account' })
   await expect(dialog.getByRole('textbox', { name: 'Email Address', exact: true })).toBeVisible()
   await dialog.getByRole('button', { name: 'Manual setup', exact: true }).click()
@@ -2855,7 +2870,7 @@ test('OAuth uses the browser-authorized identity, not the initially entered addr
   await page.getByRole('textbox', { name: 'Email Address', exact: true }).fill('suggested@outlook.com')
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
   await page.getByRole('button', { name: 'Sign in with Outlook' }).click()
-  await expect(page.getByRole('button', { name: 'More', exact: true })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Modules', exact: true })).toBeVisible()
   const saves = await page.evaluate(() => (window as any).startupProbe.saves)
   expect(saves).toHaveLength(1)
   expect(saves[0]).toMatchObject({ command: 'account.addOutlookOAuth', payload: { email: 'authorized@example.test' } })
@@ -2865,8 +2880,9 @@ test('OAuth uses the browser-authorized identity, not the initially entered addr
 test('closing Add account invalidates an OAuth poll already in flight', async ({ page }) => {
   const errors = await prepareStartup(page, true, { oauth: 'late' })
   await page.goto('/')
-  await page.getByRole('button', { name: 'More', exact: true }).click()
-  await page.getByText('Add account', { exact: true }).click()
+  // The rail's More menu went with the rail (#354): Add account is in the app menu.
+  await page.getByRole('button', { name: 'App menu', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Add account', exact: true }).click()
   await page.getByRole('button', { name: 'Microsoft', exact: true }).click()
   await page.getByRole('button', { name: 'Sign in with Outlook' }).click()
   await expect.poll(() => page.evaluate(() => typeof (window as any).startupProbe.finishOAuth)).toBe('function')
@@ -2900,7 +2916,7 @@ test('Spanish onboarding fits a narrow window without horizontal overflow', asyn
 test('editing an existing account preserves its identity and stored password', async ({ page }) => {
   const errors = await prepareStartup(page, true, { existingEmail: 'alex@intranet' })
   await page.goto('/')
-  await expect(page.getByRole('button', { name: 'More', exact: true })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Modules', exact: true })).toBeVisible()
   await page.keyboard.press('Control+,')
   await page
     .getByRole('navigation')
@@ -2931,7 +2947,7 @@ test('editing an existing account preserves its identity and stored password', a
 test('automatic archiving turns on only after its preview is confirmed', async ({ page }) => {
   const errors = await prepareStartup(page, true, { existingEmail: 'alex@intranet' })
   await page.goto('/')
-  await expect(page.getByRole('button', { name: 'More', exact: true })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Modules', exact: true })).toBeVisible()
   await page.evaluate(() => {
     const replies = (window as any).startupProbe.replies
     const status = structuredClone(replies['autoArchive.status'])
@@ -2979,7 +2995,7 @@ test('automatic archiving turns on only after its preview is confirmed', async (
 test('production shell navigates settings, people, tasks and composer without hook errors', async ({ page }) => {
   const errors = await prepareStartup(page, true)
   await page.goto('/')
-  await expect(page.getByRole('button', { name: 'More', exact: true })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Modules', exact: true })).toBeVisible()
   await page.keyboard.press('Control+,')
   await expect(page.getByRole('button', { name: 'Close', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Close', exact: true }).click()
@@ -3582,7 +3598,7 @@ test('contact names and groups in the address book and the composer', async ({ p
   })
   const errors = await prepareStartup(page, true)
   await page.goto('/')
-  await expect(page.getByRole('button', { name: 'More', exact: true })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Modules', exact: true })).toBeVisible()
   await page.evaluate(() => {
     const replies = (window as any).startupProbe.replies
     const person = (id: string, given: string, family: string, addr: string) => ({
@@ -3749,8 +3765,8 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       let kept = '340'
       if (width >= 1100) {
         // Beside the reader: the keyboard and the pointer both resize it.
-        // With the rail and the 260 px folder pane (#317) the reader's row
-        // is 760 px at 1440, so the widest beside the reader is 400 px.
+        // With the 260 px folder pane (#317), and the rail gone (#354), the
+        // reader's row is 820 px at 1440, so the widest beside the reader is 460 px.
         await handle.focus()
         await page.keyboard.press('ArrowLeft')
         await page.keyboard.press('ArrowLeft')
@@ -4305,11 +4321,13 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
           contentType: 'image/png',
         })
       }
-      // The rail on a wide window; the "More" menu on a narrow one.
+      // The module switcher on a wide window; the app menu on a narrow one (#354).
       const openArea = async (key: string) => {
         if (width < 769) {
-          await page.getByRole('button', { name: caCatalog['common.more'], exact: true }).first().click()
-          await page.getByRole('menuitem', { name: caCatalog[key], exact: true }).last().click()
+          await page.getByRole('button', { name: caCatalog['appMenu.label'], exact: true }).click()
+          await page
+            .getByRole('menuitemradio', { name: caCatalog['commands.goTo'].replace('{name}', caCatalog[key]), exact: true })
+            .click()
         } else {
           await page.getByTitle(caCatalog[key], { exact: true }).click()
         }
@@ -4435,12 +4453,17 @@ for (const language of ['en', 'ca', 'ar']) {
     await page.goto('/')
     await expect(page.locator('html')).toHaveAttribute('lang', language)
     await expect(page.locator('[data-thread-list]')).toBeVisible()
-    // One <main>, named after the module, and the rail named as what it is.
+    // One <main>, named after the module, and the module strip named as what
+    // it is: a navigation since the rail went (#354), the only one by that name.
     await expect(page.getByRole('main')).toHaveCount(1)
     await expect(page.getByRole('main', { name: catalog['shell.region.mail'], exact: true })).toBeVisible()
     await expect(
-      page.getByRole('complementary', { name: catalog['shell.region.modules'], exact: true }),
+      page.getByRole('navigation', { name: catalog['shell.region.modules'], exact: true }),
+    ).toHaveCount(1)
+    await expect(
+      page.getByRole('navigation', { name: catalog['shell.region.modules'], exact: true }),
     ).toBeVisible()
+    await expect(page.getByRole('complementary', { name: catalog['shell.region.modules'], exact: true })).toHaveCount(0)
 
     // A conversation open, with the details sidebar beside it, so every kind
     // of region the shell has today is on screen.
@@ -4559,8 +4582,8 @@ test('F6 skips the regions a narrow window hides, and keeps working at 200 perce
   await page.goto('/')
   await expect(page.locator('[data-thread-list]')).toBeVisible()
   const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
-  // One pane at a time: the rail, the mail navigation and the reader are not
-  // shown. The top band is, with its menu (#343).
+  // One pane at a time: the module switcher, the mail navigation and the
+  // reader are not shown. The top band is, with its menu (#343).
   await row.focus()
   expect(await regionWalk(page, 'F6', 3)).toEqual(['search', 'content', 'search'])
   expect(await regionWalk(page, 'Shift+F6', 2)).toEqual(['content', 'search'])
@@ -4670,8 +4693,8 @@ for (const language of ['en', 'ca', 'ar']) {
     await peopleButton.click()
     await page.getByRole('option', { name: /Morgan Rivera/ }).click()
     await expect(page.getByRole('heading', { name: 'Morgan Rivera' })).toBeVisible()
-    // The groups are the folder pane (#326), beside the module: from the rail,
-    // F6 goes to the module, the top band (#343), the pane, then back to the rail.
+    // The groups are the folder pane (#326), beside the module: from the module
+    // strip, F6 goes to the module, the top band (#343), the pane, then back to the strip.
     await peopleButton.focus()
     expect(await regionWalk(page, 'F6', 4)).toEqual(['content', 'search', 'folders', 'modules'])
     await audit('people', catalog['people.title'])
@@ -4679,8 +4702,8 @@ for (const language of ['en', 'ca', 'ar']) {
     const tasksButton = page.getByTitle(catalog['tasks.title'], { exact: true })
     await tasksButton.click()
     await expect(page.getByText('Review the figures')).toBeVisible()
-    // The lists are the folder pane (#329), beside the module: from the rail,
-    // F6 goes to the module, the top band (#343), the pane, then back to the rail.
+    // The lists are the folder pane (#329), beside the module: from the module
+    // strip, F6 goes to the module, the top band (#343), the pane, then back to the strip.
     await tasksButton.focus()
     expect(await regionWalk(page, 'F6', 4)).toEqual(['content', 'search', 'folders', 'modules'])
     await audit('tasks', catalog['tasks.title'])
@@ -4688,8 +4711,8 @@ for (const language of ['en', 'ca', 'ar']) {
     const notesButton = page.getByTitle(catalog['notes.title'], { exact: true })
     await notesButton.click()
     await page.getByRole('button', { name: /Meeting notes/ }).click()
-    // The tags are the folder pane (#335), beside the module: from the rail,
-    // F6 goes to the module, the top band (#343), the pane, then back to the rail.
+    // The tags are the folder pane (#335), beside the module: from the module
+    // strip, F6 goes to the module, the top band (#343), the pane, then back to the strip.
     await notesButton.focus()
     expect(await regionWalk(page, 'F6', 4)).toEqual(['content', 'search', 'folders', 'modules'])
     await audit('notes', catalog['notes.title'])
@@ -4698,8 +4721,8 @@ for (const language of ['en', 'ca', 'ar']) {
     await calendarButton.click()
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     // Calendar's calendars are the folder pane (#323), beside the module:
-    // from the rail, F6 goes to the module, the top band (#343), the pane, then
-    // back to the rail.
+    // from the module strip, F6 goes to the module, the top band (#343), the
+    // pane, then back to the strip.
     await calendarButton.focus()
     expect(await regionWalk(page, 'F6', 4)).toEqual(['content', 'search', 'folders', 'modules'])
     await audit('calendar', catalog['calendar.title'])
@@ -4709,8 +4732,8 @@ for (const language of ['en', 'ca', 'ar']) {
     await expect(page.getByText('Hello Ana')).toBeVisible()
     await audit('chat', catalog['messaging.title'])
     // The conversations are the folder pane (#337), beside the module: from
-    // the rail, F6 goes to the module, the top band (#343), the pane, then back
-    // to the rail.
+    // the module strip, F6 goes to the module, the top band (#343), the pane,
+    // then back to the strip.
     await page.getByTitle(catalog['messaging.title'], { exact: true }).focus()
     expect(await regionWalk(page, 'F6', 4)).toEqual(['content', 'search', 'folders', 'modules'])
 
@@ -4733,8 +4756,8 @@ for (const language of ['en', 'ca', 'ar']) {
     await attachmentsButton.click()
     await expect(page.getByText('report.pdf')).toBeVisible()
     // The filters are the folder pane (#339), beside the module: from the
-    // rail, F6 goes to the module, the top band (#343), the pane, then back to
-    // the rail.
+    // module strip, F6 goes to the module, the top band (#343), the pane, then
+    // back to the strip.
     await attachmentsButton.focus()
     expect(await regionWalk(page, 'F6', 4)).toEqual(['content', 'search', 'folders', 'modules'])
     await audit('attachments', catalog['attachmentsView.title'])
@@ -4748,10 +4771,10 @@ for (const language of ['en', 'ca', 'ar']) {
 // band is the first row of the <header> «Oreneta» (banner), between the title
 // bar and the notices, 2.25 rem tall in the frame's tone, and the first region
 // F6 reaches. Its «App menu» button opens a menu with every palette command,
-// grouped by area, and what the rail's More menu offers; the rail keeps its own
-// until piece 14.
+// grouped by area, and what the rail's More menu offered: since the rail went
+// (#354) it is where all of it is.
 const APP_MENU_GROUPS = ['Modules', 'Mail', 'Accounts', 'Folders', 'Boards', 'Theme', 'Notifications', 'Settings', 'Application']
-// The rail's More menu, reachable from the app menu too (once each).
+// The rail's More menu, which went with the rail (#354): each item in the app menu, once.
 const MORE_MENU_ITEMS = [
   'Go to: Mail',
   'Go to: Calendar',
@@ -4813,8 +4836,17 @@ for (const width of [1440, 1025, 1024, 768]) {
     expect((await boxOf(button)).x).toBeLessThan(16)
     await expect(band.locator('[data-band-centre]')).toHaveCount(1)
     await expect(band.locator('[data-band-end]')).toHaveCount(1)
-    // The rail keeps its own More menu, and the two buttons are told apart.
-    await expect(page.getByRole('button', { name: 'More', exact: true }).first()).toBeAttached()
+    // No More menu but the app menu: the rail's went with it, and so did the
+    // compact one below 769 px (owner decision 3 on #352). The module switcher
+    // has every module in view at 100 %: the strip from 1025 px, the narrow bar
+    // from 769 to 1024 px, neither below (#354).
+    await expect(page.getByRole('button', { name: 'More', exact: true })).toHaveCount(0)
+    const modules = page.getByRole('navigation', { name: 'Modules', exact: true })
+    await expect(modules).toHaveCount(width >= 769 ? 1 : 0)
+    if (width >= 769) {
+      await expect(modules).toHaveAttribute('data-module-switcher', width >= 1025 ? 'strip' : 'bar')
+      await expect(modules.getByRole('button')).toHaveCount(7)
+    }
 
     // The pointer opens it under the button, from its start edge, inside the window.
     await button.click()
@@ -4835,7 +4867,7 @@ for (const width of [1440, 1025, 1024, 768]) {
       elements.map((element) => document.getElementById(element.getAttribute('aria-labelledby')!)?.textContent),
     )
     expect(groups).toEqual(APP_MENU_GROUPS)
-    // What the rail's More menu offers is there, once.
+    // What the rail's More menu offered is there, once.
     for (const name of MORE_MENU_ITEMS)
       await expect(menu.getByRole(name.startsWith('Go to:') ? 'menuitemradio' : 'menuitem', { name, exact: true })).toHaveCount(1)
     await expect(menu.getByRole('menuitemradio', { name: 'Go to: Mail', exact: true })).toHaveAttribute('aria-checked', 'true')
@@ -4999,7 +5031,7 @@ test('Delete and Backspace in an open menu leave the selected conversation alone
   expect(errors).toEqual([])
 })
 
-test('the app menu runs what the palette and the rail\'s More menu run (#343)', async ({ page }) => {
+test('the app menu runs what the palette and the rail\'s More menu ran (#343, #354)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   const errors = await prepareStartup(page, true, { navigation: true })
   await page.goto('/')
@@ -5024,16 +5056,19 @@ test('the app menu runs what the palette and the rail\'s More menu run (#343)', 
   await button.click()
   await expect(menu.getByRole('menuitemradio', { name: 'Go to: Calendar', exact: true })).toHaveAttribute('aria-checked', 'true')
   await page.keyboard.press('Escape')
-  // An account from another module goes back to mail, as the rail does.
+  // An account from another module goes back to mail, as the rail did.
   await choose('menuitemradio', 'Go to: Second account')
   await expect(page.getByRole('main', { name: 'Mail', exact: true })).toBeVisible()
   await choose('menuitemradio', 'Go to: Calendar')
   await choose('menuitemradio', 'Go to: Mail')
   await expect(page.getByRole('main', { name: 'Mail', exact: true })).toBeVisible()
 
-  // Do not disturb: the rail's indicator says so, and the menu now offers to resume.
+  // Do not disturb: the band's indicator says so, and the menu now offers to resume.
   await choose('menuitem', 'Do not disturb until turned off')
-  const resume = page.locator('aside').getByRole('button', { name: 'Resume notifications', exact: true })
+  const resume = page
+    .getByRole('banner')
+    .locator('[data-quiet-indicator="band"]')
+    .getByRole('button', { name: 'Resume notifications', exact: true })
   await expect(resume).toBeVisible()
   await choose('menuitem', 'Resume notifications')
   await expect(resume).toHaveCount(0)
@@ -5048,10 +5083,31 @@ test('the app menu runs what the palette and the rail\'s More menu run (#343)', 
   await page.keyboard.press('Escape')
   await expect(button).toBeFocused()
 
-  // The rail's own More menu is unchanged (owner decision 1 on #342).
-  await page.locator('aside').getByTitle('More', { exact: true }).first().click()
-  await expect(page.getByRole('menu', { name: 'More', exact: true })).toBeVisible()
+  // The rest of what the rail's More menu had: adding an account, a board
+  // (created at once, in mail), syncing and the settings (#354).
+  await choose('menuitem', 'Add account')
+  await expect(page.getByRole('dialog', { name: 'Add Account' })).toBeVisible()
   await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog', { name: 'Add Account' })).toHaveCount(0)
+  const boards = page
+    .getByRole('navigation', { name: 'Accounts and folders' })
+    .getByRole('group', { name: 'Boards' })
+    .getByRole('button')
+  const boardsBefore = await boards.count()
+  await choose('menuitemradio', 'Go to: Calendar')
+  await choose('menuitem', 'Create kanban board')
+  await expect(page.getByRole('main', { name: 'Mail', exact: true })).toBeVisible()
+  await expect(boards).toHaveCount(boardsBefore + 1)
+  await expect(boards.last()).toHaveAttribute('aria-current', 'true')
+  // The synthetic accounts are paused: the check is asked for and skipped, and says so.
+  await choose('menuitem', 'Sync mailbox')
+  await expect(page.getByRole('status').filter({ hasText: 'No mail check requested. Review paused accounts or accounts that need sign-in.' })).toBeVisible()
+  await choose('menuitem', 'Open settings')
+  await expect(page.getByRole('dialog').first()).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(button).toBeFocused()
+  // And no More menu of the rail's anywhere.
+  await expect(page.getByRole('button', { name: 'More', exact: true })).toHaveCount(0)
   expect(errors).toEqual([])
 })
 
@@ -5511,13 +5567,14 @@ test('the folder pane resizes from the keyboard and the pointer, is kept across 
 
 // When the row runs short the folders give way first, down to 200 px, then
 // the list, and the reader keeps its 360 px (ADR-0068 §7). With a remembered
-// 560 px list beside the 60 px rail: at 1200 px the folders are 220 px and the
-// list is whole; at 1100 and 1025 px the folders are at their minimum and the
-// list gives way.
+// 560 px list, and the modules at the foot of the folders since the 60 px rail
+// went (#354): at 1140 px the folders are 220 px and the list is whole; at
+// 1100 and 1025 px the folders are at their minimum and the list gives way.
 for (const [width, folders, listWidth] of [
-  [1025, 200, 405],
-  [1100, 200, 480],
-  [1200, 220, 560],
+  [1025, 200, 465],
+  [1100, 200, 540],
+  [1140, 220, 560],
+  [1200, 260, 560],
   [1440, 260, 560],
 ] as const) {
   test(`the folders give way before the list, and the list before the reader, at ${width}px (#317)`, async ({ page }) => {
@@ -5544,7 +5601,7 @@ for (const [width, folders, listWidth] of [
   })
 }
 
-test('in Arabic the folder pane sits between the rail and the list, and its separator follows the reading (#317)', async ({
+test('in Arabic the folder pane sits at the start edge, before the list, and its separator follows the reading (#317)', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
@@ -5553,13 +5610,17 @@ test('in Arabic the folder pane sits between the rail and the list, and its sepa
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
   const pane = page.getByRole('navigation', { name: arCatalog['mailNavigation.title'], exact: true })
   await expect(pane).toBeVisible()
-  const railBox = (await page.locator('main > aside').first().boundingBox())!
   const paneBox = (await pane.boundingBox())!
   const listBox = (await page.locator('[data-thread-list]').boundingBox())!
-  expect(paneBox.x + paneBox.width).toBeLessThanOrEqual(railBox.x + 1)
+  // Against the right edge, where the rail was until #354; the module strip at its foot.
+  expect(Math.round(paneBox.x + paneBox.width)).toBe(1440)
   expect(listBox.x + listBox.width).toBeLessThanOrEqual(paneBox.x + 1)
+  const strip = pane.getByRole('navigation', { name: arCatalog['shell.region.modules'], exact: true })
+  const stripBox = (await strip.boundingBox())!
+  expect(Math.abs(stripBox.x - paneBox.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(stripBox.y + stripBox.height - (paneBox.y + paneBox.height))).toBeLessThanOrEqual(1)
   // The separator is on the pane's end edge, on the left: ArrowLeft widens it,
-  // and the pane grows to the left with its start edge against the rail.
+  // and the pane grows to the left with its start edge against the window's.
   const handle = pane.getByRole('separator', { name: arCatalog['layout.resizeFolderPane'], exact: true })
   const handleBox = (await handle.boundingBox())!
   expect(Math.abs(handleBox.x + handleBox.width / 2 - paneBox.x)).toBeLessThanOrEqual(1)
@@ -5571,6 +5632,424 @@ test('in Arabic the folder pane sits between the rail and the list, and its sepa
   expect(Math.round(grown.x + grown.width)).toBe(Math.round(paneBox.x + paneBox.width))
   await page.keyboard.press('Shift+ArrowRight')
   await expect(handle).toHaveAttribute('aria-valuenow', '212')
+  expect(errors).toEqual([])
+})
+
+// #353 (piece 14a): «Comptes i carpetes» takes over what only the rail did
+// (ADR-0068 §5): accounts that reorder and open their menu, the «Taulers»
+// section, and the unified inbox's menu. The rail went with piece 14b (#354);
+// Ctrl/⌘+1…9 keep its order, which is the pane's.
+async function openPaneDestinations(page: Page) {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.addInitScript(() => {
+    const replies = (window as any).startupProbe.replies
+    replies['account.reorder'] = { ok: true }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
+  const alex = nav.locator('[data-nav-row="account:synthetic-account"]')
+  const second = nav.locator('[data-nav-row="account:second-account"]')
+  const paneOrder = () =>
+    nav
+      .locator('[data-nav-row^="account:"]')
+      .evaluateAll((rows) => rows.map((row) => row.getAttribute('data-nav-row')!.slice('account:'.length)))
+  // What Ctrl/⌘+3 and Ctrl/⌘+4 open, after the unified inbox and the board:
+  // the accounts in the order the rail had, which is the pane's. Each one
+  // opened is the pane's current account.
+  const shortcutOrder = async () => {
+    const opened: string[] = []
+    for (const digit of [3, 4]) {
+      const current = nav.locator('[data-nav-row^="account:"][aria-current="true"]')
+      const before = (await current.count()) ? await current.getAttribute('data-nav-row') : null
+      await page.keyboard.press(`Control+Digit${digit}`)
+      await expect(current).toHaveCount(1)
+      await expect.poll(() => current.getAttribute('data-nav-row')).not.toBe(before)
+      opened.push((await current.getAttribute('data-nav-row'))!.slice('account:'.length))
+    }
+    return opened
+  }
+  const saved = () =>
+    page.evaluate(
+      () =>
+        (window as any).startupProbe.requests.filter((request: any) => request.command === 'account.reorder').at(-1)
+          ?.payload.accounts,
+    )
+  return { errors, nav, alex, second, paneOrder, shortcutOrder, saved }
+}
+
+test('accounts reorder in the folder pane from the keyboard and the pointer, in the order of Ctrl/⌘+1…9 (#353)', async ({
+  page,
+}) => {
+  const { errors, nav, alex, second, paneOrder, shortcutOrder, saved } = await openPaneDestinations(page)
+  expect(await paneOrder()).toEqual(['synthetic-account', 'second-account'])
+  await expect(alex).toHaveAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown')
+  // The synthetic accounts are paused, which the row says in words.
+  await expect(alex).toHaveAccessibleName('Alex · Demo alex@example.test Mail checks paused')
+
+  // Alt+↓: one place down, the focus with it, and said.
+  await alex.focus()
+  await page.keyboard.press('Alt+ArrowDown')
+  await expect.poll(paneOrder).toEqual(['second-account', 'synthetic-account'])
+  await expect(alex).toBeFocused()
+  await expect(nav.locator('p[aria-live="polite"]')).toHaveText('Alex · Demo moved to position 2 of 2')
+  await expect.poll(saved).toEqual(['second-account', 'synthetic-account'])
+  await page.keyboard.press('Alt+ArrowUp')
+  await expect.poll(paneOrder).toEqual(['synthetic-account', 'second-account'])
+  await expect(alex).toBeFocused()
+
+  // The pointer: Second account dragged above Alex.
+  const from = (await second.boundingBox())!
+  const to = (await alex.boundingBox())!
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 - 10, { steps: 4 })
+  await page.mouse.move(to.x + to.width / 2, to.y + 4, { steps: 8 })
+  await page.mouse.up()
+  await expect.poll(paneOrder).toEqual(['second-account', 'synthetic-account'])
+  await expect.poll(saved).toEqual(['second-account', 'synthetic-account'])
+  // A drag does not open the account it moved.
+  await expect(second).not.toHaveAttribute('aria-current', 'true')
+  await expect(page.getByRole('status').filter({ hasText: 'Second account moved to position 1 of 2' })).toHaveCount(1)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  // Ctrl/⌘+1…9 follow the new order, as the rail did.
+  expect(await shortcutOrder()).toEqual(['second-account', 'synthetic-account'])
+  expect(errors).toEqual([])
+})
+
+test('the account menu opens in the folder pane with the mouse, Shift+F10 and the context menu key (#353)', async ({
+  page,
+}) => {
+  const { errors, nav, alex, second } = await openPaneDestinations(page)
+  // The synthetic accounts are paused: they offer to resume.
+  const items = ['Account settings...', 'Mark all as read', 'Mute notifications', 'Resume checking', 'Hide account']
+  await second.click({ button: 'right' })
+  const secondMenu = page.getByRole('menu', { name: 'Second account', exact: true })
+  await expect(secondMenu.getByRole('menuitem')).toHaveText(items)
+  await page.keyboard.press('Escape')
+  await expect(secondMenu).toHaveCount(0)
+
+  await alex.focus()
+  await page.keyboard.press('Shift+F10')
+  const alexMenu = page.getByRole('menu', { name: 'Alex · Demo', exact: true })
+  await expect(alexMenu.getByRole('menuitem', { name: 'Account settings...' })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(alexMenu).toHaveCount(0)
+  await expect(alex).toBeFocused()
+
+  // The context menu key: hide Second account from the pane (and from
+  // Ctrl/⌘+1…9), with the preference of before.
+  await second.focus()
+  await page.keyboard.press('ContextMenu')
+  await expect(secondMenu).toBeVisible()
+  await secondMenu.getByRole('menuitem', { name: 'Hide account' }).click()
+  await expect(second).toHaveCount(0)
+  await expect
+    .poll(() =>
+      page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}').hidden_sidenav_accounts),
+    )
+    .toEqual(['second-account'])
+  await expect(alex).toBeFocused()
+  await expect(nav.locator('p[aria-live="polite"]')).toHaveText(
+    'Second account hidden. It can be shown again from Settings.',
+  )
+  await expect
+    .poll(() =>
+      page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}').hidden_sidenav_accounts),
+    )
+    .toEqual(['second-account'])
+
+  // The account settings, from the menu.
+  await alex.click({ button: 'right' })
+  await alexMenu.getByRole('menuitem', { name: 'Account settings...' }).click()
+  await expect(page.getByRole('dialog', { name: /Settings/ })).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+test('a board opens from «Taulers» in the folder pane, which stays with the board marked (#353)', async ({ page }) => {
+  const { errors, nav, alex } = await openPaneDestinations(page)
+  // Every profile has a first board.
+  // A group named «Taulers», under «Comptes».
+  const boards = nav.getByRole('group', { name: 'Boards', exact: true })
+  const board = boards.getByRole('button', { name: 'Kanban board', exact: true })
+  const boardTitle = page.locator('main').getByRole('heading', { level: 2, name: 'Kanban board', exact: true })
+  // Between the unified inbox and the accounts, as on the rail before, and for Ctrl/⌘+1…9.
+  expect(
+    await nav.locator('[data-nav-row]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-nav-row'))),
+  ).toEqual([
+    'unified',
+    expect.stringMatching(/^board:/),
+    'account:synthetic-account',
+    'account:second-account',
+  ])
+
+  await board.click()
+  await expect(boardTitle).toBeVisible()
+  await expect(nav).toBeVisible()
+  await expect(board).toHaveAttribute('aria-current', 'true')
+  await expect(alex).not.toHaveAttribute('aria-current', 'true')
+  await expect(nav.getByRole('button', { name: 'Inbox 3', exact: true })).not.toHaveAttribute('aria-current', 'page')
+
+  // An account goes back to mail, where the mail view was.
+  await alex.click()
+  await expect(boardTitle).toHaveCount(0)
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await expect(alex).toHaveAttribute('aria-current', 'true')
+
+  // The keyboard: Enter opens the board and the focus stays on it.
+  await board.focus()
+  await page.keyboard.press('Enter')
+  await expect(boardTitle).toBeVisible()
+  await expect(board).toBeFocused()
+  // Its menu, from the keyboard.
+  await page.keyboard.press('Shift+F10')
+  const menu = page.getByRole('menu', { name: 'Kanban board', exact: true })
+  await expect(menu.getByRole('menuitem')).toHaveText(['Board settings...', 'Delete board'])
+  await page.keyboard.press('Escape')
+  await expect(board).toBeFocused()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  expect(errors).toEqual([])
+})
+
+test('deleting a board from its menu in the folder pane leaves the focus on the next board (#353)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const column = { accountId: 'unified', folderId: 'inbox' }
+  const errors = await prepareStartup(page, true, {
+    navigation: true,
+    preferences: {
+      kanban_boards: [
+        { id: 'b1', name: 'Launch', columns: [column] },
+        { id: 'b2', name: 'Hiring', columns: [column] },
+      ],
+    },
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
+  const launch = nav.locator('[data-nav-row="board:b1"]')
+  const hiring = nav.locator('[data-nav-row="board:b2"]')
+  await launch.focus()
+  await page.keyboard.press('ContextMenu')
+  await page.getByRole('menu', { name: 'Launch', exact: true }).getByRole('menuitem', { name: 'Delete board' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete', exact: true }).click()
+  await expect(launch).toHaveCount(0)
+  await expect(hiring).toBeFocused()
+  expect(errors).toEqual([])
+})
+
+test('a feed dragged from the list onto another RSS account in the folder pane moves there (#353)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  // The cards view, whose rows drag a feed (the table's do not).
+  const errors = await prepareStartup(page, true, {
+    navigation: true,
+    listView: 'cards',
+    preferences: { session_account: 'rss-news', session_folder: 'inbox' },
+  })
+  await page.addInitScript(() => {
+    const replies = (window as any).startupProbe.replies
+    const base = replies['account.list'].accounts[0]
+    const feeds = (id: string, name: string) => ({
+      ...base,
+      id,
+      email: '',
+      display_name: name,
+      provider: 'rss',
+      auth_type: 'rss',
+      paused: false,
+    })
+    replies['account.list'] = {
+      accounts: [...replies['account.list'].accounts, feeds('rss-news', 'News'), feeds('rss-blogs', 'Blogs')],
+    }
+    replies['rss.moveFeed'] = { ok: true }
+    // Feed accounts are not paused, so they are checked at start.
+    replies['mail.sync'] = { ok: true }
+    const feed = {
+      id: 'feed-item-1',
+      account_id: 'rss-news',
+      folder_id: 'inbox',
+      thread_id: 'rss-news#rss#https://news.example.test/feed',
+      feed_url: 'https://news.example.test/feed',
+      from_name: 'Example news',
+      from_addr: '',
+      to: '',
+      subject: 'Synthetic headline',
+      preview: 'A synthetic feed item.',
+      body: 'A synthetic feed item.',
+      date: 1760000000,
+      unread: true,
+      starred: false,
+      has_attachments: false,
+      labels: [],
+    }
+    const app = (window as any).go.main.App
+    const invoke = app.Invoke
+    app.Invoke = async (command: string, payload: Record<string, unknown>) => {
+      if (command === 'mail.threadList' && payload.account_id === 'rss-news')
+        return { threads: [feed], next_cursor: '', pagination: 'conversation-v1' }
+      if (command === 'mail.folderList' && String(payload.account_id).startsWith('rss-')) return { folders: [] }
+      return invoke(command, payload)
+    }
+  })
+  await page.goto('/')
+  const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
+  const news = nav.locator('[data-nav-row="account:rss-news"]')
+  const blogs = nav.locator('[data-nav-row="account:rss-blogs"]')
+  const row = page.locator('[data-thread-list] [draggable="true"]').filter({ hasText: 'Synthetic headline' })
+  await expect(row).toBeVisible()
+  // A real drag: held over the account it comes from, the feed is refused and
+  // no row is marked; over another RSS account, the row is marked for it.
+  const centre = async (locator: ReturnType<Page['locator']>) => {
+    const box = (await locator.boundingBox())!
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  }
+  const from = await centre(row)
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  const own = await centre(news)
+  await page.mouse.move(own.x, own.y, { steps: 6 })
+  await page.mouse.move(own.x + 2, own.y, { steps: 2 })
+  await expect(news).not.toHaveAttribute('data-drop-target')
+  const other = await centre(blogs)
+  await page.mouse.move(other.x, other.y, { steps: 6 })
+  await page.mouse.move(other.x + 2, other.y, { steps: 2 })
+  await expect(blogs).toHaveAttribute('data-drop-target', 'ok')
+  await page.mouse.up()
+  await expect(blogs).not.toHaveAttribute('data-drop-target')
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as any).startupProbe.requests.find((request: any) => request.command === 'rss.moveFeed')?.payload,
+      ),
+    )
+    .toEqual({ thread_id: 'rss-news#rss#https://news.example.test/feed', target_account_id: 'rss-blogs' })
+  expect(errors).toEqual([])
+})
+
+test('the unified inbox row in the folder pane has the rail\'s menu (#353)', async ({ page }) => {
+  const { errors, nav, alex } = await openPaneDestinations(page)
+  const unified = nav.getByRole('button', { name: 'Unified inbox', exact: true })
+  await unified.click({ button: 'right' })
+  const menu = page.getByRole('menu', { name: 'Unified inbox', exact: true })
+  await expect(menu.getByRole('menuitem')).toHaveText(['Hide unified inbox'])
+  await page.keyboard.press('Escape')
+  await unified.focus()
+  await page.keyboard.press('ContextMenu')
+  await menu.getByRole('menuitem', { name: 'Hide unified inbox' }).click()
+  await expect(unified).toHaveCount(0)
+  await expect(nav.locator('[data-nav-row^="board:"]')).toBeFocused()
+  await expect
+    .poll(() =>
+      page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}').show_unified_inbox_in_sidenav),
+    )
+    .toBe(false)
+  await expect(alex).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+// With a board open the folder pane stays (ADR-0068 §4), and the board's
+// conversation pane is a share of the board's area. The reader in it keeps its
+// 360 px, the folders give way before the board's columns do, and the
+// separator is there to resize it: a new message opened beside the board is
+// whole, its Send button inside the pane.
+for (const [width, folders] of [
+  [1025, 260],
+  [1025, 400],
+  [1280, 260],
+] as const) {
+  test(`a board's conversation pane keeps the reader whole beside the folder pane: ${width}px, folders ${folders}px (#353)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const errors = await prepareStartup(page, true, { navigation: true, preferences: { folder_pane_width: folders } })
+    await page.goto('/')
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
+    await nav.locator('[data-nav-row^="board:"]').first().click()
+    const board = page.locator('main section[data-region="content"]')
+    await expect(board.getByRole('heading', { level: 2, name: 'Kanban board', exact: true })).toBeVisible()
+    await page.keyboard.press('Control+n')
+    const reader = page.locator('[data-message-pane]')
+    const pane = reader.locator('xpath=..')
+    const send = page.getByRole('button', { name: 'Send', exact: true })
+    await expect(send).toBeInViewport({ ratio: 1 })
+    const box = async (locator: ReturnType<Page['locator']>) => (await locator.boundingBox())!
+    const [paneBox, readerBox, sendBox, boardBox, navBox] = await Promise.all(
+      [pane, reader, send, board, nav].map(box),
+    )
+    // The reader is not cut by the pane around it, and nor is Send.
+    expect(paneBox.width).toBeGreaterThanOrEqual(360 - 1)
+    expect(readerBox.width).toBeLessThanOrEqual(paneBox.width + 1)
+    expect(readerBox.x + readerBox.width).toBeLessThanOrEqual(paneBox.x + paneBox.width + 1)
+    expect(sendBox.x).toBeGreaterThanOrEqual(paneBox.x - 1)
+    expect(sendBox.x + sendBox.width).toBeLessThanOrEqual(paneBox.x + paneBox.width + 1)
+    await expect(page.getByRole('separator', { name: 'Resize conversation', exact: true })).toHaveCount(1)
+    // The columns keep one whole column (360 px by default): the folders gave way first.
+    expect(boardBox.width).toBeGreaterThanOrEqual(360 - 1)
+    expect(navBox.width).toBeGreaterThanOrEqual(200 - 1)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    expect(errors).toEqual([])
+  })
+}
+
+test('in Arabic the new rows of the folder pane follow the reading, and fit at the app\'s 200 percent (#353)', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, language: 'ar' })
+  await page.addInitScript(() => {
+    ;(window as any).startupProbe.replies['account.reorder'] = { ok: true }
+  })
+  await page.goto('/')
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+  const nav = page.getByRole('navigation', { name: arCatalog['mailNavigation.title'], exact: true })
+  const alex = nav.locator('[data-nav-row="account:synthetic-account"]')
+  await expect(nav.getByRole('group', { name: arCatalog['mailNavigation.boards'], exact: true })).toBeVisible()
+  // The state, in words, in Arabic; its icon at the end of the line, on the left.
+  await expect(alex).toHaveAccessibleName(`Alex · Demo alex@example.test ${arCatalog['connectivity.health.paused']}`)
+  const row = (await alex.boundingBox())!
+  const icon = (await alex.locator('svg.mail-account-status').boundingBox())!
+  expect(icon.x + icon.width / 2).toBeLessThan(row.x + row.width / 2)
+
+  // Alt+↓ moves down in right to left too, and says so in Arabic.
+  await alex.focus()
+  await page.keyboard.press('Alt+ArrowDown')
+  await expect(nav.locator('p[aria-live="polite"]')).toHaveText(
+    arCatalog['mailNavigation.moved']
+      .replace('{name}', 'Alex · Demo')
+      .replace('{position}', '2')
+      .replace('{count}', '2'),
+  )
+  await expect(alex).toBeFocused()
+
+  // Shift+F10: the menu starts at the row's start edge, which is on the right.
+  await page.keyboard.press('Shift+F10')
+  const menu = page.getByRole('menu', { name: 'Alex · Demo', exact: true })
+  await expect(menu.getByRole('menuitem', { name: arCatalog['mailNavigation.actions.hideAccount'], exact: true })).toBeVisible()
+  const menuBox = (await menu.boundingBox())!
+  const rowNow = (await alex.boundingBox())!
+  expect(Math.abs(menuBox.x + menuBox.width - (rowNow.x + rowNow.width - 20))).toBeLessThanOrEqual(2)
+  const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+  const blocking = results.violations.filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+  await info.attach('axe-pane-destinations-ar', { body: JSON.stringify(results.violations, null, 2), contentType: 'application/json' })
+  expect(blocking.map((violation) => violation.id)).toEqual([])
+  await page.keyboard.press('Escape')
+  await expect(alex).toBeFocused()
+
+  // The app's 200 %: the pane keeps its width, and its rows their parts, with
+  // nothing scrolling sideways.
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
+  const body = nav.locator('xpath=./div[2]')
+  expect(await body.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  const zoomed = (await alex.boundingBox())!
+  const zoomedIcon = (await alex.locator('svg.mail-account-status').boundingBox())!
+  expect(zoomedIcon.x).toBeGreaterThanOrEqual(zoomed.x)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.keyboard.press(`${mod}+Digit0`)
   expect(errors).toEqual([])
 })
 
@@ -5598,6 +6077,19 @@ async function openCalendarPane(page: Page, options: SetupOptions = {}, catalog 
 }
 
 const boxOf = async (locator: ReturnType<Page['locator']>) => (await locator.boundingBox())!
+
+// A module's button in the module switcher or, where the strip has no room
+// for it (a 200 px pane holds five buttons and «Més»), its item in «Més» (#354).
+async function chooseModule(page: Page, title: string, catalog: Record<string, string> = enCatalog) {
+  const modules = page.locator('nav[data-region="modules"]')
+  const button = modules.getByTitle(title, { exact: true })
+  if (await button.count()) return button.click()
+  await modules.getByRole('button', { name: catalog['common.more'], exact: true }).click()
+  await page
+    .getByRole('menu', { name: catalog['common.more'], exact: true })
+    .getByRole('menuitem', { name: title, exact: true })
+    .click()
+}
 
 // Every day of the month at a glance, and every calendar row, inside the pane.
 async function insidePane(page: Page, pane: ReturnType<Page['locator']>) {
@@ -5636,10 +6128,11 @@ for (const [width, paneWidth] of [
     const month = pane.getByRole('navigation', { name: 'Month at a glance' })
     await expect(month).toBeVisible()
     expect((await boxOf(month)).y).toBeGreaterThan((await boxOf(pane.getByRole('button', { name: 'Holidays', exact: true }).first())).y)
-    // Right after the rail, at the shared width, and the module right after it.
-    const rail = await boxOf(page.locator('main > aside').first())
+    // At the start of the row, where the rail was until #354, at the shared
+    // width, and the module right after it.
+    const row = await boxOf(page.getByRole('main'))
     const paneBox = await boxOf(pane)
-    expect(Math.abs(paneBox.x - (rail.x + rail.width))).toBeLessThanOrEqual(1)
+    expect(Math.abs(paneBox.x - row.x)).toBeLessThanOrEqual(1)
     expect(Math.abs(paneBox.width - paneWidth)).toBeLessThanOrEqual(1)
     await expect(pane.getByRole('separator', { name: 'Resize folder pane' })).toHaveAttribute('aria-valuenow', String(paneWidth))
     const contentBox = await boxOf(content)
@@ -5736,7 +6229,7 @@ test('the folder pane resized in Calendar is the width mail draws, and the rever
   expect(errors).toEqual([])
 })
 
-test('in Arabic Calendar\'s folder pane sits between the rail and the views, and its separator follows the reading (#323)', async ({
+test('in Arabic Calendar\'s folder pane sits at the start edge, before the views, and its separator follows the reading (#323)', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
@@ -5745,14 +6238,15 @@ test('in Arabic Calendar\'s folder pane sits between the rail and the views, and
   const pane = page.getByRole('navigation', { name: arCatalog['calendar.calendars'], exact: true })
   await expect(pane).toBeVisible()
   await expect(pane.getByRole('navigation', { name: arCatalog['calendar.miniCalendar'], exact: true })).toBeVisible()
-  const railBox = await boxOf(page.locator('main > aside').first())
+  // Against the right edge of the row, where the rail was until #354.
+  const row = await boxOf(page.getByRole('main'))
   const paneBox = await boxOf(pane)
   const contentBox = await boxOf(page.locator('main > [data-region="content"]'))
-  expect(Math.abs(paneBox.x + paneBox.width - railBox.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(paneBox.x + paneBox.width - (row.x + row.width))).toBeLessThanOrEqual(1)
   expect(Math.abs(contentBox.x + contentBox.width - paneBox.x)).toBeLessThanOrEqual(1)
   expect(contentBox.x).toBeGreaterThanOrEqual(-1)
   // The separator is on the pane's end edge, on the left: ArrowLeft widens it,
-  // and the pane grows to the left with its start edge against the rail.
+  // and the pane grows to the left with its start edge against the row's.
   const handle = pane.getByRole('separator', { name: arCatalog['layout.resizeFolderPane'], exact: true })
   const handleBox = await boxOf(handle)
   expect(Math.abs(handleBox.x + handleBox.width / 2 - paneBox.x)).toBeLessThanOrEqual(1)
@@ -5942,13 +6436,14 @@ for (const [width, paneWidth] of [
     await expect(pane.getByRole('button', { name: 'All contacts', exact: true })).toBeVisible()
     await expect(pane.getByRole('button', { name: 'Engines (2)', exact: true })).toBeVisible()
     await expect(pane.getByRole('button', { name: 'New group', exact: true })).toBeVisible()
-    // Right after the rail, at the shared width, and the module right after it.
-    const rail = await boxOf(page.locator('main > aside').first())
+    // At the start of the row, where the rail was until #354, at the shared
+    // width, and the module right after it.
+    const row = await boxOf(page.getByRole('main'))
     const paneBox = await boxOf(pane)
-    expect(Math.abs(paneBox.x - (rail.x + rail.width))).toBeLessThanOrEqual(1)
+    expect(Math.abs(paneBox.x - row.x)).toBeLessThanOrEqual(1)
     // The person keeps the reader's 360 px (ADR-0068 §7): where the pane and
     // the list leave less, the pane gives way first, down to 200 px.
-    const drawnPane = Math.max(200, Math.min(paneWidth, width - 60 - 288 - 360))
+    const drawnPane = Math.max(200, Math.min(paneWidth, width - 288 - 360))
     expect(Math.abs(paneBox.width - drawnPane)).toBeLessThanOrEqual(1)
     // The separator reports the width that is drawn, squeezed or not.
     const valueNow = await pane.getByRole('separator', { name: 'Resize folder pane' }).getAttribute('aria-valuenow')
@@ -5977,10 +6472,10 @@ for (const [width, paneWidth] of [
     expect(outside).toEqual([])
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     const detail = await boxOf(page.getByRole('region', { name: 'Ada Lovelace' }))
-    // The person takes all the room the rail, the pane and the list leave: at
-    // 1025 px, 477 and 417 px for a pane of 200 and 260, and 360 px for 400,
-    // when the pane is drawn 317 px wide instead.
-    expect(detail.width).toBeGreaterThanOrEqual(width - 60 - drawnPane - 288 - 2)
+    // The person takes all the room the pane and the list leave: at 1025 px,
+    // 537 and 477 px for a pane of 200 and 260, and 360 px for 400, when the
+    // pane is drawn 377 px wide instead (with the rail of before #354, 60 px less).
+    expect(detail.width).toBeGreaterThanOrEqual(width - drawnPane - 288 - 2)
     await insidePane(page, pane)
     expect(errors).toEqual([])
   })
@@ -6094,7 +6589,7 @@ test('the folder pane resized in People is the width mail draws, and the reverse
   expect(errors).toEqual([])
 })
 
-test("in Arabic People's folder pane sits between the rail and the list, and its separator follows the reading (#326)", async ({
+test("in Arabic People's folder pane sits at the start edge, before the list, and its separator follows the reading (#326)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
@@ -6102,10 +6597,11 @@ test("in Arabic People's folder pane sits between the rail and the list, and its
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
   const pane = page.getByRole('navigation', { name: arCatalog['people.contactGroups'], exact: true })
   await expect(pane).toBeVisible()
-  const railBox = await boxOf(page.locator('main > aside').first())
+  // Against the right edge of the row, where the rail was until #354.
+  const row = await boxOf(page.getByRole('main'))
   const paneBox = await boxOf(pane)
   const contentBox = await boxOf(page.locator('main > [data-region="content"]'))
-  expect(Math.abs(paneBox.x + paneBox.width - railBox.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(paneBox.x + paneBox.width - (row.x + row.width))).toBeLessThanOrEqual(1)
   expect(Math.abs(contentBox.x + contentBox.width - paneBox.x)).toBeLessThanOrEqual(1)
   expect(contentBox.x).toBeGreaterThanOrEqual(-1)
   const handle = pane.getByRole('separator', { name: arCatalog['layout.resizeFolderPane'], exact: true })
@@ -6146,7 +6642,7 @@ for (const width of [1440, 1025]) {
     for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
     expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
     await expect(pane.getByRole('heading', { level: 2, name: 'Contact groups' })).toBeVisible()
-    // It does not grow with the zoom. At 1025 px the rail's rem width grows and
+    // It does not grow with the zoom. At 1025 px the rail's rem width grew and
     // the pane, which gives way before the person's 360 px, loses a few px.
     const zoomed = Math.round((await boxOf(pane)).width)
     if (width === 1440) expect(zoomed).toBe(before)
@@ -6228,17 +6724,18 @@ for (const [width, paneWidth] of [
     await expect(pane.getByRole('button', { name: 'Home (2)', exact: true })).toBeVisible()
     await expect(pane.getByRole('button', { name: 'New list', exact: true })).toBeVisible()
     await expect(pane.getByRole('button', { name: /Add a list/ })).toBeVisible()
-    // Right after the rail, at the shared width, and the module right after it.
-    const rail = await boxOf(page.locator('main > aside').first())
+    // At the start of the row, where the rail was until #354, at the shared
+    // width, and the module right after it.
+    const row = await boxOf(page.getByRole('main'))
     const paneBox = await boxOf(pane)
-    expect(Math.abs(paneBox.x - (rail.x + rail.width))).toBeLessThanOrEqual(1)
+    expect(Math.abs(paneBox.x - row.x)).toBeLessThanOrEqual(1)
     expect(Math.abs(paneBox.width - paneWidth)).toBeLessThanOrEqual(1)
     await expect(pane.getByRole('separator', { name: 'Resize folder pane' })).toHaveAttribute('aria-valuenow', String(paneWidth))
     const contentBox = await boxOf(content)
     expect(Math.abs(contentBox.x - (paneBox.x + paneBox.width))).toBeLessThanOrEqual(1)
     expect(contentBox.x + contentBox.width).toBeLessThanOrEqual(width + 1)
-    // The tasks take all the room the rail and the pane leave.
-    expect(contentBox.width).toBeGreaterThanOrEqual(width - 60 - paneWidth - 2)
+    // The tasks take all the room the pane leaves.
+    expect(contentBox.width).toBeGreaterThanOrEqual(width - paneWidth - 2)
     // The tabs are gone from beside the tasks.
     await expect(content.locator('[data-region="folders"]')).toHaveCount(0)
     await expect(page.getByRole('tablist')).toHaveCount(0)
@@ -6401,7 +6898,7 @@ test('the folder pane resized in Tasks is the width mail draws, and the reverse 
   expect(errors).toEqual([])
 })
 
-test("in Arabic Tasks's folder pane sits between the rail and the tasks, and its separator follows the reading (#329)", async ({
+test("in Arabic Tasks's folder pane sits at the start edge, before the tasks, and its separator follows the reading (#329)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
@@ -6409,10 +6906,11 @@ test("in Arabic Tasks's folder pane sits between the rail and the tasks, and its
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
   const pane = page.getByRole('navigation', { name: arCatalog['tasks.taskLists'], exact: true })
   await expect(pane).toBeVisible()
-  const railBox = await boxOf(page.locator('main > aside').first())
+  // Against the right edge of the row, where the rail was until #354.
+  const row = await boxOf(page.getByRole('main'))
   const paneBox = await boxOf(pane)
   const contentBox = await boxOf(page.locator('main > [data-region="content"]'))
-  expect(Math.abs(paneBox.x + paneBox.width - railBox.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(paneBox.x + paneBox.width - (row.x + row.width))).toBeLessThanOrEqual(1)
   expect(Math.abs(contentBox.x + contentBox.width - paneBox.x)).toBeLessThanOrEqual(1)
   expect(contentBox.x).toBeGreaterThanOrEqual(-1)
   const handle = pane.getByRole('separator', { name: arCatalog['layout.resizeFolderPane'], exact: true })
@@ -6456,7 +6954,7 @@ for (const [width, paneWidth] of [
     for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
     expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
     await expect(pane.getByRole('heading', { level: 2, name: 'Task lists' })).toBeVisible()
-    // It does not grow with the zoom. At 1025 px the rail's rem width grows and
+    // It does not grow with the zoom. At 1025 px the rail's rem width grew and
     // the pane, which gives way first, may lose a few px.
     const zoomed = Math.round((await boxOf(pane)).width)
     if (width === 1440) expect(zoomed).toBe(before)
@@ -6547,11 +7045,12 @@ for (const [width, paneWidth] of [
     await expect(pane.getByRole('heading', { level: 2, name: 'Note tags' })).toBeVisible()
     await expect(pane.getByRole('button', { name: 'All notes', exact: true })).toBeVisible()
     await expect(pane.getByRole('button', { name: '#travel (2)', exact: true })).toBeVisible()
-    // Right after the rail, at the shared width, and the module right after it.
-    const rail = await boxOf(page.locator('main > aside').first())
+    // At the start of the row, where the rail was until #354, at the shared
+    // width, and the module right after it.
+    const row = await boxOf(page.getByRole('main'))
     const paneBox = await boxOf(pane)
-    expect(Math.abs(paneBox.x - (rail.x + rail.width))).toBeLessThanOrEqual(1)
-    expect(Math.abs(paneBox.width - Math.min(paneWidth, width - 60 - 680))).toBeLessThanOrEqual(1)
+    expect(Math.abs(paneBox.x - row.x)).toBeLessThanOrEqual(1)
+    expect(Math.abs(paneBox.width - Math.min(paneWidth, width - 680))).toBeLessThanOrEqual(1)
     const contentBox = await boxOf(content)
     expect(Math.abs(contentBox.x - (paneBox.x + paneBox.width))).toBeLessThanOrEqual(1)
     expect(contentBox.x + contentBox.width).toBeLessThanOrEqual(width + 1)
@@ -6625,7 +7124,9 @@ test("Notes's tags choose, clear, and give way to a line in the Trash from the f
   // In the Trash the tags are not offered, and the pane says so.
   await content.getByRole('button', { name: 'Trash', exact: true }).click()
   await expect(content.getByText('Old receipt', { exact: true })).toBeVisible()
-  await expect(pane.getByRole('button')).toHaveCount(0)
+  // None in the pane's body; the module strip stays at its foot (#354).
+  await expect(pane.locator('button:not([data-module-switcher] *)')).toHaveCount(0)
+  await expect(pane.getByRole('navigation', { name: 'Modules', exact: true })).toBeVisible()
   await expect(pane.getByText('The trash is not filtered by tag.')).toBeVisible()
   await content.getByRole('button', { name: 'Trash', exact: true }).click()
   await expect(pane.getByRole('button', { name: '#travel (2)', exact: true })).toBeVisible()
@@ -6659,7 +7160,7 @@ test('the folder pane resized in Notes is the width mail draws, and the reverse 
   expect(errors).toEqual([])
 })
 
-test("in Arabic Notes's folder pane sits between the rail and the list, and its separator follows the reading (#335)", async ({
+test("in Arabic Notes's folder pane sits at the start edge, before the list, and its separator follows the reading (#335)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
@@ -6667,10 +7168,11 @@ test("in Arabic Notes's folder pane sits between the rail and the list, and its 
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
   const pane = page.getByRole('navigation', { name: arCatalog['notes.tagsPane'], exact: true })
   await expect(pane).toBeVisible()
-  const railBox = await boxOf(page.locator('main > aside').first())
+  // Against the right edge of the row, where the rail was until #354.
+  const row = await boxOf(page.getByRole('main'))
   const paneBox = await boxOf(pane)
   const contentBox = await boxOf(page.locator('main > [data-region="content"]'))
-  expect(Math.abs(paneBox.x + paneBox.width - railBox.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(paneBox.x + paneBox.width - (row.x + row.width))).toBeLessThanOrEqual(1)
   expect(Math.abs(contentBox.x + contentBox.width - paneBox.x)).toBeLessThanOrEqual(1)
   expect(contentBox.x).toBeGreaterThanOrEqual(-1)
   await insidePane(page, pane)
@@ -6719,7 +7221,7 @@ async function openChatPane(page: Page, options: SetupOptions = {}, catalog = en
   })
   await page.goto('/')
   await expect(page.locator('[data-thread-list]')).toBeVisible()
-  await page.getByTitle(catalog['messaging.title'], { exact: true }).click()
+  await chooseModule(page, catalog['messaging.title'], catalog)
   await expect(page.getByRole('main', { name: catalog['messaging.title'], exact: true })).toBeVisible()
   return errors
 }
@@ -6746,11 +7248,12 @@ for (const [width, paneWidth] of [
     await expect(pane.getByRole('list', { name: 'Invitations' })).toBeVisible()
     await expect(pane.getByRole('list', { name: 'Groups' })).toBeVisible()
     await expect(pane.getByRole('button', { name: 'Remove this chat account' })).toBeVisible()
-    // Right after the rail, at the shared width, and the conversation right after it.
-    const rail = await boxOf(page.locator('main > aside').first())
+    // At the start of the row, where the rail was until #354, at the shared
+    // width, and the conversation right after it.
+    const row = await boxOf(page.getByRole('main'))
     const paneBox = await boxOf(pane)
-    expect(Math.abs(paneBox.x - (rail.x + rail.width))).toBeLessThanOrEqual(1)
-    expect(Math.abs(paneBox.width - Math.min(paneWidth, width - 60 - 360))).toBeLessThanOrEqual(1)
+    expect(Math.abs(paneBox.x - row.x)).toBeLessThanOrEqual(1)
+    expect(Math.abs(paneBox.width - Math.min(paneWidth, width - 360))).toBeLessThanOrEqual(1)
     const contentBox = await boxOf(content)
     expect(Math.abs(contentBox.x - (paneBox.x + paneBox.width))).toBeLessThanOrEqual(1)
     expect(contentBox.x + contentBox.width).toBeLessThanOrEqual(width + 1)
@@ -6834,13 +7337,15 @@ test('the folder pane resized in Chat is the width mail draws, and the reverse (
   await handleIn(mail).focus()
   await page.keyboard.press('Home')
   await expect.poll(stored).toBe(200)
-  await chatButton.click()
+  // A 200 px pane holds five modules and «Més», where Chat is (#354).
+  await expect(chatButton).toHaveCount(0)
+  await chooseModule(page, 'Chat')
   await expect(handleIn(chat)).toHaveAttribute('aria-valuenow', '200')
   expect(await drawn(chat)).toBe(200)
   expect(errors).toEqual([])
 })
 
-test("in Arabic Chat's folder pane sits between the rail and the conversation, and its separator follows the reading (#337)", async ({
+test("in Arabic Chat's folder pane sits at the start edge, before the conversation, and its separator follows the reading (#337)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
@@ -6848,10 +7353,11 @@ test("in Arabic Chat's folder pane sits between the rail and the conversation, a
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
   const pane = page.getByRole('navigation', { name: arCatalog['messaging.conversations'], exact: true })
   await expect(pane).toBeVisible()
-  const railBox = await boxOf(page.locator('main > aside').first())
+  // Against the right edge of the row, where the rail was until #354.
+  const row = await boxOf(page.getByRole('main'))
   const paneBox = await boxOf(pane)
   const contentBox = await boxOf(page.locator('main > [data-region="content"]'))
-  expect(Math.abs(paneBox.x + paneBox.width - railBox.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(paneBox.x + paneBox.width - (row.x + row.width))).toBeLessThanOrEqual(1)
   expect(Math.abs(contentBox.x + contentBox.width - paneBox.x)).toBeLessThanOrEqual(1)
   expect(contentBox.x).toBeGreaterThanOrEqual(-1)
   await pane.getByRole('button', { name: /pau@chat.test/ }).click()
@@ -6896,7 +7402,7 @@ async function openAttachmentsPane(page: Page, options: SetupOptions = {}, catal
   })
   await page.goto('/')
   await expect(page.locator('[data-thread-list]')).toBeVisible()
-  await page.getByTitle(catalog['attachmentsView.title'], { exact: true }).click()
+  await chooseModule(page, catalog['attachmentsView.title'], catalog)
   await expect(page.getByRole('main', { name: catalog['attachmentsView.title'], exact: true })).toBeVisible()
   await expect(page.getByText('report.pdf')).toBeVisible()
   return errors
@@ -6933,11 +7439,12 @@ for (const [width, paneWidth] of [
       await expect(pane.locator('label', { hasText: new RegExp(`^${label}$`) })).toBeVisible()
     await expect(pane.getByRole('textbox')).toHaveCount(1)
     await expect(page.getByRole('search').getByRole('textbox', { name: 'Search attachments by file name' })).toBeVisible()
-    // Right after the rail, at the shared width, and the list right after it.
-    const rail = await boxOf(page.locator('main > aside').first())
+    // At the start of the row, where the rail was until #354, at the shared
+    // width, and the list right after it.
+    const row = await boxOf(page.getByRole('main'))
     const paneBox = await boxOf(pane)
-    expect(Math.abs(paneBox.x - (rail.x + rail.width))).toBeLessThanOrEqual(1)
-    expect(Math.abs(paneBox.width - Math.min(paneWidth, width - 60 - 360))).toBeLessThanOrEqual(1)
+    expect(Math.abs(paneBox.x - row.x)).toBeLessThanOrEqual(1)
+    expect(Math.abs(paneBox.width - Math.min(paneWidth, width - 360))).toBeLessThanOrEqual(1)
     const contentBox = await boxOf(content)
     expect(Math.abs(contentBox.x - (paneBox.x + paneBox.width))).toBeLessThanOrEqual(1)
     expect(contentBox.x + contentBox.width).toBeLessThanOrEqual(width + 1)
@@ -7066,13 +7573,15 @@ test('the folder pane resized in Attachments is the width mail draws, and the re
   await handleIn(mail).focus()
   await page.keyboard.press('Home')
   await expect.poll(stored).toBe(200)
-  await attachmentsButton.click()
+  // A 200 px pane holds five modules and «Més», where Attachments is (#354).
+  await expect(attachmentsButton).toHaveCount(0)
+  await chooseModule(page, 'Attachments')
   await expect(handleIn(attachments)).toHaveAttribute('aria-valuenow', '200')
   expect(await drawn(attachments)).toBe(200)
   expect(errors).toEqual([])
 })
 
-test("in Arabic Attachments's folder pane sits between the rail and the list, and its separator follows the reading (#339)", async ({
+test("in Arabic Attachments's folder pane sits at the start edge, before the list, and its separator follows the reading (#339)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
@@ -7080,10 +7589,11 @@ test("in Arabic Attachments's folder pane sits between the rail and the list, an
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
   const pane = page.getByRole('navigation', { name: arCatalog['attachmentsView.filters'], exact: true })
   await expect(pane).toBeVisible()
-  const railBox = await boxOf(page.locator('main > aside').first())
+  // Against the right edge of the row, where the rail was until #354.
+  const row = await boxOf(page.getByRole('main'))
   const paneBox = await boxOf(pane)
   const contentBox = await boxOf(page.locator('main > [data-region="content"]'))
-  expect(Math.abs(paneBox.x + paneBox.width - railBox.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(paneBox.x + paneBox.width - (row.x + row.width))).toBeLessThanOrEqual(1)
   expect(Math.abs(contentBox.x + contentBox.width - paneBox.x)).toBeLessThanOrEqual(1)
   expect(contentBox.x).toBeGreaterThanOrEqual(-1)
   await expect(pane.getByRole('textbox', { name: arCatalog['attachmentsView.sender'], exact: true })).toBeVisible()
@@ -7176,8 +7686,9 @@ const lastRequest = (page: Page, command: string) =>
     command,
   )
 
-// Opens a module from its rail button, which goes back to mail when the module
-// is already open: call it for another module than the one on screen.
+// Opens a module from its button in the module switcher, which goes back to
+// mail when the module is already open: call it for another module than the
+// one on screen.
 async function openModule(page: Page, title: string) {
   await page.getByTitle(title, { exact: true }).click()
   await expect(page.getByRole('main', { name: title, exact: true })).toBeVisible()
@@ -7810,8 +8321,8 @@ test("the band field shrinks inside the window at the app's 200 percent at 1025p
 // visually hidden live region. It opens today's detail in a popover anchored
 // under it. The full-width bar under the header stays only while something is
 // prominent (an account must sign in again, or a failure is not dismissed).
-// Do not disturb shows at the end of the band too, before the sync status,
-// and in the rail until piece 14 (owner decision 1 on #342).
+// Do not disturb shows at the end of the band too, before the sync status; the
+// rail showed it as well until the rail went (#354).
 const SYNC_UNKNOWN = 'Complete sync status unknown'
 
 function bandEnd(page: Page, catalog: Record<string, string> = enCatalog) {
@@ -8150,7 +8661,7 @@ test("at the app's 200 percent the band's end leaves the search its room, at 102
 })
 
 for (const width of [1440, 768]) {
-  test(`do not disturb shows at the end of the band, with the rail's, and resumes from there: ${width}px (#345)`, async ({
+  test(`do not disturb shows at the end of the band, alone since the rail went, and resumes from there: ${width}px (#345, #354)`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 1000 })
@@ -8167,17 +8678,17 @@ for (const width of [1440, 768]) {
     const { button, menu } = await appMenuParts(page)
     const text = 'Do not disturb is on until you turn it off'
     const indicator = end.getByRole('status', { name: text, exact: true })
-    const rail = page.locator('aside [data-quiet-indicator="rail"]')
     await expect(indicator).toHaveCount(0)
 
     await button.click()
     await menu.getByRole('menuitem', { name: 'Do not disturb until turned off', exact: true }).click()
     await expect(indicator).toBeVisible()
     await expect.poll(async () => (await quietPushes()).at(-1)).toMatchObject({ indefinite: true, quiet: true })
-    // The band's is the one status; the rail shows its button while it is there.
+    // The band's is the one status, and the one indicator: the rail's copy
+    // went with the rail (#354), at every width.
     await expect(page.getByRole('status', { name: text, exact: true })).toHaveCount(1)
-    if (width >= 769) await expect(rail).toBeVisible()
-    else await expect(rail).toBeHidden()
+    await expect(page.locator('[data-quiet-indicator]')).toHaveCount(1)
+    await expect(page.getByRole('button', { name: 'Resume notifications', exact: true })).toHaveCount(1)
     const resume = indicator.getByRole('button', { name: 'Resume notifications', exact: true })
     await expect(resume).toHaveAttribute('title', `${text} — Resume notifications`)
     await expect(resume).toBeInViewport({ ratio: 1 })
@@ -8185,7 +8696,7 @@ for (const width of [1440, 768]) {
     expect((await boxOf(resume)).x).toBeLessThan((await boxOf(sync)).x)
     await ltrInView(page, `do not disturb at ${width}px`)
 
-    // Resumed from the band: both go, and the bridge is told.
+    // Resumed from the band: it goes, and the bridge is told.
     await resume.click()
     await expect(indicator).toHaveCount(0)
     await expect(page.locator('[data-quiet-indicator]')).toHaveCount(0)
@@ -8306,3 +8817,411 @@ test('Retry keeps the focus in its entry, in the popover and in the bar, and in 
   await expect(second).toContainText('Request not confirmed')
   expect(errors).toEqual([])
 })
+
+// #354 (piece 14b, ADR-0068 §5): the module switcher. From 1025 px a strip at
+// the foot of the folder pane, 2.5 rem tall, in the pane's colour; from 769 to
+// 1024 px a vertical bar 3 rem wide, the one surface in the module bar colour
+// (owner decision 4 on #352); below 769 px neither, and the modules open from
+// the app menu. The same seven buttons, Mail and Chat with their counts, what
+// does not fit in «Més», and the rail with its More menu gone.
+const MODULE_TITLES = ['Mail', 'Calendar', 'People', 'Tasks', 'Notes', 'Chat', 'Attachments']
+
+async function openModuleSwitcher(page: Page, width: number, height = 1000, options: SetupOptions = {}) {
+  await page.setViewportSize({ width, height })
+  const errors = await prepareStartup(page, true, {
+    navigation: true,
+    ...options,
+    preferences: { show_unread_account_badge: true, ...options.preferences },
+  })
+  await page.addInitScript(() => {
+    const replies = (window as any).startupProbe.replies
+    replies['chat.accounts'] = [{ id: 'c1', jid: 'ana@chat.test', host: '', port: 5222 }]
+    replies['chat.status'] = { c1: { account: 'c1', state: 'online' } }
+    replies['chat.conversations'] = [
+      { conversation: 'pau@chat.test', last_body: 'Hello', last_stamp: 1760000120, last_direction: 'in', unread: 2 },
+    ]
+    replies['calendar.list'] = {
+      calendars: [{ id: 'local-team', name: 'Team', is_default: true, enabled: true, kind: 'local', read_only: false, synced_at: 0 }],
+    }
+    replies['calendar.events'] = { events: [] }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const modules = page.locator('nav[data-region="modules"]')
+  const titles = () => modules.locator('[data-module-slot] > button').evaluateAll((buttons) => buttons.map((b) => (b as HTMLElement).title))
+  return { errors, modules, titles }
+}
+
+// The colour a token resolves to, as the browser writes it.
+function tokenColour(page: Page, token: string) {
+  return page.evaluate((name) => {
+    const probe = document.createElement('div')
+    probe.style.backgroundColor = `var(${name})`
+    document.body.append(probe)
+    const colour = getComputedStyle(probe).backgroundColor
+    probe.remove()
+    return colour
+  }, token)
+}
+
+// The names of a menu's items, without what is drawn beside them (a count).
+const itemNames = (menu: ReturnType<Page['locator']>) =>
+  menu.getByRole('menuitem').evaluateAll((items) => items.map((item) => item.querySelector('.flex-1')?.textContent))
+
+const zoomTo200 = async (page: Page) => {
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
+}
+
+for (const width of [1025, 1024, 769, 768]) {
+  test(`the module strip, the narrow bar and the compact menu at ${width}px (#354)`, async ({ page }) => {
+    const { errors, modules, titles } = await openModuleSwitcher(page, width)
+    const sidenav = await tokenColour(page, '--me-bg-sidenav')
+    // No More menu of the rail's, and no compact one: only the app menu.
+    await expect(page.locator('main > aside')).toHaveCount(0)
+    await expect(page.getByRole('complementary', { name: 'Modules', exact: true })).toHaveCount(0)
+    if (width >= 769) {
+      // One «Mòduls» navigation, the F6 region, with the seven, all in view at 100 %.
+      await expect(page.getByRole('navigation', { name: 'Modules', exact: true })).toHaveCount(1)
+      await expect(modules).toHaveAttribute('aria-label', 'Modules')
+      expect(await titles()).toEqual(MODULE_TITLES)
+      await expect(page.getByRole('button', { name: 'More', exact: true })).toHaveCount(0)
+      const mail = modules.getByTitle('Mail', { exact: true })
+      await expect(mail).toHaveAttribute('aria-current', 'page')
+      await expect(mail).toHaveAccessibleName('Mail')
+      // Mail counts the unified inbox, Chat its own conversations, in words too.
+      await expect(mail).toHaveAccessibleDescription('3 unread')
+      await expect(modules.getByTitle('Chat', { exact: true })).toHaveAccessibleDescription('2 unread')
+      const box = await boxOf(modules)
+      for (const title of MODULE_TITLES) {
+        const button = await boxOf(modules.getByTitle(title, { exact: true }))
+        expect(button.x, title).toBeGreaterThanOrEqual(box.x - 1)
+        expect(button.x + button.width, title).toBeLessThanOrEqual(box.x + box.width + 1)
+        expect(button.y + button.height, title).toBeLessThanOrEqual(1000)
+      }
+      if (width >= 1025) {
+        // The strip: at the foot of the folder pane, 2.5 rem tall, in the pane's colour.
+        const pane = page.getByRole('navigation', { name: 'Accounts and folders' })
+        await expect(modules).toHaveAttribute('data-module-switcher', 'strip')
+        expect(await pane.locator('nav[data-region="modules"]').count()).toBe(1)
+        const paneBox = await boxOf(pane)
+        expect(Math.round(box.height)).toBe(40)
+        expect(Math.abs(box.y + box.height - (paneBox.y + paneBox.height))).toBeLessThanOrEqual(1)
+        expect(Math.abs(box.x - paneBox.x)).toBeLessThanOrEqual(1)
+        expect(box.width).toBeLessThanOrEqual(paneBox.width + 1)
+        expect(await modules.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe('rgba(0, 0, 0, 0)')
+        expect(await pane.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(sidenav)
+        // The active one marked on its top edge, in the accent as text.
+        const bar = mail.locator('span.bg-accent-fg')
+        expect(Math.abs((await boxOf(bar)).y - box.y)).toBeLessThanOrEqual(1)
+      } else {
+        // The narrow bar: 3 rem at the start of the row, in the module bar
+        // colour, with no accounts or boards; the folder pane is not drawn and
+        // «Canvia de carpeta» stays.
+        await expect(modules).toHaveAttribute('data-module-switcher', 'bar')
+        expect(Math.round(box.x)).toBe(0)
+        expect(Math.round(box.width)).toBe(48)
+        expect(await modules.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe(sidenav)
+        await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).not.toBeVisible()
+        await expect(modules.getByRole('button')).toHaveCount(7)
+        await expect(page.getByTitle('Switch folder', { exact: true })).toBeVisible()
+      }
+      // The keyboard: along the strip, or down the bar, to Calendar, which
+      // opens with the focus on its button.
+      await mail.focus()
+      await page.keyboard.press(width >= 1025 ? 'ArrowRight' : 'ArrowDown')
+      await expect(modules.getByTitle('Calendar', { exact: true })).toBeFocused()
+      await page.keyboard.press('Enter')
+      await expect(page.getByRole('main', { name: 'Calendar', exact: true })).toBeVisible()
+      await expect(modules.getByTitle('Calendar', { exact: true })).toBeFocused()
+      await expect(modules.getByTitle('Calendar', { exact: true })).toHaveAttribute('aria-current', 'page')
+      await expect(mail).not.toHaveAttribute('aria-current', 'page')
+      expect(await regionAtFocus(page)).toBe('modules')
+      // The same button goes back to mail, as the rail's did.
+      await page.keyboard.press('Space')
+      await expect(page.getByRole('main', { name: 'Mail', exact: true })).toBeVisible()
+    } else {
+      // Below 769 px: no strip and no bar. The modules open from the app menu,
+      // and the way back to mail stays in each module (owner decision 3 on #352).
+      await expect(modules).toHaveCount(0)
+      await expect(page.getByRole('button', { name: 'More', exact: true })).toHaveCount(0)
+      const { button, menu } = await appMenuParts(page)
+      await button.click()
+      for (const title of MODULE_TITLES)
+        await expect(menu.getByRole('menuitemradio', { name: `Go to: ${title}`, exact: true })).toHaveCount(1)
+      await menu.getByRole('menuitemradio', { name: 'Go to: Calendar', exact: true }).click()
+      await expect(page.getByRole('main', { name: 'Calendar', exact: true })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'More', exact: true })).toHaveCount(0)
+      await page.getByTitle('Back to Chats', { exact: true }).click()
+      await expect(page.getByRole('main', { name: 'Mail', exact: true })).toBeVisible()
+    }
+    await ltrInView(page, `module switcher at ${width}px`)
+    expect(errors).toEqual([])
+  })
+}
+
+// At the app's 200 % (font_scale) a 260 px pane holds two buttons and «Més»
+// (ADR-0068 §5 and §7): the others are in «Més», in the strip's order, never
+// the active module.
+for (const width of [1440, 1025]) {
+  test(`the strip holds two modules and «Més» at the app's 200 %, in a 260 px pane, at ${width}px (#354)`, async ({
+    page,
+  }) => {
+    const { errors, modules, titles } = await openModuleSwitcher(page, width)
+    const pane = page.getByRole('navigation', { name: 'Accounts and folders' })
+    expect(await titles()).toEqual(MODULE_TITLES)
+    await zoomTo200(page)
+    await expect.poll(titles).toEqual(['Mail', 'Calendar', 'More'])
+    expect(Math.round((await boxOf(pane)).width)).toBe(260)
+    expect(Math.round((await boxOf(modules)).height)).toBe(80)
+    await insidePane(page, pane)
+    const more = modules.getByRole('button', { name: 'More', exact: true })
+    await expect(more).toHaveAttribute('aria-haspopup', 'menu')
+    // From the keyboard: Enter opens it on its first item, Escape gives the focus back.
+    await more.focus()
+    await page.keyboard.press('Enter')
+    const menu = page.getByRole('menu', { name: 'More', exact: true })
+    await expect(menu).toBeVisible()
+    await expect.poll(() => itemNames(menu)).toEqual(['People', 'Tasks', 'Notes', 'Chat', 'Attachments'])
+    await expect(menu.getByRole('menuitem').first()).toBeFocused()
+    // Chat's count goes with it, said as the item's description.
+    await expect(menu.getByRole('menuitem', { name: 'Chat', exact: true })).toHaveAccessibleDescription('2 unread')
+    // Above the strip, and inside the window.
+    const menuBox = await boxOf(menu)
+    expect(menuBox.y + menuBox.height).toBeLessThanOrEqual((await boxOf(modules)).y + 1)
+    expect(menuBox.x).toBeGreaterThanOrEqual(0)
+    expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(width)
+    expect(menuBox.y).toBeGreaterThanOrEqual(0)
+    await page.keyboard.press('Escape')
+    await expect(menu).toHaveCount(0)
+    await expect(more).toBeFocused()
+    // Chosen from «Més», Notes opens and takes the last place, with the focus.
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('ArrowDown')
+    await expect(menu.getByRole('menuitem', { name: 'Notes', exact: true })).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('main', { name: 'Notes', exact: true })).toBeVisible()
+    await expect.poll(titles).toEqual(['Mail', 'Notes', 'More'])
+    await expect(modules.getByTitle('Notes', { exact: true })).toHaveAttribute('aria-current', 'page')
+    await expect(modules.getByTitle('Notes', { exact: true })).toBeFocused()
+    await more.click()
+    await expect.poll(() => itemNames(menu)).toEqual(['Calendar', 'People', 'Tasks', 'Chat', 'Attachments'])
+    await page.keyboard.press('Escape')
+    await insidePane(page, page.getByRole('navigation', { name: 'Note tags', exact: true }))
+    await ltrInView(page, `the strip at 200 %, ${width}px`)
+    // At 100 % again, the seven.
+    const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+    await page.keyboard.press(`${mod}+Digit0`)
+    await expect.poll(titles).toEqual(MODULE_TITLES)
+    expect(errors).toEqual([])
+  })
+}
+
+// Back to mail from a module that sits in «Més» there: Mail's strip is drawn
+// with all seven before it is measured, and the button that had the focus
+// goes into «Més» once it is; the focus follows it there, not to the page.
+test("back to mail from the open module at the app's 200 %, the focus goes to «Més», where that module went (#354)", async ({
+  page,
+}) => {
+  const { errors, modules, titles } = await openModuleSwitcher(page, 1440)
+  await zoomTo200(page)
+  await expect.poll(titles).toEqual(['Mail', 'Calendar', 'More'])
+  const more = modules.getByRole('button', { name: 'More', exact: true })
+  const menu = page.getByRole('menu', { name: 'More', exact: true })
+  await more.focus()
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('ArrowDown')
+  await expect(menu.getByRole('menuitem', { name: 'Notes', exact: true })).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('main', { name: 'Notes', exact: true })).toBeVisible()
+  await expect.poll(titles).toEqual(['Mail', 'Notes', 'More'])
+  const notes = modules.getByTitle('Notes', { exact: true })
+  await expect(notes).toBeFocused()
+  // Enter on the open module goes back to mail, as the rail's did.
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('main', { name: 'Mail', exact: true })).toBeVisible()
+  await expect.poll(titles).toEqual(['Mail', 'Calendar', 'More'])
+  await expect(more).toBeFocused()
+  expect(await regionAtFocus(page)).toBe('modules')
+  // And «Més» holds Notes, in the strip's order.
+  await page.keyboard.press('Enter')
+  await expect.poll(() => itemNames(menu)).toEqual(['People', 'Tasks', 'Notes', 'Chat', 'Attachments'])
+  await page.keyboard.press('Escape')
+  await expect(more).toBeFocused()
+  expect(errors).toEqual([])
+})
+
+// The strip and the narrow bar are different elements, drawn by the folder
+// pane and by the row: across 1025 px the focus goes from one to the other,
+// on the same module's button, in mail (which draws its own pane) and in a
+// module whose pane keeps its own controls' focus (#341).
+for (const module of ['Mail', 'Notes']) {
+  test(`the focus stays on the same module's button as the window narrows past 1025 px and widens again, in ${module} (#354)`, async ({
+    page,
+  }) => {
+    const { errors, modules } = await openModuleSwitcher(page, 1440)
+    if (module !== 'Mail') {
+      await modules.getByTitle(module, { exact: true }).click()
+      await expect(page.getByRole('main', { name: module, exact: true })).toBeVisible()
+    }
+    const people = modules.getByTitle('People', { exact: true })
+    await people.focus()
+    await page.setViewportSize({ width: 1000, height: 1000 })
+    await expect(modules).toHaveAttribute('data-module-switcher', 'bar')
+    await expect(people).toBeFocused()
+    expect(await regionAtFocus(page)).toBe('modules')
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await expect(modules).toHaveAttribute('data-module-switcher', 'strip')
+    await expect(people).toBeFocused()
+    // Nothing opened on the way, and the arrows go on from there.
+    await expect(page.getByRole('main', { name: module, exact: true })).toBeVisible()
+    await page.keyboard.press('ArrowRight')
+    await expect(modules.getByTitle('Tasks', { exact: true })).toBeFocused()
+    expect(errors).toEqual([])
+  })
+}
+
+test("the narrow bar at the app's 200 % at 1024px: every module in a tall window, «Més» in a short one, and no horizontal scroll (#354)", async ({
+  page,
+}) => {
+  const { errors, modules, titles } = await openModuleSwitcher(page, 1024)
+  await zoomTo200(page)
+  // 3 rem wide, 96 px; the seven fit down a window 1000 px tall.
+  expect(Math.round((await boxOf(modules)).width)).toBe(96)
+  await expect.poll(titles).toEqual(MODULE_TITLES)
+  for (const title of MODULE_TITLES) await expect(modules.getByTitle(title, { exact: true })).toBeInViewport({ ratio: 1 })
+  await ltrInView(page, 'the bar at 200 %, 1000 px tall')
+  // 600 px tall: four, and «Més» at the foot.
+  await page.setViewportSize({ width: 1024, height: 600 })
+  await expect.poll(titles).toEqual(['Mail', 'Calendar', 'People', 'Tasks', 'More'])
+  const more = modules.getByRole('button', { name: 'More', exact: true })
+  await expect(more).toBeInViewport({ ratio: 1 })
+  // The bar's ring is its light foreground; the menu's, on the menu's own
+  // surface, the accent as text (index.css).
+  const ring = (locator: ReturnType<Page['locator']>) => locator.evaluate((element) => getComputedStyle(element).outlineColor)
+  const dark = await page.evaluate(() => document.documentElement.classList.contains('dark'))
+  await modules.getByTitle('Mail', { exact: true }).focus()
+  await page.keyboard.press('ArrowDown')
+  await expect(modules.getByTitle('Calendar', { exact: true })).toBeFocused()
+  // Polled: the colour transitions with the others (transition-colors).
+  const barRing = await tokenColour(page, dark ? '--me-text-primary' : '--me-bg-app')
+  await expect.poll(() => ring(modules.getByTitle('Calendar', { exact: true }))).toBe(barRing)
+  await more.focus()
+  await page.keyboard.press('Enter')
+  const menu = page.getByRole('menu', { name: 'More', exact: true })
+  await expect(menu.getByRole('menuitem').first()).toBeFocused()
+  const accentRing = await tokenColour(page, '--me-accent-fg')
+  await expect.poll(() => ring(menu.getByRole('menuitem').first())).toBe(accentRing)
+  await expect.poll(() => itemNames(menu)).toEqual(['Notes', 'Chat', 'Attachments'])
+  // Beside the bar, past its end edge, inside the window.
+  const menuBox = await boxOf(menu)
+  expect(menuBox.x).toBeGreaterThanOrEqual((await boxOf(modules)).x + 96 - 1)
+  expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(1024)
+  expect(menuBox.y).toBeGreaterThanOrEqual(0)
+  expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(600)
+  await menu.getByRole('menuitem', { name: 'Attachments', exact: true }).click()
+  await expect(page.getByRole('main', { name: 'Attachments', exact: true })).toBeVisible()
+  await expect.poll(titles).toEqual(['Mail', 'Calendar', 'People', 'Attachments', 'More'])
+  await expect(modules.getByTitle('Attachments', { exact: true })).toHaveAttribute('aria-current', 'page')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await ltrInView(page, 'the bar at 200 %, 600 px tall')
+  expect(errors).toEqual([])
+})
+
+for (const language of ['ca', 'ar']) {
+  test(`the module strip from the keyboard in ${language}: a Tab stop each, the arrows in reading order, Home and End (#354)`, async ({
+    page,
+  }) => {
+    const catalog = regionCatalogs[language]
+    const { errors, modules, titles } = await openModuleSwitcher(page, 1440, 1000, { language })
+    await expect(page.locator('html')).toHaveAttribute('lang', language)
+    const names = ['shell.region.mail', 'calendar.title', 'people.title', 'tasks.title', 'notes.title', 'messaging.title', 'attachmentsView.title'].map(
+      (key) => catalog[key],
+    )
+    expect(await titles()).toEqual(names)
+    await expect(page.getByRole('navigation', { name: catalog['shell.region.modules'], exact: true })).toBeVisible()
+    const button = (index: number) => modules.getByTitle(names[index], { exact: true })
+    // In right to left the strip is on the right and reads from right to left.
+    const first = await boxOf(button(0))
+    const second = await boxOf(button(1))
+    if (language === 'ar') {
+      expect(first.x).toBeGreaterThan(second.x)
+      const box = await boxOf(modules)
+      expect(Math.round(box.x + box.width)).toBe(1440)
+    } else expect(first.x).toBeLessThan(second.x)
+    // Each one a Tab stop, in the strip's order.
+    await button(0).focus()
+    await page.keyboard.press('Tab')
+    await expect(button(1)).toBeFocused()
+    await page.keyboard.press('Shift+Tab')
+    await expect(button(0)).toBeFocused()
+    // The side arrows in reading order, round at both ends, with Home and End.
+    const next = language === 'ar' ? 'ArrowLeft' : 'ArrowRight'
+    const back = language === 'ar' ? 'ArrowRight' : 'ArrowLeft'
+    await page.keyboard.press(next)
+    await expect(button(1)).toBeFocused()
+    await page.keyboard.press(back)
+    await page.keyboard.press(back)
+    await expect(button(6)).toBeFocused()
+    await page.keyboard.press(next)
+    await expect(button(0)).toBeFocused()
+    await page.keyboard.press('End')
+    await expect(button(6)).toBeFocused()
+    await page.keyboard.press('Home')
+    await expect(button(0)).toBeFocused()
+    // Moving opens nothing; Enter does, and the focus stays on the button.
+    await expect(page.getByRole('main', { name: names[0], exact: true })).toBeVisible()
+    await page.keyboard.press(next)
+    await page.keyboard.press(next)
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('main', { name: names[2], exact: true })).toBeVisible()
+    await expect(button(2)).toBeFocused()
+    await expect(button(2)).toHaveAttribute('aria-current', 'page')
+    // F6 goes on from the strip to the module, and comes back to the button.
+    await page.keyboard.press('F6')
+    expect(await regionAtFocus(page)).toBe('content')
+    await page.keyboard.press('Shift+F6')
+    await expect(button(2)).toBeFocused()
+    if (language === 'ar') await rtlInView(page, 'the strip in Arabic')
+    else await ltrInView(page, 'the strip in Catalan')
+    expect(errors).toEqual([])
+  })
+}
+
+// The region rules of axe, which the WCAG tags leave out, and those tags, on
+// the new frame: the strip, the narrow bar, neither, and «Més» open.
+for (const [width, zoomed] of [
+  [1440, false],
+  [1440, true],
+  [1024, false],
+  [768, false],
+] as const) {
+  test(`the frame with the module switcher passes axe's region rules and WCAG at ${width}px${zoomed ? ", 200 % with «Més» open" : ''} (#354)`, async ({
+    page,
+  }, info) => {
+    const { errors, modules } = await openModuleSwitcher(page, width)
+    if (zoomed) {
+      await zoomTo200(page)
+      await modules.getByRole('button', { name: 'More', exact: true }).click()
+      await expect(page.getByRole('menu', { name: 'More', exact: true })).toBeVisible()
+    }
+    await settled(page)
+    const results = await new AxeBuilder({ page }).withRules(REGION_RULES).analyze()
+    const wcag = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+    const body = JSON.stringify({ width, zoomed, regions: results.violations, wcag: wcag.violations }, null, 2)
+    await info.attach(`axe-module-switcher-${width}${zoomed ? '-200' : ''}`, { body, contentType: 'application/json' })
+    expect(results.violations.map((violation) => violation.id)).toEqual([])
+    expect(
+      wcag.violations
+        .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+        .map((violation) => `${violation.id} on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`),
+    ).toEqual([])
+    // One «Mòduls» landmark at most, never a second in the page.
+    expect(await page.getByRole('navigation', { name: 'Modules', exact: true }).count()).toBe(width >= 769 ? 1 : 0)
+    expect(await page.locator('[data-region="modules"]').count()).toBe(width >= 769 ? 1 : 0)
+    expect(errors).toEqual([])
+  })
+}

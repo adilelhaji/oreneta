@@ -248,15 +248,15 @@ export const SHORTCUT_LABELS: Record<ShortcutId, string> = {
   'search.thread': 'Search current thread',
   'search.global': 'Search all messages',
   'view.toggle': 'Toggle Mail / Kanban board',
-  'view.rail1': 'Go to side navigation item 1',
-  'view.rail2': 'Go to side navigation item 2',
-  'view.rail3': 'Go to side navigation item 3',
-  'view.rail4': 'Go to side navigation item 4',
-  'view.rail5': 'Go to side navigation item 5',
-  'view.rail6': 'Go to side navigation item 6',
-  'view.rail7': 'Go to side navigation item 7',
-  'view.rail8': 'Go to side navigation item 8',
-  'view.rail9': 'Go to side navigation item 9',
+  'view.rail1': 'Go to item 1 of Accounts and folders',
+  'view.rail2': 'Go to item 2 of Accounts and folders',
+  'view.rail3': 'Go to item 3 of Accounts and folders',
+  'view.rail4': 'Go to item 4 of Accounts and folders',
+  'view.rail5': 'Go to item 5 of Accounts and folders',
+  'view.rail6': 'Go to item 6 of Accounts and folders',
+  'view.rail7': 'Go to item 7 of Accounts and folders',
+  'view.rail8': 'Go to item 8 of Accounts and folders',
+  'view.rail9': 'Go to item 9 of Accounts and folders',
   'tab.close': 'Close tab',
   'view.zoomIn': 'Make everything larger',
   'view.zoomOut': 'Make everything smaller',
@@ -296,8 +296,10 @@ export const SHORTCUT_GROUPS: { title: string; ids: ShortcutId[] }[] = [
     title: 'View',
     ids: ['view.toggle', 'tab.close', 'view.zoomIn', 'view.zoomOut', 'view.zoomReset', 'pane.next', 'pane.prev'],
   },
-  // Every rail slot gets a row, so all nine are visible and rebindable.
-  { title: 'Side navigation', ids: [...RAIL_SHORTCUT_IDS] },
+  // Every slot gets a row, so all nine are visible and rebindable. The slots
+  // are the rail's, in «Comptes i carpetes» since the rail went (#354): the
+  // unified inbox if shown, the boards, then the accounts shown.
+  { title: 'Accounts and folders', ids: [...RAIL_SHORTCUT_IDS] },
 ]
 
 export const isMac = /mac|iphone|ipad|ipod/i.test(navigator.userAgent + ' ' + (navigator.platform ?? ''))

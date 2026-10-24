@@ -11,6 +11,9 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 //    the same key in both (`list:<id>`, `tag:<name>`, `conversation:<jid>`);
 //  - `data-focus-return` on the container that stands in for the pane below
 //    1025 px, which is where the fallback looks when no key matches.
+//
+// The module strip at the pane's foot is not the pane's: the module switcher
+// hands its own focus to the narrow bar that takes its place (#354).
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -18,7 +21,8 @@ const AREAS = '[data-folder-pane], [data-focus-return]'
 
 /** The key of a control in the pane or in its narrow stand-in; `null` when it has none; `undefined` when it is elsewhere. */
 function keyInAreas(target: EventTarget | null): string | null | undefined {
-  if (!(target instanceof HTMLElement) || !target.closest(AREAS)) return undefined
+  if (!(target instanceof HTMLElement) || !target.closest(AREAS) || target.closest('[data-module-switcher]'))
+    return undefined
   return target.closest<HTMLElement>('[data-focus-key]')?.dataset.focusKey ?? null
 }
 

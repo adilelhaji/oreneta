@@ -26,13 +26,16 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-// Today's mail window (ADR-0068 §9, step 1): the rail comes first in the
-// document, then the mail navigation, the list, the reader and its sidebar.
+// The mail window from 1025 px (ADR-0068 §5, #354): the folder pane with the
+// module strip at its foot, a region inside it, then the list, the reader and
+// its sidebar.
 function mailWindow() {
   document.body.innerHTML = `
     <main aria-label="Mail">
-      <aside data-region="modules"><button id="calendar">Calendar</button><button id="people">People</button></aside>
-      <nav data-region="folders"><a href="#inbox" id="inbox">Inbox</a><a href="#sent" id="sent">Sent</a></nav>
+      <nav data-region="folders" aria-label="Accounts and folders">
+        <a href="#inbox" id="inbox">Inbox</a><a href="#sent" id="sent">Sent</a>
+        <nav data-region="modules" aria-label="Modules"><button id="calendar">Calendar</button><button id="people">People</button></nav>
+      </nav>
       <section data-region="content"><input id="search" /><button id="row" tabindex="-1">Row</button></section>
       <div data-region="reader">
         <button id="reply">Reply</button>
@@ -77,13 +80,36 @@ describe('region order', () => {
 
   it('leaves out the regions that are not shown', () => {
     mailWindow()
-    byId('inbox').closest('nav')!.setAttribute('data-test-hidden', '')
+    byId('calendar').closest('nav')!.setAttribute('data-test-hidden', '')
     expect(visibleRegions(document, shown).map((region) => region.dataset.region)).toEqual([
-      'modules',
+      'folders',
       'content',
       'reader',
       'sidebar',
     ])
+    // The strip goes with the pane it is in, as below 1025 px.
+    byId('calendar').closest('nav')!.removeAttribute('data-test-hidden')
+    byId('inbox').closest('nav')!.setAttribute('data-test-hidden', '')
+    expect(visibleRegions(document, shown).map((region) => region.dataset.region)).toEqual([
+      'content',
+      'reader',
+      'sidebar',
+    ])
+  })
+
+  it('reaches the narrow bar of 769–1024 px, which stands alone before the module, in the same place (#354)', () => {
+    document.body.innerHTML = `
+      <main aria-label="Mail">
+        <nav data-region="modules" aria-label="Modules"><button id="calendar">Calendar</button></nav>
+        <nav data-region="folders" data-test-hidden><a href="#inbox" id="inbox">Inbox</a></nav>
+        <section data-region="content"><input id="search" /></section>
+      </main>`
+    expect(visibleRegions(document, shown).map((region) => region.dataset.region)).toEqual(['modules', 'content'])
+    byId('search').focus()
+    step(1)
+    expect(focused()).toBe('calendar')
+    step(1)
+    expect(focused()).toBe('search')
   })
 })
 
@@ -184,15 +210,21 @@ describe('F6 and Shift+F6', () => {
     const reader = byId('reply').closest<HTMLElement>('[data-region]')!
     byId('reply').remove()
     expect(focusTargetIn(reader, shown)).toBeNull()
+    // Nor are the strip's buttons the folder pane's (#354).
+    const folders = byId('inbox').closest<HTMLElement>('[data-region]')!
+    expect(regionOf(byId('calendar'))?.dataset.region).toBe('modules')
+    byId('inbox').remove()
+    byId('sent').remove()
+    expect(focusTargetIn(folders, shown)).toBeNull()
   })
 
   it('skips a region that is not shown or where nothing can take the focus', () => {
     mailWindow()
-    byId('calendar').closest('aside')!.setAttribute('data-test-hidden', '')
+    byId('calendar').closest('nav')!.setAttribute('data-test-hidden', '')
     byId('search').setAttribute('disabled', '')
     byId('inbox').focus()
     step(1)
-    // The rail is hidden and the list has only a disabled field and a row out of the Tab order.
+    // The strip is hidden and the list has only a disabled field and a row out of the Tab order.
     expect(focused()).toBe('reply')
   })
 

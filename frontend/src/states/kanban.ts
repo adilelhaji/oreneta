@@ -79,6 +79,12 @@ export function selectKanbanBoard(boardId: string) {
   kanban$.activeBoardId.set(boardId)
 }
 
+/** Opens a board from «Comptes i carpetes» or Ctrl/⌘+1…9: boards are part of mail. */
+export function openKanbanBoard(boardId: string) {
+  ui$.module.set('mail')
+  selectKanbanBoard(boardId)
+}
+
 export function closeKanbanPane() {
   ui$.selectedThread.set('')
   kanban$.paneThreadId.set('')
@@ -179,7 +185,7 @@ export function renameKanbanBoard(boardId: string, name: string) {
   )
 }
 
-/** Set or clear ("" clears) a board's custom rail/header image. */
+/** Set or clear ("" clears) a board's custom image (its row in «Taulers», its header). */
 export function setKanbanBoardAvatar(boardId: string, avatarUrl: string) {
   const url = avatarUrl.trim()
   settings$.kanbanBoards.set(

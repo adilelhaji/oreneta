@@ -3,7 +3,7 @@ import { Check, Pencil, Trash2 } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import type { ThemeDef } from '../../lib/themes'
 
-// One selectable theme tile: a mini app mock (side navigation / panel / bubbles) drawn
+// One selectable theme tile: a mini app mock (module bar / panel / bubbles) drawn
 // with the theme's OWN token values via inline styles — never the live CSS
 // vars, so every swatch previews its theme regardless of the active one.
 

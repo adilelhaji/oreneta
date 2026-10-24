@@ -55,7 +55,8 @@
   padding: 0 8px 12px;
   font-size: var(--text-ui);
 }
-.mail-navigation h3 {
+.mail-navigation h3,
+.mail-navigation-label {
   padding: 8px;
   color: var(--me-text-secondary);
   font-size: var(--text-caption);
@@ -101,6 +102,31 @@
 .mail-account-destination small {
   font-size: var(--text-caption);
   color: var(--me-text-secondary);
+}
+/* What the pane took over from the vertical rail (piece 14a): the boards, a
+   labelled group between the unified inbox and the accounts, and each
+   account's state and unread count, which keep their size beside a name that
+   ends in "…". The state's icon is secondary text: the words are for the
+   screen reader and the tooltip. */
+.mail-navigation-boards {
+  border-block: 1px solid var(--me-border);
+  padding-block: 4px;
+  margin-block: 4px;
+}
+.mail-account-destination > .mail-board-mark {
+  display: flex;
+  flex: none;
+  align-items: center;
+  overflow: visible;
+}
+.mail-account-destination > svg.mail-account-status {
+  color: var(--me-text-secondary);
+}
+.mail-account-destination > small.mail-account-unread {
+  flex-shrink: 0;
+  overflow: visible;
+  color: inherit;
+  font-variant-numeric: tabular-nums;
 }
 .mail-navigation button:hover {
   background: var(--me-bg-hover);
@@ -546,12 +572,28 @@ textarea {
   outline-offset: 2px;
   border-radius: inherit;
 }
-/* The module rail is dark in every theme, and the accent as text is darkened
-   for light content surfaces, which would drop the ring under 3:1 there in
-   Mist, Dawn and Honey. The rail keeps the accent fill until piece 14
-   replaces it (#311). */
-[data-region='modules'] :focus-visible {
-  outline-color: var(--me-accent);
+/* The narrow module bar (769–1024 px, #354) is the one surface painted with
+   the module bar colour, which is dark in every built-in theme (owner decision
+   4 on #352). Its icons and its focus ring take the light end of the palette:
+   the frame tone in a light theme, the primary text in a dark one, 10:1 or
+   more on the bar in every built-in theme (lib/themes.test.ts). The rail's
+   ring, the accent fill, read under 3:1 there in Oreneta Light (2.03:1),
+   Indigo, Paper and Lilac. */
+[data-module-switcher='bar'] {
+  --module-bar-fg: var(--me-bg-app);
+}
+.dark [data-module-switcher='bar'] {
+  --module-bar-fg: var(--me-text-primary);
+}
+/* The bar's own buttons only: its «Més» menu, drawn inside it, keeps the one
+   ring on its own light surface. */
+[data-module-switcher='bar'] [data-module-slot] > button:focus-visible {
+  outline-color: var(--module-bar-fg);
+}
+/* The strip's buttons touch one another and its edges: the ring is drawn
+   inside each, in the accent as text, on the pane's own surfaces. */
+[data-module-switcher='strip'] [data-module-slot] > button:focus-visible {
+  outline-offset: -2px;
 }
 input:focus-visible,
 textarea:focus-visible,

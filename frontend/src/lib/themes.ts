@@ -149,7 +149,7 @@ export type CustomThemeInput = {
   bgApp: string
   /** Panels: thread list, header, composer, incoming bubbles. */
   surface: string
-  /** The account rail / side navigation. */
+  /** The module bar: the narrow bar of module icons from 769 to 1024 px (#354). */
   sideNav: string
   accent: string
   /** Primary text color. */
@@ -245,9 +245,23 @@ function readableSecondary(text: string, toward: string, backgrounds: string[]):
  * the chosen colors themselves are too close. The editor names these so the
  * person choosing can see it; it does not stop them saving.
  */
-export type ContrastShortfall = { pair: 'text' | 'accent'; ratio: number }
+export type ContrastShortfall = { pair: 'text' | 'accent' | 'moduleBar'; ratio: number }
 
-export function contrastShortfalls(tokens: ThemeTokens): ContrastShortfall[] {
+/**
+ * The colour of the narrow module bar's icons and focus ring (index.css,
+ * `--module-bar-fg`, #354): the light end of the palette whatever the theme,
+ * the frame tone in a light theme and the primary text in a dark one.
+ */
+export function moduleBarForeground(tokens: ThemeTokens, appearance: Appearance): string {
+  return appearance === 'light' ? tokens.bgApp : tokens.textPrimary
+}
+
+/**
+ * With the theme's appearance, which the tokens do not carry, also the narrow
+ * module bar: its icons on the module bar colour, chosen in the editor as it
+ * is (#354).
+ */
+export function contrastShortfalls(tokens: ThemeTokens, appearance?: Appearance): ContrastShortfall[] {
   const worst = (fg: string, backgrounds: string[]) => Math.min(...backgrounds.map((bg) => contrastRatio(fg, bg) ?? 0))
   const text = worst(tokens.textPrimary, themeSurfaces(tokens))
   // The accent as text and ring (#311) is drawn on the selected folder, account
@@ -257,6 +271,11 @@ export function contrastShortfalls(tokens: ThemeTokens): ContrastShortfall[] {
   const shortfalls: ContrastShortfall[] = []
   if (text < READABLE_CONTRAST) shortfalls.push({ pair: 'text', ratio: text })
   if (accent < READABLE_CONTRAST) shortfalls.push({ pair: 'accent', ratio: accent })
+  if (appearance) {
+    // The icons are held to text's 4.5:1, which clears their ring's 3:1.
+    const moduleBar = worst(moduleBarForeground(tokens, appearance), [tokens.bgSideNav])
+    if (moduleBar < READABLE_CONTRAST) shortfalls.push({ pair: 'moduleBar', ratio: moduleBar })
+  }
   return shortfalls
 }
 

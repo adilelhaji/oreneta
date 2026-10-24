@@ -72,8 +72,11 @@ actiu) passa `appearance` en lloc de sumar classes que es contradiuen.
 Menú contextual de la conversa (correu i canals, amb «Mou a» i «Copia a») i les seves
 seccions de prioritat i categoria; menú contextual del missatge; «Més» de la barra
 de selecció; accions de la llista de converses i de la columna del tauler; menú del
-tauler; abast de la cerca del tauler; selector de carpetes; menús de la barra lateral
-(compte, tauler, carpeta, safata unificada); menú ràpid «Més»; menú de l'esdeveniment;
+tauler; abast de la cerca del tauler; selector de carpetes; menús del compte, del
+tauler, de la carpeta i de la safata unificada (abans, de la barra vertical; des de
+#353 també a «Comptes i carpetes», amb el clic dret, Maj+F10 i la tecla de menú, i,
+des de #354, només allà);
+menú ràpid «Més», fins a #354; «Més» del selector de mòduls (#354); menú de l'esdeveniment;
 selector de color del calendari; «Més accions» i menú del remitent del lector; menú
 de la persona als detalls de la conversa; menú de la imatge a la galeria; remitent de
 la resposta ràpida; etiquetes; cerques desades; enviar més tard; text desat; i la

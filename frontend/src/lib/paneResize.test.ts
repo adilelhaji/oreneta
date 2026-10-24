@@ -4,7 +4,11 @@ import {
   drawnPane,
   FOLDER_PANE_DEFAULT_WIDTH,
   FOLDER_PANE_WIDTH,
+  kanbanAreaBase,
+  KANBAN_PANE_MIN_PX,
+  KANBAN_PANE_NARROW_MIN_PX,
   kanbanPane,
+  READER_ROOM,
   sidebarLayout,
   THREAD_LIST_WIDTH,
 } from './paneResize'
@@ -50,12 +54,31 @@ describe('pane limits (#212)', () => {
     expect(sidebarLayout(true, 400)).toEqual({ beside: false, max: 560 })
   })
 
-  it("raises the board pane's smallest percentage to its 320 px minimum, and gives up where nothing is left", () => {
+  it("raises the board pane's smallest percentage to its reader's 360 px, and gives up where nothing is left", () => {
+    expect(KANBAN_PANE_MIN_PX).toBe(READER_ROOM)
     expect(kanbanPane(33, 0, 0)).toEqual({ value: 33, limits: { min: 25, max: 60 } })
     expect(kanbanPane(33, 475, 1440)).toEqual({ value: 33, limits: { min: 25, max: 60 } })
-    // 1000 px shell: 320 px is 32 %, so a stored 25 % is drawn, and stated, as 32 %.
-    expect(kanbanPane(25, 320, 1000)).toEqual({ value: 32, limits: { min: 32, max: 60 } })
-    expect(kanbanPane(40, 210, 520)).toBeNull()
+    // A 1000 px area: 360 px is 36 %, so a stored 25 % is drawn, and stated, as 36 %.
+    expect(kanbanPane(25, 360, 1000)).toEqual({ value: 36, limits: { min: 36, max: 60 } })
+    // A 720 px area (1025 px, the folders given way): 360 px is half of it.
+    expect(kanbanPane(33, 360, 720)).toEqual({ value: 50, limits: { min: 50, max: 60 } })
+    // Narrower than 600 px, 360 px is more than the 60 % it may take.
+    expect(kanbanPane(40, 360, 565)).toBeNull()
     expect(kanbanPane(40, 600, 600)).toBeNull()
+  })
+
+  it('keeps 320 px for the board pane below 769 px, and leaves the whole-window case to the window (#353)', () => {
+    // Below 769 px the reader has no minimum: the pane keeps 320 px.
+    expect(kanbanPane(25, 320, 1000, KANBAN_PANE_NARROW_MIN_PX)).toEqual({ value: 32, limits: { min: 32, max: 60 } })
+    // An area under 600 px in a wider window still has its separator; only a
+    // window under 600 px gives the pane the whole width (KanbanPaneResizer).
+    expect(kanbanPane(40, 320, 580, KANBAN_PANE_NARROW_MIN_PX)).toEqual({ value: 56, limits: { min: 56, max: 60 } })
+    expect(kanbanPane(40, 210, 520, KANBAN_PANE_NARROW_MIN_PX)).toBeNull()
+  })
+
+  it("asks for one column and, with a conversation open, the reader's 360 px for the board's area (#353)", () => {
+    expect(kanbanAreaBase(360, false)).toBe(360)
+    expect(kanbanAreaBase(360, true)).toBe(720)
+    expect(kanbanAreaBase(240.4, true)).toBe(600)
   })
 })

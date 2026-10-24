@@ -15,7 +15,7 @@ import {
 } from '../../states/folderPrefs'
 import type { Account, Folder } from '../../types'
 import { MenuGroup } from '../menu/Menu'
-import { RailContextMenu, RailMenuItem } from './RailContextMenu'
+import { NavContextMenu, NavMenuItem } from './NavContextMenu'
 
 const secondary = 'text-secondary'
 
@@ -75,14 +75,14 @@ export function FolderContextMenu({
   }
 
   return (
-    <RailContextMenu
+    <NavContextMenu
       x={x}
       y={y}
       label={t('folders.menu.label', { folder: folder.name, defaultValue: 'Actions for {folder}' })}
       onClose={onClose}
     >
       <div role="none">
-        <RailMenuItem
+        <NavMenuItem
           icon={
             favorite ? (
               <StarOff size={14} className={secondary} strokeWidth={1.75} />
@@ -99,14 +99,14 @@ export function FolderContextMenu({
         />
         {inFavorites && favorite && (
           <>
-            <RailMenuItem
+            <NavMenuItem
               disabled={index === 0}
               icon={<ArrowUp size={14} className={secondary} strokeWidth={1.75} />}
               label={t('folders.favorite.moveUp', { defaultValue: 'Move up' })}
               trailing={<kbd className="text-caption text-secondary">Alt+↑</kbd>}
               onClick={close(() => moveFavorite(ref, -1))}
             />
-            <RailMenuItem
+            <NavMenuItem
               disabled={index === favorites.length - 1}
               icon={<ArrowDown size={14} className={secondary} strokeWidth={1.75} />}
               label={t('folders.favorite.moveDown', { defaultValue: 'Move down' })}
@@ -115,7 +115,7 @@ export function FolderContextMenu({
             />
           </>
         )}
-        <RailMenuItem
+        <NavMenuItem
           disabled={!!block}
           title={reason || undefined}
           icon={<FolderInput size={14} className={secondary} strokeWidth={1.75} />}
@@ -127,7 +127,7 @@ export function FolderContextMenu({
           }
           onClick={close(() => onMoveTo(folder))}
         />
-        <RailMenuItem
+        <NavMenuItem
           disabled={!!hideBlock}
           title={hideReason || undefined}
           icon={
@@ -190,6 +190,6 @@ export function FolderContextMenu({
           </div>
         </MenuGroup>
       </div>
-    </RailContextMenu>
+    </NavContextMenu>
   )
 }

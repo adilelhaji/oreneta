@@ -2,24 +2,28 @@ import { Settings, Trash2 } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { removeKanbanBoard } from '../../states/kanban'
 import { confirmAction, ui$ } from '../../states/ui'
-import { RailContextMenu, RailMenuItem } from './RailContextMenu'
+import { NavContextMenu, NavMenuItem } from './NavContextMenu'
 
-// Right-click menu for a kanban board in the rail: settings or delete.
+// The menu of a kanban board in the folder pane's «Taulers» (right click,
+// Shift+F10 and the context menu key), the one the rail had: settings or delete.
 export function BoardContextMenu({
   board,
   x,
   y,
+  onDelete,
   onClose,
 }: {
   board: { id: string; name: string }
   x: number
   y: number
+  /** Told once the deletion is confirmed, just before the board goes, so the focus can move on from its row. */
+  onDelete?: () => void
   onClose: () => void
 }) {
   const { t } = useTranslation()
   return (
-    <RailContextMenu x={x} y={y} label={board.name} onClose={onClose}>
-      <RailMenuItem
+    <NavContextMenu x={x} y={y} label={board.name} onClose={onClose}>
+      <NavMenuItem
         icon={<Settings size={14} className="text-secondary" strokeWidth={1.75} />}
         label={t('kanban.board.settings')}
         onClick={() => {
@@ -28,7 +32,7 @@ export function BoardContextMenu({
           onClose()
         }}
       />
-      <RailMenuItem
+      <NavMenuItem
         icon={<Trash2 size={14} strokeWidth={1.75} />}
         label={t('kanban.board.delete')}
         danger
@@ -43,11 +47,12 @@ export function BoardContextMenu({
                 tone: 'danger',
               })
             ) {
+              onDelete?.()
               removeKanbanBoard(board.id)
             }
           })()
         }}
       />
-    </RailContextMenu>
+    </NavContextMenu>
   )
 }

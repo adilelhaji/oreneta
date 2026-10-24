@@ -1,10 +1,17 @@
 import type { RefObject } from 'react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
-import { drawnPane, FOLDER_PANE_WIDTH, kanbanPane, THREAD_LIST_WIDTH } from '../../lib/paneResize'
+import {
+  drawnPane,
+  FOLDER_PANE_WIDTH,
+  KANBAN_PANE_MIN_PX,
+  KANBAN_PANE_NARROW_MIN_PX,
+  kanbanPane,
+  THREAD_LIST_WIDTH,
+} from '../../lib/paneResize'
 import { settings$ } from '../../states/settings'
 import { PaneResizer } from './PaneResizer'
-import { useElementWidth } from './useElementWidth'
+import { useElementWidth, useWideWindow } from './useElementWidth'
 
 /**
  * The thread list's separator, on its end edge (ADR-0059). It states the
@@ -60,9 +67,11 @@ export function FolderPaneResizer({ pane }: { pane: RefObject<HTMLElement | null
 
 /**
  * The board's conversation pane separator, on its start edge, as a
- * percentage of the app shell (ADR-0059). The pane is never drawn under
- * 320 px, so on a narrow shell the smallest honoured percentage rises, and
- * where nothing is left to choose there is no separator.
+ * percentage of the board's area (ADR-0059, ADR-0068 §4). The pane is never
+ * drawn narrower than its reader (360 px from 769 px, 320 px below), so in a
+ * narrow area the smallest honoured percentage rises, and where nothing is
+ * left to choose there is no separator. Below 600 px the pane takes the whole
+ * window, and there is none either.
  */
 export function KanbanPaneResizer({
   pane,
@@ -74,8 +83,16 @@ export function KanbanPaneResizer({
   const { t } = useTranslation()
   const stored = useValue(settings$.kanbanPaneWidth)
   const shellWidth = useElementWidth(shell)
-  const state = kanbanPane(stored, useElementWidth(pane), shellWidth)
-  if (!state) return null
+  const paneWidth = useElementWidth(pane)
+  const readerKeepsItsWidth = useWideWindow(769)
+  const wholeWindow = !useWideWindow(600)
+  const state = kanbanPane(
+    stored,
+    paneWidth,
+    shellWidth,
+    readerKeepsItsWidth ? KANBAN_PANE_MIN_PX : KANBAN_PANE_NARROW_MIN_PX,
+  )
+  if (!state || wholeWindow) return null
   return (
     <PaneResizer
       label={t('layout.resizeConversation')}

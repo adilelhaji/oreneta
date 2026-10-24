@@ -110,7 +110,11 @@ describe('Notes in the common folder pane (ADR-0068 §4, #335)', () => {
     // The note list no longer claims the region, and no chips sit above it.
     expect(screen.container.querySelectorAll('[data-region="folders"]')).toHaveLength(1)
     expect(content(screen).querySelectorAll('[data-region="folders"]')).toHaveLength(0)
-    expect(nav.querySelectorAll('[data-region]')).toHaveLength(0)
+    // The one region inside it is the module strip at its foot (#354).
+    expect([...nav.querySelectorAll<HTMLElement>('[data-region]')].map((region) => region.dataset.region)).toEqual([
+      'modules',
+    ])
+    expect(nav.querySelector('[data-region="modules"]')?.getAttribute('aria-label')).toBe('Modules')
     expect(content(screen).querySelector('[aria-label="Tags"]')).toBeNull()
     // Trash and New note stay where they were; the search is in the top band (#344).
     expect(within(content(screen)).queryByRole('textbox', { name: 'Search notes' })).toBeNull()
@@ -292,7 +296,10 @@ describe('Notes in the common folder pane (ADR-0068 §4, #335)', () => {
     fireEvent.click(within(content(screen)).getByRole('button', { name: 'Trash' }))
     await waitFor(() => expect(screen.container.textContent).toContain('Old receipt'))
     const nav = pane(screen)
-    expect(within(nav).queryByRole('button')).toBeNull()
+    // Nothing to press in its body; the module strip stays at its foot (#354).
+    const body = within(nav).getByRole('heading', { level: 2 }).parentElement!.nextElementSibling as HTMLElement
+    expect(within(body).queryByRole('button')).toBeNull()
+    expect(within(nav).getByRole('navigation', { name: 'Modules' })).toBeTruthy()
     expect(nav.querySelectorAll('[data-tag-row]')).toHaveLength(0)
     expect(within(nav).getByText('The trash is not filtered by tag.')).toBeTruthy()
     // The pane is still the region, with its title, and the tag chosen before

@@ -106,9 +106,13 @@ describe('Calendar in the common folder pane (ADR-0068 §4, #323)', () => {
     // Beside the module, not inside it: the pane comes first, then the views.
     expect(content(screen).contains(nav)).toBe(false)
     expect(nav.compareDocumentPosition(content(screen)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    // One "folders" region in the module, and it holds no other.
+    // One "folders" region in the module, and no other but the module strip in it.
     expect(screen.container.querySelectorAll('[data-region="folders"]')).toHaveLength(1)
-    expect(nav.querySelectorAll('[data-region]')).toHaveLength(0)
+    // The one region inside it is the module strip at its foot (#354).
+    expect([...nav.querySelectorAll<HTMLElement>('[data-region]')].map((region) => region.dataset.region)).toEqual([
+      'modules',
+    ])
+    expect(nav.querySelector('[data-region="modules"]')?.getAttribute('aria-label')).toBe('Modules')
     // The list is the pane's body, not a landmark of its own (it was the
     // "Calendar" <aside>, named like <main>, ADR-0068 §1).
     expect(screen.queryByRole('complementary')).toBeNull()
@@ -170,7 +174,8 @@ describe('Calendar in the common folder pane (ADR-0068 §4, #323)', () => {
     const screen = await open()
     const nav = pane(screen)
     const month = within(nav).getByRole('navigation', { name: 'Month at a glance' })
-    // Under every calendar, outside the pane's body, and just before the separator.
+    // Under every calendar, outside the pane's body, and just above the module
+    // strip, which is the pane's last part before the separator (#354).
     const body = within(nav).getByRole('heading', { level: 2 }).parentElement!.nextElementSibling!
     expect(body.contains(tick(nav, 'Work'))).toBe(true)
     expect(body.contains(month)).toBe(false)
@@ -178,7 +183,9 @@ describe('Calendar in the common folder pane (ADR-0068 §4, #323)', () => {
       expect(row.compareDocumentPosition(month) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     }
     const separator = within(nav).getByRole('separator', { name: 'Resize folder pane' })
-    expect(separator.previousElementSibling!.contains(month)).toBe(true)
+    const strip = within(nav).getByRole('navigation', { name: 'Modules' })
+    expect(separator.previousElementSibling).toBe(strip)
+    expect(strip.previousElementSibling!.contains(month)).toBe(true)
     // Only one month at a glance, and no column beside the views.
     expect(screen.getAllByRole('navigation', { name: 'Month at a glance' })).toHaveLength(1)
     expect(content(screen).querySelector('[data-region="folders"]')).toBeNull()

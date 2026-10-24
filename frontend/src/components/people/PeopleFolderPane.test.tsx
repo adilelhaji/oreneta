@@ -144,7 +144,11 @@ describe('People in the common folder pane (ADR-0068 §4, #326)', () => {
     expect(nav.compareDocumentPosition(content(screen)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     // One "folders" region in the module, and it holds no other region.
     expect(screen.container.querySelectorAll('[data-region="folders"]')).toHaveLength(1)
-    expect(nav.querySelectorAll('[data-region]')).toHaveLength(0)
+    // The one region inside it is the module strip at its foot (#354).
+    expect([...nav.querySelectorAll<HTMLElement>('[data-region]')].map((region) => region.dataset.region)).toEqual([
+      'modules',
+    ])
+    expect(nav.querySelector('[data-region="modules"]')?.getAttribute('aria-label')).toBe('Modules')
     // The old filter row is not drawn in the list's header as well.
     expect(screen.queryByLabelText('Show group')).toBeNull()
     expect(within(content(screen)).queryByRole('button', { name: 'New group' })).toBeNull()
