@@ -238,7 +238,7 @@ mateixa que llegeix `MessagePane`), `states/settings.ts` (`app_sidebar_state`) i
   Desplegar la barra des de la tira el porta a la pestanya del panell, i
   minimitzar-la, a la icona del panell a la tira. Un focus que ha pres una altra
   superfície (un diàleg obert des de l'agenda, el botó de la banda) s'hi queda.
-  Si l'element que l'havia obert encara és dins de `<main>` inert, el focus hi
+  Si l'element que l'havia obert encara està dins de `<main>` inert, el focus hi
   torna tan bon punt deixa de ser-ho.
 - **Escapada** va al gestor més recent de la pila compartida (`useEscapeKey`),
   la mateixa dels diàlegs, dels menús, de la galeria i de la paleta. Amb el focus

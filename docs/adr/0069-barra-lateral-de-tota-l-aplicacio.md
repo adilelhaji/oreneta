@@ -19,7 +19,7 @@
   la peça 12a: als mòduls que no són correu, el contingut que compta és el
   mínim que la seva peça ja havia fixat, com preveu la decisió 5 (D3); el botó
   «Barra lateral» també amaga la tira i, amb la barra amagada, la desplega (D4);
-  una capa no desa mai `expanded` (D5); i, com a fe d'errades, la subfinestra
+  una capa no desa mai `expanded` (D5); i, com a correcció d'una errada, la subfinestra
   de conversa del tauler compta 360 px a partir de 769 px (320 px per sota), i
   només amb una targeta oberta (D6). En formen part els apartats del §2 marcats
   amb «esmena #361»; la resta de la decisió no canvia.
@@ -116,7 +116,7 @@
   360); Calendari, Tasques, Xat i Adjunts, 360 px. Amb un tauler obert, en lloc
   de la llista i el contingut compten la columna del tauler (mín. 280) i, només
   amb una targeta oberta, la subfinestra de conversa del tauler: 360 px a partir
-  de 769 px i 320 px per sota (fe d'errades, esmena #361; deia «mín. 320 px»
+  de 769 px i 320 px per sota (correcció d'una errada, esmena #361; deia «mín. 320 px»
   sense més). Al costat, el màxim és `min(560, resta)`. Per
   fer-hi lloc, cedeixen primer les carpetes fins al seu mínim i després la
   llista (comportament nou: avui la llista no cedeix davant de la barra); si encara no hi cap, és una capa sobre el contingut (com a màxim el
@@ -143,7 +143,7 @@
   que mostra i amaga tota la barra (esmena #361): desplegada al costat o
   minimitzada a la tira, l'amaga; com a capa, la tanca; amagada, la desplega, al
   costat si hi cap i si no com a capa; les icones de la tira la despleguen des
-  de la tira. Una ordre a la paleta i al menú de l'aplicació, que fa el mateix
+  de la tira; una ordre a la paleta i al menú de l'aplicació, que fa el mateix
   que el botó, i la tecla
   `i` (`thread.details`) al correu: si la barra és desplegada al panell
   Conversa, la minimitza (o, si és una capa, la tanca com Esc); si no, la
