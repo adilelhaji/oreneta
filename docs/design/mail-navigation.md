@@ -646,14 +646,14 @@ dos, de manera que el control que tenia el focus es desmuntava en travessar els
 Data: 2026-10-23. Peça 14a, la primera part del pas 4 de l'ordre de migració
 d'[ADR-0068](../adr/0068-marc-comu-de-l-aplicacio.md) (§4 i §5, «El que hi havia a
 la barra vertical»), amb les decisions del propietari de #352. La subfinestra de
-carpetes del correu, «Comptes i carpetes», fa ara el que només feia la barra
-vertical amb els comptes, els taulers i la safata d'entrada unificada. La barra
-vertical encara hi és i fa el mateix que abans: comparteix amb la subfinestra el
-codi, l'ordre i els menús, i se'n va a la peça 14b (#354), amb el selector de
+carpetes del correu, «Comptes i carpetes», va passar a fer el que només feia la
+barra vertical amb els comptes, els taulers i la safata d'entrada unificada. La barra
+vertical encara hi era i feia el mateix que abans: compartia amb la subfinestra el
+codi, l'ordre i els menús, i se'n va anar a la peça 14b (#354), amb el selector de
 mòduls (vegeu [més avall](#la-tira-de-mòduls-i-la-barra-estreta-la-barra-vertical-sen-va-354)).
 
 - **Ordre del cos:** Preferits; «Comptes», amb la safata d'entrada unificada,
-  «Taulers», els grups de comptes i els comptes; «Carpetes». És l'ordre de la
+  «Taulers», els grups de comptes i els comptes; «Carpetes». Era l'ordre de la
   barra vertical i el de Ctrl/⌘+1…9 (la safata unificada, si es mostra; els
   taulers; els comptes visibles), que no canvien. La safata unificada continua
   sent la primera fila de «Comptes». «Taulers» no és cap títol (ni cap regió):
@@ -666,13 +666,13 @@ mòduls (vegeu [més avall](#la-tira-de-mòduls-i-la-barra-estreta-la-barra-vert
   una posició, com les preferides (ADR-0050): el focus s'hi queda i la regió
   `aria-live` de la subfinestra en diu la posició nova («Alex s'ha mogut a la
   posició 2 de 3»). Retorn i Espai continuen obrint el compte: a la barra
-  vertical comencen un arrossegament, perquè allà la fila no és un botó, però a
+  vertical començaven un arrossegament, perquè allà la fila no era un botó, però a
   la subfinestra les files ja eren botons. Mentre el punter arrossega una fila,
-  dnd-kit ho anuncia en l'idioma de la interfície (la barra vertical ho diu en
+  dnd-kit ho anuncia en l'idioma de la interfície (la barra vertical ho deia en
   anglès i amb l'identificador del compte), i Esc ho cancel·la. És l'ordre desat
-  (`account.reorder`), el de la barra vertical. Els comptes amagats hi conserven
+  (`account.reorder`), el que feia servir la barra vertical. Els comptes amagats hi conserven
   el seu lloc i només es mouen els que es veuen; el càlcul
-  (`shownAccountOrder`, a `states/accounts.ts`) és el mateix per a totes dues.
+  (`shownAccountOrder`, a `states/accounts.ts`) era el mateix per a totes dues.
   Una llista d'un sol compte, o d'un sol tauler, no s'ordena.
 - **Menú contextual del compte:** el de la barra vertical
   (`AccountContextMenu`): configuració del compte, marcar-ho tot com a llegit
@@ -767,8 +767,8 @@ mòduls (vegeu [més avall](#la-tira-de-mòduls-i-la-barra-estreta-la-barra-vert
   l'arrossegament) i «S'ha amagat {name}. Es pot tornar a mostrar des de
   Configuració.» (`mailNavigation.hidden`).
 - **Proves:** `frontend/src/components/sidenav/MailNavigationDestinations.test.tsx`
-  (ordenar els comptes amb Alt+↑ i Alt+↓, el focus i l'anunci; el mateix ordre a
-  la barra vertical, amb els comptes amagats al seu lloc; el menú amb el ratolí,
+  (ordenar els comptes amb Alt+↑ i Alt+↓, el focus i l'anunci; el mateix ordre que tenia
+  aleshores la barra vertical, amb els comptes amagats al seu lloc; el menú amb el ratolí,
   Maj+F10 i la tecla de menú, i amagar; el comptador segons la preferència;
   l'estat en paraules; deixar-hi anar un canal, i que el compte d'on ve no
   l'accepti; el grup «Taulers»: llistar, ordenar, obrir, marcar el tauler obert,
@@ -777,7 +777,7 @@ mòduls (vegeu [més avall](#la-tira-de-mòduls-i-la-barra-estreta-la-barra-vert
   `frontend/src/lib/paneResize.test.ts` (el mínim de 360 px de la subfinestra
   de conversa del tauler, i 320 per sota de 769 px, i el que demana l'àrea) i
   `frontend/e2e/startup.e2e.ts` («#353», a 1440 px: ordenar els comptes amb el
-  teclat i el punter, amb la barra vertical en el mateix ordre; el menú del
+  teclat i el punter, amb la barra vertical d'aleshores en el mateix ordre; el menú del
   compte amb el ratolí, Maj+F10 i la tecla de menú, i amagar-lo; obrir un tauler
   des de la subfinestra, que s'hi queda, amb el ratolí i el teclat, i el seu
   menú; suprimir un tauler des del seu menú, amb el focus al següent; deixar

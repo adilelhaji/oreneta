@@ -1,10 +1,10 @@
 # Límits de les subfinestres del correu (#85)
 
 Per sota de 769 píxels CSS, el correu fa servir una sola subfinestra: la llista o
-la conversa, segons l'estat existent `mobilePane`. La barra de comptes s'oculta;
+la conversa, segons l'estat existent `mobilePane`. La barra de comptes (fins a #354) s'ocultava;
 el menú existent de la llista i el selector de carpetes continuen disponibles.
-Des de #354, per sota de 1025 px l'única barra és la barra estreta de mòduls (de
-769 a 1024 px); per sota de 769 px els mòduls i el que oferia el menú «Més» de la
+Des de #354, de 769 a 1024 px l'única barra és la barra estreta de mòduls; per
+sota de 769 px els mòduls i el que oferia el menú «Més» de la
 llista són al menú de l'aplicació de la banda superior.
 Enrere torna a la llista sense tancar la conversa. A partir de 769 px, l'amplada
 desada de la llista i el lector coexisteixen; el lector es pot encongir dins de

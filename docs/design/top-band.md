@@ -96,7 +96,7 @@ La cerca de la conversa demanada des d'un altre mòdul (#344) és a
   Dins d'una àrea, les accions van abans que les seccions de la configuració, i
   cada tipus conserva l'ordre de la llista. La paleta no fa servir les àrees.
 - **El menú «Més» de la barra vertical** es trobava també al menú de l'aplicació
-  (des de #354 només hi és el del menú de l'aplicació):
+  (des de #354 només hi ha el menú de l'aplicació):
   els mòduls, la paleta, afegir un compte, afegir un tauler, sincronitzar, el
   mode No molestis, la configuració i «Quant a». Afegir un compte, afegir un
   tauler, sincronitzar i la configuració ja eren ordres de la paleta i hi surten
@@ -340,8 +340,8 @@ Peça 13c. ADR-0068 §2 («Al final») i la seva decisió 8: l'estat de la
 sincronització a la banda, només amb els textos d'avui i sense «Sincronitzat».
 Decisió 1 del propietari a
 [#342](https://github.com/adilelhaji/oreneta/issues/342): l'indicador del mode
-No molestis també es va quedar a la barra vertical fins a la peça 14 (se'n va
-anar a #354).
+No molestis també es va quedar a la barra vertical fins a la peça 14 (va passar a
+#354).
 
 - **Què hi ha:** l'indicador del mode No molestis, només mentre les
   notificacions estan en silenci, i després, a la vora final, l'estat de la
