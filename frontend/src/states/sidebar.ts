@@ -201,9 +201,9 @@ export function openSidebarPanel(panel: SidebarPanelId) {
  * `i` (`thread.details`) in mail, and the conversation header's details
  * buttons (ADR-0069 §2): with the sidebar expanded on the Conversa panel, it
  * minimises it, or closes it as Escape does where it is an overlay; otherwise
- * it expands it on the Conversa panel. Hidden where it does not fit beside,
- * it brings the strip back on the Conversa panel (saved `minimized`, owner
- * decision D7 on #360), from which `i` again opens the overlay.
+ * it expands it on the Conversa panel: beside the content where it fits
+ * (saved), or as an overlay (not saved), also from `hidden`. Owner decision D7
+ * is the band button's and the command's, not this key's.
  */
 export function toggleConversationPanel() {
   // No conversation on screen (a reader or compose tab over it, the list in
@@ -213,10 +213,7 @@ export function toggleConversationPanel() {
   const onConversation = isConversationSection(ui$.sidebarSection.peek())
   if (onConversation && shown === 'overlay') closeSidebarOverlay()
   else if (onConversation && shown === 'beside') minimizeSidebar()
-  else if (stripComesBack()) {
-    selectSidebarPanel('conversation')
-    settings$.appSidebarState.set('minimized')
-  } else openSidebarPanel('conversation')
+  else openSidebarPanel('conversation')
 }
 
 // The overlay covers the module it was opened over, which is inert under it.

@@ -9846,3 +9846,40 @@ test('at 1024px the band button hides the strip and brings it back, saved across
   expect(await saved()).toBe('minimized')
   expect(errors).toEqual([])
 })
+
+// A command that acts outside the module leaves the overlay as it is: Settings
+// opened from the palette over it opens over the overlay, which stays, and
+// gives the focus back into it on closing; the overlay then gives it back to
+// the strip's icon (ADR-0069 §2).
+test('Settings opened from the palette over the sidebar overlay leaves it open and gives the focus back into it (#361)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 900 })
+  const errors = await agendaSidebarStartup(page, { language: 'en' })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { sidebar } = sidebarParts(page, enCatalog)
+  const icon = sidebar.getByRole('button', { name: stripIconName(enCatalog, 'sidebar.agenda'), exact: true })
+  await icon.click()
+  await expect(sidebar).toHaveAttribute('data-layout', 'overlay')
+  const tab = sidebar.getByRole('tab', { name: enCatalog['sidebar.agenda'], exact: true })
+  await expect(tab).toBeFocused()
+
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  await page.keyboard.press(`${mod}+k`)
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  await palette.getByRole('combobox').fill('settings')
+  await palette.getByRole('option', { name: /^Open settings/ }).click()
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+  await expect(settings).toBeVisible()
+  await expect(sidebar).toHaveAttribute('data-layout', 'overlay')
+  await page.keyboard.press('Escape')
+  await expect(settings).toHaveCount(0)
+  await expect(sidebar).toHaveAttribute('data-layout', 'overlay')
+  await expect(tab).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await expect(icon).toBeFocused()
+  expect((await storedPrefs(page)).app_sidebar_state).toBeUndefined()
+  expect(errors).toEqual([])
+})

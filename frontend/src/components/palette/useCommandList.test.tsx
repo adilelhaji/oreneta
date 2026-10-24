@@ -289,27 +289,60 @@ describe('with no account, on the setup screen (#343)', () => {
   })
 })
 
-// Under the app sidebar's overlay the module is inert (ADR-0069 §2, #361):
-// a command closes the overlay before it acts, except the sidebar's own.
+// Under the app sidebar's overlay the module is inert (ADR-0069 §2, #361): a
+// command that brings something of the module forward closes the overlay
+// first; one that acts outside <main>, or on data as its hotkey does, leaves
+// it as it is; the sidebar's own command decides about it.
 describe("the app sidebar's overlay (#361)", () => {
   afterEach(() => {
     sidebar$.set({ fits: false, strip: false, conversationOpen: false, overlay: false })
     settings$.appSidebarState.set('minimized')
     compose$.tabs.set([])
     compose$.activeTab.set('')
+    ui$.filters.set([])
+    ui$.settingsOpen.set(false)
+    ui$.shortcutsOpen.set(false)
+    ui$.catalogueOpen.set(false)
+    ui$.setupOpen.set(false)
   })
   const command = (id: string) => list().current.find((entry) => entry.id === id)!
+  const runOverOverlay = (id: string) => {
+    ui$.module.set('mail')
+    ui$.selectedFolder.set('Sent')
+    sidebar$.set({ fits: false, strip: true, conversationOpen: false, overlay: true })
+    const entry = command(id)
+    expect(entry, id).toBeTruthy()
+    act(() => entry.run())
+    return sidebar$.overlay.get()
+  }
 
-  it('closes the overlay before a command acts on the module, whatever the command', () => {
-    for (const id of ['compose.new', 'filter.unread', 'settings.open', 'module.calendar']) {
-      ui$.module.set('mail')
-      sidebar$.set({ fits: false, strip: true, conversationOpen: false, overlay: true })
-      const entry = command(id)
-      act(() => entry.run())
-      expect(sidebar$.overlay.get(), id).toBe(false)
-    }
-    ui$.settingsOpen.set(false)
-    ui$.filters.set([])
+  it('closes the overlay before a command that brings the module forward', () => {
+    for (const id of [
+      'compose.new',
+      'filter.unread',
+      'folder.INBOX',
+      'account.unified',
+      `kanban.${board.id}`,
+      'module.calendar',
+    ])
+      expect(runOverOverlay(id), id).toBe(false)
+  })
+
+  it('leaves the overlay open for a command that acts outside the module, or on data as its hotkey does', () => {
+    for (const id of [
+      'settings.open',
+      'theme.oreneta-light',
+      'notifications.pause.off',
+      'app.about',
+      'palette.open',
+      'shortcuts.help',
+      'design.catalogue',
+      'account.add',
+      'search.global',
+      'mail.sync',
+      'mail.markAllRead',
+    ])
+      expect(runOverOverlay(id), id).toBe(true)
   })
 
   it("leaves the overlay to the sidebar's own command, which closes it and hides nothing", () => {

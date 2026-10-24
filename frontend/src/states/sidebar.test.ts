@@ -225,41 +225,22 @@ describe('what changes the saved state (ADR-0069 §2)', () => {
     expect(settings$.appSidebarState.get()).toBe('expanded')
   })
 
-  it('`i` where it does not fit: hidden, the strip back on Conversa, saved; from the strip, the overlay (D7)', () => {
+  // D7 is the band button's and the command's (owner decision on #360): `i`
+  // opens the Conversa panel, as ADR-0069 §2 says, from `hidden` too.
+  it('`i` hidden where it does not fit: the Conversa overlay, not saved, and the band button brings the strip back', () => {
     room(false)
     settings$.appSidebarState.set('hidden')
     ui$.sidebarSection.set('agenda')
     toggleConversationPanel()
-    expect(drawn()).toBe('strip')
-    expect(settings$.appSidebarState.get()).toBe('minimized')
+    expect(drawn()).toBe('overlay')
     expect(ui$.sidebarSection.get()).toBe('overview')
-    toggleConversationPanel()
-    expect(drawn()).toBe('overlay')
-    toggleConversationPanel()
-    expect(drawn()).toBe('strip')
-    expect(settings$.appSidebarState.get()).toBe('minimized')
-    // With no strip (below 769 px), hidden: the overlay, as before.
-    settings$.appSidebarState.set('hidden')
-    room(false, false)
-    toggleConversationPanel()
-    expect(drawn()).toBe('overlay')
     expect(settings$.appSidebarState.get()).toBe('hidden')
-  })
-
-  it('`i` as an overlay opens it on Conversa and closes it as Escape does: the saved state stays', () => {
-    room(false)
-    settings$.appSidebarState.set('expanded')
     toggleConversationPanel()
-    expect(sidebar$.overlay.get()).toBe(true)
-    expect(ui$.sidebarSection.get()).toBe('overview')
-    toggleConversationPanel()
-    expect(sidebar$.overlay.get()).toBe(false)
-    expect(settings$.appSidebarState.get()).toBe('expanded')
-    // On the Agenda overlay, `i` moves it to Conversa rather than closing it.
-    openSidebarPanel('agenda')
-    toggleConversationPanel()
-    expect(sidebar$.overlay.get()).toBe(true)
-    expect(ui$.sidebarSection.get()).toBe('overview')
+    expect(drawn()).toBe('none')
+    expect(settings$.appSidebarState.get()).toBe('hidden')
+    toggleAppSidebar()
+    expect(drawn()).toBe('strip')
+    expect(settings$.appSidebarState.get()).toBe('minimized')
   })
 
   // Review finding C: under a reader or compose tab, or below 769 px with the
