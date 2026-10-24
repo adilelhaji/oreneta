@@ -227,8 +227,10 @@ mateixa que llegeix `MessagePane`), `states/settings.ts` (`app_sidebar_state`) i
   on tampoc no hi ha tira (per sota de 769 px), l'obre com a capa, sense desar res.
   Desplegar-la des de la tira és cosa de les icones de la tira, que obren la
   capa on no hi cap. Decideix el que es veu: amb `expanded` desat i la tira
-  dibuixada perquè la barra no hi cap, el botó també l'amaga i desa `hidden`. A
-  la pantalla d'alta del primer compte no hi és.
+  dibuixada perquè la barra no hi cap, el botó també l'amaga i desa `hidden`, i
+  si després es torna a mostrar allà mateix queda `minimized`: amagar-la desa
+  `hidden` (D4) i mostrar-la hi torna a posar la tira (D7). A la pantalla d'alta
+  del primer compte no hi és.
 - **El que diu el botó:** el seu nom és el de la regió, «Barra lateral», i el
   seu `aria-expanded` és cert només quan la barra està desplegada, al costat o
   com a capa (ADR-0069 §2). Amb la tira dibuixada és fals, però un clic
@@ -252,11 +254,10 @@ mateixa que llegeix `MessagePane`), `states/settings.ts` (`app_sidebar_state`) i
   el seu nom és la descripció del botó en aquell moment.
 - **La tecla `i`** (`thread.details`) al correu, amb una conversa oberta: si la
   barra està desplegada al panell Conversa, la minimitza (si és una capa, la tanca
-  com Escapada); si està amagada i al costat només hi cap la tira, hi torna a
-  posar la tira, en el panell Conversa, i desa `minimized` (decisió D7), i des
-  de la tira un altre `i` obre la capa; si no, la desplega al panell Conversa.
-  Els botons «Detalls de la conversa» de la capçalera de la conversa fan el
-  mateix que `i`. Sense cap
+  com Escapada); si no, la desplega al panell Conversa, també quan està
+  amagada: al costat si hi cap (es desa `expanded`), i si no com a capa, sense
+  desar res. Els botons «Detalls de la conversa» de la capçalera de la conversa
+  fan el mateix que `i`. Sense cap
   conversa a la pantalla (una pestanya de lector o de redacció a sobre, o, per
   sota de 769 px, la llista al lloc del lector), `i` i aquests botons no fan res,
   ni desen res: no hi ha panell Conversa. La barra publica si n'hi ha
@@ -279,15 +280,24 @@ mateixa que llegeix `MessagePane`), `states/settings.ts` (`app_sidebar_state`) i
   la conversa» d'una imatge o d'un fitxer, abans d'obrir una imatge a la galeria
   del lector, amb «Mostra els missatges amb …» d'un participant, amb «Missatge
   nou per a …» d'un participant (la redacció s'obre al lector) i amb una
-  conversa de l'historial d'una persona. Es tanca també amb les ordres que van al mòdul,
-  que sota la capa no farien res que es veiés: qualsevol ordre de la paleta o
-  del menú de l'aplicació (excepte la de la barra, que ja decideix sobre la
-  capa); `r` i «Respon», que posen el focus a la resposta ràpida; la cerca de
-  la conversa; i qualsevol pestanya del lector que passa al davant (un missatge
-  nou amb Ctrl/⌘+N, una resposta a l'editor complet, un missatge a la seva
-  pestanya o tornar a la conversa). Ho fan les dades mateixes
-  (`states/sidebar.ts`, `states/compose.ts`) i el punt d'entrada de les ordres
-  (`useCommandList`), i no cada drecera.
+  conversa de l'historial d'una persona. Es tanca també amb les ordres que
+  porten al davant alguna cosa del mòdul o hi posen el focus, que sota la capa
+  no farien res que es veiés: `r` i «Respon», que posen el focus a la
+  resposta ràpida; la cerca de la conversa; qualsevol pestanya del lector que
+  passa al davant (un missatge nou amb Ctrl/⌘+N, una resposta a l'editor
+  complet, un missatge a la seva pestanya o tornar a la conversa); i, des de la
+  paleta o del menú de l'aplicació, anar a un altre mòdul, carpeta, compte,
+  tauler o filtre. Ho fan les dades mateixes (`states/sidebar.ts`,
+  `states/compose.ts`) i, a les ordres, el seu embolcall `inModule` de
+  `useCommandList`, triat ordre per ordre. Les altres ordres actuen fora de
+  `<main>` (la configuració i les seves seccions, els temes, les pauses de les
+  notificacions, «Quant a», les dreceres, el catàleg de disseny, la paleta, el
+  camp de cerca de la banda, els diàlegs de correspondència i de respostes
+  pendents) o sobre les dades sense portar res al davant (sincronitzar, marcar
+  com a llegit, arxivar), com les seves dreceres, i deixen la capa com està;
+  la de la barra ja decideix sobre la capa. Per exemple, la configuració oberta
+  des de la paleta s'obre per sobre de la capa, que s'hi queda, i en tancar-se
+  torna el focus a la pestanya de la capa.
 - **Subfinestres de la dreta de cada mòdul:** el detall d'un esdeveniment del
   calendari és un diàleg modal, i la subfinestra de conversa del tauler és dins
   de la fila del tauler; cap no topa amb la barra.
@@ -298,12 +308,12 @@ mateixa que llegeix `MessagePane`), `states/settings.ts` (`app_sidebar_state`) i
 |---|---|
 | N1 (`lib/paneResize.test.ts`) | La regla a 1100, 1119, 1120, 1180 i 1440 px, amb carpetes i sense, al correu, a Calendari, Tasques, Xat i Adjunts (540 px a 1100 px), a Persones (al costat a partir de 1128 px) i a Notes (a partir de 1160 px), i amb un tauler, amb una targeta oberta i sense, també el pas a la tira entre 1100 i 1119 px en obrir-ne una; el mínim que demana el contingut de cada mòdul com a base (`moduleContentStyle`); la fila mesurada; la tira a 769 i 768 px i a 600 px; la tira al 200 %, al correu i a Persones |
 | N1 (`states/settings.test.ts`) | `app_sidebar_state`: minimitzada per defecte i en actualitzar, els tres estats, valors no vàlids, i només els canvis s'escriuen |
-| N1 (`states/sidebar.test.ts`) | La taula de conversió de `session_sidebar_section_main`, també els valors desconeguts, buits, `day` i `person`; com es dibuixa la barra; el botó en cada estat i espai (la taula de més amunt: què es dibuixa, l'`aria-expanded`, l'acció, què fa un clic i què desa), també amagar la tira i tornar-la a posar on no hi cap al costat; la tira, minimitzar i `i` al costat, i `i` amb la barra amagada on només hi cap la tira; què no canvia l'estat desat (la capa, l'obri el que l'obri, Escapada, canviar de mòdul); `i` sense conversa a la pantalla no fa res ni desa res; la resposta ràpida, la cerca de la conversa i una pestanya que passa al davant tanquen la capa |
+| N1 (`states/sidebar.test.ts`) | La taula de conversió de `session_sidebar_section_main`, també els valors desconeguts, buits, `day` i `person`; com es dibuixa la barra; el botó en cada estat i espai (la taula de més amunt: què es dibuixa, l'`aria-expanded`, l'acció, què fa un clic i què desa), també amagar la tira i tornar-la a posar on no hi cap al costat; la tira, minimitzar i `i` al costat, i `i` amb la barra amagada on no hi cap, que obre la capa sense desar res; què no canvia l'estat desat (la capa, l'obri el que l'obri, Escapada, canviar de mòdul); `i` sense conversa a la pantalla no fa res ni desa res; la resposta ràpida, la cerca de la conversa i una pestanya que passa al davant tanquen la capa |
 | N2 (`components/shell/AppSidebar.test.tsx`) | La barra a cada mòdul, després de `<main>`, amb l'Agenda, i la Conversa només amb una conversa oberta (també en un tauler); què canvia l'estat desat i què no, amb el focus; l'arrencada amb `expanded` en una finestra estreta; la finestra que s'eixampla i s'estreny; per sota de 769 px, la Conversa només amb la conversa a la pantalla; el selector de panells amb el teclat, en anglès i en àrab, també amb un tercer panell afegit amb una entrada; el botó de la banda (amaga, desplega, l'`aria-expanded`, la descripció per `aria-describedby` i el títol), i a 1024 px la tira que amaga i torna a posar, desada, amb el focus al botó; per sota de 769 px, la capa que obre des de res i el focus que hi torna; `i` sota una pestanya de redacció i per sota de 769 px amb la llista; la capa que es tanca amb «Missatge nou per a …», «Mostra els missatges amb …», una imatge de la galeria, una conversa de l'historial d'una persona i Ctrl/⌘+N; `<main>` inert sota la capa i el focus que hi torna en tancar-la; Escapada al camp de cerca de la banda abans que a la capa; la tira de 2,5 rem |
-| N2 (`components/palette/useCommandList.test.tsx`) | Una ordre de la paleta o del menú tanca la capa abans d'actuar; la de la barra la tanca sense amagar la tira |
+| N2 (`components/palette/useCommandList.test.tsx`) | Les ordres que porten al davant el mòdul (un missatge nou, un filtre, una carpeta, un compte, un tauler, un mòdul) tanquen la capa abans d'actuar; les que actuen fora del mòdul o sobre les dades (la configuració, un tema, una pausa, «Quant a», la paleta, les dreceres, el catàleg, afegir un compte, la cerca de la banda, sincronitzar, marcar com a llegit) la deixen oberta; la de la barra la tanca sense amagar la tira |
 | N2 (`components/chat/SidebarAgenda.test.tsx`) | Un esdeveniment de l'agenda tanca la capa abans d'obrir-se al Calendari, també des del Calendari mateix |
 | N2 (`components/chat/ConversationDetailsPanel.test.tsx`) | Les proves de #212 al contenidor nou: l'agenda des de la seva pestanya i recordada, restaurada després de reiniciar, una secció desconeguda, la subsecció en canviar de conversa i l'historial d'una persona que no es recorda; l'amplada amb el teclat i restaurada |
 | N2 (`components/shell/SyncStatus.test.tsx`) | El botó «Barra lateral» al final de la banda, després de l'estat de la sincronització, en l'ordre de Tab |
 | e2e (`startup.e2e.ts`, «#212») | Les proves de la barra de detalls amb el botó de la banda i la regió nova, amb les mateixes expectatives (a 1100 px ja acceptaven la capa) |
-| e2e (`startup.e2e.ts`, «#361») | A 600, 1024, 1100, 1180 i 1440 px, en clar i en fosc, en català i en àrab: la tira en arrencar, l'agenda sense conversa des del botó de la banda, al correu i des de Calendari, Tasques, Persones i Notes, al costat o com a capa segons la regla, al costat final de la línia (a l'esquerra en àrab), sense desplaçament horitzontal, amb axe; l'estat desat després de reiniciar, sense capa en arrencar. Al 200 % a 1440 i 1024 px: la tira i el selector de 80 px, sense desplaçament horitzontal, amb axe. L'estat i l'amplada després de reiniciar, el botó de minimitzar, el botó de la banda que amaga la tira i la desplega des de res, amb la descripció i el títol, l'ordre del menú, la capa que no es desa (des d'una icona de la tira), a 1100 px el botó que torna a posar la tira amagada, desada com a `minimized`, i F6 i Maj+F6 a través de la barra. A 1024 px, el botó i l'ordre del menú que amaguen la tira i la tornen a posar, desada després de reiniciar, sense capa i amb `<main>` actiu; la capa, només des de la icona. A Persones a 1127, 1128, 1180 i 1440 px i a Notes a 1159, 1160, 1180 i 1440 px, amb `expanded` desat: la barra al costat o la tira segons el mínim del mòdul, i la persona i la nota, mesurades, d'almenys 360 px, abans de la barra. Al 200 % a 1025 px, la tira per defecte: 80 px, la subfinestra de carpetes de 225 px amb Correu, Calendari i «Més», sense desplaçament horitzontal. A 1024 px, la capa de `i`: `<main>` inert, F6 i Maj+F6 només entre la banda i la barra, Tab que no hi entra, el focus que torna a la fila, Escapada al camp de cerca de la banda abans que a la capa, i `r`, que la tanca i posa el focus a la resposta ràpida |
+| e2e (`startup.e2e.ts`, «#361») | A 600, 1024, 1100, 1180 i 1440 px, en clar i en fosc, en català i en àrab: la tira en arrencar, l'agenda sense conversa des del botó de la banda, al correu i des de Calendari, Tasques, Persones i Notes, al costat o com a capa segons la regla, al costat final de la línia (a l'esquerra en àrab), sense desplaçament horitzontal, amb axe; l'estat desat després de reiniciar, sense capa en arrencar. Al 200 % a 1440 i 1024 px: la tira i el selector de 80 px, sense desplaçament horitzontal, amb axe. L'estat i l'amplada després de reiniciar, el botó de minimitzar, el botó de la banda que amaga la tira i la desplega des de res, amb la descripció i el títol, l'ordre del menú, la capa que no es desa (des d'una icona de la tira), a 1100 px el botó que torna a posar la tira amagada, desada com a `minimized`, i F6 i Maj+F6 a través de la barra. A 1024 px, el botó i l'ordre del menú que amaguen la tira i la tornen a posar, desada després de reiniciar, sense capa i amb `<main>` actiu; la capa, només des de la icona. A Persones a 1127, 1128, 1180 i 1440 px i a Notes a 1159, 1160, 1180 i 1440 px, amb `expanded` desat: la barra al costat o la tira segons el mínim del mòdul, i la persona i la nota, mesurades, d'almenys 360 px, abans de la barra. Al 200 % a 1025 px, la tira per defecte: 80 px, la subfinestra de carpetes de 225 px amb Correu, Calendari i «Més», sense desplaçament horitzontal. A 1024 px, la capa de `i`: `<main>` inert, F6 i Maj+F6 només entre la banda i la barra, Tab que no hi entra, el focus que torna a la fila, Escapada al camp de cerca de la banda abans que a la capa, i `r`, que la tanca i posa el focus a la resposta ràpida. La configuració oberta des de la paleta per sobre de la capa, que s'hi queda, i el focus que torna a la pestanya de la capa i, en tancar-la, a la icona de la tira |
 | e2e (`startup.e2e.ts`, «#306») | F6 i Maj+F6 amb la barra al costat; després del lector, la tira (minimitzada per defecte); als altres mòduls, la barra entre el mòdul i la banda |

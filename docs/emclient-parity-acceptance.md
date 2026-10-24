@@ -363,14 +363,16 @@ s'hi corregeix que `i` i els botons de detalls de la capçalera actuaven sense p
 buidar el camp de cerca de la banda. Amb la capa oberta, `<main>` és inert i F6 només va entre la
 banda i la barra; la tira per defecte al 200 % a 1025 px deixa uns 225 px de carpetes, amb Correu,
 Calendari i «Més». Amb la decisió D7 del propietari, també del 2026-10-24, on la barra no hi cap al
-costat el botó «Barra lateral», l'ordre del menú i de la paleta i `i` tornen a posar la tira
-que s'havia amagat (es desa `minimized`) en lloc d'obrir una capa, i una prova del punt d'entrada de producció a
+costat el botó «Barra lateral» i l'ordre del menú i de la paleta tornen a posar la tira que s'havia
+amagat (es desa `minimized`) en lloc d'obrir una capa, i una prova del punt d'entrada de producció a
 1024 px ho comprova després de reiniciar. El botó diu amb una descripció què farà un clic («Amaga la
 barra lateral» o «Mostra la barra lateral»), perquè amb la tira `aria-expanded` és fals; el fons de
-la capa és el del `Dialog` compartit; i les ordres que van al mòdul (les de la paleta i del menú, `r`,
-Ctrl/⌘+N, la cerca de la conversa i qualsevol pestanya del lector que passa al davant) tanquen la
-capa abans d'actuar, perquè sota la capa el mòdul està inert. Continua sent una nota d'evidència: cap
-fila no canvia d'estat.
+la capa és el del `Dialog` compartit; i les ordres que porten al davant alguna cosa del mòdul (`r`,
+Ctrl/⌘+N, la cerca de la conversa, qualsevol pestanya del lector que passa al davant i, des de la
+paleta i del menú, anar a un mòdul, carpeta, compte, tauler o filtre) tanquen la capa abans d'actuar,
+perquè sota la capa el mòdul està inert; les que actuen fora del mòdul, com la configuració oberta des
+de la paleta, la deixen oberta i el focus hi torna. Continua sent una nota d'evidència: cap fila no
+canvia d'estat.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per

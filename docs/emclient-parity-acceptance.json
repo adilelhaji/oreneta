@@ -1733,6 +1733,18 @@
           {
             "sha": "5549f6505007db1a6674b933455aa97332aba41c",
             "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "e4820e90509a125c296ce124d429b9e972115888",
+            "result": "frontend/src/states/sidebar.test.ts"
+          },
+          {
+            "sha": "e4820e90509a125c296ce124d429b9e972115888",
+            "result": "frontend/src/components/palette/useCommandList.test.tsx"
+          },
+          {
+            "sha": "e4820e90509a125c296ce124d429b9e972115888",
+            "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
         "native": [],

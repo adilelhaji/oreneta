@@ -23,8 +23,9 @@
   de conversa del tauler compta 360 px a partir de 769 px (320 px per sota), i
   només amb una targeta oberta (D6). Amb la decisió D7, del mateix dia, amagar
   la tira on la barra no hi cap al costat es desfà amb el mateix botó: amb la
-  barra amagada, el botó, l'ordre i la tecla `i` hi tornen a posar la tira
-  (es desa `minimized`) en lloc d'obrir una capa. En formen part els apartats
+  barra amagada, el botó i l'ordre de la paleta i del menú de l'aplicació hi
+  tornen a posar la tira (es desa `minimized`) en lloc d'obrir una capa. En
+  formen part els apartats
   del §2 marcats amb «esmena #361»; la resta de la decisió no canvia.
 - Data: 2026-10-17 (proposta); 2026-10-18 (acceptació).
 - Abast: #223 (fila SET-23 del registre d'acceptació, #86) i peça 12 de la
@@ -153,10 +154,8 @@
   `aria-expanded` és fals i un clic l'amaga. Hi ha una ordre a la paleta i al menú de
   l'aplicació, que fa el mateix que el botó, i la tecla
   `i` (`thread.details`) al correu. La tecla, si la barra està desplegada al panell
-  Conversa, la minimitza (o, si és una capa, la tanca com Esc); si està
-  amagada i al costat només hi cap la tira, hi torna a posar la tira en el
-  panell Conversa (esmena #361, decisió D7); si no, la desplega al panell
-  Conversa.
+  Conversa, la minimitza (o, si és una capa, la tanca com Esc); si no, la
+  desplega al panell Conversa, també quan està amagada.
 
 ### 3. Panell Dia (nou)
 
