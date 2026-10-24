@@ -41,6 +41,8 @@ import { printFromReader } from '../../states/printing'
 import { LabelPicker } from './LabelPicker'
 import { thread$, type ConversationMode } from '../../states/thread'
 import { closeKanbanPane, kanban$, openCorrespondentMail } from '../../states/kanban'
+import { toggleConversationPanel } from '../../states/sidebar'
+import { useConversationPanelExpanded } from '../shell/useSidebarShown'
 import { openComposeTab } from '../../states/compose'
 import type { Message } from '../../types'
 import { Avatar } from '../avatar/Avatar'
@@ -83,7 +85,8 @@ export function ConversationHeader({
   const inKanban = !!useValue(kanban$.activeBoardId)
   const threadSearch = useValue(thread$.search)
   const threadSearchOpen = useValue(thread$.searchOpen)
-  const mediaOpen = useValue(thread$.mediaOpen)
+  // The app sidebar's Conversa panel (ADR-0069): these buttons do what `i` does.
+  const detailsOpen = useConversationPanelExpanded()
   const normalizedThreadSearch = threadSearch.trim().toLowerCase()
 
   // The conversation as a whole, for the line under the subject. Derived from
@@ -206,8 +209,8 @@ export function ConversationHeader({
             <ReadingHeaderSummary
               summary={summary}
               onSenderMenu={openSenderMenu}
-              detailsOpen={mediaOpen}
-              onOpenDetails={() => thread$.mediaOpen.set(!mediaOpen)}
+              detailsOpen={detailsOpen}
+              onOpenDetails={toggleConversationPanel}
             />
           ) : (
             <button
@@ -364,8 +367,9 @@ export function ConversationHeader({
           <IconButton
             icon={PanelRight}
             label={isRSS ? t('chat.feedDetails') : t('chat.conversationDetails')}
-            active={mediaOpen}
-            onClick={() => thread$.mediaOpen.set(!mediaOpen)}
+            active={detailsOpen}
+            aria-expanded={detailsOpen}
+            onClick={toggleConversationPanel}
           />
           <div ref={actionsMenuRef} className="relative">
             <IconButton

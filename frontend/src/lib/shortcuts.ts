@@ -269,7 +269,7 @@ export const SHORTCUT_LABELS: Record<ShortcutId, string> = {
   'thread.star': 'Toggle star',
   'thread.unread': 'Mark unread',
   'thread.delete': 'Delete thread',
-  'thread.details': 'Toggle details sidebar',
+  'thread.details': 'Toggle the sidebar conversation panel',
 }
 
 /** Grouping for the help overlay, in display order. */

@@ -14,6 +14,7 @@ import {
   deleteCustomTheme,
   isListView,
   isProxyUsable,
+  parseAppSidebarState,
   sanitizeKanbanBoards,
   sanitizeListSort,
   sanitizeProxy,
@@ -401,5 +402,56 @@ describe('pane sizes (#212)', () => {
     expect(settings$.threadListWidth.get()).toBe(560)
     expect(settings$.kanbanPaneWidth.get()).toBe(60)
     expect(settings$.detailsPanelWidth.get()).toBe(280)
+  })
+})
+
+// The app's sidebar (ADR-0069 §2): expanded, minimised or hidden, saved.
+describe('app sidebar state (#361)', () => {
+  afterEach(() => {
+    delete (window as any).go
+    settings$.appSidebarState.set('minimized')
+  })
+
+  it('starts minimised on a new profile and on upgrading (owner decision 1)', () => {
+    expect(settings$.appSidebarState.get()).toBe('minimized')
+    expect(SETTINGS_DB_KEYS).toContain('app_sidebar_state')
+    // An upgraded profile has no row for it: the default stands.
+    hydrateSettings({ details_panel_width: 420, session_sidebar_section_main: 'agenda' })
+    expect(settings$.appSidebarState.get()).toBe('minimized')
+  })
+
+  it('restores each of the three states', () => {
+    for (const state of ['expanded', 'hidden', 'minimized'] as const) {
+      hydrateSettings({ app_sidebar_state: state })
+      expect(settings$.appSidebarState.get()).toBe(state)
+    }
+  })
+
+  it('ignores a stored value that is not one of them', () => {
+    settings$.appSidebarState.set('hidden')
+    for (const raw of ['open', 'Expanded', '', 1, true, null, ['expanded'], { state: 'expanded' }]) {
+      hydrateSettings({ app_sidebar_state: raw })
+      expect(settings$.appSidebarState.get()).toBe('hidden')
+    }
+    expect(parseAppSidebarState('expanded')).toBe('expanded')
+    expect(parseAppSidebarState('collapsed')).toBeNull()
+  })
+
+  it('writes a change to its row, and not what it was restored to', async () => {
+    const writes: { key: string; value: unknown }[] = []
+    ;(window as any).go = {
+      main: {
+        App: {
+          Invoke: async (command: string, payload: any) => {
+            if (command === 'app.prefsSet') writes.push(payload)
+            return { ok: true }
+          },
+        },
+      },
+    }
+    hydrateSettings({ app_sidebar_state: 'expanded' })
+    settings$.appSidebarState.set('hidden')
+    await Promise.resolve()
+    expect(writes.filter((write) => write.key === 'app_sidebar_state').map((write) => write.value)).toEqual(['hidden'])
   })
 })

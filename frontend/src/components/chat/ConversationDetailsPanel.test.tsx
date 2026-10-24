@@ -1,15 +1,72 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
-import { ConversationDetailsPanel, type Participant } from './ConversationDetailsPanel'
+import { useRef } from 'react'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { accounts$ } from '../../states/accounts'
+import { compose$ } from '../../states/compose'
+import { kanban$ } from '../../states/kanban'
+import { mail$ } from '../../states/mail'
 import { hydrateSettings, settings$ } from '../../states/settings'
+import { sidebar$ } from '../../states/sidebar'
 import { restoreUiSession, ui$, UI_SESSION_KEYS } from '../../states/ui'
+import type { Message } from '../../types'
+import { AppSidebar } from '../shell/AppSidebar'
+
+// The conversation's details (#86, #212) as the Conversa panel of the app's
+// sidebar (ADR-0069): the expectations of the details sidebar, in the
+// container that replaced it. A conversation is open in mail, the sidebar
+// expanded beside it at 1440 px.
 
 let writes: { key: string; value: unknown }[] = []
 
+const message = (thread: string, subject: string): Message => ({
+  id: `${thread}#1`,
+  account_id: 'work',
+  folder_id: 'INBOX',
+  thread_id: thread,
+  from_name: 'Ana',
+  from_addr: 'ana@x.test',
+  to: 'me@work.test',
+  subject,
+  preview: '',
+  body: '',
+  date: 1,
+  unread: false,
+  starred: false,
+  has_attachments: false,
+})
+const budget = message('work#INBOX#budget', 'Budget')
+const other = message('work#INBOX#other', 'Other thread')
+const third = message('work#INBOX#third', 'Third thread')
+
+function openConversation(thread: Message) {
+  mail$.messages.set([thread])
+  ui$.selectedThread.set(thread.thread_id)
+}
+
+function Frame() {
+  const row = useRef<HTMLDivElement | null>(null)
+  return (
+    <div ref={row}>
+      <main aria-label="Mail" />
+      <AppSidebar row={row} content="mail" />
+    </div>
+  )
+}
+
 beforeEach(() => {
-  writes = []
+  ;(window as any).happyDOM.setViewport({ width: 1440, height: 900 })
   accounts$.set([{ id: 'work', email: 'me@work.test' } as any])
+  ui$.module.set('mail')
+  kanban$.activeBoardId.set('')
+  kanban$.paneThreadId.set('')
+  compose$.tabs.set([])
+  compose$.activeTab.set('')
+  mail$.threadLoading.set(false)
+  mail$.threads.set([budget, other, third])
+  openConversation(budget)
+  ui$.sidebarSection.set('overview')
+  settings$.appSidebarState.set('expanded')
+  writes = []
   ;(window as any).go = {
     main: {
       App: {
@@ -28,43 +85,28 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   delete (window as any).go
-  ui$.sidebarSection.set('overview')
+  ui$.sidebarSection.set('agenda')
+  ui$.selectedThread.set('')
+  mail$.threads.set([])
+  mail$.messages.set([])
   settings$.detailsPanelWidth.set(340)
+  settings$.appSidebarState.set('minimized')
+  sidebar$.set({ fits: false, strip: false, overlay: false })
+  ;(window as any).happyDOM.setViewport({ width: 1024, height: 768 })
 })
-
-const ana: Participant = { name: 'Ana', email: 'ana@x.test', count: 2, isSelf: false }
-
-function Panel({ scopeTitle = 'Budget' }: { scopeTitle?: string }) {
-  return (
-    <ConversationDetailsPanel
-      media={[]}
-      files={[]}
-      participants={[ana]}
-      scopeTitle={scopeTitle}
-      loading={false}
-      onOpenImage={() => {}}
-      onShowInConversation={() => {}}
-      onComposeTo={() => {}}
-      onViewMessagesWith={() => {}}
-      onClose={() => {}}
-      accountId="work"
-      onOpenConversation={() => {}}
-      onOpenEvent={() => {}}
-    />
-  )
-}
 
 const written = (key: string) => writes.filter((w) => w.key === key).map((w) => w.value)
 
-describe('details sidebar sections (#212)', () => {
-  it('opens the agenda from the overview and remembers it for this window', async () => {
-    const screen = render(<Panel />)
-    fireEvent.click(screen.getByRole('button', { name: 'Agenda' }))
+describe('the sidebar panels (#212, ADR-0069)', () => {
+  it('opens the agenda from its tab and remembers it for this window', async () => {
+    const screen = render(<Frame />)
+    fireEvent.click(screen.getByRole('tab', { name: 'Agenda' }))
     expect(screen.getByRole('heading', { name: 'Agenda' })).toBeTruthy()
     expect(screen.getByText('Next 7 days')).toBeTruthy()
     await waitFor(() => expect(screen.getByText('Nothing scheduled or due in the next 7 days.')).toBeTruthy())
     expect(written('session_sidebar_section_main')).toEqual(['agenda'])
-    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    // Back to the conversation's summary, from its own tab.
+    fireEvent.click(screen.getByRole('tab', { name: 'Conversation' }))
     expect(written('session_sidebar_section_main')).toEqual(['agenda', 'overview'])
   })
 
@@ -72,26 +114,30 @@ describe('details sidebar sections (#212)', () => {
     expect(UI_SESSION_KEYS).toContain('session_sidebar_section_main')
     // What boot does with the stored preferences.
     restoreUiSession({ session_sidebar_section_main: 'agenda' }, [])
-    const screen = render(<Panel />)
+    const screen = render(<Frame />)
     expect(screen.getByRole('heading', { name: 'Agenda' })).toBeTruthy()
     // Seeding the stored value is not a fresh choice to write back.
     expect(written('session_sidebar_section_main')).toEqual([])
     await waitFor(() => expect(screen.getByText('Nothing scheduled or due in the next 7 days.')).toBeTruthy())
   })
 
-  it('ignores a stored section this version does not know', () => {
+  it('reads a stored section this version does not know as the Agenda (ADR-0069 §2)', () => {
     ui$.sidebarSection.set('files')
-    restoreUiSession({ session_sidebar_section_main: 'person' }, [])
-    expect(ui$.sidebarSection.get()).toBe('files')
     restoreUiSession({ session_sidebar_section_main: 'widgets' }, [])
-    expect(ui$.sidebarSection.get()).toBe('files')
+    expect(ui$.sidebarSection.get()).toBe('agenda')
+    // Dia and Persona are kept as they are, and shown as the Agenda until they arrive.
+    restoreUiSession({ session_sidebar_section_main: 'person' }, [])
+    expect(ui$.sidebarSection.get()).toBe('person')
+    const screen = render(<Frame />)
+    expect(screen.getByRole('heading', { name: 'Agenda' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Agenda' }).getAttribute('aria-selected')).toBe('true')
   })
 
   it("keeps the section when the conversation changes, but not one person's history", async () => {
     ui$.sidebarSection.set('files')
-    const screen = render(<Panel />)
+    const screen = render(<Frame />)
     expect(screen.getByRole('heading', { name: 'Files' })).toBeTruthy()
-    screen.rerender(<Panel scopeTitle="Other thread" />)
+    act(() => openConversation(other))
     expect(screen.getByRole('heading', { name: 'Files' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
@@ -101,15 +147,15 @@ describe('details sidebar sections (#212)', () => {
     expect(screen.getByRole('heading', { name: 'With Ana' })).toBeTruthy()
     // A person's history is shown over the overview, not remembered as a section.
     expect(ui$.sidebarSection.get()).toBe('overview')
-    screen.rerender(<Panel scopeTitle="Third thread" />)
+    act(() => openConversation(third))
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'With Ana' })).toBeNull())
   })
 })
 
-describe('details sidebar width (#212)', () => {
+describe('the sidebar width (#212)', () => {
   it('resizes from the keyboard within its limits and keeps the width', () => {
-    const screen = render(<Panel />)
-    const handle = screen.getByRole('separator', { name: 'Resize details panel' })
+    const screen = render(<Frame />)
+    const handle = screen.getByRole('separator', { name: 'Resize sidebar' })
     expect(handle.getAttribute('aria-valuenow')).toBe('340')
     expect(handle.getAttribute('aria-valuemin')).toBe('280')
     expect(handle.getAttribute('aria-valuemax')).toBe('560')
@@ -127,8 +173,8 @@ describe('details sidebar width (#212)', () => {
 
   it('restores the stored width at boot, clamped to the limits', () => {
     hydrateSettings({ details_panel_width: 420 })
-    const screen = render(<Panel />)
-    expect(screen.getByRole('separator', { name: 'Resize details panel' }).getAttribute('aria-valuenow')).toBe('420')
+    const screen = render(<Frame />)
+    expect(screen.getByRole('separator', { name: 'Resize sidebar' }).getAttribute('aria-valuenow')).toBe('420')
     cleanup()
     hydrateSettings({ details_panel_width: 5000 })
     expect(settings$.detailsPanelWidth.get()).toBe(560)

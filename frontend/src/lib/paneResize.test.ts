@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'bun:test'
 import {
+  appSidebarLayout,
+  BOARD_COLUMN_ROOM,
   clampPaneSize,
+  CONTENT_ROOM,
+  DETAILS_PANEL_WIDTH,
   drawnPane,
   FOLDER_PANE_DEFAULT_WIDTH,
   FOLDER_PANE_WIDTH,
@@ -9,8 +13,11 @@ import {
   KANBAN_PANE_NARROW_MIN_PX,
   kanbanPane,
   READER_ROOM,
-  sidebarLayout,
+  SIDEBAR_BESIDE_MIN_WINDOW,
+  SIDEBAR_STRIP_MIN_WINDOW,
+  sidebarRest,
   THREAD_LIST_WIDTH,
+  type SidebarRoom,
 } from './paneResize'
 
 describe('pane limits (#212)', () => {
@@ -43,17 +50,6 @@ describe('pane limits (#212)', () => {
     expect(drawnPane(280, 560, THREAD_LIST_WIDTH)).toEqual({ value: 280, limits: THREAD_LIST_WIDTH })
   })
 
-  it('puts the details sidebar beside the reader only where the row leaves the reader 360 px', () => {
-    expect(sidebarLayout(false, 2000)).toEqual({ beside: false, max: 560 })
-    expect(sidebarLayout(true, 0)).toEqual({ beside: true, max: 560 })
-    expect(sidebarLayout(true, 1200)).toEqual({ beside: true, max: 560 })
-    // A 1100–1180 px window: the widest it goes is what the reader leaves.
-    expect(sidebarLayout(true, 760)).toEqual({ beside: true, max: 400 })
-    expect(sidebarLayout(true, 640)).toEqual({ beside: true, max: 280 })
-    // The board's narrow conversation pane on a wide window: an overlay.
-    expect(sidebarLayout(true, 400)).toEqual({ beside: false, max: 560 })
-  })
-
   it("raises the board pane's smallest percentage to its reader's 360 px, and gives up where nothing is left", () => {
     expect(KANBAN_PANE_MIN_PX).toBe(READER_ROOM)
     expect(kanbanPane(33, 0, 0)).toEqual({ value: 33, limits: { min: 25, max: 60 } })
@@ -80,5 +76,103 @@ describe('pane limits (#212)', () => {
     expect(kanbanAreaBase(360, false)).toBe(360)
     expect(kanbanAreaBase(360, true)).toBe(720)
     expect(kanbanAreaBase(240.4, true)).toBe(600)
+  })
+})
+
+// The app's sidebar (ADR-0069 §2): beside the content from 1100 px where
+// rest = row − folders (200, if drawn) − list (280, mail) − content (360) ≥ 280,
+// at most min(560, rest); otherwise only an overlay. The strip from 769 px.
+describe("the app sidebar's room (ADR-0069 §2, #361)", () => {
+  // Mail from 1025 px: the folder pane is drawn; at 100 % the strip is 40 px.
+  const mail = (window: number, extra: Partial<SidebarRoom> = {}): SidebarRoom => ({
+    window,
+    content: 'mail',
+    folders: window >= 1025,
+    bar: window >= 769 && window < 1025 ? 48 : 0,
+    strip: 40,
+    ...extra,
+  })
+  const other = (window: number, extra: Partial<SidebarRoom> = {}): SidebarRoom => ({
+    ...mail(window),
+    content: 'module',
+    ...extra,
+  })
+
+  it('uses the minimums of the ADR', () => {
+    expect(SIDEBAR_BESIDE_MIN_WINDOW).toBe(1100)
+    expect(SIDEBAR_STRIP_MIN_WINDOW).toBe(769)
+    expect(DETAILS_PANEL_WIDTH).toEqual({ min: 280, max: 560 })
+    expect(FOLDER_PANE_WIDTH.min).toBe(200)
+    expect(THREAD_LIST_WIDTH.min).toBe(280)
+    expect(CONTENT_ROOM).toBe(360)
+    expect(BOARD_COLUMN_ROOM).toBe(280)
+  })
+
+  it('in mail with the folders: an overlay at 1100 px, beside from 1120 px, up to 340 px at 1180 and 560 px at 1440', () => {
+    // 1100 − 200 − 280 − 360 = 260 < 280.
+    expect(sidebarRest(mail(1100))).toBe(260)
+    expect(appSidebarLayout(mail(1100))).toEqual({ beside: false, max: 560, strip: true })
+    expect(appSidebarLayout(mail(1119)).beside).toBe(false)
+    expect(appSidebarLayout(mail(1120))).toEqual({ beside: true, max: 280, strip: true })
+    expect(appSidebarLayout(mail(1180))).toEqual({ beside: true, max: 340, strip: true })
+    // 1440 − 840 = 600: held to 560.
+    expect(sidebarRest(mail(1440))).toBe(600)
+    expect(appSidebarLayout(mail(1440))).toEqual({ beside: true, max: 560, strip: true })
+  })
+
+  it("in mail without the folder pane, its 200 px are the sidebar's", () => {
+    expect(appSidebarLayout(mail(1100, { folders: false }))).toEqual({ beside: true, max: 460, strip: true })
+    expect(appSidebarLayout(mail(1440, { folders: false }))).toEqual({ beside: true, max: 560, strip: true })
+  })
+
+  it('in the other modules: beside from 1100 px, with 540 px of room there', () => {
+    // 1100 − 200 − 360 = 540.
+    expect(appSidebarLayout(other(1100))).toEqual({ beside: true, max: 540, strip: true })
+    expect(appSidebarLayout(other(1120))).toEqual({ beside: true, max: 560, strip: true })
+    expect(appSidebarLayout(other(1180))).toEqual({ beside: true, max: 560, strip: true })
+    expect(appSidebarLayout(other(1440))).toEqual({ beside: true, max: 560, strip: true })
+    expect(appSidebarLayout(other(1100, { folders: false }))).toEqual({ beside: true, max: 560, strip: true })
+    // Under 1100 px never beside, whatever the room.
+    expect(appSidebarLayout(other(1099))).toEqual({ beside: false, max: 560, strip: true })
+  })
+
+  it('with a board open, its column and its conversation pane count in place of the list and the reader', () => {
+    const board = (window: number, pane: boolean) => mail(window, { content: pane ? 'board-pane' : 'board' })
+    // A column alone: 1100 − 200 − 280 = 620, held to 560.
+    expect(appSidebarLayout(board(1100, false))).toEqual({ beside: true, max: 560, strip: true })
+    // With the pane, its 360 px as well, which is mail's sum: as mail.
+    expect(KANBAN_PANE_MIN_PX).toBe(360)
+    expect(appSidebarLayout(board(1100, true))).toEqual({ beside: false, max: 560, strip: true })
+    expect(appSidebarLayout(board(1120, true))).toEqual({ beside: true, max: 280, strip: true })
+    expect(appSidebarLayout(board(1180, true))).toEqual({ beside: true, max: 340, strip: true })
+    expect(appSidebarLayout(board(1440, true))).toEqual({ beside: true, max: 560, strip: true })
+  })
+
+  it('measures the row, drawn without the sidebar, rather than trusting the window', () => {
+    // A row narrower than the window: what is left of it is what counts.
+    expect(appSidebarLayout(mail(1440, { row: 1100 }))).toEqual({ beside: false, max: 560, strip: true })
+    expect(appSidebarLayout(mail(1440, { row: 1180 }))).toEqual({ beside: true, max: 340, strip: true })
+    // Not measured (0): the window stands for it.
+    expect(appSidebarLayout(mail(1180, { row: 0 }))).toEqual({ beside: true, max: 340, strip: true })
+  })
+
+  it('draws the minimised strip from 769 px, beside, and nothing below', () => {
+    expect(appSidebarLayout(mail(1024))).toEqual({ beside: false, max: 560, strip: true })
+    expect(appSidebarLayout(mail(769))).toEqual({ beside: false, max: 560, strip: true })
+    expect(appSidebarLayout(mail(768))).toEqual({ beside: false, max: 560, strip: false })
+    expect(appSidebarLayout(mail(600))).toEqual({ beside: false, max: 560, strip: false })
+    expect(appSidebarLayout(other(600))).toEqual({ beside: false, max: 560, strip: false })
+  })
+
+  it("at the app's 200 %, the 80 px strip where it fits beside the narrow bar and mail's minimums", () => {
+    const zoomed = (window: number, content: SidebarRoom['content'] = 'mail') =>
+      mail(window, { content, bar: window >= 769 && window < 1025 ? 96 : 0, strip: 80 })
+    // 769 − 96 − 640 = 33: no room for it just above 769 px.
+    expect(appSidebarLayout(zoomed(769)).strip).toBe(false)
+    expect(appSidebarLayout(zoomed(900)).strip).toBe(true)
+    expect(appSidebarLayout(zoomed(1024))).toEqual({ beside: false, max: 560, strip: true })
+    expect(appSidebarLayout(zoomed(769, 'module')).strip).toBe(true)
+    // The widths in px do not grow with the zoom: the same room as at 100 %.
+    expect(appSidebarLayout(zoomed(1440))).toEqual({ beside: true, max: 560, strip: true })
   })
 })

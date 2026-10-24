@@ -3,6 +3,7 @@ import { useTranslation } from '../../lib/i18n'
 import { QuietIndicator } from '../sidenav/QuietIndicator'
 import { AppMenuButton } from './AppMenu'
 import { BandSearch } from './BandSearch'
+import { SidebarToggle } from './SidebarToggle'
 import { SyncStatus } from './SyncStatus'
 
 /**
@@ -14,7 +15,8 @@ import { SyncStatus } from './SyncStatus'
  * zoom, in today's frame tone (`--me-bg-header`) until #287 adds the «marc»
  * one. The app menu sits at its start and the search field, scoped to the
  * module on screen, at its centre (#344); its end holds the do-not-disturb
- * indicator and the sync status (#345). The band is the first region F6
+ * indicator, the sync status (#345) and the «Barra lateral» button of the
+ * app's sidebar (ADR-0069 §2, #361). The band is the first region F6
  * reaches, `search`, and Tab goes through it from start to end. The main
  * toolbar (§3) becomes the second row once the piece 8 primitive exists.
  *
@@ -51,6 +53,8 @@ export function AppHeader({ setup = false }: { setup?: boolean }) {
             <>
               <QuietIndicator inert={inert} />
               <SyncStatus inert={inert} />
+              {/* The app's sidebar is at the end of the frame row, under this end (ADR-0069 §2). */}
+              <SidebarToggle inert={inert} />
             </>
           )}
         </div>

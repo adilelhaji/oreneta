@@ -129,14 +129,26 @@ export function parseFilters(raw: unknown): FilterFacet[] | undefined {
   return facets.length > 0 ? facets : undefined
 }
 /**
- * A section of the conversation details sidebar that can be reopened on its
- * own (ADR-0059). One person's history is not: it needs the person, who may
- * not be in the next conversation.
+ * The panel of the app's sidebar last shown, as `session_sidebar_section_main`
+ * keeps it (ADR-0059, ADR-0069 §2): the Conversa panel by its subsection
+ * (`overview`, `media`, `files`), or the Agenda, Dia or Persona panel. The
+ * panel type, never the person: one person's history needs that person, who
+ * may not be in the next conversation.
  */
-export type SidebarSection = 'overview' | 'media' | 'files' | 'agenda'
+export type SidebarSection = ConversationSection | 'agenda' | 'day' | 'person'
 
-export const parseSidebarSection = (raw: unknown): SidebarSection | undefined =>
-  raw === 'overview' || raw === 'media' || raw === 'files' || raw === 'agenda' ? raw : undefined
+/** The subsections of the Conversa panel: the summary, the media and the files. */
+export type ConversationSection = 'overview' | 'media' | 'files'
+
+export const isConversationSection = (value: unknown): value is ConversationSection =>
+  value === 'overview' || value === 'media' || value === 'files'
+
+/**
+ * A stored panel, read back. Anything unknown or empty is the Agenda
+ * (ADR-0069 §2); `day` and `person` stay what they are, for their panels.
+ */
+export const parseSidebarSection = (raw: unknown): SidebarSection =>
+  isConversationSection(raw) || raw === 'agenda' || raw === 'day' || raw === 'person' ? raw : 'agenda'
 
 export type SetupMode = 'gmail' | 'outlook' | 'graph' | 'custom' | 'ews' | 'rss'
 export type MobilePane = 'threads' | 'conversation'
@@ -202,8 +214,9 @@ export const ui$ = observable({
   // Narrowings currently applied, in no particular order.
   filters: [] as FilterFacet[],
   // Modals / panels.
-  // The details sidebar's section last shown; persisted (see below).
-  sidebarSection: 'overview' as SidebarSection,
+  // The app sidebar's panel last shown; persisted (see below). Nothing stored
+  // is the Agenda (ADR-0069 §2).
+  sidebarSection: 'agenda' as SidebarSection,
   setupOpen: false,
   setupMode: 'gmail' as SetupMode,
   reconnectAccountId: '',

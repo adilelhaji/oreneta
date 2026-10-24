@@ -1,0 +1,188 @@
+import { observable } from '@legendapp/state'
+import { settings$, type AppSidebarState } from './settings'
+import { isConversationSection, ui$, type ConversationSection, type SidebarSection } from './ui'
+
+// The app's sidebar (ADR-0069): one `<aside>` at the end of the frame row, in
+// every module, expanded, minimised to its strip, or hidden. What is saved is
+// `settings$.appSidebarState`; what is here is how it is on screen now.
+
+/**
+ * The panels of the app's sidebar (ADR-0069 §1). The ones this version shows
+ * are listed by AppSidebar; Dia and Persona arrive with their pieces (12b and
+ * 12c), and until then a stored `day` or `person` shows the Agenda.
+ */
+export type SidebarPanelId = 'agenda' | 'day' | 'person' | 'conversation'
+
+/** How the sidebar is drawn now. */
+export type SidebarShown = 'beside' | 'overlay' | 'strip' | 'none'
+
+export const sidebar$ = observable({
+  /** Whether, expanded, the sidebar goes beside the content (AppSidebar measures the row). */
+  fits: false,
+  /** Whether the minimised strip is drawn where the sidebar is not expanded beside. */
+  strip: false,
+  /**
+   * An overlay opened where the sidebar does not fit beside the content. It is
+   * a way of showing the sidebar, not a preference: opening and closing it
+   * leave the saved state alone (ADR-0069 §2).
+   */
+  overlay: false,
+})
+
+/** The panel a stored section belongs to: each Conversa subsection is the Conversa panel. */
+export function panelOfSection(section: SidebarSection): SidebarPanelId {
+  return isConversationSection(section) ? 'conversation' : section
+}
+
+/**
+ * The panel shown for the stored section (ADR-0069 §2): the Conversa panel,
+ * on its subsection, only with a conversation open, and otherwise the Agenda;
+ * a panel `panels` does not have (Dia and Persona, for now) is the Agenda too.
+ */
+export function resolveSidebarPanel(
+  section: SidebarSection,
+  conversationOpen: boolean,
+  panels: readonly SidebarPanelId[],
+): SidebarPanelId {
+  const panel = panelOfSection(section)
+  if (panel === 'conversation' && !conversationOpen) return 'agenda'
+  return panels.includes(panel) ? panel : 'agenda'
+}
+
+/**
+ * How the sidebar is drawn (ADR-0069 §2). An overlay only where it does not
+ * fit beside, and only once something opened it; expanded beside where it
+ * fits; otherwise the strip, which is how `expanded` is drawn where it does
+ * not fit (never an overlay by itself), from 769 px; and nothing when hidden
+ * or below 769 px.
+ */
+export function shownSidebar(state: AppSidebarState, fits: boolean, strip: boolean, overlay: boolean): SidebarShown {
+  if (overlay && !fits) return 'overlay'
+  if (state === 'expanded' && fits) return 'beside'
+  if (state !== 'hidden' && strip) return 'strip'
+  return 'none'
+}
+
+export function currentSidebarShown(): SidebarShown {
+  return shownSidebar(
+    settings$.appSidebarState.peek(),
+    sidebar$.fits.peek(),
+    sidebar$.strip.peek(),
+    sidebar$.overlay.peek(),
+  )
+}
+
+// The Conversa subsection last shown in this session, so that its tab and its
+// strip icon go back to it.
+let conversationSection: ConversationSection = isConversationSection(ui$.sidebarSection.peek())
+  ? (ui$.sidebarSection.peek() as ConversationSection)
+  : 'overview'
+ui$.sidebarSection.onChange(({ value }) => {
+  if (isConversationSection(value)) conversationSection = value
+})
+
+/** Shows `panel` in the sidebar, as its tab does: the Conversa panel on the subsection last shown. */
+export function selectSidebarPanel(panel: SidebarPanelId) {
+  ui$.sidebarSection.set(panel === 'conversation' ? conversationSection : panel)
+}
+
+// Where the focus goes once the sidebar is drawn again, when it was in the
+// sidebar as it changed shape: the strip's icon gives way to the expanded
+// sidebar and its minimise button to the strip, so the focused control goes.
+let refocus: 'tab' | 'strip' | null = null
+// What had the focus when an overlay opened, for it to go back to.
+let overlayOpener: Element | null = null
+
+function focusInSidebar(): boolean {
+  return !!document.activeElement?.closest('[data-app-sidebar]')
+}
+
+// Asked for the drawing that follows, and forgotten after it, so a later one
+// never takes the focus.
+function askRefocus(target: 'tab' | 'strip') {
+  refocus = target
+  setTimeout(() => {
+    if (refocus === target) refocus = null
+  }, 0)
+}
+
+/** For AppSidebar, once drawn: where the focus should go, once. */
+export function takeSidebarRefocus(): 'tab' | 'strip' | null {
+  const target = refocus
+  refocus = null
+  return target
+}
+
+/** For AppSidebar, once an overlay closed: what had the focus when it opened. */
+export function takeOverlayOpener(): Element | null {
+  const opener = overlayOpener
+  overlayOpener = null
+  return opener
+}
+
+/**
+ * Expands the sidebar: beside the content where it fits, which is saved, and
+ * otherwise as an overlay, which is not (ADR-0069 §2).
+ */
+export function expandSidebar() {
+  if (sidebar$.fits.peek()) {
+    if (focusInSidebar()) askRefocus('tab')
+    settings$.appSidebarState.set('expanded')
+    return
+  }
+  if (sidebar$.overlay.peek()) return
+  overlayOpener = document.activeElement
+  sidebar$.overlay.set(true)
+}
+
+/** Closes the overlay (Escape, the backdrop, its close button, `i`); the saved state does not change. */
+export function closeSidebarOverlay() {
+  if (sidebar$.overlay.peek()) sidebar$.overlay.set(false)
+}
+
+/** The sidebar's minimise button (and `i` on its Conversa panel): from beside the content to the strip, saved. */
+export function minimizeSidebar() {
+  if (focusInSidebar()) askRefocus('strip')
+  settings$.appSidebarState.set('minimized')
+}
+
+/**
+ * The band's «Barra lateral» button, the palette and the app menu: hide the
+ * sidebar expanded beside the content (saved), close its overlay (not saved),
+ * or else expand it.
+ */
+export function toggleAppSidebar() {
+  const shown = currentSidebarShown()
+  if (shown === 'overlay') closeSidebarOverlay()
+  else if (shown === 'beside') settings$.appSidebarState.set('hidden')
+  else expandSidebar()
+}
+
+/** Whether the sidebar is expanded, beside the content or as an overlay: the band button's `aria-expanded`. */
+export function sidebarExpanded(shown: SidebarShown): boolean {
+  return shown === 'beside' || shown === 'overlay'
+}
+
+/** A strip icon: expands the sidebar on its panel. */
+export function openSidebarPanel(panel: SidebarPanelId) {
+  selectSidebarPanel(panel)
+  expandSidebar()
+}
+
+/**
+ * `i` (`thread.details`) in mail, and the conversation header's details
+ * buttons (ADR-0069 §2): with the sidebar expanded on the Conversa panel, it
+ * minimises it, or closes it as Escape does where it is an overlay; otherwise
+ * it expands it on the Conversa panel.
+ */
+export function toggleConversationPanel() {
+  const shown = currentSidebarShown()
+  const onConversation = isConversationSection(ui$.sidebarSection.peek())
+  if (onConversation && shown === 'overlay') closeSidebarOverlay()
+  else if (onConversation && shown === 'beside') minimizeSidebar()
+  else openSidebarPanel('conversation')
+}
+
+// The overlay covers the module it was opened over: another module (the
+// calendar, for an event opened from the agenda) is shown without it.
+ui$.module.onChange(() => closeSidebarOverlay())

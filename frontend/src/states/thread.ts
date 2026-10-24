@@ -26,7 +26,6 @@ export const thread$ = observable({
   revealedRemote: {} as Record<string, boolean>,
   // Index into galleryItems for the lightbox; null when closed.
   galleryIndex: null as number | null,
-  mediaOpen: false,
   // Per-account override of the conversation render mode for this session.
   conversationModeOverrides: {} as Record<string, ConversationMode>,
 })

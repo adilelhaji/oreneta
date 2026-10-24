@@ -23,7 +23,9 @@ import { AttachmentsView } from './components/attachments/AttachmentsView'
 import { MessagePane } from './components/chat/MessagePane'
 import { KanbanPaneResizer } from './components/resizer/PaneResizers'
 import { useWideWindow } from './components/resizer/useElementWidth'
-import { kanbanAreaBase, KANBAN_PANE_MIN_PX, KANBAN_PANE_NARROW_MIN_PX } from './lib/paneResize'
+import { kanbanAreaBase, KANBAN_PANE_MIN_PX, KANBAN_PANE_NARROW_MIN_PX, type SidebarContent } from './lib/paneResize'
+import { clsx } from './lib/utils'
+import { AppSidebar } from './components/shell/AppSidebar'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ConnectivityBanner } from './components/banner/ConnectivityBanner'
 import { UpdateBanner } from './components/banner/UpdateBanner'
@@ -32,6 +34,7 @@ import { SetupScreen } from './components/setup/SetupScreen'
 export default function App() {
   const { t } = useTranslation()
   const mainRef = useRef<HTMLElement | null>(null)
+  const rowRef = useRef<HTMLDivElement | null>(null)
   const kanbanPaneRef = useRef<HTMLDivElement | null>(null)
   const boardAreaRef = useRef<HTMLDivElement | null>(null)
   const system = useValue(ui$.system)
@@ -67,6 +70,9 @@ export default function App() {
   }
 
   const showKanbanMessagePane = !!kanbanPaneThreadId || composeTabs.some((tab) => tab.id === activeComposeTab)
+  // What the module keeps beside the app's sidebar (ADR-0069 §2).
+  const sidebarContent: SidebarContent =
+    activeModule !== 'mail' ? 'module' : !activeBoardId ? 'mail' : showKanbanMessagePane ? 'board-pane' : 'board'
 
   // No account yet: the first-account setup, in the same frame as the
   // window's, which stays mounted when the first account arrives (#343).
@@ -80,94 +86,108 @@ export default function App() {
         <>
           <ConnectivityBanner />
           <UpdateBanner />
-          {/* One <main>, named after the module on screen (ADR-0068 §1). The
-              narrow module bar and the folder pane, which each module draws
-              with the module strip at its foot, are still inside it. */}
-          <main
-            ref={mainRef}
-            aria-label={moduleNames[activeModule]}
-            className="flex min-h-0 w-full flex-1 overflow-hidden"
-          >
-            {narrowBar && (
-              <ErrorBoundary label="module bar">
-                <ModuleSwitcher variant="bar" />
-              </ErrorBoundary>
-            )}
-            {activeModule === 'mail' && (
-              // The common folder pane, mail first (ADR-0068 §4 and §9, step 2):
-              // today's accounts and folders are its body. It stays with a
-              // board open, which its «Taulers» section marks (piece 14a).
-              <ErrorBoundary label="mail navigation">
-                <FolderPane title={t('mailNavigation.title')}>
-                  <MailNavigation />
-                </FolderPane>
-              </ErrorBoundary>
-            )}
-            {activeModule === 'people' ? (
-              <ErrorBoundary label="people">
-                <PeopleView />
-              </ErrorBoundary>
-            ) : activeModule === 'calendar' ? (
-              <ErrorBoundary label="calendar">
-                <CalendarView />
-              </ErrorBoundary>
-            ) : activeModule === 'tasks' ? (
-              <ErrorBoundary label="tasks">
-                <TasksView />
-              </ErrorBoundary>
-            ) : activeModule === 'notes' ? (
-              <ErrorBoundary label="notes">
-                <NotesView />
-              </ErrorBoundary>
-            ) : activeModule === 'attachments' ? (
-              <ErrorBoundary label="attachments">
-                <AttachmentsView />
-              </ErrorBoundary>
-            ) : activeModule === 'chat' ? (
-              <ErrorBoundary label="messaging">
-                <MessagingView />
-              </ErrorBoundary>
-            ) : activeBoardId ? (
-              // The board and its conversation pane, whose width is a share of
-              // this area: the row less the folders, or the narrow bar (ADR-0068 §4).
-              // It asks for one column and the reader, so the folder pane gives
-              // way first where the row is short.
-              <div
-                ref={boardAreaRef}
-                className="flex min-w-0 overflow-hidden"
-                style={{ flex: `1 1 ${kanbanAreaBase(kanbanColumnWidth, showKanbanMessagePane)}px` }}
-              >
-                <ErrorBoundary label="thread list">
-                  <KanbanView boardId={activeBoardId} />
+          {/* The frame row (ADR-0068 §1): <main>, named after the module on
+              screen, then the app's sidebar, after it, in every module
+              (ADR-0069 §1). The narrow module bar and the folder pane, which
+              each module draws with the module strip at its foot, are still
+              inside <main>. The row is what the sidebar measures, and where
+              its overlay sits. */}
+          <div ref={rowRef} data-frame-row className="relative flex min-h-0 w-full flex-1 overflow-hidden">
+            <main
+              ref={mainRef}
+              aria-label={moduleNames[activeModule]}
+              className={clsx(
+                'flex min-h-0 min-w-0 flex-1 overflow-hidden',
+                // Outside mail the module keeps 360 px beside the sidebar
+                // (ADR-0069 §2, owner decision 5), which also makes the folder
+                // pane give way first, as mail's reader does.
+                activeModule !== 'mail' && 'min-[769px]:[&>[data-region=content]]:min-w-[360px]',
+              )}
+            >
+              {narrowBar && (
+                <ErrorBoundary label="module bar">
+                  <ModuleSwitcher variant="bar" />
                 </ErrorBoundary>
-                {showKanbanMessagePane && (
-                  <div
-                    ref={kanbanPaneRef}
-                    className="relative flex shrink-0 overflow-hidden border-s border-border bg-chat max-[600px]:w-full"
-                    style={{
-                      width: `${kanbanPaneWidth}%`,
-                      minWidth: readerKeepsItsWidth ? KANBAN_PANE_MIN_PX : KANBAN_PANE_NARROW_MIN_PX,
-                    }}
-                  >
-                    {/* The width is a percentage of the board's area, kept in settings. */}
-                    <KanbanPaneResizer pane={kanbanPaneRef} shell={boardAreaRef} />
-                    <ErrorBoundary label="conversation">
-                      <MessagePane />
-                    </ErrorBoundary>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <>
-                <ErrorBoundary label="thread list">
-                  <ThreadList width={threadListWidth} resizable />
+              )}
+              {activeModule === 'mail' && (
+                // The common folder pane, mail first (ADR-0068 §4 and §9, step 2):
+                // today's accounts and folders are its body. It stays with a
+                // board open, which its «Taulers» section marks (piece 14a).
+                <ErrorBoundary label="mail navigation">
+                  <FolderPane title={t('mailNavigation.title')}>
+                    <MailNavigation />
+                  </FolderPane>
                 </ErrorBoundary>
-                <ErrorBoundary label="conversation">
-                  <MessagePane />
+              )}
+              {activeModule === 'people' ? (
+                <ErrorBoundary label="people">
+                  <PeopleView />
                 </ErrorBoundary>
-              </>
-            )}
-          </main>
+              ) : activeModule === 'calendar' ? (
+                <ErrorBoundary label="calendar">
+                  <CalendarView />
+                </ErrorBoundary>
+              ) : activeModule === 'tasks' ? (
+                <ErrorBoundary label="tasks">
+                  <TasksView />
+                </ErrorBoundary>
+              ) : activeModule === 'notes' ? (
+                <ErrorBoundary label="notes">
+                  <NotesView />
+                </ErrorBoundary>
+              ) : activeModule === 'attachments' ? (
+                <ErrorBoundary label="attachments">
+                  <AttachmentsView />
+                </ErrorBoundary>
+              ) : activeModule === 'chat' ? (
+                <ErrorBoundary label="messaging">
+                  <MessagingView />
+                </ErrorBoundary>
+              ) : activeBoardId ? (
+                // The board and its conversation pane, whose width is a share of
+                // this area: the row less the folders, or the narrow bar (ADR-0068 §4).
+                // It asks for one column and the reader, so the folder pane gives
+                // way first where the row is short.
+                <div
+                  ref={boardAreaRef}
+                  className="flex min-w-0 overflow-hidden"
+                  style={{ flex: `1 1 ${kanbanAreaBase(kanbanColumnWidth, showKanbanMessagePane)}px` }}
+                >
+                  <ErrorBoundary label="thread list">
+                    <KanbanView boardId={activeBoardId} />
+                  </ErrorBoundary>
+                  {showKanbanMessagePane && (
+                    <div
+                      ref={kanbanPaneRef}
+                      className="relative flex shrink-0 overflow-hidden border-s border-border bg-chat max-[600px]:w-full"
+                      style={{
+                        width: `${kanbanPaneWidth}%`,
+                        minWidth: readerKeepsItsWidth ? KANBAN_PANE_MIN_PX : KANBAN_PANE_NARROW_MIN_PX,
+                      }}
+                    >
+                      {/* The width is a percentage of the board's area, kept in settings. */}
+                      <KanbanPaneResizer pane={kanbanPaneRef} shell={boardAreaRef} />
+                      <ErrorBoundary label="conversation">
+                        <MessagePane />
+                      </ErrorBoundary>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <ErrorBoundary label="thread list">
+                    <ThreadList width={threadListWidth} resizable />
+                  </ErrorBoundary>
+                  <ErrorBoundary label="conversation">
+                    <MessagePane />
+                  </ErrorBoundary>
+                </>
+              )}
+            </main>
+            <ErrorBoundary label="sidebar">
+              <AppSidebar row={rowRef} content={sidebarContent} />
+            </ErrorBoundary>
+          </div>
         </>
       )}
     </AppFrame>

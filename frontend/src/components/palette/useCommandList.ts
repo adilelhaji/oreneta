@@ -18,6 +18,7 @@ import {
   MailOpen,
   MessagesSquare,
   Moon,
+  PanelRight,
   Paperclip,
   Pencil,
   Keyboard,
@@ -79,6 +80,8 @@ import { merge$ } from '../../states/merge'
 import { awaiting$ } from '../../states/awaiting'
 import { pauseNotifications, resumeNotifications, type PauseChoice } from '../../states/notifications'
 import { useQuietState } from '../sidenav/QuietIndicator'
+import { sidebarExpanded, toggleAppSidebar } from '../../states/sidebar'
+import { useSidebarShown } from '../shell/useSidebarShown'
 
 // The modules after mail, in the order of the module strip (ADR-0068 §5). Mail
 // itself is "Go to: Mail" (view.mail).
@@ -118,6 +121,8 @@ export function useCommandList(): Command[] {
   const quiet = useQuietState().quiet
   // A manual mail check in flight (`syncMail`): its command waits, and says so.
   const syncing = useValue(ui$.busy)
+  // The app's sidebar, expanded beside the content or as an overlay (ADR-0069 §2).
+  const sidebarOpen = sidebarExpanded(useSidebarShown())
 
   return useMemo<Command[]>(() => {
     const run = (fn: () => void) => () => {
@@ -286,6 +291,16 @@ export function useCommandList(): Command[] {
         icon: icon(Palette),
         keywords: 'components tokens library styleguide',
         run: run(() => ui$.catalogueOpen.set(true)),
+      },
+      {
+        // As the band's «Barra lateral» button (ADR-0069 §2): shows the app's
+        // sidebar, or hides it. There is none on the first-account setup.
+        id: 'view.sidebar',
+        label: sidebarOpen ? t('commands.sidebar.hide') : t('commands.sidebar.show'),
+        area: 'app',
+        icon: icon(PanelRight),
+        keywords: 'sidebar agenda conversation details panel widgets',
+        run: run(() => toggleAppSidebar()),
       },
       {
         id: 'app.about',
@@ -520,7 +535,10 @@ export function useCommandList(): Command[] {
     const messageCommands = new Set(['thread.archive', 'thread.star', 'thread.unread', 'thread.delete'])
     // With no account yet (the first-account setup screen, #343), only what
     // needs none: the settings, the themes and the app's own commands.
-    const available = accounts.length === 0 ? list.filter((command) => NO_ACCOUNT_AREAS.has(command.area)) : list
+    const available =
+      accounts.length === 0
+        ? list.filter((command) => NO_ACCOUNT_AREAS.has(command.area) && command.id !== 'view.sidebar')
+        : list
     return available.map((command) => {
       if (command.kind === 'setting') return command
       const keywordId = command.id.startsWith('theme.')
@@ -587,5 +605,6 @@ export function useCommandList(): Command[] {
     activeModule,
     quiet,
     syncing,
+    sidebarOpen,
   ])
 }
