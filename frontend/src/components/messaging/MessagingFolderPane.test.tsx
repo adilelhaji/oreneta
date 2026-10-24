@@ -152,7 +152,11 @@ describe('Chat in the common folder pane (ADR-0068 §4, #337)', () => {
     // The pane is the only "folders" region, and the old column is gone.
     expect(screen.container.querySelectorAll('[data-region="folders"]')).toHaveLength(1)
     expect(content(screen).querySelectorAll('[data-region="folders"]')).toHaveLength(0)
-    expect(nav.querySelectorAll('[data-region]')).toHaveLength(0)
+    // The one region inside it is the module strip at its foot (#354).
+    expect([...nav.querySelectorAll<HTMLElement>('[data-region]')].map((region) => region.dataset.region)).toEqual([
+      'modules',
+    ])
+    expect(nav.querySelector('[data-region="modules"]')?.getAttribute('aria-label')).toBe('Modules')
     expect(screen.container.querySelector('.w-72')).toBeNull()
     // The conversation side keeps its own section.
     expect(within(content(screen)).getByRole('region', { name: 'No conversation open' })).toBeTruthy()
@@ -165,7 +169,10 @@ describe('Chat in the common folder pane (ADR-0068 §4, #337)', () => {
     // The account row comes first in the body, with its status.
     expect(within(nav).getByRole('combobox', { name: 'Chat account' })).toBeTruthy()
     expect(within(nav).getByRole('status').textContent).toBe('Connected')
-    expect(nav.querySelector('svg.lucide-messages-square')).toBeNull()
+    // The column's chat icon is not there; the strip's Chat button has its own (#354).
+    expect(
+      [...nav.querySelectorAll('svg.lucide-messages-square')].filter((icon) => !icon.closest('[data-module-switcher]')),
+    ).toEqual([])
     expect(within(nav).queryByRole('button', { name: /navigation|menu/i })).toBeNull()
     // Then the column's pieces, in the column's order.
     const order = [
@@ -237,12 +244,26 @@ describe('Chat in the common folder pane (ADR-0068 §4, #337)', () => {
     expect(within(pane(screen)).getByRole('status').textContent).toBe('Not connected')
   })
 
-  it('keeps ChatSetup as it was when there is no account', async () => {
+  it('keeps ChatSetup as it was when there is no account, beside an empty pane that holds the module strip', async () => {
     ;(window as any).go.main.App.Invoke = async (command: string) => (command === 'chat.accounts' ? [] : { ok: true })
     const screen = render(<MessagingView />)
-    await waitFor(() => screen.getByRole('form', { name: 'Add a chat account' }))
+    const form = await waitFor(() => screen.getByRole('form', { name: 'Add a chat account' }))
+    // From 1025 px the module strip is at the foot of the folder pane (#354):
+    // without a pane, Chat would be the one module with no way to the others
+    // but the app menu. The pane has nothing else yet, and the form is as it was.
+    const nav = pane(screen)
+    expect(nav.dataset.region).toBe('folders')
+    const body = within(nav).getByRole('heading', { level: 2 }).parentElement!.nextElementSibling as HTMLElement
+    expect(body.childElementCount).toBe(0)
+    expect(within(nav).getByRole('navigation', { name: 'Modules' })).toBeTruthy()
+    expect(nav.contains(form)).toBe(false)
+    expect(nav.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // At 1024 px the setup is alone, as before.
+    await act(async () => setWidth(1500))
+    await act(async () => setWidth(1024))
     expect(screen.container.querySelector('[data-folder-pane]')).toBeNull()
     expect(screen.container.querySelector('[data-region="folders"]')).toBeNull()
+    expect(screen.getByRole('form', { name: 'Add a chat account' })).toBeTruthy()
   })
 
   it('has the width the other modules have, and shares it with them', async () => {

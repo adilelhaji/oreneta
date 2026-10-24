@@ -113,7 +113,11 @@ describe('Attachments in the common folder pane (ADR-0068 §4, #339)', () => {
     // The pane is the only "folders" region.
     expect(screen.container.querySelectorAll('[data-region="folders"]')).toHaveLength(1)
     expect(content(screen).querySelectorAll('[data-region="folders"]')).toHaveLength(0)
-    expect(nav.querySelectorAll('[data-region]')).toHaveLength(0)
+    // The one region inside it is the module strip at its foot (#354).
+    expect([...nav.querySelectorAll<HTMLElement>('[data-region]')].map((region) => region.dataset.region)).toEqual([
+      'modules',
+    ])
+    expect(nav.querySelector('[data-region="modules"]')?.getAttribute('aria-label')).toBe('Modules')
     // The bar is gone from the content, and the header and the list stay.
     expect(within(content(screen)).queryByLabelText('From')).toBeNull()
     expect(within(content(screen)).getByRole('heading', { level: 1, name: 'Attachments' })).toBeTruthy()

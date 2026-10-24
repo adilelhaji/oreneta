@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, it } from 'bun:test'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { QuietIndicator } from './QuietIndicator'
-import { QuickSettingsMenu } from './QuickSettingsMenu'
+import { AppMenuButton } from '../shell/AppMenu'
+import { accounts$ } from '../../states/accounts'
 import { settings$ } from '../../states/settings'
 import { notificationClock, quietClock$ } from '../../states/notifications'
 import { DEFAULT_NOTIFICATION_PREFS } from '../../lib/quietHours'
@@ -18,6 +19,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  accounts$.set([])
   notificationClock.now = realNow
   settings$.notifications.set(structuredClone(DEFAULT_NOTIFICATION_PREFS))
   delete (window as any).go
@@ -49,10 +51,29 @@ it('follows the clock into scheduled quiet hours, and Resume skips the rest of t
   expect(settings$.notifications.peek().scheduleResumedUntil).toBe(new Date(2026, 9, 14, 7).getTime())
 })
 
-it('the More menu offers the pauses, then Resume', async () => {
-  const onClose = () => {}
-  const screen = render(<QuickSettingsMenu anchor={{ x: 0, y: 0, placement: 'down' }} onClose={onClose} />)
+// The rail's More menu went with the rail (#354): the app menu offers the
+// same pauses, then Resume.
+it('the app menu offers the pauses, then Resume', async () => {
+  accounts$.set([
+    {
+      id: 'a',
+      email: 'a@example.test',
+      display_name: 'A',
+      provider: 'imap',
+      auth_type: 'password',
+      imap_host: 'imap.example.test',
+      imap_port: 993,
+      smtp_host: 'smtp.example.test',
+      smtp_port: 465,
+      tls: true,
+    },
+  ])
+  const screen = render(<AppMenuButton />)
+  const button = screen.getByRole('button', { name: 'App menu' })
+  fireEvent.click(button)
   await act(async () => fireEvent.click(screen.getByRole('menuitem', { name: 'Do not disturb until tomorrow' })))
   expect(settings$.notifications.peek().pause).toEqual({ until: new Date(2026, 9, 14, 8).getTime() })
+  fireEvent.click(button)
   expect(screen.getByRole('menuitem', { name: 'Resume notifications' })).toBeTruthy()
+  expect(screen.queryByRole('menuitem', { name: 'Do not disturb until tomorrow' })).toBeNull()
 })

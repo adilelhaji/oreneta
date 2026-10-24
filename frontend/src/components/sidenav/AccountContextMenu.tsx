@@ -6,26 +6,23 @@ import { inboxUnread, mail$, markAccountInboxRead } from '../../states/mail'
 import { setAccountSideNavHidden } from '../../states/settings'
 import { ui$ } from '../../states/ui'
 import type { Account } from '../../types'
-import { RailContextMenu, RailMenuItem } from './RailContextMenu'
+import { NavContextMenu, NavMenuItem } from './NavContextMenu'
 
 const secondary = 'text-secondary'
 
-// The menu of an account, on the rail (right click) and in the folder pane
-// (right click, Shift+F10 and the context menu key): settings, notifications,
+// The menu of an account in «Comptes i carpetes» (right click, Shift+F10 and
+// the context menu key), the one the rail had: settings, notifications,
 // checking, and visibility.
 export function AccountContextMenu({
   account,
   x,
   y,
-  hideLabel,
   onHidden,
   onClose,
 }: {
   account: Account
   x: number
   y: number
-  /** The hide row's text, which says where it hides from: the rail's unless given. */
-  hideLabel?: string
   /** Told after the account was hidden, before the menu closes. */
   onHidden?: () => void
   onClose: () => void
@@ -34,8 +31,8 @@ export function AccountContextMenu({
   const folders = useValue(mail$.foldersByAccount[account.id])
   const hasUnread = inboxUnread(folders) > 0
   return (
-    <RailContextMenu x={x} y={y} label={account.display_name || account.email || account.id} onClose={onClose}>
-      <RailMenuItem
+    <NavContextMenu x={x} y={y} label={account.display_name || account.email || account.id} onClose={onClose}>
+      <NavMenuItem
         icon={<SlidersHorizontal size={14} className={secondary} strokeWidth={1.75} />}
         label={t('settings.account.accountSettings')}
         onClick={() => {
@@ -44,7 +41,7 @@ export function AccountContextMenu({
           onClose()
         }}
       />
-      <RailMenuItem
+      <NavMenuItem
         disabled={!hasUnread || account.auth_type === 'graph_oauth'}
         icon={<CheckCheck size={14} className={secondary} strokeWidth={1.75} />}
         label={t('threads.actions.markAllAsRead')}
@@ -53,7 +50,7 @@ export function AccountContextMenu({
           onClose()
         }}
       />
-      <RailMenuItem
+      <NavMenuItem
         icon={
           account.muted ? (
             <Bell size={14} className={secondary} strokeWidth={1.75} />
@@ -67,7 +64,7 @@ export function AccountContextMenu({
           onClose()
         }}
       />
-      <RailMenuItem
+      <NavMenuItem
         icon={
           account.paused ? (
             <Play size={14} className={secondary} strokeWidth={1.75} />
@@ -81,15 +78,15 @@ export function AccountContextMenu({
           onClose()
         }}
       />
-      <RailMenuItem
+      <NavMenuItem
         icon={<EyeOff size={14} className={secondary} strokeWidth={1.75} />}
-        label={hideLabel ?? t('sidenav.actions.hideFromSideNav')}
+        label={t('mailNavigation.actions.hideAccount')}
         onClick={() => {
           setAccountSideNavHidden(account.id, true)
           onHidden?.()
           onClose()
         }}
       />
-    </RailContextMenu>
+    </NavContextMenu>
   )
 }

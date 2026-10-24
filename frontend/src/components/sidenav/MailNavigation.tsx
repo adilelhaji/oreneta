@@ -572,9 +572,9 @@ export function MailNavigationView({
       />
       <h3>{t('mailNavigation.accounts')}</h3>
       <div className="mail-navigation-accounts">
-        {/* The unified inbox, the boards and the accounts, in the order of the
-            rail and of Ctrl/⌘+1…9 (ADR-0068 §5), the account groups after
-            the boards. */}
+        {/* The unified inbox, the boards and the accounts, in the order of
+            Ctrl/⌘+1…9, the one the rail had (ADR-0068 §5), the account groups
+            after the boards. */}
         {unifiedVisible && (
           <UnifiedInboxRow
             current={!boardOpen && selectedAccount === 'unified' && !activeGroup}
@@ -796,7 +796,7 @@ export function MailNavigation() {
     openMailAccount(account, folder, false)
   }
   // From a board (ADR-0068 §4), an account goes back to mail; the one the
-  // mail view was on comes back on the folder it was showing, as from the rail.
+  // mail view was on comes back on the folder it was showing, as it did from the rail.
   function leaveBoard(account: string) {
     clearBulkSelection()
     ui$.mobilePane.set('threads')

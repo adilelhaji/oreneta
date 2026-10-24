@@ -11,6 +11,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
+import { CSS } from '@dnd-kit/utilities'
 import { useTranslation } from '../../lib/i18n'
 import { documentDirection } from '../../lib/direction'
 import { moveShownAccount } from '../../states/accounts'
@@ -20,14 +21,28 @@ import { Avatar } from '../avatar/Avatar'
 import { AccountContextMenu } from './AccountContextMenu'
 import { BoardContextMenu } from './BoardContextMenu'
 import { UnifiedInboxContextMenu } from './UnifiedInboxContextMenu'
-import { sortableStyle } from './SortableRailItems'
 import { accountStatus, feedDragOver, feedDrop, useAccountUnread, type AccountStatus } from './accountNav'
 
 // What «Comptes i carpetes» took over from the vertical rail (ADR-0068 §5,
 // piece 14a): the unified inbox's menu, the «Taulers» section, and accounts
 // that reorder, open their menu, count their unread mail, say their state and
-// take a dropped feed. The rail shows the same order and the same menus until
-// it goes (piece 14b).
+// take a dropped feed. The rail itself went with piece 14b (#354); the order
+// and the menus are the ones it had.
+
+/** How a sortable row is drawn while it moves. */
+function sortableStyle(
+  transform: ReturnType<typeof useSortable>['transform'],
+  transition: string | undefined,
+  isDragging: boolean,
+) {
+  return {
+    transform: CSS.Translate.toString(transform),
+    transition: isDragging ? 'none' : transition,
+    zIndex: isDragging ? 10 : undefined,
+    opacity: isDragging ? 0.5 : undefined,
+    pointerEvents: isDragging ? ('none' as const) : undefined,
+  }
+}
 
 /** Shift+F10 or the context menu key: the keyboard's right click. */
 export function menuKey(event: KeyboardEvent<HTMLElement>): boolean {
@@ -207,7 +222,6 @@ export function UnifiedInboxRow({
           x={menu.x}
           y={menu.y}
           label={name}
-          hideLabel={t('mailNavigation.actions.hideUnified')}
           onShowGroup={onShowGroup}
           onHidden={() => refocus(rowAndNeighbours(menu.trigger), t('mailNavigation.hidden', { name }))}
           onClose={() => {
@@ -355,7 +369,7 @@ function BoardRow({
   )
 }
 
-/** The accounts the pane shows, in the saved order, which is the rail's (ADR-0068 §5). */
+/** The accounts the pane shows, in the saved order, the one the rail had (ADR-0068 §5). */
 export function AccountRows({
   accounts,
   isCurrent,
@@ -410,7 +424,6 @@ export function AccountRows({
           account={menuAccount}
           x={menu.x}
           y={menu.y}
-          hideLabel={t('mailNavigation.actions.hideAccount')}
           onHidden={() =>
             refocus(rowAndNeighbours(menu.trigger), t('mailNavigation.hidden', { name: nameOf(menuAccount) }))
           }

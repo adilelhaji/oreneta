@@ -12,7 +12,6 @@ import { settings$ } from '../../states/settings'
 import { ui$ } from '../../states/ui'
 import type { Account } from '../../types'
 import { ConnectivityBanner } from '../banner/ConnectivityBanner'
-import { QuietIndicator } from '../sidenav/QuietIndicator'
 import { AppHeader } from './AppHeader'
 import { SYNC_SUMMARY_MIN_WINDOW } from './SyncStatus'
 
@@ -458,40 +457,34 @@ describe('the bar under the header (#345)', () => {
 })
 
 describe('do not disturb in the band (#345)', () => {
-  it('shows the same state as the rail, which keeps its button, and is the one status', async () => {
-    const view = render(
-      <>
-        <AppHeader />
-        <QuietIndicator placement="rail" />
-      </>,
-    )
+  it('is the one indicator now that the rail is gone (#354), and the one status', async () => {
+    const view = render(<AppHeader />)
     const end = view.container.querySelector<HTMLElement>('[data-band-end]')!
     expect(end.querySelector('[data-quiet-indicator]')).toBeNull()
-    expect(view.container.querySelector('[data-quiet-indicator="rail"]')).toBeNull()
     await act(async () => settings$.notifications.pause.set({ until: null }))
     const status = 'Do not disturb is on until you turn it off'
-    // The band's is the status, named by what it says; the rail's copy is only its button.
+    // The band's is the status, named by what it says, around its button.
     const band = within(end).getByRole('status', { name: status })
     // Compared one by one: a failing comparison of DOM nodes would print the whole tree.
     const named = view.getAllByRole('status', { name: status })
     expect(named.length).toBe(1)
     expect(named[0] === band).toBe(true)
-    const rail = view.container.querySelector<HTMLElement>('[data-quiet-indicator="rail"]')!
-    expect(rail.getAttribute('role')).toBeNull()
+    expect(view.container.querySelectorAll('[data-quiet-indicator]')).toHaveLength(1)
     const resumes = view.getAllByRole('button', { name: 'Resume notifications' })
-    expect(resumes).toHaveLength(2)
-    for (const resume of resumes) expect(resume.title).toBe(`${status} — Resume notifications`)
+    expect(resumes).toHaveLength(1)
+    expect(resumes[0].title).toBe(`${status} — Resume notifications`)
+    expect(band.contains(resumes[0])).toBe(true)
     // It comes before the sync status, at the end of the band.
     const sync = end.querySelector('[data-sync-status]')!
     expect(band.compareDocumentPosition(sync) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    // Resumed from the band: both go.
+    // Resumed from the band: it goes.
     await act(async () => fireEvent.click(within(band).getByRole('button', { name: 'Resume notifications' })))
     expect(settings$.notifications.peek().pause).toBeNull()
     expect(view.queryByRole('status', { name: status })).toBeNull()
     expect(view.container.querySelector('[data-quiet-indicator]')).toBeNull()
   })
 
-  it('follows a pause until a time, in the words the rail uses', async () => {
+  it('follows a pause until a time, in the words the rail used', async () => {
     const view = render(<AppHeader />)
     await act(async () => settings$.notifications.pause.set({ until: new Date(2026, 9, 23, 13).getTime() }))
     const status = view.getByRole('status', { name: /^Do not disturb until / })

@@ -154,6 +154,20 @@ export const messaging$ = observable({
   uploads: {} as Record<string, ChatUpload>,
 })
 
+/**
+ * Chat's own unread count, the one its button in the module switcher shows
+ * (owner decision 2 on #352): the unread messages of the open account's direct
+ * conversations and groups, muted ones included (they still count as unread).
+ */
+export function chatUnread(
+  conversations: readonly Pick<ChatConversation, 'unread'>[],
+  rooms: readonly Pick<ChatRoom, 'unread'>[],
+): number {
+  const count = (items: readonly { unread: number }[]) =>
+    items.reduce((sum, item) => sum + (Number.isFinite(item.unread) && item.unread > 0 ? item.unread : 0), 0)
+  return count(conversations) + count(rooms)
+}
+
 export async function loadMessaging() {
   const [accounts, status] = await Promise.all([
     invoke<ChatAccount[]>('chat.accounts', {}),

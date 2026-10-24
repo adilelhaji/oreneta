@@ -149,7 +149,7 @@ export type CustomThemeInput = {
   bgApp: string
   /** Panels: thread list, header, composer, incoming bubbles. */
   surface: string
-  /** The account rail / side navigation. */
+  /** The module bar: the narrow bar of module icons from 769 to 1024 px (#354). */
   sideNav: string
   accent: string
   /** Primary text color. */

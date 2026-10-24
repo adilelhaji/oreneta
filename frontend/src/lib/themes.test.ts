@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { composite, contrastRatio, isValidColor, luminance } from './color'
+import { composite, contrastRatio, isValidColor, luminance, withAlpha } from './color'
 import {
   BUILTIN_THEMES,
   DEFAULT_DARK_ID,
@@ -186,15 +186,42 @@ describe('cobalt defaults', () => {
     }
   })
 
-  it('keeps the accent fill for the focus ring on the dark module rail', () => {
-    // The accent as text is darkened for light content surfaces, which would
-    // drop the ring under 3:1 on the rail in Mist, Dawn and Honey (#311).
+  it('paints the narrow module bar with icons and a focus ring that read on it, in every theme (#354)', () => {
+    // Owner decision 4 on #352: the module bar colour paints only the narrow
+    // bar of 769–1024 px, dark in every built-in theme. Its icons and ring take
+    // the light end of the palette (index.css): the frame tone in a light
+    // theme, the primary text in a dark one. The rail's ring, the accent fill,
+    // read 2.03:1 on it in Oreneta Light (#311).
     const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8')
-    expect(css).toMatch(/\[data-region='modules'\] :focus-visible \{\s*outline-color: var\(--me-accent\);/)
-    for (const id of ['mist', 'dawn', 'honey']) {
-      const t = builtinTheme(id)!.tokens
-      expect(contrastRatio(t.accent, t.bgSideNav)!).toBeGreaterThanOrEqual(3)
+    expect(css).toMatch(/\[data-module-switcher='bar'\] \{\s*--module-bar-fg: var\(--me-bg-app\);/)
+    expect(css).toMatch(/\.dark \[data-module-switcher='bar'\] \{\s*--module-bar-fg: var\(--me-text-primary\);/)
+    expect(css).toMatch(
+      /\[data-module-switcher='bar'\] \[data-module-slot\] > button:focus-visible \{\s*outline-color: var\(--module-bar-fg\);/,
+    )
+    // The strip under the folders keeps the one ring, the accent as text, on
+    // the pane's surfaces: the rail's rule for the whole region is gone.
+    expect(css).not.toContain("[data-region='modules'] :focus-visible")
+    for (const theme of BUILTIN_THEMES) {
+      const t = theme.tokens
+      const fg = theme.appearance === 'light' ? t.bgApp : t.textPrimary
+      const hover = composite(withAlpha(fg, 0.15), t.bgSideNav)!
+      expect({
+        id: theme.id,
+        // The icons, held to text's 4.5:1, which clears the ring's 3:1, also
+        // on the hover tint.
+        icon: contrastRatio(fg, t.bgSideNav)! >= READABLE_CONTRAST,
+        hover: contrastRatio(fg, hover)! >= READABLE_CONTRAST,
+        // The active button: the accent as text on the selection, as is its
+        // accent bar; its count, text on the accent.
+        active: contrastRatio(t.accentFg, t.bgActive)! >= READABLE_CONTRAST,
+        count: contrastRatio(t.accentText, t.accent)! >= READABLE_CONTRAST,
+      }).toEqual({ id: theme.id, icon: true, hover: true, active: true, count: true })
     }
+    // Oreneta's two, as measured.
+    const light = builtinTheme(DEFAULT_LIGHT_ID)!.tokens
+    const dark = builtinTheme(DEFAULT_DARK_ID)!.tokens
+    expect(contrastRatio(light.bgApp, light.bgSideNav)!).toBeGreaterThan(10)
+    expect(contrastRatio(dark.textPrimary, dark.bgSideNav)!).toBeGreaterThan(16)
   })
 
   it('has readable body, accent buttons and semantic notices in both defaults', () => {

@@ -255,8 +255,8 @@ export async function reorderAccounts(oldIndex: number, newIndex: number) {
 /**
  * The order of every account after one of those shown moves to where another
  * shown one is. The others keep their places in the saved order, so moving
- * among the accounts on screen never moves a hidden one (ADR-0068 §5: the rail
- * and «Comptes i carpetes» show one order). Null when either is not shown.
+ * among the accounts on screen never moves a hidden one (ADR-0068 §5: «Comptes
+ * i carpetes» and Ctrl/⌘+1…9 follow one order). Null when either is not shown.
  */
 export function shownAccountOrder(
   allIds: string[],

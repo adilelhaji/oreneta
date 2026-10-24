@@ -255,7 +255,7 @@ export const ui$ = observable({
 
 let pendingConfirmResolve: ((confirmed: boolean) => void) | null = null
 
-/** A module's button in the side rail: opens it, or goes back to mail if it is already open. */
+/** A module's button in the module switcher: opens it, or goes back to mail if it is already open. */
 export function toggleModule(next: AppModule) {
   ui$.module.set(ui$.module.peek() === next ? 'mail' : next)
 }

@@ -5,7 +5,7 @@ import { useThreadListLoader } from './useThreadListLoader'
 import { invoke } from './lib/bridge'
 import { onTranslationEvent } from './states/translation'
 import { onCloudEvent } from './states/cloud'
-import { onChatEvent } from './states/messaging'
+import { loadMessaging, onChatEvent } from './states/messaging'
 import { onNotificationClicked } from './states/notificationClick'
 import { onBackupScheduled } from './states/backupSchedule'
 import { onAutoArchiveRan } from './states/autoArchive'
@@ -93,6 +93,14 @@ export function useAppEffects() {
 
   // Notification sounds, do not disturb and quiet hours (ADR-0049).
   useEffect(() => startNotifications(), [])
+
+  // Chat's button in the module switcher shows Chat's unread count (owner
+  // decision 2 on #352), so its conversations are read once there is an
+  // account, not only when Chat first opens. Then `chat.changed` keeps them.
+  const hasAccount = accounts.length > 0
+  useEffect(() => {
+    if (hasAccount) void loadMessaging().catch(() => {})
+  }, [hasAccount])
 
   useEffect(() => {
     void boot().catch((error) => {

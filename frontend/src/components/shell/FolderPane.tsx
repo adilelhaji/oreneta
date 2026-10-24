@@ -3,6 +3,8 @@ import { useValue } from '@legendapp/state/react'
 import { FOLDER_PANE_WIDTH } from '../../lib/paneResize'
 import { settings$ } from '../../states/settings'
 import { FolderPaneResizer } from '../resizer/PaneResizers'
+import { useWideWindow } from '../resizer/useElementWidth'
+import { ModuleSwitcher } from './ModuleSwitcher'
 
 // Where the row runs short, the folders give way before the list: flexbox
 // shrinks each item in proportion to this factor times its width, and this
@@ -25,8 +27,6 @@ interface FolderPaneProps {
   children: ReactNode
   /** An optional strip under the body (the calendar's month, piece 4). */
   footer?: ReactNode
-  /** The place kept at the very foot for the module switcher (ADR-0068 §5), which piece 14 fills. */
-  modules?: ReactNode
 }
 
 /**
@@ -36,11 +36,17 @@ interface FolderPaneProps {
  * pane; a name that does not fit ends in "…" and is whole in its tooltip. It
  * is not drawn at 1024 px and below, where the list's folder switcher takes
  * its place (ADR-0068 §5).
+ *
+ * At its very foot is the module strip (ADR-0068 §5, #354), in every module:
+ * the body scrolls above it and the footer, which stay put. The strip is only
+ * mounted while the pane is drawn, so the narrow bar of 769–1024 px and the
+ * strip are never both in the page: one «Mòduls» landmark at a time.
  */
-export function FolderPane({ title, children, footer, modules }: FolderPaneProps) {
+export function FolderPane({ title, children, footer }: FolderPaneProps) {
   const titleId = useId()
   const pane = useRef<HTMLElement | null>(null)
   const width = useValue(settings$.folderPaneWidth)
+  const drawn = useWideWindow(FOLDER_PANE_MIN_WINDOW)
   return (
     <nav
       ref={pane}
@@ -57,7 +63,7 @@ export function FolderPane({ title, children, footer, modules }: FolderPaneProps
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
       {footer && <div className="shrink-0 border-t border-border">{footer}</div>}
-      {modules}
+      {drawn && <ModuleSwitcher variant="strip" />}
       <FolderPaneResizer pane={pane} />
     </nav>
   )

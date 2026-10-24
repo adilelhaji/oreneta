@@ -5,9 +5,9 @@ import { inboxUnread, mail$ } from '../../states/mail'
 import { settings$ } from '../../states/settings'
 import type { Account } from '../../types'
 
-// What the vertical rail and the mail folder pane both show of an account
-// (ADR-0068 §5): its state, its inbox count and the feeds it takes. One place,
-// so the two say the same thing until the rail goes (piece 14b).
+// What the mail folder pane shows of an account (ADR-0068 §5), as the
+// vertical rail did until piece 14b (#354): its state, its inbox count and the
+// feeds it takes.
 
 /** The state an account is in that its row marks, the most pressing first; null when none. */
 export type AccountStatus = 'reconnect' | 'paused' | 'muted'

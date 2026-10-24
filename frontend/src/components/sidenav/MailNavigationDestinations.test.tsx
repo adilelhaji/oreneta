@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import { MailNavigation } from './MailNavigation'
-import { SideNav } from './SideNav'
 import { AppHotkeys } from '../dialog/AppHotkeys'
 import { accounts$, shownAccountOrder } from '../../states/accounts'
 import { accountGroups$ } from '../../states/accountGroups'
@@ -16,8 +15,8 @@ import type { Account, Folder } from '../../types'
 // What «Comptes i carpetes» took over from the vertical rail (ADR-0068 §5,
 // piece 14a, #353): accounts that reorder, open their menu, count their
 // unread mail, say their state and take a dropped feed; the «Taulers»
-// section; the unified inbox's menu. The rail is still there and shares all of
-// it: one order, one menu, one shortcut sequence.
+// section; the unified inbox's menu. The rail went with piece 14b (#354): one
+// order and one shortcut sequence remain, the ones it had.
 
 const account = (id: string, name: string, extra: Partial<Account> = {}): Account => ({
   id,
@@ -122,34 +121,36 @@ describe('accounts in «Comptes i carpetes» (#353)', () => {
     expect(order()).toEqual(['blai', 'carla', 'alex'])
   })
 
-  it('share their order with the rail, and hidden accounts keep their places in it', () => {
+  it('share their order with Ctrl/⌘+1…9, as they did with the rail, and hidden accounts keep their places in it', () => {
     settings$.hiddenSideNavAccounts.set(['blai'])
     const view = render(
       <>
-        <SideNav />
+        <AppHotkeys />
         <MailNavigation />
       </>,
     )
-    const rail = view.getByRole('complementary', { name: 'Modules' })
-    const railOrder = () =>
-      within(rail)
-        .getAllByRole('button')
-        .flatMap((element) => (element.getAttribute('aria-roledescription') === 'sortable' ? [element.title] : []))
     const paneRow = (id: string) => view.container.querySelector<HTMLElement>(`[data-nav-row="account:${id}"]`)!
     const paneOrder = () =>
       [...view.container.querySelectorAll('[data-nav-row^="account:"]')].map((element) =>
         element.getAttribute('data-nav-row')!.slice('account:'.length),
       )
-    expect(railOrder()).toEqual(['Alex (alex@example.test)', 'Carla (carla@example.test)'])
+    // The unified inbox first, then the accounts shown, in the pane's order.
+    const opened = (digit: number) => {
+      act(() => {
+        fireEvent.keyDown(window, { key: String(digit), code: `Digit${digit}`, ctrlKey: true })
+      })
+      return ui$.selectedAccount.peek()
+    }
     expect(paneOrder()).toEqual(['alex', 'carla'])
+    expect([opened(2), opened(3)]).toEqual(['alex', 'carla'])
     fireEvent.keyDown(paneRow('alex'), { key: 'ArrowDown', altKey: true })
     // Blai, hidden, stays second in the saved order.
     expect(order()).toEqual(['carla', 'blai', 'alex'])
     expect(paneOrder()).toEqual(['carla', 'alex'])
-    expect(railOrder()).toEqual(['Carla (carla@example.test)', 'Alex (alex@example.test)'])
+    expect([opened(2), opened(3)]).toEqual(['carla', 'alex'])
   })
 
-  it('compute one order for the rail and the pane, moving only among the accounts shown', () => {
+  it('compute one order for the pane and the shortcuts, moving only among the accounts shown', () => {
     const all = ['a', 'b', 'c', 'd']
     expect(shownAccountOrder(all, all, 'a', 'c')).toEqual(['b', 'c', 'a', 'd'])
     expect(shownAccountOrder(all, ['a', 'c', 'd'], 'd', 'a')).toEqual(['d', 'b', 'a', 'c'])
@@ -237,7 +238,7 @@ describe('accounts in «Comptes i carpetes» (#353)', () => {
     expect(row('account:blai').querySelector('svg.mail-account-status')?.getAttribute('aria-hidden')).toBe('true')
   })
 
-  it('take a feed dropped from the list on an RSS account, as on the rail', async () => {
+  it('take a feed dropped from the list on an RSS account, as the rail did', async () => {
     const feeds = account('rss-news', 'News', { provider: 'rss', auth_type: 'rss' })
     const other = account('rss-blogs', 'Blogs', { provider: 'rss', auth_type: 'rss' })
     accounts$.set([alex, feeds, other])
@@ -323,7 +324,7 @@ describe('«Taulers» in «Comptes i carpetes» (#353)', () => {
     expect(view.queryByText('Boards')).toBeNull()
   })
 
-  it('opens a board as the rail does, and marks it, not mail, while it is open', () => {
+  it('opens a board as the rail did, and marks it, not mail, while it is open', () => {
     ui$.module.set('mail')
     const { view, row } = pane()
     fireEvent.click(row('board:b2'))
@@ -409,7 +410,7 @@ describe('the unified inbox row in «Comptes i carpetes» (#353)', () => {
     accountGroups$.groups.set([{ id: 'group:work', name: 'Work', accounts: ['alex', 'carla'] }])
   })
 
-  it('has the rail menu: each group shown together, and hiding it, from the mouse and the keyboard', () => {
+  it("has the rail's menu: each group shown together, and hiding it, from the mouse and the keyboard", () => {
     const { view, row, announced } = pane()
     fireEvent.contextMenu(row('unified'))
     expect(
@@ -452,6 +453,32 @@ describe('the unified inbox row in «Comptes i carpetes» (#353)', () => {
 describe('Ctrl/⌘+1…9 open the same places as before (ADR-0068 §5, #353)', () => {
   const press = (digit: number) =>
     fireEvent.keyDown(window, { key: String(digit), code: `Digit${digit}`, ctrlKey: true })
+
+  it('keep their slots with the rail gone (#354): mail places only, never a module, from any module', () => {
+    settings$.kanbanBoards.set([board('b1', 'Launch')])
+    ui$.module.set('calendar')
+    render(<AppHotkeys />)
+    const where = () =>
+      kanban$.activeBoardId.peek() ? `board:${kanban$.activeBoardId.peek()}` : ui$.selectedAccount.peek()
+    const opened: string[] = []
+    for (const digit of [1, 2, 3, 4, 5]) {
+      act(() => {
+        press(digit)
+      })
+      opened.push(where())
+    }
+    expect(opened).toEqual(['unified', 'board:b1', 'alex', 'blai', 'carla'])
+    // They change mail's place and leave the module on screen as they did:
+    // the module switcher has no shortcut of its own (ADR-0068 §5).
+    expect(ui$.module.peek()).toBe('calendar')
+    for (const digit of [6, 7, 8, 9]) {
+      act(() => {
+        press(digit)
+      })
+      expect(where()).toBe('carla')
+      expect(ui$.module.peek()).toBe('calendar')
+    }
+  })
 
   it('the unified inbox, then the boards, then the accounts shown, in the order the pane draws them', () => {
     settings$.kanbanBoards.set([board('b1', 'Launch'), board('b2', 'Hiring')])

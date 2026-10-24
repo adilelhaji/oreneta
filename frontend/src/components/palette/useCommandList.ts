@@ -116,6 +116,8 @@ export function useCommandList(): Command[] {
   const updatesSupported = useValue(update$.status.supported)
   const activeModule = useValue(ui$.module)
   const quiet = useQuietState().quiet
+  // A manual mail check in flight (`syncMail`): its command waits, and says so.
+  const syncing = useValue(ui$.busy)
 
   return useMemo<Command[]>(() => {
     const run = (fn: () => void) => () => {
@@ -130,8 +132,9 @@ export function useCommandList(): Command[] {
       ? setGlobalKanbanFilter
       : (mode: FilterMode) => ui$.filters.set(facetsOf(mode))
     const railShortcut = (slot: number) => RAIL_SHORTCUT_IDS[slot - 1] as ShortcutId | undefined
-    // Picking a mail destination leaves another module, as the rail does:
-    // they share the window, so staying would change mail's selection unseen.
+    // Picking a mail destination leaves another module, as the module
+    // switcher's Mail does: they share the window, so staying would change
+    // mail's selection unseen.
     const inMail = (fn: () => void) => () => {
       ui$.module.set('mail')
       fn()
@@ -263,7 +266,8 @@ export function useCommandList(): Command[] {
         run: run(inMail(() => closeKanbanBoard())),
       },
       // The other modules (ADR-0068 §5: a "Go to: …" for each), as the rail's
-      // More menu offered them.
+      // More menu offered them; below 769 px, where there is no module
+      // switcher, this is where they open (#354).
       ...MODULES.map(
         ({ key, title, icon: component, keywords }): Command => ({
           id: `module.${key}`,
@@ -349,7 +353,7 @@ export function useCommandList(): Command[] {
         }),
       ),
       // Do not disturb (ADR-0049): the same choices as Settings, the tray and
-      // the rail's More menu.
+      // the band's indicator, which resumes (the rail's More menu had them too).
       ...(quiet
         ? [
             {
@@ -542,20 +546,25 @@ export function useCommandList(): Command[] {
           : (writeCommands.has(command.id) && readOnlyTarget(currentAccounts, target)) ||
             (sendCommands.has(command.id) && sendBlocked(currentAccounts, target)) ||
             (messageCommands.has(command.id) && messageChangesBlocked(currentAccounts, target))
-      const disabled = unavailable(accounts)
+      // While a manual mail check is in flight, another waits: the command
+      // says why, as the rail's More menu did (#354).
+      const waiting = (busy: boolean) => command.id === 'mail.sync' && busy
+      const disabled = unavailable(accounts) || waiting(syncing)
       return {
         ...command,
         disabled,
-        hint: disabled
-          ? t(command.id === 'compose.new' ? 'commands.noSendableAccount' : 'accounts.graph.readOnly')
-          : t('palette.kind.action'),
+        hint: waiting(syncing)
+          ? t('connectivity.health.pending')
+          : disabled
+            ? t(command.id === 'compose.new' ? 'commands.noSendableAccount' : 'accounts.graph.readOnly')
+            : t('palette.kind.action'),
         // The palette's search reads the catalog's synonyms; the app menu,
         // which alone lists the menu-only commands, finds by name.
         keywords: command.menuOnly
           ? command.keywords
           : (command.keywords ?? '') + ' ' + t('commands.aliases.' + keywordId),
         run: () => {
-          if (unavailable(accounts$.peek())) return
+          if (unavailable(accounts$.peek()) || waiting(ui$.busy.peek())) return
           command.run()
         },
       }
@@ -577,5 +586,6 @@ export function useCommandList(): Command[] {
     activeTab,
     activeModule,
     quiet,
+    syncing,
   ])
 }

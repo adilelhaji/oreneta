@@ -25,6 +25,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  // happy-dom's own window: 1024 px wide.
+  ;(window as any).happyDOM.setViewport({ width: 1024, height: 768 })
   delete (window as any).go
   if (ownRect) Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', ownRect)
   else delete (HTMLElement.prototype as Partial<HTMLElement>).getBoundingClientRect
@@ -34,9 +36,9 @@ afterEach(() => {
 const written = (key: string) => writes.filter((w) => w.key === key).map((w) => w.value)
 
 // happy-dom lays nothing out, so the pane says where it is: its start edge,
-// the one that stays put (60 px in after the rail in left to right, 1380 px
-// in right to left), for the pointer; and a drawn width of 0, which is "not
-// measured" as without layout, unless the test says what is drawn.
+// the one that stays put (60 px in, as when the rail was before it, in left to
+// right; 1380 px in right to left), for the pointer; and a drawn width of 0,
+// which is "not measured" as without layout, unless the test says what is drawn.
 function drawPane({ rtl = false, drawn = 0 }: { rtl?: boolean; drawn?: number } = {}) {
   HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
     if (!this.hasAttribute('data-folder-pane')) return realRect.call(this)
@@ -46,10 +48,10 @@ function drawPane({ rtl = false, drawn = 0 }: { rtl?: boolean; drawn?: number } 
   }
 }
 
-function Pane({ rtl = false, footer, modules }: { rtl?: boolean; footer?: string; modules?: string }) {
+function Pane({ rtl = false, footer }: { rtl?: boolean; footer?: string }) {
   return (
     <div style={{ direction: rtl ? 'rtl' : 'ltr' }}>
-      <FolderPane title="Accounts and folders" footer={footer} modules={modules}>
+      <FolderPane title="Accounts and folders" footer={footer}>
         <button type="button">Inbox</button>
       </FolderPane>
     </div>
@@ -79,13 +81,28 @@ describe('common folder pane (ADR-0068 §4, #317)', () => {
     expect(pane(screen).className.split(' ')).toContain(`min-[${FOLDER_PANE_MIN_WINDOW}px]:flex`)
   })
 
-  it('keeps an optional footer, and the place for the module switcher at the very foot', () => {
+  it('keeps an optional footer, with the module strip at the very foot from 1025 px (#354)', () => {
     const plain = render(<Pane />)
     expect(pane(plain).textContent).toBe('Accounts and foldersInbox')
+    // Not drawn at 1024 px, where the pane is not either: no strip in the page.
+    expect(plain.queryByRole('navigation', { name: 'Modules' })).toBeNull()
     cleanup()
-    const screen = render(<Pane footer="Month" modules="Modules" />)
-    const text = pane(screen).textContent ?? ''
-    expect(text).toBe('Accounts and foldersInboxMonthModules')
+    ;(window as any).happyDOM.setViewport({ width: 1440, height: 900 })
+    const screen = render(<Pane footer="Month" />)
+    const nav = pane(screen)
+    const strip = screen.getByRole('navigation', { name: 'Modules' })
+    expect(strip.dataset.region).toBe('modules')
+    expect(strip.dataset.moduleSwitcher).toBe('strip')
+    // Inside the pane, its last part: after the body and the footer.
+    expect(nav.contains(strip)).toBe(true)
+    const parts = [...nav.children].filter((element) => element.getAttribute('role') !== 'separator')
+    expect(parts.at(-1)).toBe(strip)
+    expect(parts.at(-2)?.textContent).toBe('Month')
+    // The body scrolls above the footer and the strip, which stay put; the
+    // strip is 2.5 rem tall, so it grows with the app's zoom.
+    const body = screen.getByRole('button', { name: 'Inbox' }).parentElement!
+    expect(body.className.split(' ')).toEqual(expect.arrayContaining(['min-h-0', 'flex-1', 'overflow-y-auto']))
+    expect(strip.className.split(' ')).toEqual(expect.arrayContaining(['h-10', 'shrink-0']))
   })
 
   it('draws its width in px, 260 by default and never under 200, and follows the stored width', () => {

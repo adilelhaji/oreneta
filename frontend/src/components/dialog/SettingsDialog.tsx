@@ -913,7 +913,7 @@ function GeneralSection() {
         <ToggleRow
           icon={<Inbox size={16} strokeWidth={1.75} />}
           title={t('settings.appearance.showUnreadAccountBadge')}
-          hint={t('settings.appearance.showUnreadAccountBadgeHint')}
+          hint={t('settings.appearance.unreadBadgeHint')}
           checked={showUnreadAccountBadge}
           onChange={() => settings$.showUnreadAccountBadge.set(!showUnreadAccountBadge)}
         />
@@ -1018,7 +1018,9 @@ function GeneralSection() {
         <AssistantSettingsSection />
       </div>
 
-      <SettingsGroup title={t('settings.sections.sideNav')}>
+      {/* What «Comptes i carpetes» and Ctrl/⌘+1…9 show: the pane's own name,
+          now that the rail is gone (#354). The preference keeps its key. */}
+      <SettingsGroup title={t('mailNavigation.title')}>
         <ToggleRow
           icon={<Inbox size={16} strokeWidth={1.75} />}
           title={t('settings.sideNav.showUnifiedInbox')}
