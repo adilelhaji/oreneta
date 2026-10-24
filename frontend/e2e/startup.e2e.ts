@@ -5106,11 +5106,11 @@ test('Delete in the Outlook scheme leaves the selected conversation alone from C
   await attach.focus()
   await expect(attach).toBeFocused()
   await page.keyboard.press('Delete')
-  const tab = page.getByRole('tab', { name: /Current conversation/ })
-  if (await tab.count()) {
-    await tab.first().focus()
-    await page.keyboard.press('Delete')
-  }
+  const tab = page.locator('[data-region="reader"]').getByTitle('Current conversation').first()
+  await expect(tab).toBeVisible()
+  await tab.focus()
+  await expect(tab).toBeFocused()
+  await page.keyboard.press('Delete')
   expect(await sent()).toEqual([])
   // From the list, the same key deletes it, once.
   await row.focus()

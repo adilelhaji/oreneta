@@ -388,7 +388,7 @@ describe('Delete outside the conversation list', () => {
       })
     }
 
-    it(`Delete from the conversation view of another module does nothing: ${scheme} scheme`, async () => {
+    it(`Delete or Backspace from the conversation view or a row of another module does nothing: ${scheme} scheme`, async () => {
       setShortcutOverrides(bindings(scheme, 'Backspace'))
       const el = surface()
       ui$.module.set('calendar')
