@@ -299,8 +299,20 @@ describe('Delete outside the conversation list', () => {
           <button id="row">Row</button>
         </section>
         <div data-region="reader">
-          <button id="reader-button">Reply</button>
-          <textarea id="reader-field" />
+          <nav>
+            <button id="conversation-tab">Current conversation</button>
+          </nav>
+          <div data-conversation>
+            <button id="conversation-button">Reply</button>
+            <textarea id="conversation-field" />
+            <footer data-quick-reply>
+              <button id="attach">Attach files</button>
+            </footer>
+          </div>
+          <div id="document-tab">
+            <button id="composer-attach">Attach files</button>
+            <button id="reader-tab-button">Print</button>
+          </div>
         </div>
         <main>
           <button id="people">New contact</button>
@@ -316,20 +328,22 @@ describe('Delete outside the conversation list', () => {
   }
 
   const schemes = Object.keys(SHORTCUT_SCHEMES) as ShortcutScheme[]
-  // Gmail binds #, not Delete: bind Delete as well so that every scheme is
-  // tried with the key under test.
-  const withDelete = (scheme: ShortcutScheme) => ({
-    ...SHORTCUT_SCHEMES[scheme],
-    ...(scheme === 'gmail' ? { 'thread.delete': { key: 'Delete' } } : {}),
-  })
+  // The scheme's own bindings, plus the key under test bound to the delete
+  // shortcut. The default scheme with Delete binds nothing: the built-in key.
+  const bindings = (scheme: ShortcutScheme, key: string) =>
+    scheme === 'oreneta' && key === 'Delete'
+      ? SHORTCUT_SCHEMES.oreneta
+      : scheme === 'outlook' && key === 'Delete'
+        ? SHORTCUT_SCHEMES.outlook
+        : { ...SHORTCUT_SCHEMES[scheme], 'thread.delete': { key } }
+  // Bound to a shortcut, the key also acts in the conversation view; the
+  // built-in Delete of the default scheme stays with the list.
+  const bound = (scheme: ShortcutScheme, key: string) => !(scheme === 'oreneta' && key === 'Delete')
 
   for (const scheme of schemes) {
     for (const key of ['Delete', 'Backspace']) {
-      // The default scheme has no Backspace binding: bind it, as an override would.
-      const bindings = () => (key === 'Backspace' ? { 'thread.delete': { key } } : withDelete(scheme))
-
       it(`${key} leaves the conversation alone on a People button, a toolbar button and a select: ${scheme} scheme`, async () => {
-        setShortcutOverrides(bindings())
+        setShortcutOverrides(bindings(scheme, key))
         const el = surface()
         ui$.module.set('people')
         el('people').focus()
@@ -344,36 +358,54 @@ describe('Delete outside the conversation list', () => {
         expect(ui$.selectedThread.peek()).toBe('acc:inbox:thread:1')
       })
 
-      for (const place of ['row', 'reader-button']) {
-        it(`${key} still deletes from the ${place === 'row' ? 'list' : 'reading pane'}: ${scheme} scheme`, async () => {
-          setShortcutOverrides(bindings())
-          const el = surface()
-          el(place).focus()
-          fireEvent.keyDown(el(place), { key })
-          await nextTick()
-          expect(deleted()).toHaveLength(1)
-        })
-      }
+      it(`${key} leaves the conversation alone on its tab, a compose or reader tab and the quick reply: ${scheme} scheme`, async () => {
+        setShortcutOverrides(bindings(scheme, key))
+        const el = surface()
+        for (const id of ['conversation-tab', 'composer-attach', 'reader-tab-button', 'attach']) {
+          el(id).focus()
+          fireEvent.keyDown(el(id), { key })
+        }
+        await nextTick()
+        expect(deleted()).toEqual([])
+      })
+
+      it(`${key} still deletes from a row: ${scheme} scheme`, async () => {
+        setShortcutOverrides(bindings(scheme, key))
+        const el = surface()
+        el('row').focus()
+        fireEvent.keyDown(el('row'), { key })
+        await nextTick()
+        expect(deleted()).toHaveLength(1)
+      })
+
+      it(`${key} ${bound(scheme, key) ? 'deletes from' : 'leaves alone'} the conversation view: ${scheme} scheme`, async () => {
+        setShortcutOverrides(bindings(scheme, key))
+        const el = surface()
+        el('conversation-button').focus()
+        fireEvent.keyDown(el('conversation-button'), { key })
+        await nextTick()
+        expect(deleted()).toHaveLength(bound(scheme, key) ? 1 : 0)
+      })
     }
 
-    it(`Delete from the reading pane of another module does nothing: ${scheme} scheme`, async () => {
-      setShortcutOverrides(withDelete(scheme))
+    it(`Delete from the conversation view of another module does nothing: ${scheme} scheme`, async () => {
+      setShortcutOverrides(bindings(scheme, 'Backspace'))
       const el = surface()
       ui$.module.set('calendar')
-      el('reader-button').focus()
-      fireEvent.keyDown(el('reader-button'), { key: 'Delete' })
+      el('conversation-button').focus()
+      fireEvent.keyDown(el('conversation-button'), { key: 'Backspace' })
       el('row').focus()
-      fireEvent.keyDown(el('row'), { key: 'Delete' })
+      fireEvent.keyDown(el('row'), { key: 'Backspace' })
       await nextTick()
       expect(deleted()).toEqual([])
     })
   }
 
-  it('Delete in a text field of the reading pane edits text, not the conversation', async () => {
+  it('Delete in a text field of the conversation view edits text, not the conversation', async () => {
     setShortcutOverrides(SHORTCUT_SCHEMES.outlook)
     const el = surface()
-    el('reader-field').focus()
-    fireEvent.keyDown(el('reader-field'), { key: 'Delete' })
+    el('conversation-field').focus()
+    fireEvent.keyDown(el('conversation-field'), { key: 'Delete' })
     await nextTick()
     expect(deleted()).toEqual([])
   })

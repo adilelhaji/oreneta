@@ -5072,6 +5072,7 @@ test('Delete in the Outlook scheme leaves the selected conversation alone from C
       ],
     }
     replies['calendar.events'] = { events: [] }
+    replies['mail.delete'] = {}
   })
   const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
   await row.click()
@@ -5094,6 +5095,27 @@ test('Delete in the Outlook scheme leaves the selected conversation alone from C
         .filter((command: string) => command === 'mail.delete'),
     )
   expect(await sent()).toEqual([])
+  // Back in mail, a compose tab is open over the conversation: its buttons
+  // are not the conversation's, and neither is the tab strip.
+  await button.click()
+  await menu.getByRole('menuitemradio', { name: 'Go to: Mail', exact: true }).click()
+  await expect(page.getByRole('main', { name: 'Mail', exact: true })).toBeVisible()
+  await page.keyboard.press('Control+n')
+  const attach = page.getByRole('button', { name: 'Attach files', exact: true }).first()
+  await expect(attach).toBeVisible()
+  await attach.focus()
+  await expect(attach).toBeFocused()
+  await page.keyboard.press('Delete')
+  const tab = page.getByRole('tab', { name: /Current conversation/ })
+  if (await tab.count()) {
+    await tab.first().focus()
+    await page.keyboard.press('Delete')
+  }
+  expect(await sent()).toEqual([])
+  // From the list, the same key deletes it, once.
+  await row.focus()
+  await page.keyboard.press('Delete')
+  await expect.poll(sent).toEqual(['mail.delete'])
   expect(errors).toEqual([])
 })
 
