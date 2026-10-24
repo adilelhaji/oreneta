@@ -286,7 +286,7 @@ mateixa que llegeix `MessagePane`), `states/settings.ts` (`app_sidebar_state`) i
   resposta ràpida; la cerca de la conversa; qualsevol pestanya del lector que
   passa al davant (un missatge nou amb Ctrl/⌘+N, una resposta a l'editor
   complet, un missatge a la seva pestanya o tornar a la conversa); i, des de la
-  paleta o del menú de l'aplicació, anar a un altre mòdul, carpeta, compte,
+  paleta o des del menú de l'aplicació, anar a un altre mòdul, carpeta, compte,
   tauler o filtre. Ho fan les dades mateixes (`states/sidebar.ts`,
   `states/compose.ts`) i, a les ordres, el seu embolcall `inModule` de
   `useCommandList`, triat ordre per ordre. Les altres ordres actuen fora de

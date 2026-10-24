@@ -369,7 +369,7 @@ amagat (es desa `minimized`) en lloc d'obrir una capa, i una prova del punt d'en
 barra lateral» o «Mostra la barra lateral»), perquè amb la tira `aria-expanded` és fals; el fons de
 la capa és el del `Dialog` compartit; i les ordres que porten al davant alguna cosa del mòdul (`r`,
 Ctrl/⌘+N, la cerca de la conversa, qualsevol pestanya del lector que passa al davant i, des de la
-paleta i del menú, anar a un mòdul, carpeta, compte, tauler o filtre) tanquen la capa abans d'actuar,
+paleta i des del menú, anar a un mòdul, carpeta, compte, tauler o filtre) tanquen la capa abans d'actuar,
 perquè sota la capa el mòdul està inert; les que actuen fora del mòdul, com la configuració oberta des
 de la paleta, la deixen oberta i el focus hi torna. Continua sent una nota d'evidència: cap fila no
 canvia d'estat.
