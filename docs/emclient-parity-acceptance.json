@@ -333,6 +333,14 @@
           {
             "sha": "01360f26f2d27c83cee8d44d75987ce50963451e",
             "result": "frontend/src/lib/paneResize.test.ts"
+          },
+          {
+            "sha": "ce140d332429230407f69d3a1cd13c9b85ecafb1",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "ce140d332429230407f69d3a1cd13c9b85ecafb1",
+            "result": "frontend/src/lib/paneResize.test.ts"
           }
         ],
         "native": [],
@@ -1688,6 +1696,22 @@
           },
           {
             "sha": "01360f26f2d27c83cee8d44d75987ce50963451e",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "ce140d332429230407f69d3a1cd13c9b85ecafb1",
+            "result": "frontend/src/components/shell/AppSidebar.test.tsx"
+          },
+          {
+            "sha": "ce140d332429230407f69d3a1cd13c9b85ecafb1",
+            "result": "frontend/src/states/sidebar.test.ts"
+          },
+          {
+            "sha": "ce140d332429230407f69d3a1cd13c9b85ecafb1",
+            "result": "frontend/src/lib/paneResize.test.ts"
+          },
+          {
+            "sha": "ce140d332429230407f69d3a1cd13c9b85ecafb1",
             "result": "frontend/e2e/startup.e2e.ts"
           }
         ],

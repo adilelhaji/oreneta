@@ -67,6 +67,9 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
   sobre de 769 px, al 200 %, al correu no hi cap la tira al costat de la barra
   estreta, la llista i el lector, i no es dibuixa fins que hi cap (vegeu
   [contextual-sidebar.md](contextual-sidebar.md#la-barra-lateral-de-laplicació-361)).
+  A 1025 px, al 200 %, la tira, que hi és per defecte, fa que la subfinestra de
+  carpetes, de 260 px, en cedeixi 35 i en faci uns 225: la tira de mòduls del seu
+  peu hi conserva Correu, Calendari i «Més», sense desplaçament horitzontal.
 - **El que continua en px:**
   - l'amplada dels taulers que la persona arrossega;
   - l'amplada de la subfinestra de carpetes (260 px per defecte, de 200 a 400,
@@ -100,6 +103,7 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
 | e2e (`startup.e2e.ts`, «#343», 1025 px) | Al 200 % la banda superior fa 72 px, la pàgina no es desplaça i la llista, les carpetes, la resposta i els botons de la bústia i de la conversa continuen dins de l'alçada de la finestra |
 | e2e (`startup.e2e.ts`, «#344», 1025 px i de 769 a 1024 px) | Al 200 % a 1025 px, i al 100 % a 1024, 900 i 769 px, el camp de cerca de la banda i els seus botons queden dins de la finestra, després del botó del menú, sense desplaçament horitzontal |
 | e2e (`startup.e2e.ts`, «#361», 1440 i 1024 px) | Al 200 %, en català i en àrab: la tira de la barra lateral fa 80 px; desplegada al correu i al Calendari, l'agenda i el selector de panells (80 px) són dins de la finestra, sense desplaçament horitzontal, amb axe |
+| e2e (`startup.e2e.ts`, «#361», 1025 px) | Al 200 %, amb la tira per defecte: la tira fa 80 px al final de la fila, la subfinestra de carpetes en fa 225, amb Correu, Calendari i «Més» a la tira de mòduls (80 px d'alçada) i tots els botons dins, i la icona de l'Agenda dins de la finestra, sense desplaçament horitzontal |
 | e2e (`startup.e2e.ts`, «#345», 1025 px i de 769 a 1024 px) | Al 200 % a 1025, 1024, 900 i 769 px, amb el mode No molestis activat: el final de la banda no passa del 35 % de la banda; el botó del menú, el camp de cerca (de més de 100 px), l'indicador del mode No molestis i el botó de l'estat són dins de la finestra, en aquest ordre; la finestra emergent hi queda a 1025 i 769 px; sense desplaçament horitzontal |
 
 Falta la prova nativa (N4) a Windows, que es farà una sola vegada amb la versió

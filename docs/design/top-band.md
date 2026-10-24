@@ -485,9 +485,9 @@ No molestis també es va quedar a la barra vertical fins a la peça 14 (va passa
 | N2 (`components/shell/SyncStatus.test.tsx`, #345) | Res sense cap compte i el botó amb el primer; el resum de cada estat (desconegut, atenció, sol·licitud en curs, sense confirmar, fallada, sessió per tornar a iniciar, problema sense compte), mai «Sincronitzat», en els 20 catàlegs; una sola regió en directe, sense moure el focus; la icona sola per sota de 1025 px, amb el nom i la indicació, i en travessar els 1025 px; la finestra emergent: el detall, el focus, Escapada, un segon clic, un clic fora, el focus fora, un desplaçament de la pàgina i un canvi de mida, la configuració amb el focus de tornada al botó, les tecles, la posició en les dues direccions i a 900, 768 i 320 px; la barra només en el cas destacat, sense regió en directe, el focus al botó quan se'n va, una sessió que no es pot descartar, el problema sense compte i el detall plegat amb la finestra oberta; el mode No molestis a la banda i a la barra vertical, una sola regió d'estat; l'ordre de Tab; cap punt de referència nou; la pantalla d'alta sense el final; per sota de 769 px, amb la cerca damunt de la banda, les dues regions d'estat fora de cap element inert i els controls inerts; «Torna-ho a provar» deixa el focus a l'entrada, a la finestra i a la barra, i una tecla nua no surt de la finestra; la barra plega el seu detall en el mateix pintat en què apareix la finestra |
 | e2e (`startup.e2e.ts`, «#345») | El final de la banda a 1440, 1025, 1024 i 768 px: el resum o la icona sola, una sola regió en directe, la finestra emergent amb el ratolí, dins de la finestra, Escapada i els clics; el teclat: Tab des del botó del menú, Retorn, Espai, Escapada, F6 i Maj+F6, i la configuració amb el focus de tornada al botó; una fallada torna la barra, a 1440 i 768 px, que plega el seu detall amb la finestra oberta i se'n va en descartar-la, i una sessió per tornar a iniciar no es pot descartar, amb les regles de regions d'axe; l'àrab amb axe i la finestra oberta a 1440 i 768 px; el 200 % a 1025, 1024, 900 i 769 px amb el mode No molestis activat; el mode No molestis a la banda a 1440 i 768 px. Les proves de «#343», de l'actualització manual i de les observacions de la sincronització busquen l'estat a la banda, i la barra només quan hi ha una fallada; la del mode No molestis troba la regió d'estat a la banda; a 768 px, amb la cerca damunt de la banda, una fallada s'anuncia: les dues regions d'estat són a l'arbre d'accessibilitat de Chromium i els controls no; «Torna-ho a provar» deixa el focus a l'entrada, a la finestra i a la barra, i la `j` no mou la conversa oberta |
 | N2 (`baseline/connectivityHealth.test.tsx`) | L'anunci d'una fallada sense moure el focus, ara des del botó de la banda (#345) |
-| N2 (`components/shell/AppSidebar.test.tsx`, #361) | El botó «Barra lateral»: `aria-expanded`, desplegar, amagar i tornar a desplegar al costat del contingut (desat), la capa on no hi cap (no desada), el focus que hi torna després d'Escapada, i per sota de 769 px |
+| N2 (`components/shell/AppSidebar.test.tsx`, #361) | El botó «Barra lateral»: `aria-expanded` i el títol; amagar la tira i la barra desplegada, i desplegar-la des de res, al costat del contingut (desat); la capa que obre des de res on no hi cap (no desada), el focus que hi torna després d'Escapada, i per sota de 769 px |
 | N2 (`components/shell/SyncStatus.test.tsx`, #361) | El botó «Barra lateral», l'últim de la banda en l'ordre de Tab, després de l'estat de la sincronització |
-| e2e (`startup.e2e.ts`, «#361») | El botó a 600, 1024, 1100, 1180 i 1440 px, en català i en àrab, al correu i a Calendari, Tasques, Persones i Notes; l'ordre «Mostra la barra lateral» del menú de l'aplicació; el 200 % a 1440 i 1024 px |
+| e2e (`startup.e2e.ts`, «#361») | El botó a 600, 1024, 1100, 1180 i 1440 px, en català i en àrab, al correu i a Calendari, Tasques, Persones i Notes; al Calendari, el botó que amaga la tira, la desplega des de res i l'amaga, desat, amb el títol i l'`aria-expanded`; a 1100 px, la capa que obre des de res, no desada, i el focus que hi torna després d'Escapada; l'ordre «Mostra la barra lateral» del menú de l'aplicació; el 200 % a 1440 i 1024 px |
 
 ## Sense la barra vertical (#354)
 
@@ -546,20 +546,23 @@ l'ordre a `components/palette/useCommandList.ts`.
   d'una subfinestra a la dreta, que en àrab es gira cap a l'esquerra, on hi ha
   la barra.
 - **Nom i estat:** «Barra lateral» (`sidebar.label`), el mateix nom que la
-  regió de la barra, i `aria-expanded`, que diu si la barra està desplegada, al
-  costat del contingut o com a capa. Desplegada, el botó pren el fons de
-  selecció.
-- **Què fa:** amb la barra desplegada al costat del contingut, l'amaga (es desa
-  `hidden`); amb la capa oberta, la tanca, sense desar res; altrament, la
+  regió de la barra, i `aria-expanded`, que només és cert quan la barra està
+  desplegada, al costat del contingut o com a capa; minimitzada a la tira, és
+  fals. Desplegada, el botó pren el fons de selecció. El seu títol diu què farà
+  un clic: «Amaga la barra lateral» mentre se'n dibuixa alguna cosa, la tira
+  inclosa, i «Mostra la barra lateral» quan no.
+- **Què fa** (decisió D4 del propietari a #360): mostra i amaga tota la barra.
+  Desplegada al costat del contingut o minimitzada a la tira, l'amaga (es desa
+  `hidden`); amb la capa oberta, la tanca, sense desar res; amagada, la
   desplega: al costat del contingut on hi cap (es desa `expanded`), o com a capa
-  on no hi cap, sense desar res. Per sota de 769 px, on no hi ha tira, només la
-  capa.
+  on no hi cap, sense desar res. Desplegar-la des de la tira és cosa de les
+  icones de la tira. Per sota de 769 px, on no hi ha tira, només la capa.
 - **Al menú de l'aplicació i a la paleta,** l'ordre «Mostra la barra lateral»,
-  o «Amaga la barra lateral» quan està desplegada (`view.sidebar`, àrea
-  «Aplicació», amb els sinònims de `commands.aliases.view.sidebar`), fa el
-  mateix que el botó. Com les altres ordres, primer torna el focus al botó del
-  menú o al de la paleta, i després actua, de manera que una capa que s'obre el
-  torna a aquell botó en tancar-se.
+  o «Amaga la barra lateral» mentre se'n dibuixa alguna cosa (`view.sidebar`,
+  àrea «Aplicació», amb els sinònims de `commands.aliases.view.sidebar`), fa el
+  mateix que el botó i porta el seu títol. Com les altres ordres, primer torna
+  el focus al botó del menú o al de la paleta, i després actua, de manera que
+  una capa que s'obre el torna a aquell botó en tancar-se.
 - **Per sota de 769 px,** quan el camp de cerca cobreix la banda, el botó és
   inert, com els altres controls de la banda.
 - **La pantalla d'alta del primer compte** no té el botó ni l'ordre: no hi ha

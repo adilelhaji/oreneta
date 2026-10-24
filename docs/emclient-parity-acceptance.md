@@ -349,7 +349,20 @@ Tasques, Notes, Xat i Adjunts mesuren l'espai del mòdul sense la tira, les de �
 de la sincronització just abans del botó «Barra lateral», i la del desbordament de la tira de mòduls
 al 200 % a 1025 px amaga la barra lateral. És una nota d'evidència: cap fila no canvia d'estat
 (SET-23 continua `partial`; S01-05 i SET-27 tampoc no canvien), i els panells Dia i Persona (12b i
-12c) i l'evidència nativa de Windows i amb lectors de pantalla continuen pendents.
+12c) i l'evidència nativa de Windows i amb lectors de pantalla continuen pendents. El mateix dia, amb
+la revisió de la peça, s'hi apliquen les decisions D3–D6 del propietari a #360, que esmenen
+ADR-0069 §2: a Persones i a Notes la barra compta el mínim que aquestes peces havien fixat (648 i
+680 px) i hi va al costat a partir de 1128 i 1160 px, i al punt d'entrada de producció la persona i
+la nota es mesuren a 360 px o més al costat de la barra (amb el mínim pla de 360 px no hi arribaven); el
+botó «Barra lateral» també amaga la tira i, amb la barra amagada, la desplega, amb `aria-expanded`
+cert només amb la barra desplegada; una capa no desa mai `expanded`, i les proves ho comproven per
+a cada manera d'obrir-la; i la subfinestra de conversa del tauler compta 360 px a partir de 769 px,
+només amb una targeta oberta (entre 1100 i 1119 px, obrir-ne una passa la barra a la tira). També
+s'hi corregeix que `i` i els botons de detalls de la capçalera actuessin sense panell Conversa, que
+«Missatge nou per a …» deixés la capa sobre la redacció i que Escapada tanqués la capa abans de
+buidar el camp de cerca de la banda. Amb la capa oberta, `<main>` és inert i F6 només va entre la
+banda i la barra; la tira per defecte al 200 % a 1025 px deixa uns 225 px de carpetes, amb Correu,
+Calendari i «Més». Continua sent una nota d'evidència: cap fila no canvia d'estat.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per
