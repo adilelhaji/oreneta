@@ -1745,6 +1745,34 @@
           {
             "sha": "e4820e90509a125c296ce124d429b9e972115888",
             "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "d98a004dea9be52fe1a03b79a2aadb0d4d37e249",
+            "result": "frontend/src/lib/dayPanel.test.ts"
+          },
+          {
+            "sha": "d98a004dea9be52fe1a03b79a2aadb0d4d37e249",
+            "result": "frontend/src/components/chat/SidebarDay.test.tsx"
+          },
+          {
+            "sha": "d98a004dea9be52fe1a03b79a2aadb0d4d37e249",
+            "result": "frontend/src/components/chat/SidebarAgenda.test.tsx"
+          },
+          {
+            "sha": "d98a004dea9be52fe1a03b79a2aadb0d4d37e249",
+            "result": "frontend/src/lib/calendarInvitation.test.ts"
+          },
+          {
+            "sha": "d98a004dea9be52fe1a03b79a2aadb0d4d37e249",
+            "result": "frontend/src/components/shell/AppSidebar.test.tsx"
+          },
+          {
+            "sha": "d98a004dea9be52fe1a03b79a2aadb0d4d37e249",
+            "result": "frontend/src/states/sidebar.test.ts"
+          },
+          {
+            "sha": "d98a004dea9be52fe1a03b79a2aadb0d4d37e249",
+            "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
         "native": [],
