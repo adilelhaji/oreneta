@@ -6127,17 +6127,22 @@ async function chooseModule(page: Page, title: string, catalog: Record<string, s
 }
 
 // Every day of the month at a glance, and every calendar row, inside the pane.
+// The module strip at the pane's foot measures itself after a resize, so the
+// buttons that no longer fit leave for «Més» a frame later: read until it settles.
 async function insidePane(page: Page, pane: ReturnType<Page['locator']>) {
-  const box = await boxOf(pane)
-  const outside = await page.evaluate(
-    ({ left, right }) =>
-      [...document.querySelectorAll<HTMLElement>('[data-folder-pane] button')]
-        .map((element) => ({ label: element.getAttribute('aria-label') ?? element.textContent, box: element.getBoundingClientRect() }))
-        .filter(({ box }) => box.width > 0 && (box.left < left - 1 || box.right > right + 1))
-        .map(({ label }) => label),
-    { left: box.x, right: box.x + box.width },
-  )
-  expect(outside).toEqual([])
+  await expect
+    .poll(async () => {
+      const box = await boxOf(pane)
+      return page.evaluate(
+        ({ left, right }) =>
+          [...document.querySelectorAll<HTMLElement>('[data-folder-pane] button')]
+            .map((element) => ({ label: element.getAttribute('aria-label') ?? element.textContent, box: element.getBoundingClientRect() }))
+            .filter(({ box }) => box.width > 0 && (box.left < left - 1 || box.right > right + 1))
+            .map(({ label }) => label),
+        { left: box.x, right: box.x + box.width },
+      )
+    })
+    .toEqual([])
 }
 
 for (const [width, paneWidth] of [
