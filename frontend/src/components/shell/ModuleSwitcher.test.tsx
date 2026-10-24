@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
+import { useEffect, useRef } from 'react'
 import { useValue } from '@legendapp/state/react'
 import i18n from '../../lib/i18n'
 import { messages, supportedI18nLanguages } from '../../generated/locales'
@@ -117,6 +118,8 @@ afterEach(async () => {
   messaging$.rooms.set([])
   ui$.module.set('mail')
   await i18n.changeLanguage('en')
+  // What a switcher hands to the next one is forgotten after the task.
+  await new Promise((resolve) => setTimeout(resolve, 0))
 })
 
 function draw(variant: ModuleSwitcherVariant = 'strip') {
@@ -337,6 +340,41 @@ describe('what does not fit goes into «Més»', () => {
     expect(document.activeElement).toBe(button('Calendar'))
   })
 
+  it('gives the focus to the last button when the place grows with «Més» open, rather than to the page', () => {
+    lay(251, 64)
+    const { button, names, view } = draw()
+    fireEvent.click(button('More'))
+    const menu = view.getByRole('menu', { name: 'More' })
+    expect(document.activeElement).toBe(within(menu).getAllByRole('menuitem')[0])
+    // The pane widened while the menu was open: the seven fit, and «Més» goes.
+    resize(255, 32)
+    expect(names()).toEqual(NAMES)
+    expect(view.queryByRole('menu')).toBeNull()
+    expect(document.activeElement).toBe(button('Attachments'))
+    return Promise.resolve().then(() => expect(document.activeElement).toBe(button('Attachments')))
+  })
+
+  it('keeps its menu listening once, however often the switcher draws again', () => {
+    lay(251, 64)
+    const { button } = draw()
+    fireEvent.click(button('More'))
+    const added: string[] = []
+    const add = document.addEventListener
+    document.addEventListener = function (this: Document, type: string, ...rest: unknown[]) {
+      added.push(type)
+      return (add as (...args: unknown[]) => void).call(this, type, ...rest)
+    } as typeof document.addEventListener
+    try {
+      // A count changing draws the switcher, and the menu with it, again.
+      act(() => messaging$.conversations.set([conversation('pau@chat.test', 1)]))
+      act(() => messaging$.conversations.set([conversation('pau@chat.test', 2)]))
+      act(() => mail$.foldersByAccount.alex.set(inbox('alex', 9)))
+    } finally {
+      document.addEventListener = add
+    }
+    expect(added).toEqual([])
+  })
+
   it('does the same in the narrow bar, by its height', () => {
     ui$.module.set('attachments')
     // Six 48 px places: five buttons and «Més».
@@ -457,6 +495,139 @@ describe('the keyboard', () => {
       outside.focus()
       act(() => ui$.module.set('tasks'))
       expect(document.activeElement).toBe(outside)
+    } finally {
+      outside.remove()
+    }
+  })
+
+  it('puts the focus on «Més» when the open module, there in the strip, goes back to mail', () => {
+    // The app's 200 % in a 260 px pane: Mail, the open module and «Més».
+    function Pane() {
+      const module = useValue(ui$.module)
+      return <ModuleSwitcher key={module} variant="strip" />
+    }
+    ui$.module.set('notes')
+    lay(251, 64)
+    const view = render(<Pane />)
+    const strip = () => view.getByRole('navigation', { name: 'Modules' })
+    const names = () =>
+      within(strip())
+        .getAllByRole('button')
+        .map((element) => element.getAttribute('aria-label'))
+    expect(names()).toEqual(['Mail', 'Notes', 'More'])
+    const notes = within(strip()).getByRole('button', { name: 'Notes' })
+    notes.focus()
+    fireEvent.click(notes)
+    expect(ui$.module.peek()).toBe('mail')
+    // Mail's strip, drawn with all seven before it is measured: Notes is in
+    // «Més» once it is, and the focus with it rather than on the page.
+    expect(names()).toEqual(['Mail', 'Calendar', 'More'])
+    expect(document.activeElement).toBe(within(strip()).getByRole('button', { name: 'More' }))
+  })
+})
+
+describe('the focus across 1025 px, where the strip and the narrow bar take each other’s place', () => {
+  // The strip at the foot of the folder pane, or the bar at the start of the
+  // row: different elements, drawn by different parts of the app.
+  function Frame({ strip, bar }: { strip: boolean; bar: boolean }) {
+    return (
+      <>
+        {bar && <ModuleSwitcher variant="bar" />}
+        <div data-folder-pane="">{strip && <ModuleSwitcher variant="strip" />}</div>
+      </>
+    )
+  }
+  const switcher = (variant: ModuleSwitcherVariant) =>
+    document.querySelector<HTMLElement>(`nav[data-module-switcher="${variant}"]`)!
+  const buttonIn = (variant: ModuleSwitcherVariant, name: string) =>
+    within(switcher(variant)).getByRole('button', { name })
+
+  it('keeps the focus on the same module, narrowing and widening, in one go', () => {
+    lay(255, 32)
+    ui$.module.set('notes')
+    const view = render(<Frame strip bar={false} />)
+    buttonIn('strip', 'People').focus()
+    view.rerender(<Frame strip={false} bar />)
+    expect(document.activeElement).toBe(buttonIn('bar', 'People'))
+    view.rerender(<Frame strip bar={false} />)
+    expect(document.activeElement).toBe(buttonIn('strip', 'People'))
+    // Nothing opened on the way.
+    expect(ui$.module.peek()).toBe('notes')
+  })
+
+  it('keeps it when the browser dropped it first, the folder pane hidden by CSS', () => {
+    lay(255, 32)
+    const view = render(<Frame strip bar={false} />)
+    buttonIn('strip', 'Tasks').focus()
+    ;(document.activeElement as HTMLElement).blur()
+    expect(document.activeElement).toBe(document.body)
+    view.rerender(<Frame strip={false} bar />)
+    expect(document.activeElement).toBe(buttonIn('bar', 'Tasks'))
+  })
+
+  it('keeps it whichever is drawn first: the bar before the strip goes, or after, in the same task', () => {
+    lay(255, 32)
+    const view = render(<Frame strip bar={false} />)
+    buttonIn('strip', 'Chat').focus()
+    // The bar first, with the strip still there.
+    view.rerender(<Frame strip bar />)
+    expect(document.activeElement).toBe(buttonIn('bar', 'Chat'))
+    view.rerender(<Frame strip={false} bar />)
+    expect(document.activeElement).toBe(buttonIn('bar', 'Chat'))
+    // The bar gone first, and the strip drawn after it in the same task.
+    view.rerender(<Frame strip={false} bar={false} />)
+    view.rerender(<Frame strip bar={false} />)
+    expect(document.activeElement).toBe(buttonIn('strip', 'Chat'))
+  })
+
+  it('leaves the focus where a command put it when the module changes with the focus in the strip', () => {
+    // «Search all messages» from Notes: mail opens and the band's search field
+    // takes the focus once mail is drawn, before the new strip is measured.
+    function Pane() {
+      const module = useValue(ui$.module)
+      const field = useRef<HTMLInputElement | null>(null)
+      useEffect(() => {
+        if (module === 'mail') field.current?.focus()
+      }, [module])
+      return (
+        <>
+          <input ref={field} aria-label="Search messages" />
+          <ModuleSwitcher key={module} variant="strip" />
+        </>
+      )
+    }
+    lay(255, 32)
+    ui$.module.set('notes')
+    const view = render(<Pane />)
+    within(view.getByRole('navigation', { name: 'Modules' }))
+      .getByRole('button', { name: 'Notes' })
+      .focus()
+    act(() => ui$.module.set('mail'))
+    expect(document.activeElement).toBe(view.getByRole('textbox', { name: 'Search messages' }))
+  })
+
+  it('puts it on «Més» when its module is there on the other side, and leaves focus elsewhere alone', async () => {
+    // A strip with all seven; a bar with room for four and «Més».
+    lay(255, 32)
+    const view = render(<Frame strip bar={false} />)
+    buttonIn('strip', 'Attachments').focus()
+    layout = { length: 5 * 32, place: 32 }
+    view.rerender(<Frame strip={false} bar />)
+    expect(document.activeElement).toBe(buttonIn('bar', 'More'))
+    // The focus somewhere else in the page stays there.
+    lay(255, 32)
+    const outside = document.createElement('button')
+    document.body.append(outside)
+    try {
+      outside.focus()
+      view.rerender(<Frame strip bar={false} />)
+      expect(document.activeElement).toBe(outside)
+      // And a switcher drawn in a later task never takes it from the page.
+      buttonIn('strip', 'Calendar').focus()
+      view.rerender(<Frame strip={false} bar={false} />)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      view.rerender(<Frame strip={false} bar />)
+      expect(document.activeElement).toBe(document.body)
     } finally {
       outside.remove()
     }

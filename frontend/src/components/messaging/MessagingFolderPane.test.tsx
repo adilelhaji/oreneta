@@ -250,11 +250,13 @@ describe('Chat in the common folder pane (ADR-0068 §4, #337)', () => {
     const form = await waitFor(() => screen.getByRole('form', { name: 'Add a chat account' }))
     // From 1025 px the module strip is at the foot of the folder pane (#354):
     // without a pane, Chat would be the one module with no way to the others
-    // but the app menu. The pane has nothing else yet, and the form is as it was.
+    // but the app menu. The pane has nothing else yet but a line that says
+    // so, and the form is as it was.
     const nav = pane(screen)
     expect(nav.dataset.region).toBe('folders')
     const body = within(nav).getByRole('heading', { level: 2 }).parentElement!.nextElementSibling as HTMLElement
-    expect(body.childElementCount).toBe(0)
+    expect(body.textContent).toBe('Nothing here yet')
+    expect(within(body).queryAllByRole('button')).toEqual([])
     expect(within(nav).getByRole('navigation', { name: 'Modules' })).toBeTruthy()
     expect(nav.contains(form)).toBe(false)
     expect(nav.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()

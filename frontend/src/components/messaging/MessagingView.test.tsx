@@ -154,6 +154,53 @@ it('a message arriving elsewhere refreshes the list; one in the open conversatio
   expect(screen.getByRole('status').textContent).toBe('Not connected')
 })
 
+it('a message in the open conversation waits as unread while Chat is not drawn, and is read on the way back (#354)', async () => {
+  const first = render(<MessagingView />)
+  await waitFor(() => expect(first.getByText('1 new')).toBeTruthy())
+  await act(async () => {
+    fireEvent.click(first.getByRole('button', { name: /pau@chat.test/ }))
+  })
+  await waitFor(() => expect(calls.some((c) => c.command === 'chat.markRead')).toBe(true))
+  // To mail: the conversation stays open, for the way back, but is not on screen.
+  first.unmount()
+  expect(messaging$.conversation.peek()).toBe('pau@chat.test')
+  calls.length = 0
+  await act(async () => onChatEvent('chat.changed', { account: 'c1', conversation: 'pau@chat.test' }))
+  await waitFor(() => expect(calls.some((c) => c.command === 'chat.conversations')).toBe(true))
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+  // Counted, not read: the Chat button says so.
+  expect(calls.some((c) => c.command === 'chat.markRead')).toBe(false)
+  expect(messaging$.conversations.peek().find((c) => c.conversation === 'pau@chat.test')?.unread).toBe(1)
+  // Back in Chat, on the same conversation: it is read there.
+  calls.length = 0
+  const again = render(<MessagingView />)
+  await waitFor(() =>
+    expect(calls.find((c) => c.command === 'chat.markRead')?.payload).toEqual({
+      account: 'c1',
+      conversation: 'pau@chat.test',
+    }),
+  )
+  expect(messaging$.conversation.peek()).toBe('pau@chat.test')
+  await waitFor(() => expect(again.getByText('Hola Ana')).toBeTruthy())
+  // Nothing unread in it: nothing more to mark on the next way back.
+  answers['chat.conversations'] = () => [
+    { conversation: 'pau@chat.test', last_body: '', last_stamp: 1_760_000_120, last_direction: 'out', unread: 0 },
+  ]
+  await act(async () => {
+    messaging$.conversations.set(answers['chat.conversations']({}) as never)
+  })
+  again.unmount()
+  calls.length = 0
+  render(<MessagingView />)
+  await waitFor(() => expect(calls.some((c) => c.command === 'chat.conversations')).toBe(true))
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+  expect(calls.some((c) => c.command === 'chat.markRead')).toBe(false)
+})
+
 it('without an account, asks for an address and password', async () => {
   answers['chat.accounts'] = () => []
   const screen = render(<MessagingView />)

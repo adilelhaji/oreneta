@@ -51,6 +51,17 @@ const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 // RSS periodic sync, native event wiring (mailto, notifications, new mail/sync),
 // mailbox/thread loading, and the tray unread badge. Kept out of the component so
 // App stays a layout shell.
+/**
+ * Chat's button in the module switcher shows Chat's unread count (owner
+ * decision 2 on #352), so its conversations are read once there is an
+ * account, not only when Chat first opens. Then `chat.changed` keeps them.
+ */
+export function useChatAtStartup(hasAccount: boolean) {
+  useEffect(() => {
+    if (hasAccount) void loadMessaging().catch(() => {})
+  }, [hasAccount])
+}
+
 export function useAppEffects() {
   const accounts = useValue(accounts$)
   const foldersByAccount = useFoldersByAccount()
@@ -94,13 +105,7 @@ export function useAppEffects() {
   // Notification sounds, do not disturb and quiet hours (ADR-0049).
   useEffect(() => startNotifications(), [])
 
-  // Chat's button in the module switcher shows Chat's unread count (owner
-  // decision 2 on #352), so its conversations are read once there is an
-  // account, not only when Chat first opens. Then `chat.changed` keeps them.
-  const hasAccount = accounts.length > 0
-  useEffect(() => {
-    if (hasAccount) void loadMessaging().catch(() => {})
-  }, [hasAccount])
+  useChatAtStartup(accounts.length > 0)
 
   useEffect(() => {
     void boot().catch((error) => {

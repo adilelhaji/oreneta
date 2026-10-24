@@ -35,12 +35,14 @@ import {
   messaging$,
   openConversation,
   pickChatFile,
+  readOpenConversation,
   removeChatAccount,
   retryChat,
   saveChatAccount,
   saveChatFile,
   sendChat,
   sendChatFile,
+  showChatView,
   refreshConversations,
   mutedConversations$,
   setConversationMuted,
@@ -120,8 +122,11 @@ export function MessagingView() {
   const end = useRef<HTMLDivElement | null>(null)
   const composer = useRef<HTMLTextAreaElement | null>(null)
 
+  useEffect(() => showChatView(), [])
   useEffect(() => {
-    void loadMessaging().catch(() => {})
+    void loadMessaging()
+      .then(readOpenConversation)
+      .catch(() => {})
   }, [])
   useEffect(() => {
     end.current?.scrollIntoView?.({ block: 'end' })
@@ -1417,7 +1422,9 @@ function ChatSetup() {
   return (
     <>
       {inPane && (
-        <FolderPane title={t('messaging.conversations', { defaultValue: 'Conversations' })}>{null}</FolderPane>
+        <FolderPane title={t('messaging.conversations', { defaultValue: 'Conversations' })}>
+          <p className="px-4 py-2 text-caption text-secondary">{t('empty.nothingHereYet')}</p>
+        </FolderPane>
       )}
       <div className="flex flex-1 items-start justify-center bg-chats p-6">
         <form

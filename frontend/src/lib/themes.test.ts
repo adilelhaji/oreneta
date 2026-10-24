@@ -15,6 +15,7 @@ import {
   defaultCustomInput,
   deriveThemeTokens,
   isCustomThemeId,
+  moduleBarForeground,
   newCustomThemeId,
   sanitizeCustomThemes,
   themeSurfaces,
@@ -421,6 +422,35 @@ describe('deriveThemeTokens', () => {
     for (const s of shortfalls) expect(s.ratio).toBeLessThan(4.5)
     // With nothing readable to fade toward, secondary text is the text itself.
     expect(t.textSecondary).toBe(t.textPrimary)
+  })
+
+  it('names a module bar colour its icons do not read on, given the appearance (#354)', () => {
+    // The narrow bar's icons and ring are the frame tone in a light theme and
+    // the primary text in a dark one (index.css), on the colour chosen as
+    // «Barra de mòduls»: the editor says so when they fall short of 4.5:1.
+    for (const appearance of ['light', 'dark'] as const) {
+      const t = deriveThemeTokens(defaultCustomInput(appearance))
+      expect(moduleBarForeground(t, appearance)).toBe(appearance === 'light' ? t.bgApp : t.textPrimary)
+      expect(contrastShortfalls(t, appearance)).toEqual([])
+    }
+    for (const theme of BUILTIN_THEMES)
+      expect(
+        contrastShortfalls(theme.tokens, theme.appearance).map((s) => s.pair),
+        theme.id,
+      ).not.toContain('moduleBar')
+    // A light bar in a light theme: the light frame tone on it.
+    const light = deriveThemeTokens({ ...defaultCustomInput('light'), sideNav: '#c9d4e4' })
+    const lightShortfall = contrastShortfalls(light, 'light').find((s) => s.pair === 'moduleBar')
+    expect(lightShortfall?.ratio).toBeCloseTo(contrastRatio(light.bgApp, '#c9d4e4')!, 5)
+    expect(lightShortfall!.ratio).toBeLessThan(READABLE_CONTRAST)
+    // A light bar in a dark theme: the light text on it.
+    const dark = deriveThemeTokens({ ...defaultCustomInput('dark'), sideNav: '#8090a8' })
+    const darkShortfall = contrastShortfalls(dark, 'dark').find((s) => s.pair === 'moduleBar')
+    expect(darkShortfall!.ratio).toBeCloseTo(contrastRatio(dark.textPrimary, '#8090a8')!, 5)
+    expect(darkShortfall!.ratio).toBeLessThan(READABLE_CONTRAST)
+    // The other pairs are unchanged by it; and without the appearance, the bar is not judged.
+    expect(contrastShortfalls(light, 'light').map((s) => s.pair)).toEqual(['moduleBar'])
+    expect(contrastShortfalls(light)).toEqual([])
   })
 
   it('produces valid colors for every color slot', () => {

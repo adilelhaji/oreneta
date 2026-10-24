@@ -8985,6 +8985,71 @@ for (const width of [1440, 1025]) {
   })
 }
 
+// Back to mail from a module that sits in «Més» there: Mail's strip is drawn
+// with all seven before it is measured, and the button that had the focus
+// goes into «Més» once it is; the focus follows it there, not to the page.
+test("back to mail from the open module at the app's 200 %, the focus goes to «Més», where that module went (#354)", async ({
+  page,
+}) => {
+  const { errors, modules, titles } = await openModuleSwitcher(page, 1440)
+  await zoomTo200(page)
+  await expect.poll(titles).toEqual(['Mail', 'Calendar', 'More'])
+  const more = modules.getByRole('button', { name: 'More', exact: true })
+  const menu = page.getByRole('menu', { name: 'More', exact: true })
+  await more.focus()
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('ArrowDown')
+  await expect(menu.getByRole('menuitem', { name: 'Notes', exact: true })).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('main', { name: 'Notes', exact: true })).toBeVisible()
+  await expect.poll(titles).toEqual(['Mail', 'Notes', 'More'])
+  const notes = modules.getByTitle('Notes', { exact: true })
+  await expect(notes).toBeFocused()
+  // Enter on the open module goes back to mail, as the rail's did.
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('main', { name: 'Mail', exact: true })).toBeVisible()
+  await expect.poll(titles).toEqual(['Mail', 'Calendar', 'More'])
+  await expect(more).toBeFocused()
+  expect(await regionAtFocus(page)).toBe('modules')
+  // And «Més» holds Notes, in the strip's order.
+  await page.keyboard.press('Enter')
+  await expect.poll(() => itemNames(menu)).toEqual(['People', 'Tasks', 'Notes', 'Chat', 'Attachments'])
+  await page.keyboard.press('Escape')
+  await expect(more).toBeFocused()
+  expect(errors).toEqual([])
+})
+
+// The strip and the narrow bar are different elements, drawn by the folder
+// pane and by the row: across 1025 px the focus goes from one to the other,
+// on the same module's button, in mail (which draws its own pane) and in a
+// module whose pane keeps its own controls' focus (#341).
+for (const module of ['Mail', 'Notes']) {
+  test(`the focus stays on the same module's button as the window narrows past 1025 px and widens again, in ${module} (#354)`, async ({
+    page,
+  }) => {
+    const { errors, modules } = await openModuleSwitcher(page, 1440)
+    if (module !== 'Mail') {
+      await modules.getByTitle(module, { exact: true }).click()
+      await expect(page.getByRole('main', { name: module, exact: true })).toBeVisible()
+    }
+    const people = modules.getByTitle('People', { exact: true })
+    await people.focus()
+    await page.setViewportSize({ width: 1000, height: 1000 })
+    await expect(modules).toHaveAttribute('data-module-switcher', 'bar')
+    await expect(people).toBeFocused()
+    expect(await regionAtFocus(page)).toBe('modules')
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await expect(modules).toHaveAttribute('data-module-switcher', 'strip')
+    await expect(people).toBeFocused()
+    // Nothing opened on the way, and the arrows go on from there.
+    await expect(page.getByRole('main', { name: module, exact: true })).toBeVisible()
+    await page.keyboard.press('ArrowRight')
+    await expect(modules.getByTitle('Tasks', { exact: true })).toBeFocused()
+    expect(errors).toEqual([])
+  })
+}
+
 test("the narrow bar at the app's 200 % at 1024px: every module in a tall window, «Més» in a short one, and no horizontal scroll (#354)", async ({
   page,
 }) => {

@@ -32,12 +32,14 @@ const MARGIN = 8
 /** Where «Més» opens from, in the visual px of `getBoundingClientRect`. */
 type Anchor = { left: number; right: number; top: number; bottom: number }
 
-// Set when a module is opened from a switcher while the focus is in it. The
-// strip is part of each module's own folder pane, so the switcher of the
-// module that opens is a new one, and the focus would fall to the page with
-// the old: the switcher drawn next puts it on the button that was pressed.
-// The narrow bar stays, and does the same. Forgotten once the module change
-// is drawn, so a switcher drawn later (a resize) never takes the focus.
+// The place a switcher drawn next puts the focus on: a module's key, or
+// «Més». Set when a module is opened from a switcher while the focus is in
+// it (the strip is part of each module's own folder pane, so the switcher of
+// the module that opens is a new one, and the focus would fall to the page
+// with the old; the narrow bar stays, and does the same), and when a switcher
+// is drawn in place of one that had the focus (the window crossing 1025 px:
+// the strip and the bar are different elements). Forgotten once that is
+// drawn, so a switcher drawn later never takes the focus.
 let refocus: string | null = null
 
 function askRefocus(key: string) {
@@ -49,6 +51,65 @@ function askRefocus(key: string) {
 
 function slotOf(element: Element | null): string | null {
   return element?.closest(`[${SLOT}]`)?.getAttribute(SLOT) ?? null
+}
+
+/** The place of a switcher `target` is in («Més» for its menu), or null when it is not in one. */
+function placeInSwitcher(target: EventTarget | null): string | null {
+  if (!(target instanceof Element) || !target.closest('[data-module-switcher]')) return null
+  return slotOf(target) ?? MORE
+}
+
+// Where the focus is in the switchers, followed while one is drawn: it cannot
+// be read when the window crosses 1025 px, as a browser may already have
+// dropped it (the folder pane, and the strip with it, is hidden by CSS the
+// moment the query stops matching). As the folder pane's own controls do
+// (folderPaneFocus.ts), it is kept as it moves (`focusin`), and read again
+// after each press of the pointer, which may move it with no focusin.
+let held: string | null = null
+// What `held` was when the last switcher went, for one drawn in its place in
+// the same task; the media queries of a crossing report in one task, though
+// React may draw what each changes apart.
+let leaving: string | null = null
+let watchers = 0
+let afterPress: ReturnType<typeof setTimeout> | undefined
+const PRESSES = ['pointerdown', 'pointerup', 'pointercancel', 'mousedown'] as const
+
+function onFocusIn(event: FocusEvent) {
+  held = placeInSwitcher(event.target)
+}
+
+function onPress() {
+  clearTimeout(afterPress)
+  afterPress = setTimeout(() => {
+    held = focusFell() ? null : placeInSwitcher(document.activeElement)
+  })
+}
+
+/** Follows the focus while a switcher is drawn; the place it had when the last goes, for its successor. */
+function watchFocus(): () => void {
+  if (watchers++ === 0) {
+    document.addEventListener('focusin', onFocusIn, true)
+    for (const name of PRESSES) document.addEventListener(name, onPress, true)
+  }
+  return () => {
+    if (--watchers > 0) return
+    document.removeEventListener('focusin', onFocusIn, true)
+    for (const name of PRESSES) document.removeEventListener(name, onPress, true)
+    clearTimeout(afterPress)
+    const last = held
+    held = null
+    leaving = last
+    setTimeout(() => {
+      if (leaving === last) leaving = null
+    }, 0)
+  }
+}
+
+/** Whether the focus fell to the page, or is in another switcher, one about to go. */
+function focusLeftFor(me: Element | null): boolean {
+  if (focusFell()) return true
+  const other = document.activeElement?.closest('[data-module-switcher]')
+  return !!other && other !== me
 }
 
 function buttonIn(list: HTMLElement, key: string): HTMLButtonElement | null {
@@ -112,6 +173,16 @@ export function ModuleSwitcher({ variant }: { variant: ModuleSwitcherVariant }) 
   const strip = variant === 'strip'
   const label = t('shell.region.modules')
 
+  // Drawn in place of a switcher that had the focus (the window crossing
+  // 1025 px, or a module opened by a shortcut): the focus goes on to the same
+  // place here. Where it was is read before this switcher starts following it.
+  useLayoutEffect(() => {
+    const before = watchers > 0 ? held : leaving
+    leaving = null
+    if (refocus === null && before !== null && focusLeftFor(nav.current)) askRefocus(before)
+    return watchFocus()
+  }, [])
+
   // How many places there are along it. The places are the same size (in rem,
   // so they grow with the app's zoom), and the list does not size itself to
   // them: it is as long as the pane is wide or the row is tall.
@@ -139,11 +210,18 @@ export function ModuleSwitcher({ variant }: { variant: ModuleSwitcherVariant }) 
   useLayoutEffect(() => {
     const element = list.current
     if (!element) return
-    // A module opened from a switcher: the button that was pressed takes the
-    // focus here, or «Més» if that is where it went, or else the active one.
+    // A module opened from a switcher, or a switcher drawn in place of one:
+    // the button that had the focus takes it here, or «Més» if that is where
+    // it went, or else the active one. Not before the places are measured: a
+    // switcher is first drawn with all of them, and the one wanted may be
+    // about to go into «Més» (back to mail from a module that was there).
     if (refocus) {
+      if (slots !== slotsRef.current) return
       const wanted = refocus
       refocus = null
+      // Unless something else took the focus meanwhile: a command that opens
+      // mail and puts it in the band's search, once mail is drawn.
+      if (!focusLeftFor(nav.current) && !nav.current?.contains(document.activeElement)) return
       const target = buttonIn(element, wanted) ?? (more.includes(wanted as AppModule) ? buttonIn(element, MORE) : null)
       ;(target ?? buttonIn(element, active))?.focus()
       return
@@ -154,12 +232,21 @@ export function ModuleSwitcher({ variant }: { variant: ModuleSwitcherVariant }) 
     focusedAtChange.current = null
     if (lost && lost !== MORE && !shown.includes(lost as AppModule) && focusFell()) buttonIn(element, MORE)?.focus()
     // `more` follows from `shown`.
-  }, [active, shownKey])
+  }, [active, shownKey, slots])
 
-  // A menu with nothing left in it closes.
-  useEffect(() => {
-    if (menu && more.length === 0) setMenu(null)
-  }, [menu, more.length])
+  // A menu with nothing left in it closes. With the focus in it (the place
+  // grew while it was open), the focus goes to the switcher's last button
+  // rather than to the page: «Més» went with its last module.
+  useLayoutEffect(() => {
+    if (!menu || more.length > 0) return
+    const element = list.current
+    const inMenu = focusFell() || !!document.getElementById(menuId)?.contains(document.activeElement)
+    setMenu(null)
+    if (inMenu && element) [...element.querySelectorAll<HTMLButtonElement>(`[${SLOT}] > button`)].at(-1)?.focus()
+  }, [menu, more.length, menuId])
+
+  const opener = useCallback(() => (list.current ? buttonIn(list.current, MORE) : null), [])
+  const closeMenu = useCallback(() => setMenu(null), [])
 
   const open = (key: AppModule) => {
     if (nav.current?.contains(document.activeElement)) askRefocus(key)
@@ -255,9 +342,9 @@ export function ModuleSwitcher({ variant }: { variant: ModuleSwitcherVariant }) 
           anchor={menu}
           modules={more}
           counts={counts}
-          opener={() => (list.current ? buttonIn(list.current, MORE) : null)}
+          opener={opener}
           onOpen={open}
-          onClose={() => setMenu(null)}
+          onClose={closeMenu}
         />
       )}
     </nav>

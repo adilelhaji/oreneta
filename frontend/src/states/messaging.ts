@@ -363,6 +363,33 @@ export async function refreshHistory() {
   messaging$.history.set((await invoke<ChatMessage[]>('chat.history', { account, conversation })) ?? [])
 }
 
+// Whether the Chat view is drawn. The open conversation is kept when the
+// person goes to another module, so it is there on the way back, but it is
+// on screen only while the view is: a message that arrives meanwhile counts
+// as unread on the Chat button (#354), and is read on the way back.
+let chatViews = 0
+
+/** Marks the Chat view as on screen until the returned function is called. */
+export function showChatView(): () => void {
+  chatViews++
+  return () => {
+    chatViews--
+  }
+}
+
+/** On the way back to Chat: the open conversation is on screen again, so what arrived in it meanwhile is read. */
+export async function readOpenConversation() {
+  const account = messaging$.account.peek()
+  const open = messaging$.conversation.peek()
+  if (!account || !open) return
+  const entry = [...messaging$.conversations.peek(), ...messaging$.rooms.peek()].find(
+    (item) => ('room' in item ? item.room : item.conversation) === open,
+  )
+  if (!entry || !(entry.unread > 0)) return
+  await invoke('chat.markRead', { account, conversation: open })
+  await refreshConversations()
+}
+
 /** Opens a conversation and counts it as read. */
 export async function openConversation(conversation: string) {
   messaging$.conversation.set(normalizeConversation(conversation))
@@ -501,9 +528,10 @@ export function onChatEvent(name: string, detail: ChatEventDetail) {
   }
   if (name === 'chat.changed' && detail.account === messaging$.account.peek()) {
     void refreshConversations().then(async () => {
-      // A message arriving in the conversation on screen is read as it arrives.
+      // A message arriving in the conversation on screen is read as it arrives;
+      // with the person in another module, it waits as unread.
       const open = messaging$.conversation.peek()
-      if (open && detail.conversation === open) {
+      if (open && detail.conversation === open && chatViews > 0) {
         await invoke('chat.markRead', { account: detail.account, conversation: open })
         await refreshConversations()
       }

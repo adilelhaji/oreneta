@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'bun:test'
 import { cleanup, render } from '@testing-library/react'
 import { ThemeEditorDialog } from './ThemeEditorDialog'
 import type { CustomTheme } from '../../lib/themes'
-import { deriveThemeTokens, type CustomThemeInput } from '../../lib/themes'
+import { defaultCustomInput, deriveThemeTokens, type CustomThemeInput } from '../../lib/themes'
 
 afterEach(cleanup)
 
@@ -38,5 +38,28 @@ describe('ThemeEditorDialog', () => {
     expect(view.getByText(/The text is hard to read on these backgrounds \(\d\.\d:1/)).toBeTruthy()
     expect(view.getByText(/The accent is hard to read as text/)).toBeTruthy()
     expect((view.getByRole('button', { name: 'Save theme' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('names a module bar its icons do not read on, in a light theme and in a dark one (#354)', () => {
+    for (const appearance of ['light', 'dark'] as const) {
+      const view = render(
+        <ThemeEditorDialog
+          appearance={appearance}
+          initial={themeFrom({
+            ...defaultCustomInput(appearance),
+            sideNav: appearance === 'light' ? '#c9d4e4' : '#8090a8',
+          })}
+          onClose={() => {}}
+        />,
+      )
+      expect(view.getByText(/The icons are hard to read on the module bar \(\d\.\d:1/)).toBeTruthy()
+      // Only that: the text and the accent still read.
+      expect(view.getAllByText(/hard to read/)).toHaveLength(1)
+      expect((view.getByRole('button', { name: 'Save theme' }) as HTMLButtonElement).disabled).toBe(false)
+      cleanup()
+    }
+    // The default palettes say nothing of it.
+    const view = render(<ThemeEditorDialog appearance="dark" initial={null} onClose={() => {}} />)
+    expect(view.queryByText(/module bar/)).toBeNull()
   })
 })
