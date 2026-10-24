@@ -373,7 +373,7 @@ paleta i des del menú, anar a un mòdul, carpeta, compte, tauler o filtre) tanq
 perquè sota la capa el mòdul està inert; les que actuen fora del mòdul, com la configuració oberta des
 de la paleta, la deixen oberta i el focus hi torna. Continua sent una nota d'evidència: cap fila no
 canvia d'estat.
-El 2026-10-25 (#363, peça 12c, ADR-0069 §4, `docs/design/contextual-sidebar.md`) l'historial d'una
+El 2026-10-24 (#363, peça 12c, ADR-0069 §4, `docs/design/contextual-sidebar.md`) l'historial d'una
 persona de #86 va passar a ser el panell Persona de la barra lateral de l'aplicació, a tots els
 mòduls. Al correu, amb una conversa oberta, és la persona que hi participa i no és cap compte propi
 o, si n'hi ha diverses, la que es tria de la llista, al compte de la conversa; a Persones, el

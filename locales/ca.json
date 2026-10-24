@@ -2168,7 +2168,7 @@
   "person.emptyMail": "Obre una conversa per veure l'historial amb una persona que hi participa.",
   "person.emptyPeople": "Selecciona un contacte per veure'n l'historial.",
   "person.inAccount": "Compte: {account}",
-  "person.noAddress": "Aquest contacte no té cap adreça electrònica per consultar.",
+  "person.noAddress": "Aquest contacte no té cap adreça electrònica per cercar-ne l'historial.",
   "person.noBookAccount": "La llibreta d'aquest contacte no és de cap compte. Tria el compte on vols buscar l'historial.",
   "person.nobodyElse": "En aquesta conversa no hi ha ningú més.",
   "person.pickAnother": "Tria una altra persona",

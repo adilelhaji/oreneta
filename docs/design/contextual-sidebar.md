@@ -63,8 +63,8 @@ el panell Persona.
   lectura.
 - **Panell recordat:** es torna a obrir a l'últim que s'ha fet servir, també
   després de reiniciar (`session_sidebar_section_main`). Des de #361 aquesta
-  clau desa el tipus de panell (vegeu més avall). La persona no es recorda: des
-  de #363 es recorda el panell Persona (`person`), però mai qui hi havia. Fins a
+  clau desa el tipus de panell (vegeu més avall). Des
+  de #363 es recorda el panell Persona (`person`), però mai la persona que hi havia. Fins a
   #361, si la barra estava oberta o tancada només es recordava durant la sessió;
   ara es desa (`app_sidebar_state`).
 - **Proves:** `lib/agenda.test.ts`, `lib/paneResize.test.ts`,
@@ -360,7 +360,7 @@ a `AppSidebar.tsx`.
     es guarda amb la conversa i el compte on s'ha triat: en una altra conversa,
     o en el mateix fil d'un altre compte, no compta;
   - a Persones, la persona és la selecció de la llista (`people$.selectedId`),
-    tal com està, i `person$` només guarda el que el panell ha demanat per a
+    sense còpia, i `person$` només guarda el que el panell ha demanat per a
     aquell contacte: l'adreça, si en té més d'una, i el compte, si la llibreta
     no en té. Seleccionar un altre contacte comença sense res triat.
 - **El compte (aïllament de #86):** al correu, el de la conversa. A Persones, el
@@ -378,7 +378,7 @@ a `AppSidebar.tsx`.
 - **Obrir:** una conversa de l'historial s'obre al correu, al compte de
   l'historial (des de Persones, el correu passa al davant), i la persona hi
   continua en context; un esdeveniment obre el seu dia al Calendari
-  (`openCalendarOn`). Abans, la capa es tanca, com a l'agenda.
+  (`openCalendarOn`). Abans d'obrir-ho, la capa es tanca, com a l'agenda.
 - **«Historial amb …»**, al menú d'un participant del panell Conversa, obre el
   panell Persona amb aquella persona, sense canviar com es dibuixa la barra ni
   desar res més que el panell, i porta el focus a la pestanya Persona.
