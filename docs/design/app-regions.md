@@ -14,8 +14,9 @@ selector de mòduls, des de #354, en lloc de `components/sidenav/SideNav.tsx`),
 superior, des de #343), `components/shell/BandSearch.tsx` (la cerca de la banda,
 des de #344), `components/shell/SyncStatus.tsx` i
 `components/banner/ConnectivityBanner.tsx` (l'estat de la sincronització a la
-banda i la barra sota la capçalera, des de #345) i els `data-region` de les
-vistes de cada mòdul.
+banda i la barra sota la capçalera, des de #345), `components/shell/AppSidebar.tsx`
+(la barra lateral de l'aplicació, des de #361) i els `data-region` de les vistes
+de cada mòdul.
 
 ## Un sol estat de mòdul
 
@@ -47,11 +48,20 @@ vistes de cada mòdul.
 | Mòdul | `<main>` | el del mòdul: «Correu», «Calendari», «Persones», «Tasques», «Notes», «Xat», «Adjunts» | — |
 | Llista de converses o tauler; als altres mòduls, el mòdul sencer | la d'avui | — | `content` |
 | Lector | `[data-message-pane]` | — | `reader` |
-| Barra lateral de detalls | `<aside>` | — | `sidebar` |
+| Barra lateral de l'aplicació (des de #361; abans, la barra lateral de detalls d'una conversa, dins del lector): desplegada, minimitzada en una tira o com a capa ([contextual-sidebar.md](contextual-sidebar.md#la-barra-lateral-de-laplicació-361)) | `<aside>` (`complementary`), després de `<main>`, al final de la fila del marc, a tots els mòduls | «Barra lateral» | `sidebar` |
 
 - Hi ha un sol `<main>`. Els diàlegs de l'aplicació, els avisos (toasts), les
   confirmacions i l'avís de certificat en surten i es pinten al costat de les
   regions.
+- La barra lateral de l'aplicació (#361, ADR-0069 §1) és fora de `<main>`, després
+  d'ell, a la fila del marc (`data-frame-row`), i n'hi ha una sola: substitueix la
+  barra lateral de detalls, que era dins del lector i només hi era amb una
+  conversa oberta. Desplegada, minimitzada en la seva tira o com a capa, és la
+  mateixa regió `sidebar`, amb el mateix nom; amagada, o per sota de 769 px sense
+  la capa oberta, no hi és. El seu nom, «Barra lateral», no coincideix amb el de
+  cap altra regió, i el seu selector de panells, «Panells de la barra lateral»,
+  no és cap punt de referència. El botó «Barra lateral» de la banda és dins de la
+  regió `search`, com la resta del final de la banda.
 - La capçalera (#343) és el `<header>` «Oreneta», el punt de referència `banner`
   de la finestra. Es pinta després de `MacTitleBar` i abans de la barra de la
   sincronització (quan hi és) i d'`UpdateBanner`, fora de `<main>`, com demana
@@ -106,7 +116,9 @@ vistes de cada mòdul.
   ser el `<nav>` «Mòduls» d'ADR-0068 §1. Des de #354 és així: la tira de mòduls és al
   peu de la subfinestra, que continua dins de `<main>` perquè la pinta cada
   mòdul, i la barra estreta, a l'inici de `<main>`, on era la barra vertical. Que
-  `<main>` només contingui el mòdul, com vol ADR-0068 §1, és un pas pendent.
+  `<main>` només contingui el mòdul, com vol ADR-0068 §1, és un pas pendent: des
+  de #361 la barra lateral ja n'és fora, però la subfinestra de carpetes i la
+  barra estreta, no.
 - La barra vertical tenia nom perquè no hi hagués dues regions complementàries
   sense nom quan la barra lateral de detalls estigués oberta. Des de #354 el selector
   de mòduls és un `<nav>` «Mòduls», i només n'hi ha un a la vegada: la tira es
@@ -159,6 +171,18 @@ vistes de cada mòdul.
   la tira de mòduls és al peu de les carpetes, una regió dins d'una altra, i F6
   hi va després de les carpetes; entre 769 i 1024 px, sense carpetes, la barra
   estreta va abans que el mòdul.
+- **La barra lateral (#361):** és l'última regió, també quan està minimitzada:
+  la tira té una icona per panell, i per defecte (`minimized`) és a la pantalla
+  a partir de 769 px. Per això, després del lector (o del mòdul, fora del
+  correu) F6 hi va abans de tornar a la banda, encara que no hi hagi cap
+  conversa oberta. Com a capa és la mateixa regió; amagada no hi és.
+- **Sota la capa de la barra lateral (#361):** mentre està oberta, `<main>` és
+  `inert`, amb la barra estreta de mòduls, les carpetes i el mòdul: és el que
+  cobreix el fons. F6 i Maj+F6 només van entre la banda i la barra, i Tab tampoc
+  no entra al mòdul. En tancar-se, `<main>` deixa de ser inert i el focus torna a
+  l'element que l'havia oberta (vegeu
+  [contextual-sidebar.md](contextual-sidebar.md#obrir-tancar-i-el-focus)). La
+  banda no queda sota el fons i continua activa.
 - **Cicle:** després de l'última regió, F6 torna a la primera. Des de fora de
   qualsevol regió, F6 va a la primera i Maj+F6, a l'última.
 - **Se salten** les regions que no es veuen (perquè l'amplada les amaga o perquè
@@ -205,9 +229,11 @@ vistes de cada mòdul.
 | N2 (`components/shell/ModuleSwitcher.test.tsx`, #354) | El `<nav>` «Mòduls», la regió `modules`, amb un botó per mòdul que és una parada de Tab; les fletxes en el sentit de lectura, Inici i Fi, i les tecles que deixa passar; el focus quan la tira es torna a pintar i quan un botó passa a «Més» |
 | e2e (`startup.e2e.ts`, «#354») | La tira, la barra estreta i el menú compacte a 1025, 1024, 769 i 768 px, amb un sol `<nav>` «Mòduls» i F6; el teclat de la tira en català i en àrab; les regles de regions d'axe a 1440, 1024 i 768 px i al 200 % amb «Més» obert |
 | N2 (proves dels mòduls) | `ui$.module` en lloc dels sis booleans |
+| N2 (`components/shell/AppSidebar.test.tsx`, #361) | Una sola regió complementària «Barra lateral», `sidebar`, després de `<main>` i fora d'ell, a cada mòdul; el selector de panells amb el teclat, en anglès i en àrab |
+| e2e (`startup.e2e.ts`, «#361») | F6 i Maj+F6 a través de la barra desplegada, al correu i al Calendari, i axe dins de la barra a cada amplada, en català i en àrab; a 1024 px, amb la capa oberta, `<main>` inert, F6 i Maj+F6 només entre la banda i la barra, Tab que no entra al mòdul i el focus que torna a la fila en tancar-la (vegeu [contextual-sidebar.md](contextual-sidebar.md#la-barra-lateral-de-laplicació-361)) |
 | N2 (`components/shell/SyncStatus.test.tsx`, #345) | El final de la banda dins de la regió `search`, després de la cerca en l'ordre de Tab; cap punt de referència nou: la finestra emergent és un `dialog` dins de la capçalera, i la barra, l'única regió «Sincronització dels comptes»; una sola regió d'estat per a la sincronització i una per al mode No molestis |
 | e2e (`startup.e2e.ts`, «#345») | Tab des del botó del menú fins al botó de l'estat, sense sortir de la regió `search`; F6 des de la finestra emergent la tanca i va a les carpetes, i Maj+F6 torna al botó; les regles de regions d'axe amb la barra i la finestra oberta, i en àrab |
-| e2e (`startup.e2e.ts`, «#306») | A 1440 px, en anglès, català i àrab: un sol `<main>` amb el nom del mòdul, la barra vertical «Mòduls» (des de #354, el `<nav>` «Mòduls», l'únic amb aquest nom) i F6 / Maj+F6 en el mateix ordre, des de #343 passant per la banda, fins a tornar a la fila de la llista. Des d'un camp de text (des de #344, el de la cerca de la banda, d'on F6 va a les carpetes), des del missatge HTML i amb un diàleg modal obert; un avís emergent (toast) i el diàleg fora de `<main>`. Al calendari, a Persones, a Tasques, a Notes, a Xat i a Adjunts, F6 va del mòdul a la banda (des de #343), a la seva columna (des de #323, #326, #329, #335, #337 i #339, a la subfinestra de carpetes) i torna a la barra vertical (des de #354, a la tira de mòduls). Una reassignació a una lletra. A 600 px, només les regions que es veuen (la banda, que s'hi veu, i la llista o el lector); al 200 % de l'aplicació, el mateix ordre sense desplaçament horitzontal. Les regles de regions d'axe (`region`, `landmark-unique`, `landmark-one-main`) no troben res a la bústia ni a cap mòdul |
+| e2e (`startup.e2e.ts`, «#306») | A 1440 px, en anglès, català i àrab: un sol `<main>` amb el nom del mòdul, la barra vertical «Mòduls» (des de #354, el `<nav>` «Mòduls», l'únic amb aquest nom) i F6 / Maj+F6 en el mateix ordre, des de #343 passant per la banda, fins a tornar a la fila de la llista. Des d'un camp de text (des de #344, el de la cerca de la banda, d'on F6 va a les carpetes), des del missatge HTML (des de #361, d'on F6 va a la tira de la barra lateral i després a la banda) i amb un diàleg modal obert; un avís emergent (toast) i el diàleg fora de `<main>`. Al calendari, a Persones, a Tasques, a Notes, a Xat i a Adjunts, F6 va del mòdul a la barra lateral (des de #361, desplegada amb `i` al correu), a la banda (des de #343), a la seva columna (des de #323, #326, #329, #335, #337 i #339, a la subfinestra de carpetes) i torna a la barra vertical (des de #354, a la tira de mòduls). Una reassignació a una lletra. A 600 px, només les regions que es veuen (la banda, que s'hi veu, i la llista o el lector); al 200 % de l'aplicació, el mateix ordre sense desplaçament horitzontal (des de #361, amb la tira de la barra lateral després del lector). Les regles de regions d'axe (`region`, `landmark-unique`, `landmark-one-main`) no troben res a la bústia ni a cap mòdul |
 
 Les proves de límits, de zoom, de dreta a esquerra i les auditories axe que ja
 hi havia no canvien: aquest pas no mou res de lloc. La banda superior (#343) hi

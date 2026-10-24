@@ -60,6 +60,7 @@ import { FOLDER_PANE_MIN_WINDOW, FolderPane } from '../shell/FolderPane'
 import { useWideWindow } from '../resizer/useElementWidth'
 import { useFolderPaneFocus } from '../shell/folderPaneFocus'
 import { clsx } from '../../lib/utils'
+import { moduleContentStyle } from '../../lib/paneResize'
 
 const input = 'rounded-control-sm border border-border bg-app px-2.5 py-1.5 text-sm text-primary'
 
@@ -773,9 +774,11 @@ export function MessagingView() {
       <div
         data-region="content"
         // Beside the pane the module asks for the reader's minimum (360 px,
-        // ADR-0068 §7) as its basis: the pane, whose shrink factor dwarfs
-        // this one's, gives way first.
-        className={clsx('flex min-w-0 bg-chats', inPane ? 'flex-[1_1_360px]' : 'flex-1')}
+        // ADR-0068 §7) as its basis, and keeps it: the pane, whose shrink
+        // factor dwarfs this one's, gives way first, and the app's sidebar
+        // never takes it (ADR-0069 §2).
+        className={clsx('flex min-w-0 bg-chats', !inPane && 'flex-1')}
+        style={inPane ? moduleContentStyle('chat') : undefined}
       >
         {!inPane && (
           <section

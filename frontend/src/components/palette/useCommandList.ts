@@ -18,6 +18,7 @@ import {
   MailOpen,
   MessagesSquare,
   Moon,
+  PanelRight,
   Paperclip,
   Pencil,
   Keyboard,
@@ -79,6 +80,8 @@ import { merge$ } from '../../states/merge'
 import { awaiting$ } from '../../states/awaiting'
 import { pauseNotifications, resumeNotifications, type PauseChoice } from '../../states/notifications'
 import { useQuietState } from '../sidenav/QuietIndicator'
+import { closeSidebarOverlay, sidebarDrawn, toggleAppSidebar } from '../../states/sidebar'
+import { useSidebarShown } from '../shell/useSidebarShown'
 
 // The modules after mail, in the order of the module strip (ADR-0068 §5). Mail
 // itself is "Go to: Mail" (view.mail).
@@ -118,12 +121,30 @@ export function useCommandList(): Command[] {
   const quiet = useQuietState().quiet
   // A manual mail check in flight (`syncMail`): its command waits, and says so.
   const syncing = useValue(ui$.busy)
+  // Whether any of the app's sidebar is drawn, its strip included: what the
+  // band's button, and this command, would hide (ADR-0069 §2, decision D4).
+  const sidebarOpen = sidebarDrawn(useSidebarShown())
 
   return useMemo<Command[]>(() => {
     const run = (fn: () => void) => () => {
       closeCommandPalette()
       fn()
     }
+    // A command that brings something of the module forward or puts the
+    // focus in it: a conversation pane tab, the reply, the conversation's
+    // search, another module, folder, account, board or filter. Under the app
+    // sidebar's overlay the module is inert, so the overlay goes first
+    // (ADR-0069 §2), as the store closes it for the same things done by
+    // hotkey (states/sidebar.ts, states/compose.ts). Every other command acts
+    // outside <main> (Settings, the themes, the pauses, the dialogs, the
+    // band's search) or on data the overlay can stay over, as its hotkey does,
+    // and leaves the overlay as it is; the sidebar's own command decides
+    // about the overlay itself.
+    const inModule = (fn: () => void) =>
+      run(() => {
+        closeSidebarOverlay()
+        fn()
+      })
     const icon = (component: typeof Mail) => createElement(component, { size: 15 })
     // The palette offers one narrowing at a time, which is what a command
     // list is for; the filter bar is where they are combined.
@@ -151,7 +172,7 @@ export function useCommandList(): Command[] {
         icon: icon(Pencil),
         keywords: 'write new email reply',
         shortcut: 'compose.new',
-        run: run(() => openComposeTab()),
+        run: inModule(() => openComposeTab()),
       },
       {
         id: 'compose.mailing',
@@ -205,7 +226,11 @@ export function useCommandList(): Command[] {
           if (visible && !inMailView) requestThreadSearch(selectedThread)
           inMail(() => {
             if (!visible) focusGlobalSearch()
-            else if (inMailView) thread$.searchOpen.set(true)
+            else if (inMailView) {
+              // The conversation's search is in the module, the band's is not.
+              closeSidebarOverlay()
+              thread$.searchOpen.set(true)
+            }
           })()
         }),
       },
@@ -263,7 +288,7 @@ export function useCommandList(): Command[] {
         icon: icon(List),
         keywords: 'layout list conversation account',
         active: inMailView && !activeBoardId,
-        run: run(inMail(() => closeKanbanBoard())),
+        run: inModule(inMail(() => closeKanbanBoard())),
       },
       // The other modules (ADR-0068 §5: a "Go to: …" for each), as the rail's
       // More menu offered them; below 769 px, where there is no module
@@ -276,7 +301,7 @@ export function useCommandList(): Command[] {
           icon: icon(component),
           keywords: `module go to ${keywords}`,
           active: activeModule === key,
-          run: run(() => ui$.module.set(key)),
+          run: inModule(() => ui$.module.set(key)),
         }),
       ),
       {
@@ -286,6 +311,17 @@ export function useCommandList(): Command[] {
         icon: icon(Palette),
         keywords: 'components tokens library styleguide',
         run: run(() => ui$.catalogueOpen.set(true)),
+      },
+      {
+        // As the band's «Barra lateral» button (ADR-0069 §2, decision D4):
+        // hides whatever is drawn of the app's sidebar, or shows it. There is
+        // none on the first-account setup.
+        id: 'view.sidebar',
+        label: sidebarOpen ? t('commands.sidebar.hide') : t('commands.sidebar.show'),
+        area: 'app',
+        icon: icon(PanelRight),
+        keywords: 'sidebar agenda conversation details panel widgets',
+        run: run(() => toggleAppSidebar()),
       },
       {
         id: 'app.about',
@@ -303,7 +339,7 @@ export function useCommandList(): Command[] {
         keywords: 'new board columns',
         // Created at once with the default name, as before, and shown in mail,
         // where the boards are.
-        run: run(inMail(() => createKanbanBoard())),
+        run: inModule(inMail(() => createKanbanBoard())),
       },
       ...boards.map(
         (board, boardIndex): Command => ({
@@ -314,7 +350,7 @@ export function useCommandList(): Command[] {
           keywords: 'kanban board columns',
           shortcut: railShortcut(boardIndex + 2),
           active: inMailView && activeBoardId === board.id,
-          run: run(inMail(() => selectKanbanBoard(board.id))),
+          run: inModule(inMail(() => selectKanbanBoard(board.id))),
         }),
       ),
       {
@@ -324,7 +360,7 @@ export function useCommandList(): Command[] {
         icon: icon(Mail),
         keywords: 'show everything',
         active: activeFilterMode === 'all',
-        run: run(() => setActiveFilterMode('all')),
+        run: inModule(() => setActiveFilterMode('all')),
       },
       {
         id: 'filter.unread',
@@ -332,7 +368,7 @@ export function useCommandList(): Command[] {
         area: 'mail',
         icon: icon(Inbox),
         active: activeFilterMode === 'unread',
-        run: run(() => setActiveFilterMode('unread')),
+        run: inModule(() => setActiveFilterMode('unread')),
       },
       {
         id: 'filter.starred',
@@ -340,7 +376,7 @@ export function useCommandList(): Command[] {
         area: 'mail',
         icon: icon(Star),
         active: activeFilterMode === 'starred',
-        run: run(() => setActiveFilterMode('starred')),
+        run: inModule(() => setActiveFilterMode('starred')),
       },
       ...[...BUILTIN_THEMES, ...customThemes].map(
         (theme): Command => ({
@@ -393,7 +429,7 @@ export function useCommandList(): Command[] {
           icon: icon(Reply),
           keywords: 'respond quick',
           shortcut: 'reply.focus',
-          run: run(() => focusQuickReply()),
+          run: inModule(() => focusQuickReply()),
         },
         {
           id: 'compose.replyFull',
@@ -402,7 +438,7 @@ export function useCommandList(): Command[] {
           icon: icon(Maximize2),
           keywords: 'expand compose respond editor',
           shortcut: 'compose.replyFull',
-          run: run(() => openReplyInFullEditor()),
+          run: inModule(() => openReplyInFullEditor()),
         },
         {
           id: 'thread.archive',
@@ -452,7 +488,7 @@ export function useCommandList(): Command[] {
         icon: icon(X),
         keywords: 'dismiss editor reader',
         shortcut: 'tab.close',
-        run: run(() => void closeMessageTab(activeTab)),
+        run: inModule(() => void closeMessageTab(activeTab)),
       })
     }
 
@@ -466,7 +502,7 @@ export function useCommandList(): Command[] {
         keywords: 'all accounts switch',
         shortcut: railShortcut(1),
         active: inMailView && !activeBoardId && selectedAccount === 'unified',
-        run: run(inMail(() => openMailAccount('unified'))),
+        run: inModule(inMail(() => openMailAccount('unified'))),
       })
     }
     for (const [accountIndex, account] of accounts.entries()) {
@@ -478,7 +514,7 @@ export function useCommandList(): Command[] {
         keywords: `account switch ${account.email}`,
         shortcut: railShortcut(boards.length + accountIndex + 2),
         active: inMailView && !activeBoardId && selectedAccount === account.id,
-        run: run(inMail(() => openMailAccount(account.id))),
+        run: inModule(inMail(() => openMailAccount(account.id))),
       })
     }
 
@@ -491,7 +527,7 @@ export function useCommandList(): Command[] {
         icon: icon(Inbox),
         keywords: 'open mailbox',
         active: inMailView && !activeBoardId && selectedFolder === folder.id,
-        run: run(inMail(() => ui$.selectedFolder.set(folder.id))),
+        run: inModule(inMail(() => ui$.selectedFolder.set(folder.id))),
       })
     }
 
@@ -520,7 +556,10 @@ export function useCommandList(): Command[] {
     const messageCommands = new Set(['thread.archive', 'thread.star', 'thread.unread', 'thread.delete'])
     // With no account yet (the first-account setup screen, #343), only what
     // needs none: the settings, the themes and the app's own commands.
-    const available = accounts.length === 0 ? list.filter((command) => NO_ACCOUNT_AREAS.has(command.area)) : list
+    const available =
+      accounts.length === 0
+        ? list.filter((command) => NO_ACCOUNT_AREAS.has(command.area) && command.id !== 'view.sidebar')
+        : list
     return available.map((command) => {
       if (command.kind === 'setting') return command
       const keywordId = command.id.startsWith('theme.')
@@ -587,5 +626,6 @@ export function useCommandList(): Command[] {
     activeModule,
     quiet,
     syncing,
+    sidebarOpen,
   ])
 }

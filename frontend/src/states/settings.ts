@@ -283,8 +283,14 @@ export type Settings = {
   kanbanBoards: KanbanBoard[]
   threadListWidth: number
   kanbanPaneWidth: number
-  /** Pixel width of the conversation details sidebar beside the reader (ADR-0059). */
+  /** Pixel width of the app's sidebar expanded beside the content (ADR-0059, ADR-0069 §2). */
   detailsPanelWidth: number
+  /**
+   * The app's sidebar: expanded, minimised to its strip, or hidden (ADR-0069
+   * §2). Only what the person does with it beside the content changes it; an
+   * overlay shown where it does not fit beside never does.
+   */
+  appSidebarState: AppSidebarState
   /** Pixel width of the common folder pane, the same in every module (ADR-0068 §4). */
   folderPaneWidth: number
   /** Pixel width used by every expanded kanban column. */
@@ -392,6 +398,15 @@ export const MARK_READ_MODES = ['immediately', 'delayed', 'manual'] as const
 /** The delays 'delayed' can wait, in seconds. */
 export const MARK_READ_DELAY_CHOICES = [1, 2, 3, 5, 10] as const
 
+/** The app's sidebar (ADR-0069 §2): expanded, minimised to its strip, or hidden. */
+export const APP_SIDEBAR_STATES = ['expanded', 'minimized', 'hidden'] as const
+export type AppSidebarState = (typeof APP_SIDEBAR_STATES)[number]
+
+/** A stored sidebar state, or null for anything else: the default then stands. */
+export function parseAppSidebarState(raw: unknown): AppSidebarState | null {
+  return APP_SIDEBAR_STATES.includes(raw as AppSidebarState) ? (raw as AppSidebarState) : null
+}
+
 export const KANBAN_COLUMN_DEFAULT_WIDTH = 360
 export const KANBAN_COLUMN_MIN_WIDTH = 240
 export const KANBAN_COLUMN_MAX_WIDTH = 700
@@ -434,6 +449,7 @@ const DB_KEY = {
   threadListWidth: 'thread_list_width',
   kanbanPaneWidth: 'kanban_pane_width',
   detailsPanelWidth: 'details_panel_width',
+  appSidebarState: 'app_sidebar_state',
   folderPaneWidth: 'folder_pane_width',
   kanbanColumnWidth: 'kanban_column_width',
   kanbanMinimizedColumns: 'kanban_minimized_columns',
@@ -696,6 +712,9 @@ export const settings$ = observable<Settings>({
   threadListWidth: THREAD_LIST_DEFAULT_WIDTH,
   kanbanPaneWidth: 33,
   detailsPanelWidth: 340,
+  // Minimised, for a new profile and on upgrading (ADR-0069, owner decision
+  // 1): it takes no room nobody asked for.
+  appSidebarState: 'minimized',
   folderPaneWidth: FOLDER_PANE_DEFAULT_WIDTH,
   kanbanColumnWidth: KANBAN_COLUMN_DEFAULT_WIDTH,
   kanbanMinimizedColumns: {},
@@ -1163,6 +1182,9 @@ export function hydrateSettings(prefs: Record<string, unknown>, { languageRead =
     if (typeof detailsWidth === 'number' && Number.isFinite(detailsWidth)) {
       settings$.detailsPanelWidth.set(clampPaneSize(detailsWidth, DETAILS_PANEL_WIDTH))
     }
+
+    const sidebarState = parseAppSidebarState(prefs[DB_KEY.appSidebarState])
+    if (sidebarState) settings$.appSidebarState.set(sidebarState)
 
     const folderWidth = prefs[DB_KEY.folderPaneWidth]
     if (typeof folderWidth === 'number' && Number.isFinite(folderWidth)) {

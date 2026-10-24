@@ -283,6 +283,13 @@ describe('People in the common folder pane (ADR-0068 §4, #326)', () => {
     expect(within(column).getByRole('button', { name: 'New contact' })).toBeTruthy()
     expect(within(column).getByRole('button', { name: 'Import contacts' })).toBeTruthy()
     expect(within(column).queryByRole('textbox', { name: 'Search people' })).toBeNull()
+    // The list and the person at the reader's 360 px, as the content's basis,
+    // which the app's sidebar never takes (owner decision D3 on #360): the
+    // list's 288 px from PEOPLE_LIST_PX. Not a hard minimum: too short a row
+    // (the system's 200 % zoom) shrinks it rather than scroll sideways.
+    expect(column.style.flex).toBe('1 1 648px')
+    expect(column.style.minWidth).toBe('')
+    expect(screen.getByRole('listbox').closest('section')!.style.width).toBe('288px')
   })
 
   it('shares one width with mail: resized here, it is the width mail draws, and the reverse', () => {

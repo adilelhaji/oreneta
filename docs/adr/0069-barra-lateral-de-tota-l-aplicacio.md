@@ -14,6 +14,19 @@
   La decisió D8 de la proposta de redisseny, aprovada el 2026-10-17 («Lo
   apruebo»), demanava escriure aquesta ADR. Les decisions D1–D9 consten a
   [#288](https://github.com/adilelhaji/oreneta/issues/288#issuecomment-6240630278).
+- Esmena del 2026-10-24 (#361), amb les decisions D3–D6 del propietari a
+  [#360](https://github.com/adilelhaji/oreneta/issues/360), preses en revisar
+  la peça 12a: als mòduls que no són correu, el contingut que compta és el
+  mínim que la seva peça ja havia fixat, com preveu la decisió 5 (D3); el botó
+  «Barra lateral» també amaga la tira i, amb la barra amagada, la desplega (D4);
+  una capa no desa mai `expanded` (D5); i, com a correcció d'una errada, la subfinestra
+  de conversa del tauler compta 360 px a partir de 769 px (320 px per sota), i
+  només amb una targeta oberta (D6). Amb la decisió D7, del mateix dia, amagar
+  la tira on la barra no hi cap al costat es desfà amb el mateix botó: amb la
+  barra amagada, el botó i l'ordre de la paleta i del menú de l'aplicació hi
+  tornen a posar la tira (es desa `minimized`) en lloc d'obrir una capa. En
+  formen part els apartats
+  del §2 marcats amb «esmena #361»; la resta de la decisió no canvia.
 - Data: 2026-10-17 (proposta); 2026-10-18 (acceptació).
 - Abast: #223 (fila SET-23 del registre d'acceptació, #86) i peça 12 de la
   proposta de redisseny, dins de #288. Substitueix part d'ADR-0059 (vegeu el
@@ -79,7 +92,8 @@
   les icones de la tira, el botó de minimitzar de la barra i la tecla `i` quan
   la barra és al costat. Tancar la capa (Esc, un clic al fons, o `i` quan la
   barra es mostra com a capa) no el canvia: la capa és una manera de
-  mostrar-la quan no hi cap, no una preferència.
+  mostrar-la quan no hi cap, no una preferència. Tampoc no el canvia obrir-la
+  (esmena #361): una capa no desa mai `expanded`, l'obri el que l'obri.
 - **En arrencar no s'obre mai una capa sola:** si l'estat desat és `expanded`
   però la barra no hi cap al costat, es pinta minimitzada (per sota de 769 px,
   amagada) i l'estat desat no canvia.
@@ -100,26 +114,48 @@
   `resta = fila − carpetes (mín. 200) − llista (mín. 280, només al correu) − contingut (mín. 360) ≥ 280`,
 
   on la fila és l'amplada dibuixada sense la barra lateral i les carpetes
-  compten només si són visibles. Amb un tauler obert, en lloc de la llista i el
-  contingut compten la columna del tauler (mín. 280) i la subfinestra de conversa
-  del tauler (mín. 320 px). Al costat, el màxim és `min(560, resta)`. Per
+  compten només si són visibles. Als altres mòduls, el contingut és el mínim
+  que la seva peça ja havia fixat (esmena #361): 648 px a Persones (la llista de
+  288 px i la persona de 360) i 680 px a Notes (la llista de 320 px i la nota de
+  360); Calendari, Tasques, Xat i Adjunts, 360 px. Amb un tauler obert, en lloc
+  de la llista i el contingut compten la columna del tauler (mín. 280) i, només
+  amb una targeta oberta, la subfinestra de conversa del tauler: 360 px a partir
+  de 769 px i 320 px per sota (correcció d'una errada, esmena #361; deia «mín. 320 px»
+  sense més). Al costat, el màxim és `min(560, resta)`. Per
   fer-hi lloc, cedeixen primer les carpetes fins al seu mínim i després la
   llista (comportament nou: avui la llista no cedeix davant de la barra); si encara no hi cap, és una capa sobre el contingut (com a màxim el
   85 % de la finestra, amb fons). La tira minimitzada sempre va al costat.
 - **Comptes al correu** (carpetes, llista i lector als mínims): a 1100 px,
   1100 − 200 − 280 − 360 = 260 < 280, i és una capa; a 1180 px, la resta és
   340 i va al costat fins a 340 px; a 1440 px, 600, i va al costat fins a 560
-  px. Als altres mòduls, sense llista, a 1100 px la resta és 540. Per tant, al
-  correu la barra va al costat a partir de 1120 px, abans que avui (uns 1200 o
-  1270 px, vegeu el context). Les proves de #212 a 1100 px ja accepten la capa i
-  no canvien d'expectativa.
+  px. Per tant, al correu la barra va al costat a partir de 1120 px, abans que
+  avui (uns 1200 o 1270 px, vegeu el context). Les proves de #212 a 1100 px ja
+  accepten la capa i no canvien d'expectativa.
+- **Comptes als altres mòduls** (esmena #361; deia «a 1100 px la resta és
+  540», que només val per als mòduls de 360 px): a 1100 px, amb les carpetes al
+  mínim, la resta és 540 a Calendari, Tasques, Xat i Adjunts, 252 a Persones i
+  220 a Notes. La barra hi va al costat a partir de 1100, 1128 i 1160 px,
+  respectivament, i la persona i la nota hi conserven 360 px. En un tauler, la
+  barra va al costat a partir de 1100 px, i amb una targeta oberta a partir de
+  1120 px: entre 1100 i 1119 px, obrir una targeta fa que la barra que hi anava
+  al costat passi a la tira, i tancar-la la torna al costat, sense canviar
+  l'estat desat.
 - **Per sota de 769 px** no hi ha tira: la barra només s'obre com a capa des de
   la barra d'eines o el menú, i en tancar-se torna a quedar amagada.
 - **Obrir i tancar:** el botó «Barra lateral» de la barra d'eines de cada mòdul
-  (`aria-expanded`), una ordre a la paleta i al menú de l'aplicació, i la tecla
-  `i` (`thread.details`) al correu: si la barra és desplegada al panell
+  (`aria-expanded`, cert només amb la barra desplegada, al costat o com a capa),
+  que mostra i amaga tota la barra (esmena #361): desplegada al costat o
+  minimitzada a la tira, l'amaga; com a capa, la tanca; amagada, la desplega al
+  costat si hi cap; si no hi cap, hi torna a posar la tira (es desa
+  `minimized`, decisió D7), i on tampoc no hi ha tira (per sota de 769 px), la
+  mostra com a capa. Les icones de la tira la despleguen des de la tira. El nom
+  del botó és el de la regió i la seva descripció diu què farà un clic («Amaga
+  la barra lateral» o «Mostra la barra lateral»), perquè amb la tira dibuixada
+  `aria-expanded` és fals i un clic l'amaga. Hi ha una ordre a la paleta i al menú de
+  l'aplicació, que fa el mateix que el botó, i la tecla
+  `i` (`thread.details`) al correu. La tecla, si la barra està desplegada al panell
   Conversa, la minimitza (o, si és una capa, la tanca com Esc); si no, la
-  desplega al panell Conversa.
+  desplega al panell Conversa, també quan està amagada.
 
 ### 3. Panell Dia (nou)
 

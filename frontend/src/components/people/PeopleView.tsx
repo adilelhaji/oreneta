@@ -19,6 +19,7 @@ import {
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
+import { moduleContentStyle, PEOPLE_LIST_PX } from '../../lib/paneResize'
 import { accounts$, isSendableAccount } from '../../states/accounts'
 import { openComposeTab } from '../../states/compose'
 import {
@@ -203,9 +204,11 @@ export function PeopleView() {
       <div
         data-region="content"
         // Beside the pane the module asks for its list (288 px) and the
-        // reader's minimum for the person (360 px, ADR-0068 §7) as its basis:
-        // the pane, whose shrink factor dwarfs this one's, gives way first.
-        className={clsx('flex min-h-0 min-w-0 bg-app', inPane ? 'flex-[1_1_648px]' : 'flex-1')}
+        // reader's minimum for the person (360 px, ADR-0068 §7) as its basis,
+        // and keeps it: the pane, whose shrink factor dwarfs this one's, gives
+        // way first, and the app's sidebar never takes it (ADR-0069 §2).
+        className={clsx('flex min-h-0 min-w-0 bg-app', !inPane && 'flex-1')}
+        style={inPane ? moduleContentStyle('people') : undefined}
       >
         <section
           // The pane is the "folders" region from 1025 px; this is the list.
@@ -215,9 +218,10 @@ export function PeopleView() {
             // 18 rem, as before; beside the folder pane it is in px, like the
             // pane, so at the app's 200 % the person keeps their room
             // (ADR-0068 §7).
-            inPane ? 'min-[769px]:w-[288px]' : 'min-[769px]:w-72',
+            !inPane && 'min-[769px]:w-72',
             selected ? 'hidden' : 'flex',
           )}
+          style={inPane ? { width: `${PEOPLE_LIST_PX}px` } : undefined}
         >
           <header className="flex shrink-0 flex-col gap-3 border-b border-border bg-header px-4 py-3">
             <CompactNavigation />

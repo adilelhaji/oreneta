@@ -190,7 +190,9 @@ describe('the module switcher (ADR-0068 §5, #354)', () => {
     ui$.module.set('tasks')
     const { nav, button } = draw('bar')
     expect(nav().dataset.moduleSwitcher).toBe('bar')
-    expect(nav().className.split(' ')).toEqual(expect.arrayContaining(['bg-sidenav', 'w-12', 'flex-col']))
+    expect(nav().className.split(' ')).toEqual(expect.arrayContaining(['bg-sidenav', 'flex-col']))
+    // 3 rem, the width the app's sidebar counts for it (MODULE_BAR_REM).
+    expect(nav().style.width).toBe('3rem')
     const tasks = button('Tasks')
     expect(tasks.getAttribute('aria-current')).toBe('page')
     const bar = tasks.querySelector<HTMLElement>('span[aria-hidden="true"].bg-accent-fg')!

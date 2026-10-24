@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react'
+import { useEffect, useMemo, useState, type MouseEvent } from 'react'
 import { useValue } from '@legendapp/state/react'
 import {
-  CalendarDays,
   ChevronLeft,
   Copy,
   Download,
@@ -13,25 +12,25 @@ import {
   Search,
   SquarePen,
   Users,
-  X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
-import { useEscapeKey } from '../../lib/useEscapeKey'
 import { openExternal } from '../../lib/native'
-import { DETAILS_PANEL_WIDTH, sidebarLayout } from '../../lib/paneResize'
-import { downloadAttachment } from '../../states/mail'
-import { settings$ } from '../../states/settings'
-import { ui$, type SidebarSection } from '../../states/ui'
+import { calendar$, startOfDay } from '../../states/calendar'
+import { compose$, openComposeTab, withoutHydratedQuickReplyDraft } from '../../states/compose'
+import { openCorrespondentMail, openMailAccount } from '../../states/kanban'
+import { downloadAttachment, mail$ } from '../../states/mail'
+import { closeSidebarOverlay } from '../../states/sidebar'
+import { thread$ } from '../../states/thread'
+import { isConversationSection, ui$, type ConversationSection } from '../../states/ui'
 import { Avatar } from '../avatar/Avatar'
 import { IconButton } from '../button/IconButton'
 import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { MenuItem } from '../menu/MenuItem'
-import { PaneResizer } from '../resizer/PaneResizer'
-import { useElementWidth, useWideWindow } from '../resizer/useElementWidth'
+import { useActiveConversation } from './activeConversation'
+import { buildParticipants, buildThreadMedia } from './conversationMedia'
 import { fileIconFor, formatFileSize } from './messageHelpers'
 import { PersonHistory } from './PersonHistory'
-import { SidebarAgenda } from './SidebarAgenda'
 
 export type ConversationMediaItem = {
   type: 'image' | 'video'
@@ -76,13 +75,19 @@ interface ConversationDetailsPanelProps {
   onShowInConversation: (messageId: string) => void
   onComposeTo: (person: Participant) => void
   onViewMessagesWith: (person: Participant) => void
-  onClose: () => void
   /** The open conversation's account: a person's history is this account's only (#86). */
   accountId?: string
   onOpenConversation?: (threadId: string, folder: string) => void
   onOpenEvent?: (start: number) => void
 }
 
+/**
+ * The Conversa panel of the app's sidebar (ADR-0069 §1): the conversation's
+ * summary (its participants), media and files, the subsections the details
+ * sidebar had (ADR-0059). The subsection is remembered across restarts
+ * (`session_sidebar_section_main`); one person's history (#86) sits on top of
+ * it and is not, as it needs that person, until the Persona panel (12c).
+ */
 export function ConversationDetailsPanel({
   media,
   files,
@@ -94,74 +99,31 @@ export function ConversationDetailsPanel({
   onShowInConversation,
   onComposeTo,
   onViewMessagesWith,
-  onClose,
   accountId,
   onOpenConversation,
   onOpenEvent,
 }: ConversationDetailsPanelProps) {
   const { t } = useTranslation()
-  // The section is remembered across restarts (ADR-0059); one person's history
-  // sits on top of it and is not, as it needs that person.
-  const section = useValue(ui$.sidebarSection)
+  const stored = useValue(ui$.sidebarSection)
+  const section: ConversationSection = isConversationSection(stored) ? stored : 'overview'
   const [person, setPerson] = useState<Participant | null>(null)
   const view = person ? 'person' : section
-  const setView = (next: SidebarSection) => {
+  const setView = (next: ConversationSection) => {
     setPerson(null)
     ui$.sidebarSection.set(next)
   }
   const [personMenu, setPersonMenu] = useState<{ x: number; y: number; person: Participant } | null>(null)
-  const asideRef = useRef<HTMLElement | null>(null)
-  const storedWidth = useValue(settings$.detailsPanelWidth)
-  // Beside the reader on a wide window where its row leaves the reader its
-  // room; an overlay otherwise, the board's narrow conversation pane included.
-  const { beside, max } = sidebarLayout(useWideWindow(1100), useElementWidth(asideRef, true))
-  const width = beside ? Math.min(storedWidth, max) : storedWidth
 
   // Another conversation may not have this person in it.
   useEffect(() => {
     setPerson(null)
   }, [scopeTitle])
 
-  // Close the overlay drawer on Escape (matches the gallery/search behavior).
-  useEscapeKey(onClose)
-
   return (
     <>
-      {/* Backdrop — only where the panel is an overlay. */}
-      {!beside && <div className="absolute inset-0 z-20 bg-black/40 animate-fade-in" onClick={onClose} />}
-
-      {/* As an overlay it sits above the conversation header (z-40), which
-          otherwise hid its own header: the title, Back and Close. */}
-      <aside
-        ref={asideRef}
-        data-details-panel
-        data-region="sidebar"
-        data-layout={beside ? 'beside' : 'overlay'}
-        style={{ '--details-panel-width': `${width}px` } as CSSProperties}
-        className={`flex w-[var(--details-panel-width)] shrink-0 flex-col border-s border-border bg-header animate-slide-in-end ${
-          beside ? 'relative' : 'absolute inset-y-0 end-0 z-50 max-w-[85vw] shadow-overlay'
-        }`}
-      >
-        {/* Resizable beside the reader only; as an overlay it is capped to the window. */}
-        <PaneResizer
-          label={t('layout.resizeDetails')}
-          value={width}
-          limits={{ min: DETAILS_PANEL_WIDTH.min, max }}
-          edge="start"
-          sizeAt={(clientX, rtl) => {
-            const rect = asideRef.current?.getBoundingClientRect()
-            if (!rect) return width
-            return rtl ? clientX - rect.left : rect.right - clientX
-          }}
-          onResize={(size) => settings$.detailsPanelWidth.set(size)}
-          className={`absolute start-0 top-0 h-full -translate-x-1 rtl:translate-x-1 ${beside ? '' : 'hidden'}`}
-        />
-        {/* Header */}
-        {view === 'overview' ? (
-          <div className="flex h-12 shrink-0 items-center justify-end border-b border-border px-4">
-            <IconButton icon={X} iconSize={20} label={t('chat.closeEsc')} onClick={onClose} />
-          </div>
-        ) : (
+      <div className="flex min-h-0 flex-1 flex-col">
+        {/* A subsection's own header: what it is, the conversation, and back to the summary. */}
+        {view !== 'overview' && (
           <div className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
             <div className="min-w-0">
               <h3 className="truncate text-sm font-bold text-primary">
@@ -169,41 +131,30 @@ export function ConversationDetailsPanel({
                   ? t('chat.media')
                   : view === 'person' && person
                     ? t('person.title', { name: person.name || person.email, defaultValue: 'With {name}' })
-                    : view === 'agenda'
-                      ? t('sidebar.agenda')
-                      : t('chat.files')}
+                    : t('chat.files')}
               </h3>
-              {view === 'agenda' ? (
-                <p className="mt-0.5 truncate text-caption font-medium text-secondary">{t('sidebar.agendaRange')}</p>
-              ) : (
-                <p className="mt-0.5 truncate text-caption font-medium text-secondary" title={scopeTitle}>
-                  {scopeTitle}
-                </p>
-              )}
-              {view !== 'agenda' && scopeSubtitle && (
+              <p className="mt-0.5 truncate text-caption font-medium text-secondary" title={scopeTitle}>
+                {scopeTitle}
+              </p>
+              {scopeSubtitle && (
                 <p className="truncate text-2xs text-secondary/80" title={scopeSubtitle}>
                   {scopeSubtitle}
                 </p>
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-1">
-              <IconButton
-                icon={ChevronLeft}
-                iconSize={20}
-                label={t('buttons.back')}
-                onClick={() => setView('overview')}
-              />
-              <IconButton icon={X} iconSize={20} label={t('chat.closeEsc')} onClick={onClose} />
-            </div>
+            <IconButton
+              icon={ChevronLeft}
+              iconSize={20}
+              label={t('buttons.back')}
+              className="shrink-0"
+              onClick={() => setView('overview')}
+            />
           </div>
         )}
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto">
-          {view === 'agenda' ? (
-            // Not about this conversation, so it does not wait for it to load.
-            <SidebarAgenda />
-          ) : loading ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {loading ? (
             <div className="flex h-full items-center justify-center">
               <Loader2 size={20} className="animate-spin text-secondary" strokeWidth={1.75} />
             </div>
@@ -214,7 +165,6 @@ export function ConversationDetailsPanel({
               participants={participants}
               onOpenMedia={() => setView('media')}
               onOpenFiles={() => setView('files')}
-              onOpenAgenda={() => setView('agenda')}
               onComposeTo={onComposeTo}
               onOpenPersonMenu={setPersonMenu}
             />
@@ -330,7 +280,7 @@ export function ConversationDetailsPanel({
             </div>
           )}
         </div>
-      </aside>
+      </div>
       {personMenu && (
         <FloatingContextMenu
           x={personMenu.x}
@@ -383,7 +333,6 @@ function Overview({
   participants,
   onOpenMedia,
   onOpenFiles,
-  onOpenAgenda,
   onComposeTo,
   onOpenPersonMenu,
 }: {
@@ -392,22 +341,23 @@ function Overview({
   participants: Participant[]
   onOpenMedia: () => void
   onOpenFiles: () => void
-  onOpenAgenda: () => void
   onComposeTo: (person: Participant) => void
   onOpenPersonMenu: (menu: { x: number; y: number; person: Participant }) => void
 }) {
   const { t } = useTranslation()
   return (
     <div>
-      <div className="border-b border-border bg-chats p-3">
-        <SummaryRow icon={CalendarDays} label={t('sidebar.agenda')} onClick={onOpenAgenda} />
-        {mediaCount > 0 && (
-          <SummaryRow icon={Image} label={t('chat.mediaItems', { count: mediaCount })} onClick={onOpenMedia} />
-        )}
-        {filesCount > 0 && (
-          <SummaryRow icon={File} label={t('chat.fileItems', { count: filesCount })} onClick={onOpenFiles} />
-        )}
-      </div>
+      {/* The agenda is a panel of its own now (ADR-0069 §1), no longer a row here. */}
+      {(mediaCount > 0 || filesCount > 0) && (
+        <div className="border-b border-border bg-chats p-3">
+          {mediaCount > 0 && (
+            <SummaryRow icon={Image} label={t('chat.mediaItems', { count: mediaCount })} onClick={onOpenMedia} />
+          )}
+          {filesCount > 0 && (
+            <SummaryRow icon={File} label={t('chat.fileItems', { count: filesCount })} onClick={onOpenFiles} />
+          )}
+        </div>
+      )}
       <div className="p-3">
         <div className="mb-2 flex items-center gap-2 px-2 text-caption font-bold uppercase tracking-wide text-secondary">
           <Users size={16} strokeWidth={1.75} />
@@ -490,4 +440,84 @@ function PeopleList({
 
 function EmptyHint({ text }: { text: string }) {
   return <div className="flex h-full items-center justify-center px-6 text-center text-xs text-secondary">{text}</div>
+}
+
+/**
+ * The Conversa panel as the app's sidebar draws it: the open conversation's
+ * details, read from the conversation pane's own state (the same messages,
+ * gallery and account), and what each of them opens.
+ */
+export function ConversationPanel() {
+  const { t } = useTranslation()
+  const { accounts, activeThread, isRSS } = useActiveConversation()
+  const messages = useValue(mail$.messages)
+  const threadLoading = useValue(mail$.threadLoading)
+  const revealedRemote = useValue(thread$.revealedRemote)
+  const quickReplyDraftId = useValue(compose$.quickReplyDraftId)
+  const quickReplyDraftSaved = useValue(compose$.quickReplyDraftSaved)
+  // As the conversation pane shows them, so a media item's gallery index is
+  // the one of the pane's gallery.
+  const displayMessages = useMemo(
+    () => withoutHydratedQuickReplyDraft(messages, quickReplyDraftId, quickReplyDraftSaved),
+    [messages, quickReplyDraftId, quickReplyDraftSaved],
+  )
+  const { mediaItems, fileItems } = useMemo(
+    () => buildThreadMedia(displayMessages, accounts, revealedRemote),
+    [displayMessages, accounts, revealedRemote],
+  )
+  const participants = useMemo(
+    () => buildParticipants(displayMessages, accounts, isRSS),
+    [displayMessages, accounts, isRSS],
+  )
+  if (!activeThread) return null
+  const accountId = activeThread.account_id
+  // A freshly selected conversation still loading: the lists are the previous one's.
+  const loading = threadLoading && !messages.some((message) => message.thread_id === activeThread.thread_id)
+  return (
+    <ConversationDetailsPanel
+      media={mediaItems}
+      files={fileItems}
+      participants={participants}
+      scopeTitle={activeThread.subject || t('threads.noSubject')}
+      // For RSS, from_name duplicates the subject (both the feed title), so
+      // show the feed host instead; otherwise show the sender name.
+      scopeSubtitle={isRSS ? activeThread.from_addr : activeThread.from_name || activeThread.from_addr}
+      loading={loading}
+      onOpenImage={(index) => {
+        // The gallery is the conversation pane's, under an overlay's inert
+        // module: the overlay goes first, as for the message itself.
+        closeSidebarOverlay()
+        thread$.galleryIndex.set(index)
+      }}
+      onShowInConversation={(messageId) => {
+        thread$.pendingScrollMessageId.set(messageId)
+        thread$.galleryIndex.set(null)
+        // The message is what is wanted now: an overlay over it goes.
+        closeSidebarOverlay()
+      }}
+      onComposeTo={(person) => {
+        // The new message opens in the conversation pane: an overlay over it goes.
+        closeSidebarOverlay()
+        openComposeTab({
+          accountId,
+          to: person.name && person.name !== person.email ? `${person.name} <${person.email}>` : person.email,
+        })
+      }}
+      // The list of those messages is under an overlay: it closes it.
+      onViewMessagesWith={(person) => openCorrespondentMail(accountId, activeThread.folder_id, person.email)}
+      accountId={accountId}
+      onOpenConversation={(threadId, folder) => {
+        // A conversation from the person's history, under an overlay too.
+        closeSidebarOverlay()
+        openMailAccount(accountId, folder, false)
+        ui$.selectedThread.set(threadId)
+      }}
+      // Calendar is another module, which closes an overlay as it opens.
+      onOpenEvent={(start) => {
+        calendar$.anchor.set(startOfDay(new Date(start * 1000)).getTime())
+        calendar$.view.set('day')
+        ui$.module.set('calendar')
+      }}
+    />
+  )
 }

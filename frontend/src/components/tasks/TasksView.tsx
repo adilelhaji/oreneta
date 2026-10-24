@@ -15,6 +15,7 @@ import {
 import { useValue } from '@legendapp/state/react'
 import { intlLocale, useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
+import { moduleContentStyle } from '../../lib/paneResize'
 import { dueStatus, formatDueDate } from '../../lib/date'
 import {
   MAIL_LIST,
@@ -233,7 +234,14 @@ export function TasksView() {
           />
         </FolderPane>
       )}
-      <div data-region="content" className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
+      <div
+        data-region="content"
+        // Beside the pane the tasks keep the reader's 360 px, which they had
+        // no minimum of their own for: the pane gives way first, and the app's
+        // sidebar never takes them (ADR-0069 §2).
+        className={clsx('flex min-h-0 min-w-0 flex-col bg-app', !inPane && 'flex-1')}
+        style={inPane ? moduleContentStyle('tasks') : undefined}
+      >
         <header className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-header px-4 py-3">
           <CompactNavigation />
           <h1 className="flex items-center gap-2 text-heading-sm font-bold text-primary">

@@ -23,6 +23,9 @@ import { fitModules, MODULE_BUTTONS, slotsAlong } from './moduleLayout'
  */
 export type ModuleSwitcherVariant = 'strip' | 'bar'
 
+/** The narrow bar's width, in rem so it grows with the app's zoom; the app's sidebar counts it too. */
+export const MODULE_BAR_REM = 3
+
 /** Marks each place of the switcher: a module's key, or `more`. */
 const SLOT = 'data-module-slot'
 const MORE = 'more'
@@ -289,8 +292,9 @@ export function ModuleSwitcher({ variant }: { variant: ModuleSwitcherVariant }) 
         'flex shrink-0 select-none',
         // Two px each side: in the narrowest pane, 200 px less its 1 px border,
         // five 2 rem places and «Més» still fit (196 px for 192).
-        strip ? 'h-10 border-t border-border px-0.5' : 'w-12 flex-col border-e border-border bg-sidenav py-1',
+        strip ? 'h-10 border-t border-border px-0.5' : 'flex-col border-e border-border bg-sidenav py-1',
       )}
+      style={strip ? undefined : { width: `${MODULE_BAR_REM}rem` }}
     >
       <ul
         ref={list}

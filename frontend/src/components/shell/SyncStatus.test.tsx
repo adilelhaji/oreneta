@@ -503,9 +503,10 @@ describe('the band end, its keyboard and its names (#345)', () => {
     )
     const names = tabbable.map((element) => element.getAttribute('aria-label') ?? element.textContent)
     expect(names[0]).toBe('App menu')
-    expect(names.slice(-2)).toEqual(['Resume notifications', UNKNOWN])
+    // Then, at the very end, the app sidebar's button (ADR-0069 §2, #361).
+    expect(names.slice(-3)).toEqual(['Resume notifications', UNKNOWN, 'Sidebar'])
     expect(names.indexOf('Search messages...')).toBeGreaterThan(0)
-    expect(names.indexOf('Search messages...')).toBeLessThan(names.length - 2)
+    expect(names.indexOf('Search messages...')).toBeLessThan(names.length - 3)
   })
 
   it('adds no landmark: the band keeps its banner and search, and the popover is a dialog', () => {

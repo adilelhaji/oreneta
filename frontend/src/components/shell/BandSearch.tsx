@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } f
 import { Search, X } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
+import { useEscapeKey } from '../../lib/useEscapeKey'
 import { clsx } from '../../lib/utils'
 import { accounts$ } from '../../states/accounts'
 import { attachmentList$ } from '../../states/attachmentList'
@@ -205,6 +206,35 @@ export function BandSearch({ onCover }: { onCover: (covered: boolean) => void })
     setFocusWithin(false)
   }
 
+  // Escape, on the shared stack of Escape handlers (useEscapeKey) as the
+  // dialogs, the menus and the app sidebar's overlay have it. The field's is
+  // the newest while it has the focus, so the key clears or closes the field
+  // before it closes an overlay under it; a menu opened from the field is
+  // newer still, and takes it first. Over the band (below 769 px) Escape
+  // closes the field and goes back to the button; in the band it does what
+  // the module's own field did: mail's clears it and leaves, the board's
+  // clears it, then leaves.
+  const [inField, setInField] = useState(false)
+  const escape = scope.kind === 'field' ? scope.escape : undefined
+  useEscapeKey(
+    () => {
+      if (overlay) {
+        close()
+        return
+      }
+      const field = input.current
+      if (!field || scope.kind !== 'field') return
+      if (escape === 'clear-and-leave') {
+        scope.set('')
+        field.blur()
+      } else if (escape === 'clear-then-leave') {
+        if (scope.value) scope.set('')
+        else field.blur()
+      }
+    },
+    overlay ? focused : inField && !disabled && !!escape,
+  )
+
   // Crossing 769 px: a wide window has no field to open, and a narrow one
   // keeps the field open only if it has the focus.
   useEffect(() => {
@@ -300,13 +330,6 @@ export function BandSearch({ onCover }: { onCover: (covered: boolean) => void })
           onBlur={(event) => {
             if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusWithin(false)
           }}
-          onKeyDown={(event) => {
-            // Over the band, Escape closes the field and goes back to the
-            // button. A menu or dialog opened from it has taken the key first.
-            if (!overlay || event.key !== 'Escape' || event.defaultPrevented) return
-            event.preventDefault()
-            close()
-          }}
         >
           <div className="relative min-w-0 flex-1">
             <Search
@@ -327,16 +350,8 @@ export function BandSearch({ onCover }: { onCover: (covered: boolean) => void })
               onChange={(event) => {
                 if (!disabled) scope.set(event.target.value)
               }}
-              onKeyDown={(event) => {
-                if (event.key !== 'Escape' || overlay || disabled) return
-                if (scope.escape === 'clear-and-leave') {
-                  scope.set('')
-                  event.currentTarget.blur()
-                } else if (scope.escape === 'clear-then-leave') {
-                  if (scope.value) scope.set('')
-                  else event.currentTarget.blur()
-                }
-              }}
+              onFocus={() => setInField(true)}
+              onBlur={() => setInField(false)}
               className={clsx(
                 'h-7 w-full min-w-0 rounded-control-sm border bg-chats ps-8 text-ui text-primary placeholder-secondary transition-colors',
                 'focus:border-accent-fg disabled:cursor-not-allowed disabled:border-border',

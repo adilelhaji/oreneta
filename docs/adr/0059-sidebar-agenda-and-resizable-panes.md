@@ -6,7 +6,8 @@
   2026-10-18) substitueix «On és l'agenda», «Secció recordada», el punt de
   «Redimensionar» que decideix si la barra va al costat del lector o a sobre, i
   «Capa sobre la capçalera», i inverteix l'alternativa descartada «Agenda
-  visible en totes les visualitzacions».
+  visible en totes les visualitzacions». Des de #361 (peça 12a) l'agenda és un
+  panell de la barra lateral de l'aplicació d'ADR-0069, a tots els mòduls.
 - Data: 2026-10-15.
 - Abast: #212 (fila SET-23 del registre d'acceptació, «Widgets» d'eM Client
   10.4), sobre la barra lateral contextual de #86.

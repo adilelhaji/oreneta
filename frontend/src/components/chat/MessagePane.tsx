@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { t as translate, useTranslation } from '../../lib/i18n'
-import { compose$, openComposeTab, withoutHydratedQuickReplyDraft } from '../../states/compose'
+import { useTranslation } from '../../lib/i18n'
+import { compose$, withoutHydratedQuickReplyDraft } from '../../states/compose'
 import { ui$ } from '../../states/ui'
-import { mail$, getActiveThread, loadThread } from '../../states/mail'
-import { accounts$ } from '../../states/accounts'
+import { mail$, loadThread } from '../../states/mail'
 import {
   openThreadSearch,
   resetThreadView,
@@ -13,7 +12,6 @@ import {
   type ConversationMode,
 } from '../../states/thread'
 import { Gallery } from './Gallery'
-import { ConversationDetailsPanel } from './ConversationDetailsPanel'
 import { EmptyState } from '../empty-state/EmptyState'
 import { QuickReplyComposer } from './QuickReplyComposer'
 import { ConversationTabs } from './ConversationTabs'
@@ -23,35 +21,13 @@ import { ConversationHeader } from './ConversationHeader'
 import { ThreadSearchBarMobile } from './ThreadSearchBarMobile'
 import { ConversationMessageList } from './ConversationMessageList'
 import { MessageContextMenu, type MessageContextMenuState } from './MessageContextMenu'
-import { buildGalleryItems, buildThreadMedia, buildParticipants } from './conversationMedia'
+import { buildGalleryItems } from './conversationMedia'
+import { useActiveConversation } from './activeConversation'
 import { useThreadSearch } from './useThreadSearch'
 import { useConversationScroll } from './useConversationScroll'
 import { ArrowRight } from 'lucide-react'
 import { wallpaperCss } from '../../lib/wallpapers'
 import { clearMediaSession } from '../../lib/mediaSession'
-import { openCorrespondentMail, openMailAccount } from '../../states/kanban'
-import { calendar$, startOfDay } from '../../states/calendar'
-import type { Message, MessageTab } from '../../types'
-
-function threadFromTab(tab: MessageTab, fallback: Message | null): Message {
-  if (fallback?.thread_id === tab.threadId) return fallback
-  return {
-    id: tab.messageId || tab.threadId,
-    account_id: tab.accountId ?? '',
-    folder_id: tab.folderId ?? 'inbox',
-    thread_id: tab.threadId,
-    from_name: '',
-    from_addr: tab.from,
-    to: '',
-    subject: tab.subject || translate('threads.noSubject'),
-    preview: '',
-    body: '',
-    date: tab.date ?? 0,
-    unread: false,
-    starred: false,
-    has_attachments: false,
-  }
-}
 
 export function MessagePane() {
   const { t } = useTranslation()
@@ -60,34 +36,19 @@ export function MessagePane() {
   const messagesLoadingMore = useValue(mail$.messagesLoadingMore)
   const threadLoading = useValue(mail$.threadLoading)
   const threadErrorId = useValue(mail$.threadErrorId)
-  const accounts = useValue(accounts$)
   const mobilePane = useValue(ui$.mobilePane)
-  const selectedAccountId = useValue(ui$.selectedAccount)
-  const selectedThreadId = useValue(ui$.selectedThread)
   const revealedRemote = useValue(thread$.revealedRemote)
   const galleryIndex = useValue(thread$.galleryIndex)
-  const mediaOpen = useValue(thread$.mediaOpen)
   const modeOverrides = useValue(thread$.conversationModeOverrides)
   // Ring-highlight for a message jumped to from the starred list; shares the
   // search-match ring styling in ConversationMessageList.
   const flashMessageId = useValue(thread$.flashMessageId)
   const quickReplyDraftId = useValue(compose$.quickReplyDraftId)
   const quickReplyDraftSaved = useValue(compose$.quickReplyDraftSaved)
-  const tabs = useValue(compose$.tabs)
-  const activeTab = useValue(compose$.activeTab)
-  const activeTabData = tabs.find((tab) => tab.id === activeTab) ?? null
-  const activeDocumentTab = activeTabData?.kind === 'reader' || activeTabData?.kind === 'compose' ? activeTabData : null
+  // The conversation's details are the app sidebar's Conversa panel now
+  // (ADR-0069), which reads the same conversation.
+  const { accounts, activeTab, activeDocumentTab, activeThread, activeAccount, isRSS } = useActiveConversation()
   const conversationActiveTab = activeDocumentTab ? activeTab : ''
-  const listedActiveThread = useValue(getActiveThread)
-  const activeThread =
-    activeTabData?.kind === 'thread' && activeTabData.threadId === selectedThreadId
-      ? threadFromTab(activeTabData, listedActiveThread)
-      : listedActiveThread
-
-  const activeAccount = activeThread
-    ? accounts.find((account) => account.id === activeThread.account_id)
-    : (accounts.find((account) => account.id === selectedAccountId) ?? null)
-  const isRSS = activeAccount?.provider === 'rss' || activeAccount?.auth_type === 'rss'
   const activeThreadId = activeThread?.thread_id ?? ''
   const conversationWallpaper = wallpaperCss(activeAccount?.chat_wallpaper)
   // Show a spinner instead of the previous thread's messages while a freshly
@@ -127,14 +88,6 @@ export function MessagePane() {
     () => buildGalleryItems(displayMessages, accounts, revealedRemote),
     [displayMessages, accounts, revealedRemote],
   )
-  const { mediaItems, fileItems } = useMemo(
-    () => buildThreadMedia(displayMessages, accounts, revealedRemote),
-    [displayMessages, accounts, revealedRemote],
-  )
-  const participants = useMemo(
-    () => buildParticipants(displayMessages, accounts, isRSS),
-    [displayMessages, accounts, isRSS],
-  )
 
   const threadSearchFocus = useValue(thread$.searchFocus)
   const desktopThreadSearchInputRef = useRef<HTMLInputElement | null>(null)
@@ -145,12 +98,6 @@ export function MessagePane() {
     useConversationScroll(activeThreadId, displayMessages, conversationActiveTab, unreadKey)
 
   const [contextMenu, setContextMenu] = useState<MessageContextMenuState | null>(null)
-
-  const showMessageInConversation = useCallback((messageId: string) => {
-    thread$.pendingScrollMessageId.set(messageId)
-    thread$.galleryIndex.set(null)
-    thread$.mediaOpen.set(false)
-  }, [])
 
   // The conversation whose search this pane opened on a request from another
   // module (#344). Kept by the pane, not by the request: a replayed mount
@@ -356,41 +303,6 @@ export function MessagePane() {
             </div>
           )}
         </section>
-
-        {activeThread && !activeDocumentTab && mediaOpen && (
-          <ConversationDetailsPanel
-            media={mediaItems}
-            files={fileItems}
-            participants={participants}
-            scopeTitle={activeThread.subject || t('threads.noSubject')}
-            // For RSS, from_name duplicates the subject (both the feed title), so
-            // show the feed host instead; otherwise show the sender name.
-            scopeSubtitle={isRSS ? activeThread.from_addr : activeThread.from_name || activeThread.from_addr}
-            loading={showThreadLoading}
-            onOpenImage={(index) => thread$.galleryIndex.set(index)}
-            onShowInConversation={showMessageInConversation}
-            onComposeTo={(person) =>
-              openComposeTab({
-                accountId: activeThread.account_id,
-                to: person.name && person.name !== person.email ? `${person.name} <${person.email}>` : person.email,
-              })
-            }
-            onViewMessagesWith={(person) =>
-              openCorrespondentMail(activeThread.account_id, activeThread.folder_id, person.email)
-            }
-            onClose={() => thread$.mediaOpen.set(false)}
-            accountId={activeThread.account_id}
-            onOpenConversation={(threadId, folder) => {
-              openMailAccount(activeThread.account_id, folder, false)
-              ui$.selectedThread.set(threadId)
-            }}
-            onOpenEvent={(start) => {
-              calendar$.anchor.set(startOfDay(new Date(start * 1000)).getTime())
-              calendar$.view.set('day')
-              ui$.module.set('calendar')
-            }}
-          />
-        )}
       </div>
 
       {galleryIndex !== null && galleryItems[galleryIndex] && (

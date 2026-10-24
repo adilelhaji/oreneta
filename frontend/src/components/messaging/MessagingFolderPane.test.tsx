@@ -279,7 +279,11 @@ describe('Chat in the common folder pane (ADR-0068 §4, #337)', () => {
     expect(written('folder_pane_width').at(-1)).toBe(200)
     expect(pane(screen).style.width).toBe('200px')
     // The conversation keeps 360 px as its basis, so the pane gives way first.
-    expect(content(screen).className).toContain('flex-[1_1_360px]')
+    expect(content(screen).style.flex).toBe('1 1 360px')
+    // Not a hard minimum: too short a row (the system's 200 % zoom) shrinks it
+    // rather than scroll sideways; the app's sidebar goes beside only with room
+    // for it (ADR-0069 §2, owner decision D3 on #360).
+    expect(content(screen).style.minWidth).toBe('')
     expect(pane(screen).style.flexShrink).toBe('1000')
     cleanup()
 

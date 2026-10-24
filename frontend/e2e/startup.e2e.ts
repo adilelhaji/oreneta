@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import { createFixture } from '../baseline/fixtures'
 import { defaultCustomInput, deriveThemeTokens } from '../src/lib/themes'
@@ -3716,10 +3716,20 @@ async function agendaSidebarStartup(page: Page, options: SetupOptions) {
   return errors
 }
 
+// With a conversation open, as the details sidebar was: the app's sidebar
+// (ADR-0069) from its strip's Agenda icon or, with no strip drawn (below
+// 769 px), the band's «Sidebar» button, which hides a strip (owner decision
+// D4 on #360); unless a restart left it expanded beside the conversation.
 async function openAgendaSidebar(page: Page) {
   await page.getByRole('table').getByRole('button', { name: /Pilot checklist/ }).click()
-  await page.getByRole('button', { name: 'Conversation details', exact: true }).first().click()
-  const panel = page.locator('[data-details-panel]')
+  const toggle = page.getByRole('banner').getByRole('button', { name: 'Sidebar', exact: true })
+  const stripIcon = page.locator('[data-app-sidebar][data-layout="strip"]').getByRole('button', { name: 'Open the Agenda panel' })
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    if (await stripIcon.count()) await stripIcon.click()
+    else await toggle.click()
+  }
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  const panel = page.locator('[data-app-sidebar]')
   await expect(panel).toBeVisible()
   // Measured once it has slid in.
   await panel.evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)))
@@ -3740,7 +3750,7 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       const errors = await agendaSidebarStartup(page, { theme })
       await page.goto('/')
       let panel = await openAgendaSidebar(page)
-      await panel.getByRole('button', { name: 'Agenda', exact: true }).click()
+      await panel.getByRole('tab', { name: 'Agenda', exact: true }).click()
       await expect(panel.getByRole('heading', { name: 'Agenda', exact: true })).toBeVisible()
       await expect(panel.getByRole('region', { name: 'Overdue' }).getByText('Overdue synthetic task')).toBeVisible()
       await expect(panel.getByRole('region', { name: 'Tomorrow' }).getByText('Synthetic planning meeting')).toBeVisible()
@@ -3754,19 +3764,20 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       await editor.getByRole('button', { name: 'Cancel', exact: true }).click()
       await expect(editor).toBeHidden()
       await expect(panel.getByText('Overdue synthetic task')).toBeVisible()
-      // Its own header is on top and usable at every width: back to the overview and in again.
-      await panel.getByRole('button', { name: 'Back', exact: true }).click()
+      // Its own header and its tabs are on top and usable at every width: to
+      // the conversation's summary (the Conversa panel, ADR-0069) and back.
+      await panel.getByRole('tab', { name: 'Conversation', exact: true }).click()
       await expect(panel.getByRole('heading', { name: 'Agenda', exact: true })).toBeHidden()
-      await panel.getByRole('button', { name: 'Agenda', exact: true }).click()
+      await panel.getByRole('tab', { name: 'Agenda', exact: true }).click()
       await expect(panel.getByText('Synthetic planning meeting')).toBeVisible()
 
-      const handle = panel.getByRole('separator', { name: 'Resize details panel' })
+      const handle = panel.getByRole('separator', { name: 'Resize sidebar' })
       const reader = page.locator('[data-message-pane] section').first()
       let kept = '340'
       if (width >= 1100) {
         // Beside the reader: the keyboard and the pointer both resize it.
-        // With the 260 px folder pane (#317), and the rail gone (#354), the
-        // reader's row is 820 px at 1440, so the widest beside the reader is 460 px.
+        // The folder pane and then the list give way to it (ADR-0069 §2), so
+        // at 1440 px the widest is 560 px, with the reader still at 360 px.
         await handle.focus()
         await page.keyboard.press('ArrowLeft')
         await page.keyboard.press('ArrowLeft')
@@ -3815,7 +3826,7 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       })
       await page.keyboard.press(`${mod}+Digit0`)
 
-      const audit = await new AxeBuilder({ page }).include('[data-details-panel]').withTags(AXE_TAGS).analyze()
+      const audit = await new AxeBuilder({ page }).include('[data-app-sidebar]').withTags(AXE_TAGS).analyze()
       expect(
         audit.violations
           .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
@@ -3849,7 +3860,7 @@ for (const width of [1100, 1180, 600]) {
       await expect(panel).toHaveAttribute('data-layout', 'overlay')
       expect(Math.round(drawn)).toBe(Math.floor(width * 0.85))
     } else {
-      const handle = panel.getByRole('separator', { name: 'Resize details panel' })
+      const handle = panel.getByRole('separator', { name: 'Resize sidebar' })
       const reader = (await page.locator('[data-message-pane] section').first().boundingBox())!.width
       if ((await panel.getAttribute('data-layout')) === 'beside') {
         const max = Number(await handle.getAttribute('aria-valuemax'))
@@ -4472,7 +4483,7 @@ for (const language of ['en', 'ca', 'ar']) {
     await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
     await row.focus()
     await page.keyboard.press('i')
-    await expect(page.locator('[data-details-panel]')).toBeVisible()
+    await expect(page.locator('[data-app-sidebar][data-layout="beside"]')).toBeVisible()
     await row.focus()
     await markFocus(page, 'data-test-f6-start')
     expect(await regionAtFocus(page)).toBe('content')
@@ -4520,8 +4531,10 @@ test('F6 leaves a text field and the HTML message, and a modal dialog keeps the 
   expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('IFRAME')
   await page.keyboard.press('F6')
   expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('IFRAME')
-  // No sidebar is open, so after the reader comes the first region again:
-  // the top band (#343).
+  // After the reader comes the app's sidebar, minimised to its strip by
+  // default (ADR-0069 §2), then the first region again: the top band (#343).
+  expect(await regionAtFocus(page)).toBe('sidebar')
+  await page.keyboard.press('F6')
   expect(await regionAtFocus(page)).toBe('search')
   await frame.getByText('Wide synthetic invoice').click()
   await page.keyboard.press('Shift+F6')
@@ -4600,13 +4613,14 @@ test('F6 skips the regions a narrow window hides, and keeps working at 200 perce
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
   await row.focus()
   const zoomed: string[] = []
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 6; i++) {
     await page.keyboard.press('F6')
     zoomed.push(await regionAtFocus(page))
     await expect(page.locator(':focus')).toBeInViewport()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   }
-  expect(zoomed).toEqual(['reader', 'search', 'folders', 'modules', 'content'])
+  // The app's sidebar, minimised to its strip by default (#361), is the last region.
+  expect(zoomed).toEqual(['reader', 'sidebar', 'search', 'folders', 'modules', 'content'])
   await page.keyboard.press(`${mod}+Digit0`)
   expect(errors).toEqual([])
 })
@@ -4686,7 +4700,7 @@ for (const language of ['en', 'ca', 'ar']) {
     await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
     await row.focus()
     await page.keyboard.press('i')
-    await expect(page.locator('[data-details-panel]')).toBeVisible()
+    await expect(page.locator('[data-app-sidebar][data-layout="beside"]')).toBeVisible()
     await audit('conversation', catalog['shell.region.mail'])
 
     const peopleButton = page.getByTitle(catalog['people.title'], { exact: true })
@@ -4694,37 +4708,40 @@ for (const language of ['en', 'ca', 'ar']) {
     await page.getByRole('option', { name: /Morgan Rivera/ }).click()
     await expect(page.getByRole('heading', { name: 'Morgan Rivera' })).toBeVisible()
     // The groups are the folder pane (#326), beside the module: from the module
-    // strip, F6 goes to the module, the top band (#343), the pane, then back to the strip.
+    // strip, F6 goes to the module, the app's sidebar (expanded by `i` in mail,
+    // ADR-0069), the top band (#343), the pane, then back to the strip.
     await peopleButton.focus()
-    expect(await regionWalk(page, 'F6', 4)).toEqual(['content', 'search', 'folders', 'modules'])
+    expect(await regionWalk(page, 'F6', 5)).toEqual(['content', 'sidebar', 'search', 'folders', 'modules'])
     await audit('people', catalog['people.title'])
 
     const tasksButton = page.getByTitle(catalog['tasks.title'], { exact: true })
     await tasksButton.click()
     await expect(page.getByText('Review the figures')).toBeVisible()
     // The lists are the folder pane (#329), beside the module: from the module
-    // strip, F6 goes to the module, the top band (#343), the pane, then back to the strip.
+    // strip, F6 goes to the module, the app's sidebar, the top band (#343), the
+    // pane, then back to the strip.
     await tasksButton.focus()
-    expect(await regionWalk(page, 'F6', 4)).toEqual(['content', 'search', 'folders', 'modules'])
+    expect(await regionWalk(page, 'F6', 5)).toEqual(['content', 'sidebar', 'search', 'folders', 'modules'])
     await audit('tasks', catalog['tasks.title'])
 
     const notesButton = page.getByTitle(catalog['notes.title'], { exact: true })
     await notesButton.click()
     await page.getByRole('button', { name: /Meeting notes/ }).click()
     // The tags are the folder pane (#335), beside the module: from the module
-    // strip, F6 goes to the module, the top band (#343), the pane, then back to the strip.
+    // strip, F6 goes to the module, the app's sidebar, the top band (#343), the
+    // pane, then back to the strip.
     await notesButton.focus()
-    expect(await regionWalk(page, 'F6', 4)).toEqual(['content', 'search', 'folders', 'modules'])
+    expect(await regionWalk(page, 'F6', 5)).toEqual(['content', 'sidebar', 'search', 'folders', 'modules'])
     await audit('notes', catalog['notes.title'])
 
     const calendarButton = page.getByTitle(catalog['calendar.title'], { exact: true })
     await calendarButton.click()
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     // Calendar's calendars are the folder pane (#323), beside the module:
-    // from the module strip, F6 goes to the module, the top band (#343), the
-    // pane, then back to the strip.
+    // from the module strip, F6 goes to the module, the app's sidebar, the top
+    // band (#343), the pane, then back to the strip.
     await calendarButton.focus()
-    expect(await regionWalk(page, 'F6', 4)).toEqual(['content', 'search', 'folders', 'modules'])
+    expect(await regionWalk(page, 'F6', 5)).toEqual(['content', 'sidebar', 'search', 'folders', 'modules'])
     await audit('calendar', catalog['calendar.title'])
 
     await page.getByTitle(catalog['messaging.title'], { exact: true }).click()
@@ -4732,10 +4749,10 @@ for (const language of ['en', 'ca', 'ar']) {
     await expect(page.getByText('Hello Ana')).toBeVisible()
     await audit('chat', catalog['messaging.title'])
     // The conversations are the folder pane (#337), beside the module: from
-    // the module strip, F6 goes to the module, the top band (#343), the pane,
-    // then back to the strip.
+    // the module strip, F6 goes to the module, the app's sidebar, the top band
+    // (#343), the pane, then back to the strip.
     await page.getByTitle(catalog['messaging.title'], { exact: true }).focus()
-    expect(await regionWalk(page, 'F6', 4)).toEqual(['content', 'search', 'folders', 'modules'])
+    expect(await regionWalk(page, 'F6', 5)).toEqual(['content', 'sidebar', 'search', 'folders', 'modules'])
 
     // A file in the list: its "open the message" button is what F6 reaches in
     // the content, now that the filters have moved to the pane.
@@ -4756,10 +4773,10 @@ for (const language of ['en', 'ca', 'ar']) {
     await attachmentsButton.click()
     await expect(page.getByText('report.pdf')).toBeVisible()
     // The filters are the folder pane (#339), beside the module: from the
-    // module strip, F6 goes to the module, the top band (#343), the pane, then
-    // back to the strip.
+    // module strip, F6 goes to the module, the app's sidebar, the top band
+    // (#343), the pane, then back to the strip.
     await attachmentsButton.focus()
-    expect(await regionWalk(page, 'F6', 4)).toEqual(['content', 'search', 'folders', 'modules'])
+    expect(await regionWalk(page, 'F6', 5)).toEqual(['content', 'sidebar', 'search', 'folders', 'modules'])
     await audit('attachments', catalog['attachmentsView.title'])
 
     expect(found).toEqual([])
@@ -5568,18 +5585,29 @@ test('the folder pane resizes from the keyboard and the pointer, is kept across 
 // When the row runs short the folders give way first, down to 200 px, then
 // the list, and the reader keeps its 360 px (ADR-0068 §7). With a remembered
 // 560 px list, and the modules at the foot of the folders since the 60 px rail
-// went (#354): at 1140 px the folders are 220 px and the list is whole; at
-// 1100 and 1025 px the folders are at their minimum and the list gives way.
-for (const [width, folders, listWidth] of [
-  [1025, 200, 465],
-  [1100, 200, 540],
-  [1140, 220, 560],
-  [1200, 260, 560],
-  [1440, 260, 560],
+// went (#354): with the app's sidebar hidden, at 1140 px the folders are
+// 220 px and the list is whole; at 1100 and 1025 px the folders are at their
+// minimum and the list gives way. With the sidebar's strip, minimised by
+// default (#361, 40 px), the same 40 px later: 220 px of folders at 1180 px.
+for (const [sidebar, width, folders, listWidth] of [
+  ['hidden', 1025, 200, 465],
+  ['hidden', 1100, 200, 540],
+  ['hidden', 1140, 220, 560],
+  ['hidden', 1200, 260, 560],
+  ['hidden', 1440, 260, 560],
+  ['minimized', 1025, 200, 425],
+  ['minimized', 1100, 200, 500],
+  ['minimized', 1140, 200, 540],
+  ['minimized', 1180, 220, 560],
+  ['minimized', 1200, 240, 560],
+  ['minimized', 1440, 260, 560],
 ] as const) {
-  test(`the folders give way before the list, and the list before the reader, at ${width}px (#317)`, async ({ page }) => {
+  test(`the folders give way before the list, and the list before the reader, at ${width}px, sidebar ${sidebar} (#317)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
-    const errors = await prepareStartup(page, true, { navigation: true, preferences: { thread_list_width: 560 } })
+    const errors = await prepareStartup(page, true, {
+      navigation: true,
+      preferences: { thread_list_width: 560, app_sidebar_state: sidebar },
+    })
     await page.goto('/')
     const pane = page.getByRole('navigation', { name: 'Accounts and folders' })
     const reader = page.locator('[data-message-pane]')
@@ -6078,6 +6106,13 @@ async function openCalendarPane(page: Page, options: SetupOptions = {}, catalog 
 
 const boxOf = async (locator: ReturnType<Page['locator']>) => (await locator.boundingBox())!
 
+// What a module has across: the window less the app's sidebar beside it,
+// which is its 40 px strip by default (#361); an overlay takes nothing.
+async function moduleRoom(page: Page, width: number): Promise<number> {
+  const sidebar = page.locator('[data-app-sidebar]:not([data-layout="overlay"])')
+  return (await sidebar.count()) > 0 ? width - Math.round((await boxOf(sidebar)).width) : width
+}
+
 // A module's button in the module switcher or, where the strip has no room
 // for it (a 200 px pane holds five buttons and «Més»), its item in «Més» (#354).
 async function chooseModule(page: Page, title: string, catalog: Record<string, string> = enCatalog) {
@@ -6092,17 +6127,22 @@ async function chooseModule(page: Page, title: string, catalog: Record<string, s
 }
 
 // Every day of the month at a glance, and every calendar row, inside the pane.
+// The module strip at the pane's foot measures itself after a resize, so the
+// buttons that no longer fit leave for «Més» a frame later: read until it settles.
 async function insidePane(page: Page, pane: ReturnType<Page['locator']>) {
-  const box = await boxOf(pane)
-  const outside = await page.evaluate(
-    ({ left, right }) =>
-      [...document.querySelectorAll<HTMLElement>('[data-folder-pane] button')]
-        .map((element) => ({ label: element.getAttribute('aria-label') ?? element.textContent, box: element.getBoundingClientRect() }))
-        .filter(({ box }) => box.width > 0 && (box.left < left - 1 || box.right > right + 1))
-        .map(({ label }) => label),
-    { left: box.x, right: box.x + box.width },
-  )
-  expect(outside).toEqual([])
+  await expect
+    .poll(async () => {
+      const box = await boxOf(pane)
+      return page.evaluate(
+        ({ left, right }) =>
+          [...document.querySelectorAll<HTMLElement>('[data-folder-pane] button')]
+            .map((element) => ({ label: element.getAttribute('aria-label') ?? element.textContent, box: element.getBoundingClientRect() }))
+            .filter(({ box }) => box.width > 0 && (box.left < left - 1 || box.right > right + 1))
+            .map(({ label }) => label),
+        { left: box.x, right: box.x + box.width },
+      )
+    })
+    .toEqual([])
 }
 
 for (const [width, paneWidth] of [
@@ -6407,6 +6447,8 @@ async function openPeoplePane(page: Page, options: SetupOptions = {}, catalog = 
       ],
     }
     replies['people.groupSave'] = { ok: true, id: 'group:local::local:g', version: '4' }
+    // The app sidebar's agenda, where a test expands it beside the module (#361).
+    replies['calendar.events'] = { events: [] }
   })
   await page.goto('/')
   await expect(page.locator('[data-thread-list]')).toBeVisible()
@@ -6442,8 +6484,10 @@ for (const [width, paneWidth] of [
     const paneBox = await boxOf(pane)
     expect(Math.abs(paneBox.x - row.x)).toBeLessThanOrEqual(1)
     // The person keeps the reader's 360 px (ADR-0068 §7): where the pane and
-    // the list leave less, the pane gives way first, down to 200 px.
-    const drawnPane = Math.max(200, Math.min(paneWidth, width - 288 - 360))
+    // the list leave less, the pane gives way first, down to 200 px. The room
+    // is the row less the app sidebar's strip (#361).
+    const room = await moduleRoom(page, width)
+    const drawnPane = Math.max(200, Math.min(paneWidth, room - 288 - 360))
     expect(Math.abs(paneBox.width - drawnPane)).toBeLessThanOrEqual(1)
     // The separator reports the width that is drawn, squeezed or not.
     const valueNow = await pane.getByRole('separator', { name: 'Resize folder pane' }).getAttribute('aria-valuenow')
@@ -6474,8 +6518,10 @@ for (const [width, paneWidth] of [
     const detail = await boxOf(page.getByRole('region', { name: 'Ada Lovelace' }))
     // The person takes all the room the pane and the list leave: at 1025 px,
     // 537 and 477 px for a pane of 200 and 260, and 360 px for 400, when the
-    // pane is drawn 377 px wide instead (with the rail of before #354, 60 px less).
-    expect(detail.width).toBeGreaterThanOrEqual(width - drawnPane - 288 - 2)
+    // pane is drawn 377 px wide instead (with the rail of before #354, 60 px
+    // less; with the app sidebar's strip since #361, 40 px less, and the pane
+    // of 400 drawn 337 px wide).
+    expect(detail.width).toBeGreaterThanOrEqual(room - drawnPane - 288 - 2)
     await insidePane(page, pane)
     expect(errors).toEqual([])
   })
@@ -6734,8 +6780,8 @@ for (const [width, paneWidth] of [
     const contentBox = await boxOf(content)
     expect(Math.abs(contentBox.x - (paneBox.x + paneBox.width))).toBeLessThanOrEqual(1)
     expect(contentBox.x + contentBox.width).toBeLessThanOrEqual(width + 1)
-    // The tasks take all the room the pane leaves.
-    expect(contentBox.width).toBeGreaterThanOrEqual(width - paneWidth - 2)
+    // The tasks take all the room the pane leaves, beside the app sidebar's strip (#361).
+    expect(contentBox.width).toBeGreaterThanOrEqual((await moduleRoom(page, width)) - paneWidth - 2)
     // The tabs are gone from beside the tasks.
     await expect(content.locator('[data-region="folders"]')).toHaveCount(0)
     await expect(page.getByRole('tablist')).toHaveCount(0)
@@ -7017,6 +7063,8 @@ async function openNotesPane(page: Page, options: SetupOptions = {}, catalog = e
       if (command === 'notes.get') return { note: all.find((n) => n.id === payload?.id) ?? null }
       return inner(command, payload)
     }
+    // The app sidebar's agenda, where a test expands it beside the module (#361).
+    ;(window as any).startupProbe.replies['calendar.events'] = { events: [] }
   })
   await page.goto('/')
   await expect(page.locator('[data-thread-list]')).toBeVisible()
@@ -7050,7 +7098,8 @@ for (const [width, paneWidth] of [
     const row = await boxOf(page.getByRole('main'))
     const paneBox = await boxOf(pane)
     expect(Math.abs(paneBox.x - row.x)).toBeLessThanOrEqual(1)
-    expect(Math.abs(paneBox.width - Math.min(paneWidth, width - 680))).toBeLessThanOrEqual(1)
+    // The room is the row less the app sidebar's strip (#361).
+    expect(Math.abs(paneBox.width - Math.min(paneWidth, (await moduleRoom(page, width)) - 680))).toBeLessThanOrEqual(1)
     const contentBox = await boxOf(content)
     expect(Math.abs(contentBox.x - (paneBox.x + paneBox.width))).toBeLessThanOrEqual(1)
     expect(contentBox.x + contentBox.width).toBeLessThanOrEqual(width + 1)
@@ -7253,7 +7302,8 @@ for (const [width, paneWidth] of [
     const row = await boxOf(page.getByRole('main'))
     const paneBox = await boxOf(pane)
     expect(Math.abs(paneBox.x - row.x)).toBeLessThanOrEqual(1)
-    expect(Math.abs(paneBox.width - Math.min(paneWidth, width - 360))).toBeLessThanOrEqual(1)
+    // The room is the row less the app sidebar's strip (#361).
+    expect(Math.abs(paneBox.width - Math.min(paneWidth, (await moduleRoom(page, width)) - 360))).toBeLessThanOrEqual(1)
     const contentBox = await boxOf(content)
     expect(Math.abs(contentBox.x - (paneBox.x + paneBox.width))).toBeLessThanOrEqual(1)
     expect(contentBox.x + contentBox.width).toBeLessThanOrEqual(width + 1)
@@ -7444,7 +7494,8 @@ for (const [width, paneWidth] of [
     const row = await boxOf(page.getByRole('main'))
     const paneBox = await boxOf(pane)
     expect(Math.abs(paneBox.x - row.x)).toBeLessThanOrEqual(1)
-    expect(Math.abs(paneBox.width - Math.min(paneWidth, width - 360))).toBeLessThanOrEqual(1)
+    // The room is the row less the app sidebar's strip (#361).
+    expect(Math.abs(paneBox.width - Math.min(paneWidth, (await moduleRoom(page, width)) - 360))).toBeLessThanOrEqual(1)
     const contentBox = await boxOf(content)
     expect(Math.abs(contentBox.x - (paneBox.x + paneBox.width))).toBeLessThanOrEqual(1)
     expect(contentBox.x + contentBox.width).toBeLessThanOrEqual(width + 1)
@@ -8338,7 +8389,7 @@ function bandEnd(page: Page, catalog: Record<string, string> = enCatalog) {
 }
 
 for (const width of [1440, 1025, 1024, 768]) {
-  test(`the band ends with the sync status, its words from 1025px, and its popover stays in the window at ${width}px (#345)`, async ({
+  test(`the band ends with the sync status, then the sidebar button, its words from 1025px, and its popover stays in the window at ${width}px (#345)`, async ({
     page,
   }, info) => {
     await page.setViewportSize({ width, height: 1000 })
@@ -8360,10 +8411,14 @@ for (const width of [1440, 1025, 1024, 768]) {
     await expect(status).toHaveAttribute('aria-live', 'polite')
     expect(Math.round((await boxOf(status)).width)).toBeLessThanOrEqual(1)
 
-    // At the end of the band, inside the window.
+    // At the end of the band, inside the window, right before the app
+    // sidebar's «Sidebar» button, which ends the band since #361.
     await expect(sync).toBeInViewport({ ratio: 1 })
     const box = await boxOf(sync)
-    expect(box.x + box.width).toBeGreaterThan(width - 16)
+    const toggle = await boxOf(page.getByRole('banner').getByRole('button', { name: 'Sidebar', exact: true }))
+    expect(toggle.x + toggle.width).toBeGreaterThan(width - 16)
+    expect(box.x + box.width).toBeLessThanOrEqual(toggle.x + 1)
+    expect(box.x + box.width).toBeGreaterThan(toggle.x - 16)
     expect(Math.round(box.height)).toBe(32)
     const words = sync.locator('span')
     if (width >= 1025) {
@@ -8574,7 +8629,11 @@ for (const width of [1440, 768]) {
     await expect(status).toHaveText(unknown)
     await expect(page.getByRole('button', { name: unknown, exact: true })).toHaveCount(1)
     const box = await boxOf(sync)
-    expect(box.x).toBeLessThan(16)
+    // On the left, right after the «Sidebar» button that ends the band (#361).
+    const toggle = await boxOf(page.getByRole('banner').getByRole('button', { name: arCatalog['sidebar.label'], exact: true }))
+    expect(toggle.x).toBeLessThan(16)
+    expect(box.x).toBeGreaterThanOrEqual(toggle.x + toggle.width - 1)
+    expect(box.x).toBeLessThan(toggle.x + toggle.width + 16)
     await sync.focus()
     await page.keyboard.press('Enter')
     await expect(popover).toBeFocused()
@@ -8968,7 +9027,11 @@ for (const width of [1440, 1025]) {
   test(`the strip holds two modules and «Més» at the app's 200 %, in a 260 px pane, at ${width}px (#354)`, async ({
     page,
   }) => {
-    const { errors, modules, titles } = await openModuleSwitcher(page, width)
+    // With the app sidebar hidden: at 1025 px its strip, 80 px at 200 % (#361),
+    // would take 35 px of the pane, which gives way first.
+    const { errors, modules, titles } = await openModuleSwitcher(page, width, 1000, {
+      preferences: { app_sidebar_state: 'hidden' },
+    })
     const pane = page.getByRole('navigation', { name: 'Accounts and folders' })
     expect(await titles()).toEqual(MODULE_TITLES)
     await zoomTo200(page)
@@ -9225,3 +9288,603 @@ for (const [width, zoomed] of [
     expect(errors).toEqual([])
   })
 }
+
+// #361: the app's sidebar (ADR-0069 §1, §2 and §6, piece 12a). One <aside>
+// «Barra lateral» at the end of the frame row, after <main>, in every module:
+// minimised to its strip by default from 769 px, and expanded from the
+// strip's icons or, with nothing drawn, the band's «Barra lateral» button,
+// which hides whatever is drawn (owner decision D4 on #360): beside the
+// content where the module keeps its own minimum (mail from 1120 px, Calendar
+// and Tasks from 1100 px, People from 1128 px and Notes from 1160 px, owner
+// decision D3) or, where it does not fit, as an overlay of at most 85 % of the
+// window. The Agenda is there with no conversation open, at start-up and from
+// Calendar, Tasks, Persones and Notes. An overlay is never saved, and never
+// opens by itself.
+const sidebarCatalogs: Record<string, Record<string, string>> = { ca: caCatalog, ar: arCatalog }
+const SIDEBAR_MODULES = ['calendar.title', 'tasks.title', 'people.title', 'notes.title'] as const
+// The narrowest window each one has the sidebar beside it in: the row less the
+// folders' 200 px and the module's own minimum leaves its 280 px.
+const SIDEBAR_BESIDE_FROM: Record<string, number> = {
+  mail: 1120,
+  'calendar.title': 1100,
+  'tasks.title': 1100,
+  'people.title': 1128,
+  'notes.title': 1160,
+}
+// A strip icon is named after its panel, «Obre el panell Agenda».
+const stripIconName = (catalog: Record<string, string>, panel: string) =>
+  catalog['sidebar.openPanel'].replace('{panel}', catalog[panel])
+
+function sidebarParts(page: Page, catalog: Record<string, string>) {
+  return {
+    toggle: page.getByRole('banner').getByRole('button', { name: catalog['sidebar.label'], exact: true }),
+    sidebar: page.getByRole('complementary', { name: catalog['sidebar.label'], exact: true }),
+  }
+}
+
+const storedPrefs = (page: Page) =>
+  page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}') as Record<string, unknown>)
+
+async function sidebarSettled(sidebar: ReturnType<Page['locator']>) {
+  await sidebar.evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)))
+}
+
+// The sidebar's own audit: no critical or serious violation inside it.
+async function auditSidebar(page: Page, info: TestInfo, screen: string, blocking: string[]) {
+  const results = await new AxeBuilder({ page }).include('[data-app-sidebar]').withTags(AXE_TAGS).analyze()
+  await info.attach(`axe-sidebar-${screen}`, {
+    body: JSON.stringify({ screen, violations: results.violations }, null, 2),
+    contentType: 'application/json',
+  })
+  for (const violation of results.violations) {
+    if (violation.impact === 'critical' || violation.impact === 'serious') {
+      blocking.push(`${screen}: ${violation.id} (${violation.impact}) on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`)
+    }
+  }
+}
+
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  for (const language of ['ca', 'ar']) {
+    for (const width of [600, 1024, 1100, 1180, 1440]) {
+      test(`app sidebar: the agenda from start-up and from Calendar, Tasks, People and Notes: ${theme}, ${language}, ${width}px (#361)`, async ({
+        page,
+      }, info) => {
+        await page.setViewportSize({ width, height: 900 })
+        const errors = await agendaSidebarStartup(page, { theme, language })
+        const catalog = sidebarCatalogs[language]
+        await page.goto('/')
+        await expect(page.locator('html')).toHaveAttribute('lang', language)
+        await expect(page.locator('[data-thread-list]')).toBeVisible()
+        const { toggle, sidebar } = sidebarParts(page, catalog)
+        const blocking: string[] = []
+
+        // Start-up with no conversation open: minimised, from 769 px a strip
+        // with the Agenda's icon and no Conversa; below 769 px, nothing.
+        await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+        await expect(sidebar).toHaveCount(width >= 769 ? 1 : 0)
+        if (width >= 769) {
+          await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+          await expect(sidebar.getByRole('button', { name: stripIconName(catalog, 'sidebar.agenda'), exact: true })).toBeVisible()
+          await expect(sidebar.getByRole('button', { name: stripIconName(catalog, 'sidebar.conversation'), exact: true })).toHaveCount(0)
+          // After <main>, at the end of the line: the right, or the left in Arabic.
+          expect(await sidebar.evaluate((element) => element.previousElementSibling?.tagName)).toBe('MAIN')
+        }
+
+        // The strip's Agenda icon or, with no strip (below 769 px), the band's
+        // button: beside where the module leaves the room, an overlay below.
+        const open = async (screen: string, beside: boolean) => {
+          if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+            const icon = sidebar.getByRole('button', { name: stripIconName(catalog, 'sidebar.agenda'), exact: true })
+            if (await icon.count()) await icon.click()
+            else await toggle.click()
+          }
+          await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+          await expect(sidebar).toHaveAttribute('data-layout', beside ? 'beside' : 'overlay')
+          await sidebarSettled(sidebar)
+          await expect(sidebar.getByRole('heading', { name: catalog['sidebar.agenda'], exact: true })).toBeVisible()
+          await expect(sidebar.getByRole('tab', { name: catalog['sidebar.agenda'], exact: true })).toHaveAttribute(
+            'aria-selected',
+            'true',
+          )
+          await expect(sidebar.getByRole('region', { name: catalog['sidebar.agendaTomorrow'] }).getByText('Synthetic planning meeting')).toBeVisible()
+          await expect(sidebar.getByText('Overdue synthetic task')).toBeVisible()
+          const box = (await sidebar.boundingBox())!
+          if (language === 'ar') expect(Math.round(box.x), screen).toBe(0)
+          else expect(Math.round(box.x + box.width), screen).toBe(width)
+          if (!beside) expect(Math.round(box.width), screen).toBe(Math.min(340, Math.floor(width * 0.85)))
+          expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), screen).toBe(true)
+          await auditSidebar(page, info, `${screen}-${theme}-${language}-${width}`, blocking)
+        }
+        // Closing an overlay leaves the saved state alone: the strip again, or nothing below 769 px.
+        const closeOverlay = async () => {
+          await page.keyboard.press('Escape')
+          await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+          if (width >= 769) await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+          else await expect(sidebar).toHaveCount(0)
+        }
+
+        await open('mail', width >= SIDEBAR_BESIDE_FROM.mail)
+        await info.attach(`sidebar-mail-${theme}-${language}-${width}`, {
+          body: await page.screenshot({ path: info.outputPath('sidebar-mail.png'), animations: 'disabled' }),
+          contentType: 'image/png',
+        })
+        if (width < SIDEBAR_BESIDE_FROM.mail) await closeOverlay()
+
+        // Every other module has it too, with the same agenda: beside where
+        // the module keeps its own minimum, an overlay below.
+        for (const key of SIDEBAR_MODULES) {
+          if (width < 769) {
+            // The app menu opens the module; an overlay left open goes with mail.
+            await page.getByRole('button', { name: catalog['appMenu.label'], exact: true }).click()
+            await page
+              .getByRole('menuitemradio', { name: catalog['commands.goTo'].replace('{name}', catalog[key]), exact: true })
+              .click()
+          } else {
+            await page.getByTitle(catalog[key], { exact: true }).click()
+          }
+          await expect(page.getByRole('main', { name: catalog[key], exact: true })).toBeVisible()
+          await open(key, width >= SIDEBAR_BESIDE_FROM[key])
+          if (width < 769) continue
+          if (width < SIDEBAR_BESIDE_FROM[key]) await closeOverlay()
+        }
+        await info.attach(`sidebar-notes-${theme}-${language}-${width}`, {
+          body: await page.screenshot({ path: info.outputPath('sidebar-notes.png'), animations: 'disabled' }),
+          contentType: 'image/png',
+        })
+
+        // What was saved: `expanded` from the strip beside the content
+        // (1100 px and up, in Calendar); nothing from an overlay.
+        await expect.poll(async () => (await storedPrefs(page)).app_sidebar_state).toBe(width >= 1100 ? 'expanded' : undefined)
+        await page.reload()
+        await expect(page.locator('[data-thread-list]')).toBeVisible()
+        // At 1100 px the saved `expanded` does not fit beside mail's list and
+        // reader: the strip, never an overlay by itself.
+        if (width >= 1120) {
+          await expect(sidebar).toHaveAttribute('data-layout', 'beside')
+          await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+        } else if (width >= 769) {
+          await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+          await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+        } else {
+          await expect(sidebar).toHaveCount(0)
+        }
+        expect(blocking).toEqual([])
+        expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+        expect(errors).toEqual([])
+      })
+    }
+  }
+}
+
+// The app's own zoom at 200 %: the strip and the panel selector are 2.5 rem
+// (80 px), the widths in px; nothing scrolls sideways (ADR-0068 §7).
+for (const [language, theme] of [
+  ['ca', 'oreneta-light'],
+  ['ar', 'oreneta-dark'],
+]) {
+  for (const width of [1440, 1024]) {
+    test(`app sidebar at the app's 200 percent: ${language}, ${theme}, ${width}px (#361)`, async ({ page }, info) => {
+      await page.setViewportSize({ width, height: 1000 })
+      const errors = await agendaSidebarStartup(page, { theme, language })
+      const catalog = sidebarCatalogs[language]
+      await page.goto('/')
+      await expect(page.locator('[data-thread-list]')).toBeVisible()
+      const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+      for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
+      expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
+      const { toggle, sidebar } = sidebarParts(page, catalog)
+      const noSideScroll = async (where: string) =>
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), where).toBe(true)
+      await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+      expect(Math.round((await sidebar.boundingBox())!.width)).toBe(80)
+      await noSideScroll('strip')
+      const blocking: string[] = []
+
+      for (const screen of ['mail', 'calendar.title']) {
+        if (screen !== 'mail') {
+          if (width < 1100) await page.keyboard.press('Escape')
+          await chooseModule(page, catalog[screen], catalog)
+          await expect(page.getByRole('main', { name: catalog[screen], exact: true })).toBeVisible()
+        }
+        // From the strip's Agenda icon (the band's button would hide the strip, D4).
+        if ((await toggle.getAttribute('aria-expanded')) !== 'true')
+          await sidebar.getByRole('button', { name: stripIconName(catalog, 'sidebar.agenda'), exact: true }).click()
+        await expect(sidebar).toHaveAttribute('data-layout', width >= SIDEBAR_BESIDE_FROM[screen] ? 'beside' : 'overlay')
+        await sidebarSettled(sidebar)
+        await expect(sidebar.getByRole('heading', { name: catalog['sidebar.agenda'], exact: true })).toBeInViewport()
+        await expect(sidebar.getByText('Synthetic planning meeting')).toBeInViewport()
+        // The panel selector at its foot, 80 px tall, inside the window.
+        const tabs = sidebar.getByRole('tablist', { name: catalog['sidebar.panels'], exact: true })
+        await expect(tabs).toBeInViewport({ ratio: 1 })
+        expect(Math.round((await tabs.boundingBox())!.height)).toBe(80)
+        await noSideScroll(`${screen} at 200%`)
+        await auditSidebar(page, info, `200-${screen}-${language}-${width}`, blocking)
+        await info.attach(`sidebar-200-${screen}-${language}-${width}`, {
+          body: await page.screenshot({ path: info.outputPath(`sidebar-200-${screen}.png`), animations: 'disabled' }),
+          contentType: 'image/png',
+        })
+      }
+      await page.keyboard.press(`${mod}+Digit0`)
+      expect(blocking).toEqual([])
+      expect(errors).toEqual([])
+    })
+  }
+}
+
+// The saved state and width survive a restart, and only what the person does
+// beside the content changes the state; F6 and Shift+F6 go through the
+// sidebar in the frame's order (ADR-0068 §6).
+test('app sidebar: its state and width survive a restart, and F6 goes through it (#361)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const errors = await agendaSidebarStartup(page, { language: 'ca' })
+  const catalog = caCatalog
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { toggle, sidebar } = sidebarParts(page, catalog)
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+
+  // The strip's icon: expanded on the agenda, beside the content, with the
+  // focus on its tab; the separator widens it from the keyboard.
+  await sidebar.getByRole('button', { name: stripIconName(catalog, 'sidebar.agenda'), exact: true }).click()
+  await expect(sidebar).toHaveAttribute('data-layout', 'beside')
+  await expect(sidebar.getByRole('tab', { name: catalog['sidebar.agenda'], exact: true })).toBeFocused()
+  const handle = sidebar.getByRole('separator', { name: catalog['layout.resizeSidebar'], exact: true })
+  await handle.focus()
+  await page.keyboard.press('ArrowLeft')
+  await page.keyboard.press('ArrowLeft')
+  await expect(handle).toHaveAttribute('aria-valuenow', '372')
+  await expect.poll(async () => (await storedPrefs(page)).app_sidebar_state).toBe('expanded')
+  await expect.poll(async () => (await storedPrefs(page)).details_panel_width).toBe(372)
+
+  // F6 from the list: the reader, the sidebar, the band, the folders, the
+  // modules and back; Shift+F6 the other way round.
+  const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+  await row.click()
+  await row.focus()
+  expect(await regionWalk(page, 'F6', 6)).toEqual(['reader', 'sidebar', 'search', 'folders', 'modules', 'content'])
+  expect(await regionWalk(page, 'Shift+F6', 6)).toEqual(['modules', 'folders', 'search', 'sidebar', 'reader', 'content'])
+
+  // A restart: expanded, at the width it had, on the agenda.
+  await page.reload()
+  await expect(sidebar).toHaveAttribute('data-layout', 'beside')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  await expect(sidebar.getByRole('heading', { name: catalog['sidebar.agenda'], exact: true })).toBeVisible()
+  expect(Math.round((await sidebar.boundingBox())!.width)).toBe(372)
+
+  // The minimise button: the strip, saved, with the focus on the agenda's icon.
+  await sidebar.getByRole('button', { name: catalog['sidebar.minimize'], exact: true }).click()
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await expect(sidebar.getByRole('button', { name: stripIconName(catalog, 'sidebar.agenda'), exact: true })).toBeFocused()
+  await expect.poll(async () => (await storedPrefs(page)).app_sidebar_state).toBe('minimized')
+  await page.reload()
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+
+  // In Calendar, the band's button hides the strip, expands it from nothing
+  // and hides it again, all saved (owner decision D4 on #360); its
+  // `aria-expanded` is true only while it is expanded, and its description
+  // and tooltip say what a press does. F6 from the module strip goes through
+  // the module, the sidebar, the band and the folders.
+  await page.getByTitle(catalog['calendar.title'], { exact: true }).click()
+  await expect(page.getByRole('main', { name: catalog['calendar.title'], exact: true })).toBeVisible()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(toggle).toHaveAccessibleDescription(catalog['commands.sidebar.hide'])
+  await expect(toggle).toHaveAttribute('title', catalog['commands.sidebar.hide'])
+  await toggle.click()
+  await expect(sidebar).toHaveCount(0)
+  await expect(toggle).toHaveAccessibleDescription(catalog['commands.sidebar.show'])
+  await expect(toggle).toHaveAttribute('title', catalog['commands.sidebar.show'])
+  await expect.poll(async () => (await storedPrefs(page)).app_sidebar_state).toBe('hidden')
+  await toggle.click()
+  await expect(sidebar).toHaveAttribute('data-layout', 'beside')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  await expect.poll(async () => (await storedPrefs(page)).app_sidebar_state).toBe('expanded')
+  await page.getByTitle(catalog['calendar.title'], { exact: true }).focus()
+  expect(await regionWalk(page, 'F6', 5)).toEqual(['content', 'sidebar', 'search', 'folders', 'modules'])
+  await toggle.click()
+  await expect(sidebar).toHaveCount(0)
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect.poll(async () => (await storedPrefs(page)).app_sidebar_state).toBe('hidden')
+  await page.reload()
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await expect(sidebar).toHaveCount(0)
+  // From the app menu's command, back at the width it had.
+  await page.getByRole('button', { name: catalog['appMenu.label'], exact: true }).click()
+  await page.getByRole('menuitem', { name: catalog['commands.sidebar.show'], exact: true }).click()
+  await expect(sidebar).toHaveAttribute('data-layout', 'beside')
+  expect(Math.round((await sidebar.boundingBox())!.width)).toBe(372)
+  await expect.poll(async () => (await storedPrefs(page)).app_sidebar_state).toBe('expanded')
+
+  // Narrower than the room beside mail: the saved `expanded` is drawn as the
+  // strip, and an overlay opened from its icon and closed there is not saved
+  // (owner decision D5).
+  await page.setViewportSize({ width: 1100, height: 900 })
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await sidebar.getByRole('button', { name: stripIconName(catalog, 'sidebar.agenda'), exact: true }).click()
+  await expect(sidebar).toHaveAttribute('data-layout', 'overlay')
+  await page.locator('[data-sidebar-backdrop]').click({ position: { x: 20, y: 300 } })
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await expect(sidebar).toHaveAttribute('data-layout', 'beside')
+  expect((await storedPrefs(page)).app_sidebar_state).toBe('expanded')
+
+  // There, the band's button hides the strip (saved), and brings it back
+  // (saved `minimized`, owner decision D7), with the focus kept on it.
+  await page.setViewportSize({ width: 1100, height: 900 })
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await toggle.click()
+  await expect(sidebar).toHaveCount(0)
+  await expect.poll(async () => (await storedPrefs(page)).app_sidebar_state).toBe('hidden')
+  await toggle.click()
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(toggle).toBeFocused()
+  await expect.poll(async () => (await storedPrefs(page)).app_sidebar_state).toBe('minimized')
+  expect(errors).toEqual([])
+})
+
+// People and Notes keep their own minimum beside the sidebar (owner decision
+// D3 on #360): the list and the person, or the list and the note, with the
+// reader's 360 px. The sidebar is beside them where the row less the folders'
+// 200 px and that minimum leaves its 280 px (People from 1128 px, Notes from
+// 1160 px), and as wide as what is left, up to its saved width; narrower, the
+// saved `expanded` is drawn as the strip, never over the person or the note.
+for (const [module, width] of [
+  ['people', 1127],
+  ['people', 1128],
+  ['people', 1180],
+  ['people', 1440],
+  ['notes', 1159],
+  ['notes', 1160],
+  ['notes', 1180],
+  ['notes', 1440],
+] as const) {
+  test(`app sidebar beside ${module} leaves the ${module === 'people' ? 'person' : 'note'} its 360 px at ${width}px (#361)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const options = { preferences: { app_sidebar_state: 'expanded', details_panel_width: 560 } }
+    const errors = module === 'people' ? await openPeoplePane(page, options) : await openNotesPane(page, options)
+    const { toggle, sidebar } = sidebarParts(page, enCatalog)
+    const content = page.locator('main > [data-region="content"]')
+    const minimum = module === 'people' ? 288 + 360 : 320 + 360
+    const rest = width - 200 - minimum
+    const beside = rest >= 280
+    await expect(sidebar).toHaveAttribute('data-layout', beside ? 'beside' : 'strip')
+    await expect(toggle).toHaveAttribute('aria-expanded', String(beside))
+    await sidebarSettled(sidebar)
+    let detail: ReturnType<Page['locator']>
+    if (module === 'people') {
+      await page.getByRole('listbox', { name: 'People' }).getByRole('option', { name: /Lovelace/ }).click()
+      detail = page.getByRole('region', { name: 'Ada Lovelace' })
+    } else {
+      await content.getByRole('button', { name: /Plan the trip/ }).click()
+      await expect(content.getByLabel('Title', { exact: true })).toHaveValue('Plan the trip')
+      detail = content.locator('section[aria-label="Note"]')
+    }
+    await expect(detail).toBeVisible()
+    await settled(page)
+    const detailBox = await boxOf(detail)
+    const sidebarBox = await boxOf(sidebar)
+    // The person or the note keeps 360 px, and ends where the sidebar starts.
+    expect(detailBox.width, `${module} at ${width}px`).toBeGreaterThanOrEqual(359)
+    expect(detailBox.x + detailBox.width).toBeLessThanOrEqual(sidebarBox.x + 1)
+    if (beside) {
+      // What is left, up to the saved 560 px: at 1128 and 1160 px its 280 px,
+      // at 1180 px 332 and 300 px; the folder pane gives way to its 200 px.
+      expect(Math.round(sidebarBox.width)).toBe(Math.min(560, rest))
+      expect(Math.round((await boxOf(page.locator('[data-folder-pane]'))).width)).toBeGreaterThanOrEqual(200)
+    } else {
+      expect(Math.round(sidebarBox.width)).toBe(40)
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    // An `expanded` drawn as the strip stays saved as it was.
+    expect((await storedPrefs(page)).app_sidebar_state).toBe('expanded')
+    expect(errors).toEqual([])
+  })
+}
+
+// The default strip at the app's 200 % in a 1025 px window: 80 px at the end
+// of the row, which the folder pane makes room for, from its 260 px down to
+// what mail's list and reader leave it; the module strip at its foot keeps
+// «Més», and nothing scrolls sideways (ADR-0068 §7, ADR-0069 §2).
+test("the app sidebar's strip at the app's 200 % at 1025px: the folder pane gives way to it, inside the window (#361)", async ({
+  page,
+}) => {
+  const { errors, modules, titles } = await openModuleSwitcher(page, 1025)
+  const pane = page.getByRole('navigation', { name: 'Accounts and folders' })
+  const { sidebar } = sidebarParts(page, enCatalog)
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  expect(Math.round((await boxOf(sidebar)).width)).toBe(40)
+  await zoomTo200(page)
+  await expect.poll(async () => Math.round((await boxOf(sidebar)).width)).toBe(80)
+  // The 35 px the 260 px pane gives up: about 225 px.
+  await expect.poll(async () => Math.round((await boxOf(pane)).width)).toBe(225)
+  await expect.poll(titles).toEqual(['Mail', 'Calendar', 'More'])
+  expect(Math.round((await boxOf(modules)).height)).toBe(80)
+  await insidePane(page, pane)
+  const icon = sidebar.getByRole('button', { name: stripIconName(enCatalog, 'sidebar.agenda'), exact: true })
+  await expect(icon).toBeInViewport({ ratio: 1 })
+  // The sidebar at the end of the row, the pane at its start, nothing between
+  // them under the other.
+  const sidebarBox = await boxOf(sidebar)
+  expect(Math.round(sidebarBox.x + sidebarBox.width)).toBe(1025)
+  expect((await boxOf(pane)).x).toBeLessThanOrEqual(1)
+  await ltrInView(page, 'the strip at 200 %, 1025 px')
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  await page.keyboard.press(`${mod}+Digit0`)
+  await expect.poll(titles).toEqual(MODULE_TITLES)
+  expect(errors).toEqual([])
+})
+
+// Under the overlay the module is inert: the backdrop covers it, so Tab and F6
+// go between the band and the sidebar only, and closing gives the focus back
+// to what opened it. Escape goes to the newest of the shared Escape handlers:
+// in the band's field it clears and leaves the field, and only then closes the
+// overlay.
+test('app sidebar: under its overlay the module is inert, F6 goes between the band and the sidebar, and the focus goes back (#361)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 900 })
+  const errors = await agendaSidebarStartup(page, { language: 'en' })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { toggle, sidebar } = sidebarParts(page, enCatalog)
+  const main = page.getByRole('main')
+  const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+  await row.click()
+  await row.focus()
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await expect(main).not.toHaveAttribute('inert')
+
+  // `i` from the row: the Conversa panel, over the module, which is inert.
+  await page.keyboard.press('i')
+  await expect(sidebar).toHaveAttribute('data-layout', 'overlay')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  await expect(sidebar.getByRole('tab', { name: enCatalog['sidebar.conversation'], exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await sidebarSettled(sidebar)
+  expect(await regionAtFocus(page)).toBe('sidebar')
+  expect(await regionWalk(page, 'F6', 4)).toEqual(['search', 'sidebar', 'search', 'sidebar'])
+  expect(await regionWalk(page, 'Shift+F6', 2)).toEqual(['search', 'sidebar'])
+  // Tab from the sidebar's last control does not reach the module either.
+  await sidebar.getByRole('button', { name: enCatalog['chat.closeEsc'], exact: true }).focus()
+  for (let i = 0; i < 12; i++) {
+    await page.keyboard.press('Tab')
+    expect(await page.evaluate(() => !!document.activeElement?.closest('main')), `Tab ${i + 1}`).toBe(false)
+  }
+  await expect(main).toHaveAttribute('inert', '')
+  // `i` again, from the sidebar: closed, the module no longer inert, the
+  // focus on the row.
+  await sidebar.getByRole('tab', { name: enCatalog['sidebar.conversation'], exact: true }).focus()
+  await page.keyboard.press('i')
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await expect(main).not.toHaveAttribute('inert')
+  await expect(row).toBeFocused()
+
+  // Open again; Escape in the band's field clears it and leaves it, with the
+  // overlay still open; the next Escape closes the overlay, and the focus
+  // goes back to the row.
+  await page.keyboard.press('i')
+  await expect(sidebar).toHaveAttribute('data-layout', 'overlay')
+  const { field } = await bandSearch(page)
+  await field.click()
+  await field.pressSequentially('pilot')
+  await expect(field).toHaveValue('pilot')
+  await page.keyboard.press('Escape')
+  await expect(field).toHaveValue('')
+  await expect(field).not.toBeFocused()
+  await expect(sidebar).toHaveAttribute('data-layout', 'overlay')
+  await page.keyboard.press('Escape')
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await expect(main).not.toHaveAttribute('inert')
+  await expect(row).toBeFocused()
+  // A command aimed at the module closes the overlay first: `r` puts the
+  // focus in the quick reply, which is no longer inert.
+  await page.keyboard.press('i')
+  await expect(sidebar).toHaveAttribute('data-layout', 'overlay')
+  await page.keyboard.press('r')
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await expect(main).not.toHaveAttribute('inert')
+  await expect(page.getByPlaceholder(enCatalog['composer.placeholders.quickMessage'], { exact: true })).toBeFocused()
+  // Nothing of it was saved.
+  expect((await storedPrefs(page)).app_sidebar_state).toBeUndefined()
+  expect(errors).toEqual([])
+})
+
+// Owner decision D7 on #360: where the sidebar does not fit beside the
+// content, hiding its strip is undone by the band's button and by the app
+// menu's command, which bring the strip back and save `minimized`, kept after
+// a restart; the overlay stays the strip icons' (and `i`'s).
+test('at 1024px the band button hides the strip and brings it back, saved across a restart (#361)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 900 })
+  const errors = await agendaSidebarStartup(page, { language: 'en' })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { toggle, sidebar } = sidebarParts(page, enCatalog)
+  const saved = async () => (await storedPrefs(page)).app_sidebar_state
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(toggle).toHaveAccessibleDescription(enCatalog['commands.sidebar.hide'])
+
+  // Hidden, and still hidden after a restart.
+  await toggle.click()
+  await expect(sidebar).toHaveCount(0)
+  await expect.poll(saved).toBe('hidden')
+  await page.reload()
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await expect(sidebar).toHaveCount(0)
+  await expect(toggle).toHaveAccessibleDescription(enCatalog['commands.sidebar.show'])
+
+  // The band's button: the strip again, not an overlay, and the module stays usable.
+  await toggle.click()
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(toggle).toHaveAccessibleDescription(enCatalog['commands.sidebar.hide'])
+  await expect(toggle).toBeFocused()
+  await expect(page.getByRole('main')).not.toHaveAttribute('inert')
+  await expect.poll(saved).toBe('minimized')
+  await page.reload()
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+
+  // The app menu's command does the same, both ways.
+  const command = async (name: string) => {
+    await page.getByRole('button', { name: enCatalog['appMenu.label'], exact: true }).click()
+    await page.getByRole('menuitem', { name, exact: true }).click()
+  }
+  await command(enCatalog['commands.sidebar.hide'])
+  await expect(sidebar).toHaveCount(0)
+  await expect.poll(saved).toBe('hidden')
+  await command(enCatalog['commands.sidebar.show'])
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await expect.poll(saved).toBe('minimized')
+
+  // The overlay is its icon's, and is not saved.
+  await sidebar.getByRole('button', { name: stripIconName(enCatalog, 'sidebar.agenda'), exact: true }).click()
+  await expect(sidebar).toHaveAttribute('data-layout', 'overlay')
+  await page.keyboard.press('Escape')
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  expect(await saved()).toBe('minimized')
+  expect(errors).toEqual([])
+})
+
+// A command that acts outside the module leaves the overlay as it is: Settings
+// opened from the palette over it opens over the overlay, which stays, and
+// gives the focus back into it on closing; the overlay then gives it back to
+// the strip's icon (ADR-0069 §2).
+test('Settings opened from the palette over the sidebar overlay leaves it open and gives the focus back into it (#361)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 900 })
+  const errors = await agendaSidebarStartup(page, { language: 'en' })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const { sidebar } = sidebarParts(page, enCatalog)
+  const icon = sidebar.getByRole('button', { name: stripIconName(enCatalog, 'sidebar.agenda'), exact: true })
+  await icon.click()
+  await expect(sidebar).toHaveAttribute('data-layout', 'overlay')
+  const tab = sidebar.getByRole('tab', { name: enCatalog['sidebar.agenda'], exact: true })
+  await expect(tab).toBeFocused()
+
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  await page.keyboard.press(`${mod}+k`)
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  await palette.getByRole('combobox').fill('settings')
+  await palette.getByRole('option', { name: /^Open settings/ }).click()
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+  await expect(settings).toBeVisible()
+  await expect(sidebar).toHaveAttribute('data-layout', 'overlay')
+  await page.keyboard.press('Escape')
+  await expect(settings).toHaveCount(0)
+  await expect(sidebar).toHaveAttribute('data-layout', 'overlay')
+  await expect(tab).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+  await expect(icon).toBeFocused()
+  expect((await storedPrefs(page)).app_sidebar_state).toBeUndefined()
+  expect(errors).toEqual([])
+})

@@ -10,7 +10,7 @@ import { compose$, openMessageTab } from './compose'
 import { persistedField } from '../lib/sessionPref'
 import { settings$, type KanbanBoard } from './settings'
 import { invoke } from '../lib/bridge'
-import { thread$ } from './thread'
+import { closeSidebarOverlay } from './sidebar'
 
 export type KanbanColumn = {
   accountId: string
@@ -155,7 +155,8 @@ export function openCorrespondentMail(accountId: string, folderId: string, email
   ui$.filters.set([])
   ui$.query.set(query)
   ui$.selectedThread.set('')
-  thread$.mediaOpen.set(false)
+  // The list is what is wanted now: an overlay of the sidebar over it goes.
+  closeSidebarOverlay()
   ui$.mobilePane.set('threads')
 }
 

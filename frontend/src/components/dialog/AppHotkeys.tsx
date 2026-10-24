@@ -19,7 +19,8 @@ import {
   openMailAccount,
   closeKanbanPane,
 } from '../../states/kanban'
-import { openThreadSearch, thread$ } from '../../states/thread'
+import { openThreadSearch } from '../../states/thread'
+import { sidebar$, toggleConversationPanel } from '../../states/sidebar'
 import {
   syncMail,
   selectAdjacentThread,
@@ -464,9 +465,13 @@ export function AppHotkeys({ setup = false }: { setup?: boolean }) {
           void deleteThread(selected())
           break
         case 'thread.details':
-          if (!threadSearchVisible()) return
+          // The app sidebar's Conversa panel (ADR-0069 §2): expanded on it,
+          // minimised (or, as an overlay, closed); otherwise expanded on it.
+          // Only while it is there: a conversation on screen, not under a
+          // reader or compose tab, nor below 769 px with the list in its place.
+          if (!sidebar$.conversationOpen.peek()) return
           event.preventDefault()
-          thread$.mediaOpen.set(!thread$.mediaOpen.peek())
+          toggleConversationPanel()
           break
         case 'thread.junk':
           if (!selected()) return

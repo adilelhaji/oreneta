@@ -13,7 +13,7 @@ import {
 import { mail$ } from './mail'
 import { settings$ } from './settings'
 import { ui$ } from './ui'
-import { thread$ } from './thread'
+import { sidebar$ } from './sidebar'
 
 const message = (overrides: Partial<Message> = {}): Message => ({
   id: 'acc1:INBOX:t1#1',
@@ -42,7 +42,8 @@ describe('openCorrespondentMail', () => {
     ui$.query.set('old query')
     ui$.selectedThread.set('old-thread')
     ui$.mobilePane.set('conversation')
-    thread$.mediaOpen.set(true)
+    // The app sidebar as an overlay over the conversation (ADR-0069).
+    sidebar$.overlay.set(true)
 
     openCorrespondentMail('acc1', 'INBOX', '  sender@example.com  ')
 
@@ -52,7 +53,7 @@ describe('openCorrespondentMail', () => {
     expect(ui$.query.get()).toBe('sender@example.com')
     expect(ui$.selectedThread.get()).toBe('')
     expect(ui$.mobilePane.get()).toBe('threads')
-    expect(thread$.mediaOpen.get()).toBe(false)
+    expect(sidebar$.overlay.get()).toBe(false)
   })
 
   it('uses the card folder instead of resuming a same-account mail folder', () => {

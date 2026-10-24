@@ -59,3 +59,15 @@ export function useWideWindow(px: number): boolean {
   }, [query])
   return wide
 }
+
+/** The window's width in CSS px, followed as it is resized. */
+export function useWindowWidth(): number {
+  const [width, setWidth] = useState(() => window.innerWidth)
+  useEffect(() => {
+    const update = () => setWidth(window.innerWidth)
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
+  return width
+}

@@ -93,3 +93,10 @@ es reflecteix; un xebró de desplegar amb `transition-transform` es gira 180°.
   es llegeix de dreta a esquerra; la fletxa esquerra hi va endavant i la dreta
   enrere, en cercle, amb Inici i Fi, i «Més» s'obre cap a l'inici de la línia, dins
   de la finestra. La barra estreta de 769 a 1024 px és a la dreta de la fila.
+- `components/shell/AppSidebar.test.tsx` i `e2e/startup.e2e.ts` («#361»): en
+  àrab la barra lateral de l'aplicació és a l'esquerra, al final de la fila,
+  tant al costat del contingut com a capa, i la icona del botó «Barra
+  lateral» de la banda i la del botó de minimitzar es giren cap a aquest costat.
+  Al selector de panells la fletxa esquerra va a la pestanya següent i la dreta
+  a l'anterior, en cercle. El separador de l'amplada és a la vora inicial de la
+  barra, i les fletxes i l'arrossegament segueixen la lectura (ADR-0059).

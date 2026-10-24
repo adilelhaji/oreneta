@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'bun:test'
 import {
+  appSidebarLayout,
+  BOARD_COLUMN_ROOM,
   clampPaneSize,
+  CONTENT_ROOM,
+  DETAILS_PANEL_WIDTH,
   drawnPane,
   FOLDER_PANE_DEFAULT_WIDTH,
   FOLDER_PANE_WIDTH,
@@ -8,9 +12,16 @@ import {
   KANBAN_PANE_MIN_PX,
   KANBAN_PANE_NARROW_MIN_PX,
   kanbanPane,
+  MODULE_CONTENT_MIN,
+  moduleContentStyle,
+  NOTES_LIST_PX,
+  PEOPLE_LIST_PX,
   READER_ROOM,
-  sidebarLayout,
+  SIDEBAR_BESIDE_MIN_WINDOW,
+  SIDEBAR_STRIP_MIN_WINDOW,
+  sidebarRest,
   THREAD_LIST_WIDTH,
+  type SidebarRoom,
 } from './paneResize'
 
 describe('pane limits (#212)', () => {
@@ -43,17 +54,6 @@ describe('pane limits (#212)', () => {
     expect(drawnPane(280, 560, THREAD_LIST_WIDTH)).toEqual({ value: 280, limits: THREAD_LIST_WIDTH })
   })
 
-  it('puts the details sidebar beside the reader only where the row leaves the reader 360 px', () => {
-    expect(sidebarLayout(false, 2000)).toEqual({ beside: false, max: 560 })
-    expect(sidebarLayout(true, 0)).toEqual({ beside: true, max: 560 })
-    expect(sidebarLayout(true, 1200)).toEqual({ beside: true, max: 560 })
-    // A 1100–1180 px window: the widest it goes is what the reader leaves.
-    expect(sidebarLayout(true, 760)).toEqual({ beside: true, max: 400 })
-    expect(sidebarLayout(true, 640)).toEqual({ beside: true, max: 280 })
-    // The board's narrow conversation pane on a wide window: an overlay.
-    expect(sidebarLayout(true, 400)).toEqual({ beside: false, max: 560 })
-  })
-
   it("raises the board pane's smallest percentage to its reader's 360 px, and gives up where nothing is left", () => {
     expect(KANBAN_PANE_MIN_PX).toBe(READER_ROOM)
     expect(kanbanPane(33, 0, 0)).toEqual({ value: 33, limits: { min: 25, max: 60 } })
@@ -80,5 +80,158 @@ describe('pane limits (#212)', () => {
     expect(kanbanAreaBase(360, false)).toBe(360)
     expect(kanbanAreaBase(360, true)).toBe(720)
     expect(kanbanAreaBase(240.4, true)).toBe(600)
+  })
+})
+
+// The app's sidebar (ADR-0069 §2): beside the content from 1100 px where
+// rest = row − folders (200, if drawn) − list (280, mail) − content (360) ≥ 280,
+// at most min(560, rest); otherwise only an overlay. The strip from 769 px.
+describe("the app sidebar's room (ADR-0069 §2, #361)", () => {
+  // Mail from 1025 px: the folder pane is drawn; at 100 % the strip is 40 px.
+  const mail = (window: number, extra: Partial<SidebarRoom> = {}): SidebarRoom => ({
+    window,
+    content: 'mail',
+    folders: window >= 1025,
+    bar: window >= 769 && window < 1025 ? 48 : 0,
+    strip: 40,
+    ...extra,
+  })
+  // Calendar: one of the modules that keep the reader's 360 px.
+  const other = (window: number, extra: Partial<SidebarRoom> = {}): SidebarRoom => ({
+    ...mail(window),
+    content: 'calendar',
+    ...extra,
+  })
+
+  it('uses the minimums of the ADR', () => {
+    expect(SIDEBAR_BESIDE_MIN_WINDOW).toBe(1100)
+    expect(SIDEBAR_STRIP_MIN_WINDOW).toBe(769)
+    expect(DETAILS_PANEL_WIDTH).toEqual({ min: 280, max: 560 })
+    expect(FOLDER_PANE_WIDTH.min).toBe(200)
+    expect(THREAD_LIST_WIDTH.min).toBe(280)
+    expect(CONTENT_ROOM).toBe(360)
+    expect(BOARD_COLUMN_ROOM).toBe(280)
+  })
+
+  it('in mail with the folders: an overlay at 1100 px, beside from 1120 px, up to 340 px at 1180 and 560 px at 1440', () => {
+    // 1100 − 200 − 280 − 360 = 260 < 280.
+    expect(sidebarRest(mail(1100))).toBe(260)
+    expect(appSidebarLayout(mail(1100))).toEqual({ beside: false, max: 560, strip: true })
+    expect(appSidebarLayout(mail(1119)).beside).toBe(false)
+    expect(appSidebarLayout(mail(1120))).toEqual({ beside: true, max: 280, strip: true })
+    expect(appSidebarLayout(mail(1180))).toEqual({ beside: true, max: 340, strip: true })
+    // 1440 − 840 = 600: held to 560.
+    expect(sidebarRest(mail(1440))).toBe(600)
+    expect(appSidebarLayout(mail(1440))).toEqual({ beside: true, max: 560, strip: true })
+  })
+
+  it("in mail without the folder pane, its 200 px are the sidebar's", () => {
+    expect(appSidebarLayout(mail(1100, { folders: false }))).toEqual({ beside: true, max: 460, strip: true })
+    expect(appSidebarLayout(mail(1440, { folders: false }))).toEqual({ beside: true, max: 560, strip: true })
+  })
+
+  it('in Calendar, Tasks, Chat and Attachments: beside from 1100 px, with 540 px of room there', () => {
+    // 1100 − 200 − 360 = 540, in each of the four.
+    for (const content of ['calendar', 'tasks', 'chat', 'attachments'] as const) {
+      expect(MODULE_CONTENT_MIN[content]).toBe(360)
+      expect(appSidebarLayout(other(1100, { content }))).toEqual({ beside: true, max: 540, strip: true })
+    }
+    expect(appSidebarLayout(other(1120))).toEqual({ beside: true, max: 560, strip: true })
+    expect(appSidebarLayout(other(1180))).toEqual({ beside: true, max: 560, strip: true })
+    expect(appSidebarLayout(other(1440))).toEqual({ beside: true, max: 560, strip: true })
+    expect(appSidebarLayout(other(1100, { folders: false }))).toEqual({ beside: true, max: 560, strip: true })
+    // Under 1100 px never beside, whatever the room.
+    expect(appSidebarLayout(other(1099))).toEqual({ beside: false, max: 560, strip: true })
+  })
+
+  // Owner decision D3 on #360: People and Notes keep the room their pieces
+  // fixed, the list and the person or the note at the reader's 360 px.
+  it('in People and Notes, the room their pieces fixed: an overlay at 1100 px, beside from 1128 and 1160 px', () => {
+    expect(PEOPLE_LIST_PX).toBe(288)
+    expect(NOTES_LIST_PX).toBe(320)
+    expect(MODULE_CONTENT_MIN.people).toBe(PEOPLE_LIST_PX + READER_ROOM)
+    expect(MODULE_CONTENT_MIN.notes).toBe(NOTES_LIST_PX + READER_ROOM)
+    const people = (window: number) => other(window, { content: 'people' })
+    const notes = (window: number) => other(window, { content: 'notes' })
+    // 1100 − 200 − 648 = 252, and 1100 − 200 − 680 = 220.
+    expect(sidebarRest(people(1100))).toBe(252)
+    expect(appSidebarLayout(people(1100))).toEqual({ beside: false, max: 560, strip: true })
+    expect(appSidebarLayout(people(1127)).beside).toBe(false)
+    expect(appSidebarLayout(people(1128))).toEqual({ beside: true, max: 280, strip: true })
+    expect(appSidebarLayout(people(1180))).toEqual({ beside: true, max: 332, strip: true })
+    expect(appSidebarLayout(people(1440))).toEqual({ beside: true, max: 560, strip: true })
+    expect(sidebarRest(notes(1100))).toBe(220)
+    expect(appSidebarLayout(notes(1100))).toEqual({ beside: false, max: 560, strip: true })
+    expect(appSidebarLayout(notes(1159)).beside).toBe(false)
+    expect(appSidebarLayout(notes(1160))).toEqual({ beside: true, max: 280, strip: true })
+    expect(appSidebarLayout(notes(1180))).toEqual({ beside: true, max: 300, strip: true })
+    expect(appSidebarLayout(notes(1440))).toEqual({ beside: true, max: 560, strip: true })
+    // Beside them, the sidebar leaves the person and the note their 360 px:
+    // the row less the folders, the list and the widest sidebar.
+    expect(1180 - 200 - PEOPLE_LIST_PX - 332).toBe(360)
+    expect(1180 - 200 - NOTES_LIST_PX - 300).toBe(360)
+  })
+
+  // Owner decision D6 on #360 (ADR-0069 §2, erratum): the board's
+  // conversation pane counts 360 px from 769 px, and only with a card open.
+  it('flips a board from beside to the strip between 1100 and 1119 px when a card opens', () => {
+    expect(KANBAN_PANE_MIN_PX).toBe(360)
+    expect(KANBAN_PANE_NARROW_MIN_PX).toBe(320)
+    for (const width of [1100, 1110, 1119]) {
+      expect(appSidebarLayout(mail(width, { content: 'board' })).beside).toBe(true)
+      expect(appSidebarLayout(mail(width, { content: 'board-pane' })).beside).toBe(false)
+    }
+    expect(appSidebarLayout(mail(1120, { content: 'board-pane' })).beside).toBe(true)
+  })
+
+  it("asks each module's content, beside the folder pane, for its minimum as its basis, not as a hard minimum", () => {
+    expect(moduleContentStyle('people')).toEqual({ flex: '1 1 648px' })
+    expect(moduleContentStyle('notes')).toEqual({ flex: '1 1 680px' })
+    for (const module of ['calendar', 'tasks', 'chat', 'attachments'] as const) {
+      expect(moduleContentStyle(module)).toEqual({ flex: '1 1 360px' })
+    }
+  })
+
+  it('with a board open, its column and its conversation pane count in place of the list and the reader', () => {
+    const board = (window: number, pane: boolean) => mail(window, { content: pane ? 'board-pane' : 'board' })
+    // A column alone: 1100 − 200 − 280 = 620, held to 560.
+    expect(appSidebarLayout(board(1100, false))).toEqual({ beside: true, max: 560, strip: true })
+    // With the pane, its 360 px as well, which is mail's sum: as mail.
+    expect(KANBAN_PANE_MIN_PX).toBe(360)
+    expect(appSidebarLayout(board(1100, true))).toEqual({ beside: false, max: 560, strip: true })
+    expect(appSidebarLayout(board(1120, true))).toEqual({ beside: true, max: 280, strip: true })
+    expect(appSidebarLayout(board(1180, true))).toEqual({ beside: true, max: 340, strip: true })
+    expect(appSidebarLayout(board(1440, true))).toEqual({ beside: true, max: 560, strip: true })
+  })
+
+  it('measures the row, drawn without the sidebar, rather than trusting the window', () => {
+    // A row narrower than the window: what is left of it is what counts.
+    expect(appSidebarLayout(mail(1440, { row: 1100 }))).toEqual({ beside: false, max: 560, strip: true })
+    expect(appSidebarLayout(mail(1440, { row: 1180 }))).toEqual({ beside: true, max: 340, strip: true })
+    // Not measured (0): the window stands for it.
+    expect(appSidebarLayout(mail(1180, { row: 0 }))).toEqual({ beside: true, max: 340, strip: true })
+  })
+
+  it('draws the minimised strip from 769 px, beside, and nothing below', () => {
+    expect(appSidebarLayout(mail(1024))).toEqual({ beside: false, max: 560, strip: true })
+    expect(appSidebarLayout(mail(769))).toEqual({ beside: false, max: 560, strip: true })
+    expect(appSidebarLayout(mail(768))).toEqual({ beside: false, max: 560, strip: false })
+    expect(appSidebarLayout(mail(600))).toEqual({ beside: false, max: 560, strip: false })
+    expect(appSidebarLayout(other(600))).toEqual({ beside: false, max: 560, strip: false })
+  })
+
+  it("at the app's 200 %, the 80 px strip where it fits beside the narrow bar and mail's minimums", () => {
+    const zoomed = (window: number, content: SidebarRoom['content'] = 'mail') =>
+      mail(window, { content, bar: window >= 769 && window < 1025 ? 96 : 0, strip: 80 })
+    // 769 − 96 − 640 = 33: no room for it just above 769 px.
+    expect(appSidebarLayout(zoomed(769)).strip).toBe(false)
+    expect(appSidebarLayout(zoomed(900)).strip).toBe(true)
+    expect(appSidebarLayout(zoomed(1024))).toEqual({ beside: false, max: 560, strip: true })
+    expect(appSidebarLayout(zoomed(769, 'calendar')).strip).toBe(true)
+    // People keeps 648 px: 769 − 96 − 648 = 25, no room for the strip until 824 px.
+    expect(appSidebarLayout(zoomed(769, 'people')).strip).toBe(false)
+    expect(appSidebarLayout(zoomed(824, 'people')).strip).toBe(true)
+    // The widths in px do not grow with the zoom: the same room as at 100 %.
+    expect(appSidebarLayout(zoomed(1440))).toEqual({ beside: true, max: 560, strip: true })
   })
 })
