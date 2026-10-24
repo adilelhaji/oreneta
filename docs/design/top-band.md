@@ -546,7 +546,7 @@ l'ordre a `components/palette/useCommandList.ts`.
   d'una subfinestra a la dreta, que en àrab es gira cap a l'esquerra, on hi ha
   la barra.
 - **Nom i estat:** «Barra lateral» (`sidebar.label`), el mateix nom que la
-  regió de la barra, i `aria-expanded`, que diu si la barra és desplegada, al
+  regió de la barra, i `aria-expanded`, que diu si la barra està desplegada, al
   costat del contingut o com a capa. Desplegada, el botó pren el fons de
   selecció.
 - **Què fa:** amb la barra desplegada al costat del contingut, l'amaga (es desa
@@ -555,7 +555,7 @@ l'ordre a `components/palette/useCommandList.ts`.
   on no hi cap, sense desar res. Per sota de 769 px, on no hi ha tira, només la
   capa.
 - **Al menú de l'aplicació i a la paleta,** l'ordre «Mostra la barra lateral»,
-  o «Amaga la barra lateral» quan és desplegada (`view.sidebar`, àrea
+  o «Amaga la barra lateral» quan està desplegada (`view.sidebar`, àrea
   «Aplicació», amb els sinònims de `commands.aliases.view.sidebar`), fa el
   mateix que el botó. Com les altres ordres, primer torna el focus al botó del
   menú o al de la paleta, i després actua, de manera que una capa que s'obre el

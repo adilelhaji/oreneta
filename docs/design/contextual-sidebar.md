@@ -119,7 +119,7 @@ mateixa que llegeix `MessagePane`), `states/settings.ts` (`app_sidebar_state`) i
   | `day`, `person` | Agenda fins que hi hagi els panells; el valor es conserva | Agenda |
   | desconegut o buit | Agenda | Agenda |
 
-  La pestanya Conversa torna a la subsecció que s'hi ha vist l'última vegada en
+  La pestanya Conversa torna a la subsecció que s'hi va veure l'última vegada en
   la sessió.
 
 ### Estats i què es desa
@@ -185,7 +185,7 @@ mateixa que llegeix `MessagePane`), `states/settings.ts` (`app_sidebar_state`) i
 - **L'ordre** «Mostra la barra lateral» o «Amaga la barra lateral», a la paleta
   i al menú de l'aplicació, a l'àrea «Aplicació», fa el mateix que el botó.
 - **La tecla `i`** (`thread.details`) al correu, amb una conversa oberta: si la
-  barra és desplegada al panell Conversa, la minimitza (si és una capa, la tanca
+  barra està desplegada al panell Conversa, la minimitza (si és una capa, la tanca
   com Escapada); si no, la desplega al panell Conversa. Els botons «Detalls de
   la conversa» de la capçalera de la conversa fan el mateix que `i`.
 - **El focus:** la capa el pren, a la pestanya seleccionada, i en tancar-se el

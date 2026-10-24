@@ -171,7 +171,7 @@ de cada mòdul.
   la tira de mòduls és al peu de les carpetes, una regió dins d'una altra, i F6
   hi va després de les carpetes; entre 769 i 1024 px, sense carpetes, la barra
   estreta va abans que el mòdul.
-- **La barra lateral (#361):** és l'última regió, també quan és minimitzada:
+- **La barra lateral (#361):** és l'última regió, també quan està minimitzada:
   la tira té una icona per panell, i per defecte (`minimized`) és a la pantalla
   a partir de 769 px. Per això, després del lector (o del mòdul, fora del
   correu) F6 hi va abans de tornar a la banda, encara que no hi hagi cap
