@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { Editor } from '@tiptap/core'
 import { StarterKit } from '@tiptap/starter-kit'
 import { ComposerToolbar } from './ComposerToolbar'
+import { focusInMenu } from '../../lib/menuKeyboard'
 import { BACKGROUND_COLORS, FONT_FAMILIES, richTextExtensions, TEXT_COLORS } from './richText'
 
 // The toolbar's formatting controls (#274, ADR-0067), each against the editor.
@@ -141,5 +142,20 @@ describe('the composer toolbar', () => {
     })
     expect(editor.getHTML()).not.toContain('<table')
     expect(view.queryByTitle('Insert row below')).toBeNull()
+  })
+
+  it('counts an open colour row as a menu, so a bare Delete there stays in it (#348)', () => {
+    const { view } = setup()
+    const trigger = view.getByLabelText('Text color')
+    expect(focusInMenu(trigger)).toBe(false)
+    act(() => {
+      fireEvent.click(trigger)
+    })
+    expect(focusInMenu(trigger)).toBe(true)
+    expect(focusInMenu(view.getByLabelText('Red'))).toBe(true)
+    act(() => {
+      fireEvent.click(trigger)
+    })
+    expect(focusInMenu(trigger)).toBe(false)
   })
 })

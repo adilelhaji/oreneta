@@ -30,6 +30,7 @@ import { useRef, useState, type ReactNode } from 'react'
 import { useEditorState, type Editor } from '@tiptap/react'
 import { useTranslation } from '../../lib/i18n'
 import { useDismissOnOutside } from '../menu/useDismissOnOutside'
+import { menuSurfaceProps } from '../menu/Menu'
 import {
   ALIGNMENTS,
   BACKGROUND_COLORS,
@@ -90,8 +91,10 @@ function ColorMenu({
     run()
   }
 
+  // While open, the trigger and the swatches are a menu surface, so a bare
+  // Delete there never reaches the conversation behind it (#348).
   return (
-    <div ref={wrapRef} className="relative">
+    <div ref={wrapRef} className="relative" {...(open ? menuSurfaceProps : {})}>
       <button
         type="button"
         onClick={() => setOpen((was) => !was)}
@@ -177,7 +180,11 @@ export function ComposerToolbar({ editor, onSetLink }: { editor: Editor; onSetLi
     { align: 'left', label: t('composer.toolbar.alignLeft'), icon: <AlignLeft size={16} strokeWidth={1.75} /> },
     { align: 'center', label: t('composer.toolbar.alignCenter'), icon: <AlignCenter size={16} strokeWidth={1.75} /> },
     { align: 'right', label: t('composer.toolbar.alignRight'), icon: <AlignRight size={16} strokeWidth={1.75} /> },
-    { align: 'justify', label: t('composer.toolbar.alignJustify'), icon: <AlignJustify size={16} strokeWidth={1.75} /> },
+    {
+      align: 'justify',
+      label: t('composer.toolbar.alignJustify'),
+      icon: <AlignJustify size={16} strokeWidth={1.75} />,
+    },
   ]
   const tableButtons: { label: string; icon: ReactNode; run: () => boolean }[] = [
     {
@@ -380,8 +387,7 @@ export function ComposerToolbar({ editor, onSetLink }: { editor: Editor; onSetLi
         className="ms-auto hidden items-center gap-1 pe-1 text-2xs font-medium text-secondary select-none min-[900px]:flex"
         title={t('composer.toolbar.markdownHint')}
       >
-        {t('composer.toolbar.markdown')}:
-        <code className="rounded bg-raised px-1">**bold**</code>
+        {t('composer.toolbar.markdown')}:<code className="rounded bg-raised px-1">**bold**</code>
         <code className="rounded bg-raised px-1"># heading</code>
         <code className="rounded bg-raised px-1">- list</code>
       </span>
