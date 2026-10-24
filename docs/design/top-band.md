@@ -3,8 +3,8 @@
 Peça 13a del redisseny, pas 3 de l'ordre de migració
 d'[ADR-0068](../adr/0068-marc-comu-de-l-aplicacio.md) (§1, §2 i §9). Les
 decisions del propietari per a tota la peça 13 consten a
-[#342](https://github.com/adilelhaji/oreneta/issues/342): la barra vertical
-conserva el menú «Més» i l'indicador del mode No molestis fins a la peça 14 (se'n
+[#342](https://github.com/adilelhaji/oreneta/issues/342): la barra vertical va
+conservar el menú «Més» i l'indicador del mode No molestis fins a la peça 14 (se'n
 van anar amb la barra a #354; vegeu [Sense la barra vertical](#sense-la-barra-vertical-354)), i
 la peça es lliura en tres PR (13a, la banda i el menú; 13b, la cerca, #344; 13c,
 l'estat de la sincronització i l'indicador del mode No molestis a la banda,
@@ -340,7 +340,8 @@ Peça 13c. ADR-0068 §2 («Al final») i la seva decisió 8: l'estat de la
 sincronització a la banda, només amb els textos d'avui i sense «Sincronitzat».
 Decisió 1 del propietari a
 [#342](https://github.com/adilelhaji/oreneta/issues/342): l'indicador del mode
-No molestis també es queda a la barra vertical fins a la peça 14.
+No molestis també es va quedar a la barra vertical fins a la peça 14 (se'n va
+anar a #354).
 
 - **Què hi ha:** l'indicador del mode No molestis, només mentre les
   notificacions estan en silenci, i després, a la vora final, l'estat de la
@@ -432,12 +433,12 @@ No molestis també es queda a la barra vertical fins a la peça 14.
 
 ### El mode No molestis
 
-- **A la banda:** el mateix indicador de la barra vertical, amb el mateix estat
+- **A la banda:** el mateix indicador que tenia la barra vertical, amb el mateix estat
   (`useQuietState`) i els mateixos textos: «No molestis fins a…», «El mode No
   molestis està activat fins que el desactivis» o «Hores de silenci fins a…». Un
   botó amb la campana barrada, en el to d'avís sobre el to suau, i un clic
   reprèn les notificacions. Hi és a totes les amplades, també per sota de
-  769 px, on la barra vertical no es veu.
+  769 px, on la barra vertical no es veia.
 - **A la barra vertical,** fins a la peça 14, es veia el mateix botó: tots dos
   llegien el mateix estat, i apareixien, canviaven i se n'anaven alhora. El de la
   banda és la regió `role="status"` amb el nom de l'estat; el de la barra
@@ -492,7 +493,7 @@ del mode No molestis, i els mòduls passen a la tira de mòduls i a la barra
 estreta. Decisió 3 del propietari a
 [#352](https://github.com/adilelhaji/oreneta/issues/352): també se'n van els
 menús «Més» de per sota de 769 px, a `CompactNavigation` i a la capçalera de la
-llista estreta, amb `QuickSettingsMenu`; la fletxa per tornar al correu es queda.
+llista estreta, amb `QuickSettingsMenu`; la fletxa per tornar al correu es manté.
 
 - **El menú de l'aplicació és on és tot:** cada element del menú «Més» de la
   barra vertical hi és una vegada: «Ves a: …» per a cada mòdul, «Paleta d'ordres»,
@@ -507,8 +508,8 @@ llista estreta, amb `QuickSettingsMenu`; la fletxa per tornar al correu es queda
   comprovació del correu…», com a indicació i com a descripció accessible, com
   qualsevol ordre que no es pot fer.
 - **Un tauler nou** es crea de seguida amb el nom per defecte i es mostra al correu,
-  com ja feia l'ordre de la paleta; el diàleg del nom de la barra vertical se'n va
-  amb ella.
+  com ja feia l'ordre de la paleta (decisió del propietari a #352, a tot arreu); el
+  diàleg del nom de la barra vertical (`BoardDialog`) se'n va amb ella.
 - **Per sota de 769 px,** on no hi ha selector de mòduls, els mòduls s'obren des
   del menú de l'aplicació, i el focus torna al seu botó.
 - **El mode No molestis:** l'indicador de la banda és l'únic, a totes les

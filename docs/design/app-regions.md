@@ -25,7 +25,7 @@ vistes de cada mòdul.
   botó posi els altres a fals.
 - És estat de la interfície, no dades desades: l'aplicació arrenca al correu.
 - `toggleModule` és el que feia cada botó de la barra vertical, i el que fa cada
-  botó del selector de mòduls des de #354: obre el mòdul o, si ja és obert, torna
+  botó del selector de mòduls des de #354: obre el mòdul o, si ja està obert, torna
   al correu.
 
 ## Regions
@@ -58,7 +58,7 @@ vistes de cada mòdul.
   ADR-0068 §1 (barra de títol, capçalera, avisos i la resta). El seu nom és el
   de l'aplicació, igual en els 20 catàlegs, i no coincideix amb el de cap altra
   regió en cap idioma, com comprova una prova; el del botó «Menú de l'aplicació»
-  tampoc no coincideix amb el «Més» de la barra vertical.
+  tampoc no coincideix amb el «Més» que tenia la barra vertical.
 - La cerca de la banda (#344) és el punt de referència `search`, «Cerca»
   (`shell.region.search`), dins de la capçalera. És l'únic de la finestra, i el
   seu nom no coincideix amb el de la capçalera ni amb el de cap altra regió en
@@ -94,21 +94,21 @@ vistes de cada mòdul.
 - Amb un diàleg modal obert tampoc no actuen les dreceres de les posicions de
   Ctrl/⌘+1…9 (les de la barra vertical, que des de #354 són les de «Comptes i
   carpetes»), ni la tecla que s'hi hagi assignat.
-- La barra vertical i la subfinestra de carpetes continuen dins de `<main>`
-  fins que el selector de mòduls substitueixi la barra (pas 4): la barra es
-  pinta abans que les carpetes, a la mateixa fila. Al pas 2 (#317) la
+- La barra vertical i la subfinestra de carpetes van continuar dins de `<main>`
+  fins que el selector de mòduls va substituir la barra (pas 4, #354): la barra
+  es pintava abans que les carpetes, a la mateixa fila. Al pas 2 (#317) la
   subfinestra de carpetes comuna va substituir «Comptes i carpetes» al correu,
   amb el mateix nom i la mateixa regió, i a partir de 1025 px també la columna
   de calendaris del Calendari (#323), els grups de Persones (#326), les llistes
   de Tasques (#329), les etiquetes de Notes (#335), les converses de Xat
-  (#337) i els filtres d'Adjunts (#339). Les proves que hi arriben amb
-  `main > aside` canvien al pas 4 (ADR-0068 §8), quan la barra passa a ser el
-  `<nav>` «Mòduls» d'ADR-0068 §1. Des de #354 és així: la tira de mòduls és al
+  (#337) i els filtres d'Adjunts (#339). Les proves que hi arribaven amb
+  `main > aside` van canviar al pas 4 (ADR-0068 §8), quan la barra va passar a
+  ser el `<nav>` «Mòduls» d'ADR-0068 §1. Des de #354 és així: la tira de mòduls és al
   peu de la subfinestra, que continua dins de `<main>` perquè la pinta cada
   mòdul, i la barra estreta, a l'inici de `<main>`, on era la barra vertical. Que
   `<main>` només contingui el mòdul, com vol ADR-0068 §1, és un pas pendent.
 - La barra vertical tenia nom perquè no hi hagués dues regions complementàries
-  sense nom quan la barra lateral de detalls és oberta. Des de #354 el selector
+  sense nom quan la barra lateral de detalls està oberta. Des de #354 el selector
   de mòduls és un `<nav>` «Mòduls», i només n'hi ha un a la vegada: la tira es
   munta mentre la subfinestra es pinta, i la barra estreta, de 769 a 1024 px.
 - Fins al pas 2, la columna de Notes té el mateix nom que `<main>` («Notes»).
@@ -149,13 +149,13 @@ vistes de cada mòdul.
   cerca, que hi és des de #344, o el botó de l'estat de la sincronització, al
   final de la banda des de #345. F6 des de la finestra emergent de l'estat la
   tanca i passa a la regió següent. Encara no hi ha barra d'eines. Al correu,
-  doncs, l'ordre és aquest: banda, carpetes, barra vertical, llista, lector i
-  barra lateral; a la resta de mòduls, banda, carpetes, barra vertical i el
-  mòdul. La barra vertical es pinta abans que les carpetes, però F6 hi arriba
-  després: és l'ordre del marc nou, on els mòduls són al peu de les carpetes
-  (pas 4), i així no canvia d'un pas a l'altre. ADR-0068 §6 diu que és l'ordre
-  del document: al marc nou tots dos coincideixen, i mentre la barra vertical es
-  pinti abans que les carpetes, mana la llista de l'ADR. Des de #354 coincideixen:
+  doncs, l'ordre era aquest fins a #354: banda, carpetes, barra vertical, llista,
+  lector i barra lateral; a la resta de mòduls, banda, carpetes, barra vertical i
+  el mòdul. La barra vertical es pintava abans que les carpetes, però F6 hi
+  arribava després: és l'ordre del marc nou, on els mòduls són al peu de les
+  carpetes (pas 4), i així no va canviar d'un pas a l'altre. ADR-0068 §6 diu que
+  és l'ordre del document: al marc nou tots dos coincideixen, i mentre la barra
+  vertical es va pintar abans que les carpetes, va manar la llista de l'ADR. Des de #354 coincideixen:
   la tira de mòduls és al peu de les carpetes, una regió dins d'una altra, i F6
   hi va després de les carpetes; entre 769 i 1024 px, sense carpetes, la barra
   estreta va abans que el mòdul.
@@ -200,7 +200,7 @@ vistes de cada mòdul.
 | N2 (`components/dialog/ModalCard.test.tsx`) | Diàleg modal amb nom; pren el focus de l'element que l'obre i l'hi torna en tancar-se; respecta el focus que un control de dins ja ha pres |
 | N1 (`lib/shortcuts.test.ts`) | F6 i Maj+F6 per defecte, sense col·lisions; F1–F12 no són nues; reassignar F6 a una lletra torna a posar la barrera |
 | N2 (`HtmlFrame.test.tsx`) | El marc reenvia F1–F12, amb Maj o sense, i no una lletra |
-| N1 (`states/uiModule.test.ts`) | Els set mòduls; el botó del selector de mòduls (abans, de la barra vertical) obre el mòdul i, si ja és obert, torna al correu; mai dos mòduls alhora |
+| N1 (`states/uiModule.test.ts`) | Els set mòduls; el botó del selector de mòduls (abans, de la barra vertical) obre el mòdul i, si ja està obert, torna al correu; mai dos mòduls alhora |
 | N1 (`lib/regions.test.ts`, #354) | La tira de mòduls dins de les carpetes: després de les carpetes en l'ordre, una regió a part, que se'n va amb la subfinestra; la barra estreta sola, abans del mòdul |
 | N2 (`components/shell/ModuleSwitcher.test.tsx`, #354) | El `<nav>` «Mòduls», la regió `modules`, amb un botó per mòdul que és una parada de Tab; les fletxes en el sentit de lectura, Inici i Fi, i les tecles que deixa passar; el focus quan la tira es torna a pintar i quan un botó passa a «Més» |
 | e2e (`startup.e2e.ts`, «#354») | La tira, la barra estreta i el menú compacte a 1025, 1024, 769 i 768 px, amb un sol `<nav>` «Mòduls» i F6; el teclat de la tira en català i en àrab; les regles de regions d'axe a 1440, 1024 i 768 px i al 200 % amb «Més» obert |

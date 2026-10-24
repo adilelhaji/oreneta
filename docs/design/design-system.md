@@ -218,12 +218,13 @@ barra vertical era el farciment de l'accent, i no arribava a 3:1 en quatre temes
 4,5:1, i el comptador, el text sobre l'accent. Ho comprova `lib/themes.test.ts`.
 
 Un tema personalitzat pot triar una barra clara, on aquest extrem clar no es llegiria.
-L'editor encara no ho avisa (vegeu [Pendent](#pendent)).
+L'editor ho avisa, com fa amb el text i l'accent, quan les icones (el marc en un tema clar,
+el text principal en un de fosc) no arriben a 4,5:1 sobre el color triat: «Les icones es
+llegeixen malament sobre la barra de mòduls ({ratio}:1; cal com a mínim 4,5:1).»
+(`theme.lowContrast.moduleBar`). `contrastShortfalls` en fa la comprovació amb l'aspecte
+del tema, que els tokens no porten, i l'avís no impedeix desar el tema.
 
 ## Pendent
-
-L'editor de temes personalitzats encara no avisa quan el color «Barra de mòduls» és tan
-clar que les icones de la barra estreta no s'hi llegeixen (#354).
 
 `--me-accent-fg` es calcula sobre les superfícies del tema, però encara no sobre la
 bombolla de sortida del xat ni sobre els tints d'accent més forts (`bg-accent/15`,

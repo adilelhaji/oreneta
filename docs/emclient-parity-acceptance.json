@@ -208,6 +208,18 @@
           {
             "sha": "54558d3854a99cb3dd7c87c848a3a0570ecd7300",
             "result": "frontend/src/components/shell/ModuleSwitcher.test.tsx"
+          },
+          {
+            "sha": "387d0bfc5ca761b89b897263942eb978bb7f9a4b",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "387d0bfc5ca761b89b897263942eb978bb7f9a4b",
+            "result": "frontend/src/components/shell/ModuleSwitcher.test.tsx"
+          },
+          {
+            "sha": "387d0bfc5ca761b89b897263942eb978bb7f9a4b",
+            "result": "frontend/src/components/dialog/ThemeEditorDialog.test.tsx"
           }
         ],
         "native": [],
@@ -304,6 +316,14 @@
           },
           {
             "sha": "54558d3854a99cb3dd7c87c848a3a0570ecd7300",
+            "result": "frontend/src/components/shell/ModuleSwitcher.test.tsx"
+          },
+          {
+            "sha": "387d0bfc5ca761b89b897263942eb978bb7f9a4b",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "387d0bfc5ca761b89b897263942eb978bb7f9a4b",
             "result": "frontend/src/components/shell/ModuleSwitcher.test.tsx"
           }
         ],
@@ -432,6 +452,14 @@
           {
             "sha": "54558d3854a99cb3dd7c87c848a3a0570ecd7300",
             "result": "frontend/src/components/sidenav/QuietIndicator.test.tsx"
+          },
+          {
+            "sha": "387d0bfc5ca761b89b897263942eb978bb7f9a4b",
+            "result": "frontend/src/components/messaging/MessagingView.test.tsx"
+          },
+          {
+            "sha": "387d0bfc5ca761b89b897263942eb978bb7f9a4b",
+            "result": "frontend/src/useAppEffects.test.tsx"
           }
         ],
         "native": [],

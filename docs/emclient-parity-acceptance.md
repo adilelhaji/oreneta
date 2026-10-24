@@ -115,7 +115,7 @@ l'evidència nativa de Windows i la comprovació en clients de correu reals.
 El 2026-10-18 (#306, pas 1 d'ADR-0068, `docs/design/app-regions.md`) la finestra va
 incorporar regions amb nom i F6 / Maj+F6 per passar d'una a l'altra, sense cap canvi visual:
 un sol estat de mòdul, els diàlegs i els avisos fora de `<main>`, `<main>` amb el nom del
-mòdul i la barra vertical amb el nom «Mòduls». F6 també actua des d'un camp de text i des del
+mòdul i la barra vertical amb el nom «Mòduls» (des de #354, el `<nav>` «Mòduls»). F6 també actua des d'un camp de text i des del
 missatge HTML, i no fa res si hi ha un diàleg modal obert (l'editor i el detall d'un
 esdeveniment, la revisió del context de l'assistent i la galeria ara es declaren modals).
 Les proves automàtiques de límits, de dreta a esquerra i de zoom es mantenen, i se n'hi
@@ -131,8 +131,8 @@ l'aplicació no la fa créixer. Quan l'espai no arriba, les carpetes cedeixen fi
 abans que la llista, i la llista abans que el lector. Les proves automàtiques de límits, de
 dreta a esquerra, de zoom, de regions i d'axe es mantenen, i se n'hi afegeixen de noves de
 l'amplada desada, recuperada i ajustada, del teclat i del punter. Amb la barra vertical encara
-a la pantalla, a 1440 px la barra lateral de detalls arriba com a màxim a 400 px al costat del
-lector (abans, 440), i la prova de #212 ho reflecteix. Cap fila no canvia d'estat (S01-04,
+a la pantalla, a 1440 px la barra lateral de detalls arribava com a màxim a 400 px al costat del
+lector (abans, 440), i la prova de #212 ho reflectia. Cap fila no canvia d'estat (S01-04,
 S01-05, SET-23, SET-27): l'evidència nativa de Windows continua pendent.
 El 2026-10-22 (#323, pas 2 d'ADR-0068, `docs/design/mail-navigation.md`) la columna de
 calendaris del Calendari va passar a ser la subfinestra de carpetes comuna a partir de
@@ -221,7 +221,7 @@ El 2026-10-22 (#343, peça 13a, pas 3 d'ADR-0068, `docs/design/top-band.md`) la 
 incorporar la banda superior: la primera fila d'un `<header>` «Oreneta» (`banner`), entre la barra
 de títol i els avisos i fora de `<main>`, de 2,25 rem d'alçada i amb el botó «Menú de l'aplicació» a
 l'inici. El menú, fet amb la primitiva de la peça 7, té totes les ordres de la paleta agrupades per
-àrea i el que oferia el menú «Més» de la barra vertical, que s'hi queda fins a la peça 14 per decisió
+àrea i el que oferia el menú «Més» de la barra vertical, que s'hi va quedar fins a la peça 14 per decisió
 del propietari (#342). El que la paleta no tenia (els mòduls, el mode No molestis i «Quant a») hi ha
 entrat, de manera que hi ha una sola llista; «Paleta d'ordres» només surt al menú. La banda és la
 primera regió d'F6 (`search`), i el seu nom no coincideix amb el de cap altra regió en cap dels 20
@@ -261,7 +261,7 @@ la seva observació i les seves accions) en una finestra emergent no modal ancor
 segueix la direcció de lectura i queda dins de la finestra; Escapada la tanca i torna el focus al
 botó. La barra d'amplada completa sota la capçalera només hi és quan un compte ha de tornar a
 iniciar la sessió o hi ha una fallada no descartada, i una sessió per tornar a iniciar no es pot
-descartar. L'indicador del mode No molestis és també a la barra vertical fins a la peça 14 (decisió
+descartar. L'indicador del mode No molestis va ser també a la barra vertical fins a la peça 14 (decisió
 del propietari a #342). Les proves de límits, de dreta a esquerra, de zoom, de regions i d'axe es
 mantenen, amb els localitzadors que trobaven la regió de la sincronització sota la capçalera, ara
 apuntats a la banda, i se n'hi afegeixen de noves: cada estat del resum, la finestra emergent amb el
@@ -302,15 +302,23 @@ Tab i les fletxes els recorren en el sentit de lectura. El menú «Més» de la 
 de per sota de 769 px se'n van: el que oferien és al menú de l'aplicació, que també diu, com
 abans, quan hi ha una comprovació del correu en curs. Els textos de Configuració ja no parlen de
 la navegació lateral; les preferències i Ctrl/⌘+1…9 no canvien. Les proves de límits, de dreta a
-esquerra, de zoom, de regions i d'axe es mantenen amb les mateixes expectatives, amb els
-localitzadors de la barra vertical apuntats al `<nav>` «Mòduls», al menú de l'aplicació i a la
-banda, i se n'hi afegeixen de noves: unitàries del desbordament amb una amplada simulada, dels
-comptadors, del teclat en els dos sentits i de Ctrl/⌘+1…9, i, al punt d'entrada de producció, la
-tira, la barra estreta i el menú compacte a 1025, 1024, 769 i 768 px, el desbordament al 200 % a
-1440 i 1025 px, la barra estreta al 200 % a 1024 px sense desplaçament horitzontal, el teclat en
-català i en àrab i les regles de regions d'axe al marc nou. És una nota d'evidència: cap fila no
-canvia d'estat (S01-04, S01-05, SET-01, SET-27), i l'evidència nativa de Windows i amb lectors
-de pantalla continua pendent.
+esquerra, de zoom, de regions i d'axe es mantenen, amb els localitzadors de la barra vertical
+apuntats al `<nav>` «Mòduls», al menú de l'aplicació i a la banda; les que mesuren amplades
+guanyen els 60 px de la barra vertical: a la taula de #317, la llista passa de 405 a 465 px a
+1025 px i de 480 a 540 px a 1100 px, les carpetes fan els 260 px sencers a 1200 px (abans, 220)
+i hi ha una fila nova a 1140 px, on les carpetes en fan 220 i la llista és sencera; i la resta,
+amb les mateixes expectatives. Després de la revisió, el focus no cau a la pàgina en tornar al
+correu des d'un mòdul que és a «Més», ni quan la finestra travessa els 1025 px amb el focus
+al selector; un missatge que arriba a la conversa oberta mentre no es veu el Xat compta com a no
+llegit; i l'editor de temes avisa quan les icones no es llegeixen sobre la barra de mòduls. Se
+n'hi afegeixen de noves: unitàries del desbordament amb una amplada simulada, dels comptadors,
+del focus, del teclat en els dos sentits, de Ctrl/⌘+1…9, del xat en arrencar i de l'avís de
+l'editor, i, al punt d'entrada de producció, la tira, la barra estreta i el menú compacte a
+1025, 1024, 769 i 768 px, el desbordament al 200 % a 1440 i 1025 px, el focus en tornar al
+correu al 200 % i de 1440 a 1000 px i tornada, la barra estreta al 200 % a 1024 px sense
+desplaçament horitzontal, el teclat en català i en àrab i les regles de regions d'axe al marc
+nou. És una nota d'evidència: cap fila no canvia d'estat (S01-04, S01-05, SET-01, SET-27), i
+l'evidència nativa de Windows i amb lectors de pantalla continua pendent.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per

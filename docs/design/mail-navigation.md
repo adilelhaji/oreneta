@@ -138,9 +138,9 @@ Adjunts el mateix dia (vegeu [Persones](#persones-326), [Tasques](#tasques-329),
 - **Regió i noms:** la subfinestra és el `<nav>` de la regió «carpetes» d'F6
   (`data-region="folders"`) i pren el nom de la seva fila de títol: «Comptes i
   carpetes», el mateix d'abans. El títol és un encapçalament de nivell 2, i
-  «Preferits», «Comptes» i «Carpetes» passen a ser-ho de nivell 3. Fins que la
-  barra vertical se'n vagi (pas 4), la subfinestra continua dins de `<main>`,
-  just després de la barra. Des de #354 la barra no hi és, i la subfinestra
+  «Preferits», «Comptes» i «Carpetes» passen a ser-ho de nivell 3. Mentre hi va
+  haver la barra vertical (fins a #354), la subfinestra va continuar dins de
+  `<main>`, just després de la barra. Des de #354 la barra no hi és, i la subfinestra
   continua dins de `<main>`, a l'inici de la fila, amb la tira de mòduls al peu.
 - **Amplada:** 260 px per defecte, de 200 a 400, amb el separador `PaneResizer`
   d'ADR-0059 a la vora final («Canvia la mida del panell de carpetes»): punter,
@@ -152,16 +152,16 @@ Adjunts el mateix dia (vegeu [Persones](#persones-326), [Tasques](#tasques-329),
   el nom i l'adreça).
 - **Quan l'espai no arriba:** les carpetes cedeixen fins a 200 px abans que la
   llista, i la llista fins a 280 px abans que el lector, que en conserva 360. Amb
-  una llista desada de 560 px i la barra vertical de 60 px: a 1200 px, carpetes
-  de 220 px i la llista sencera; a 1100 i 1025 px, carpetes de 200 px i una
-  llista de 480 i 405 px. Sense la barra vertical (des de #354), la llista fa 540 i
+  una llista desada de 560 px i la barra vertical de 60 px (fins a #354): a
+  1200 px, carpetes de 220 px i la llista sencera; a 1100 i 1025 px, carpetes de
+  200 px i una llista de 480 i 405 px. Sense la barra vertical (des de #354), la llista fa 540 i
   465 px a 1100 i 1025 px, i a 1140 px les carpetes en fan 220 (vegeu
   [més avall](#la-tira-de-mòduls-i-la-barra-estreta-la-barra-vertical-sen-va-354)).
 - **Per sota de 1025 px** la subfinestra no es mostra, com la navegació d'abans,
   i el selector «Canvia de carpeta» de la llista dona accés a les carpetes.
-- **Efecte en la barra lateral de detalls:** amb la barra vertical i la
-  subfinestra de 260 px (abans 220), la fila del lector fa 40 px menys. A
-  1440 px, amb la llista per defecte, la barra lateral de detalls arriba com a
+- **Efecte en la barra lateral de detalls:** amb la barra vertical (fins a #354)
+  i la subfinestra de 260 px (abans 220), la fila del lector feia 40 px menys. A
+  1440 px, amb la llista per defecte, la barra lateral de detalls arribava com a
   màxim a 400 px al costat del lector (abans, 440). Des de #354, sense la barra
   vertical, la fila del lector té 60 px més, i la barra lateral de detalls hi
   arriba a 460 px. Que les carpetes i la llista
@@ -202,8 +202,8 @@ Calendari passa a ser la subfinestra de carpetes comuna, amb el mateix contingut
   catàlegs que no coincideix ni amb `<main>` ni amb el calendari petit. Abans, la
   llista era un `<aside>` «Calendari», amb el mateix nom que `<main>`; ara és el
   cos de la subfinestra i no és una regió pròpia. La subfinestra és dins de
-  `<main>`, just després de la barra vertical i abans del mòdul. La capçalera del
-  calendari (període, navegació, visualitzacions i «Esdeveniment nou») queda a la
+  `<main>`, just després de la barra vertical (fins a #354) i abans del mòdul. La
+  capçalera del calendari (període, navegació, visualitzacions i «Esdeveniment nou») queda a la
   regió del contingut, al costat.
 - **La llista omple el cos de la subfinestra**, com omplia la columna: el menú de
   colors de l'últim calendari s'obre en aquest espai i no fa desplaçar la llista.
@@ -219,9 +219,9 @@ Calendari passa a ser la subfinestra de carpetes comuna, amb el mateix contingut
   (`calendar.nameAndColor`, decisió del propietari del 2026-10-22), i el nom
   accessible del botó continua sent el del calendari.
 - **Espai a 1025 px:** les visualitzacions no tenen amplada mínima, de manera
-  que la subfinestra no ha de cedir. Amb la barra vertical de 60 px, al mòdul li
-  queden 765 px amb la subfinestra al mínim (200 px), 705 px amb la de per
-  defecte (260 px) i 565 px amb la màxima (400 px). El dia, la setmana i el mes
+  que la subfinestra no ha de cedir. Amb la barra vertical de 60 px (fins a
+  #354), al mòdul li quedaven 765 px amb la subfinestra al mínim (200 px), 705 px
+  amb la de per defecte (260 px) i 565 px amb la màxima (400 px). El dia, la setmana i el mes
   hi caben sense desplaçament horitzontal.
 - **Per sota de 1025 px** la subfinestra no es mostra, i ADR-0068 no diu on van
   llavors els calendaris (al correu hi ha el selector «Canvia de carpeta»). El
@@ -296,9 +296,9 @@ que el filtre d'abans (ADR-0068 §4, fila de Persones).
   i diferent de `<main>` («Persones») i de «Grups» (el títol d'una secció de la
   fitxa, `people.groups`) en els 20 catàlegs, com comprova una prova. Abans, la
   regió «carpetes» era la columna de la llista, una `<section>` sense nom: ara és
-  la subfinestra, que és a `<main>`, just després de la barra vertical i abans
-  del mòdul, i la llista és només el contingut. F6 va de la barra vertical al
-  mòdul, a la subfinestra i altre cop a la barra.
+  la subfinestra, que és a `<main>`, just després de la barra vertical (fins a
+  #354) i abans del mòdul, i la llista és només el contingut. Abans de #354, F6
+  anava de la barra vertical al mòdul, a la subfinestra i altre cop a la barra.
 - **Amplada:** la mateixa preferència `folder_pane_width` i el mateix separador
   que al correu i al Calendari: redimensionar-la a Persones la canvia a tots dos, i a
   l'inrevés, en px. Al costat de la subfinestra, la columna de la llista fa
@@ -309,12 +309,12 @@ que el filtre d'abans (ADR-0068 §4, fila de Persones).
 - **Espai a 1025 px:** el mòdul demana 648 px com a base (la llista de 288 px i
   els 360 px de la fitxa de la persona, el mínim del lector d'ADR-0068 §7), i la
   subfinestra, que cedeix abans que res, s'encongeix fins a donar-los-hi. Amb la
-  barra vertical de 60 px i la llista de 288 px, la fitxa té 477 px amb la
-  subfinestra al mínim (200 px) i 417 px amb la de per defecte (260 px); amb la
-  màxima (400 px) la subfinestra es pinta a 317 px i la fitxa en té 360. Cap
-  control no surt del mòdul i no hi ha desplaçament horitzontal. Al 200 % de
-  l'aplicació a 1025 px la barra vertical fa 120 px, la subfinestra per defecte
-  cedeix fins a uns 257 px i la fitxa en conserva uns 360.
+  barra vertical de 60 px (fins a #354) i la llista de 288 px, la fitxa tenia
+  477 px amb la subfinestra al mínim (200 px) i 417 px amb la de per defecte
+  (260 px); amb la màxima (400 px) la subfinestra es pintava a 317 px i la fitxa
+  en tenia 360. Cap control no surt del mòdul i no hi ha desplaçament
+  horitzontal. Al 200 % de l'aplicació a 1025 px la barra vertical feia 120 px, la
+  subfinestra per defecte cedia fins a uns 257 px i la fitxa en conservava uns 360.
 - **Per sota de 1025 px** la subfinestra no es mostra. Com va decidir el
   propietari per al Calendari, es conserva la disposició d'abans: el filtre de
   grups (desplegable «Mostra el grup» i les mateixes quatre accions) sota la
@@ -392,8 +392,9 @@ eren pestanyes sota la capçalera, passen a ser la subfinestra de carpetes comun
 - **Regió i nom:** la subfinestra és la regió «carpetes» d'F6 de Tasques i es
   diu «Llistes de tasques» (`tasks.taskLists`), una cadena pròpia de
   l'escriptori i diferent de `<main>` («Tasques») en els 20 catàlegs, com
-  comprova una prova. Abans Tasques no tenia cap regió «carpetes». F6 va de la
-  barra vertical al mòdul, a la subfinestra i altre cop a la barra.
+  comprova una prova. Abans Tasques no tenia cap regió «carpetes». Abans de
+  #354, F6 anava de la barra vertical al mòdul, a la subfinestra i altre cop a la
+  barra.
 - **Amplada:** la mateixa preferència `folder_pane_width` i el mateix separador
   que al correu, al Calendari i a Persones, en px. Com al Calendari, el mòdul no
   té una llista i una fitxa de mides fixes, sinó una sola columna de tasques que
@@ -456,7 +457,7 @@ carpetes comuna (ADR-0068 §4, fila de Notes).
   1024 px i menys) i el mòdul demana 680 px com a base (la llista i els 360 px de
   la nota, el mínim del lector d'ADR-0068 §7): la subfinestra, que cedeix abans
   que res, s'encongeix fins a donar-los-hi. A 1025 px, amb la barra vertical de
-  60 px, la subfinestra de 400 px es pinta a uns 285 px.
+  60 px (fins a #354), la subfinestra de 400 px es pintava a uns 285 px.
 - **Regió i nom:** la subfinestra és la regió «carpetes» d'F6 de Notes i es diu
   «Etiquetes de notes» (`notes.tagsPane`), diferent de `<main>` («Notes»), de la
   llista («Notes»), de «Etiquetes» i de la resta de noms de regió en els 20
@@ -680,9 +681,9 @@ mòduls (vegeu [més avall](#la-tira-de-mòduls-i-la-barra-estreta-la-barra-vert
   compte. S'obre amb el clic dret, Maj+F10 i la tecla de menú, com el de les
   carpetes, i en tancar-se el focus torna a la fila. L'element d'amagar diu
   «Amaga el compte» (`mailNavigation.actions.hideAccount`), sense parlar de la
-  navegació lateral; la barra vertical conserva el seu text fins que se'n vagi.
+  navegació lateral; la barra vertical va conservar el seu text fins a #354.
   Amagar fa servir la mateixa preferència, `hidden_sidenav_accounts`: el compte
-  surt de la subfinestra, de la barra vertical i de Ctrl/⌘+1…9, i es torna a
+  surt de la subfinestra, de Ctrl/⌘+1…9 i, fins a #354, de la barra vertical, i es torna a
   mostrar des de Configuració. El focus passa a la fila que ocupa el seu lloc i
   la regió `aria-live` ho diu («S'ha amagat Alex. Es pot tornar a mostrar des de
   Configuració.»). El compte obert continua a la subfinestra, com abans, i
@@ -690,7 +691,7 @@ mòduls (vegeu [més avall](#la-tira-de-mòduls-i-la-barra-estreta-la-barra-vert
   safata unificada passa el mateix.
 - **Comptador:** els no llegits de la safata d'entrada del compte, al final de
   la fila, com a les carpetes, només quan «Mostra el comptador de no llegits»
-  (`showUnreadAccountBadge`) està activat, com a la barra vertical.
+  (`showUnreadAccountBadge`) està activat, com feia la barra vertical.
 - **Estat del compte:** un compte que ha de tornar a iniciar la sessió, en pausa
   o silenciat porta una icona (una clau, una pausa o una campana barrada, del
   color del text secundari, que a totes les superfícies compleix el contrast) i
@@ -725,9 +726,9 @@ mòduls (vegeu [més avall](#la-tira-de-mòduls-i-la-barra-estreta-la-barra-vert
   ADR-0068 §4 (abans s'amagava), i hi marca el tauler (`aria-current`), no el
   compte ni la carpeta on era el correu. Un compte, una carpeta, una preferida,
   la safata unificada o un grup tornen al correu; el compte on era el correu hi
-  torna a la carpeta que mostrava, com des de la barra vertical.
+  torna a la carpeta que mostrava, com feia la barra vertical.
 - **La subfinestra de conversa del tauler** és un percentatge de l'àrea del
-  tauler (la fila menys la barra vertical i les carpetes), amb els límits d'abans
+  tauler (la fila menys les carpetes i, fins a #354, la barra vertical), amb els límits d'abans
   (del 25 al 60 %); abans ho era de la fila sencera. El percentatge que es
   recorda (`kanban_pane_width`) no canvia de valor, però ara és una part d'aquesta
   àrea, de manera que el mateix valor fa la subfinestra de conversa una mica més estreta. A partir de
@@ -746,13 +747,13 @@ mòduls (vegeu [més avall](#la-tira-de-mòduls-i-la-barra-estreta-la-barra-vert
   conjuntament» per a cada grup de comptes i «Amaga la safata d'entrada
   unificada» (`mailNavigation.actions.hideUnified`), amb la preferència
   `show_unified_inbox_in_sidenav`. S'obre amb el clic dret, Maj+F10 i la tecla
-  de menú. El seu comptador es queda a la barra vertical: a la peça 14b passa a
-  la tira de mòduls (decisió 2 del propietari a #352).
+  de menú. El seu comptador va quedar a la barra vertical fins a la peça 14b; des
+  de #354 és al botó Correu de la tira de mòduls (decisió 2 del propietari a #352).
 - **Sense canvis:** les preferències `show_unified_inbox_in_sidenav` i
   `hidden_sidenav_accounts` (la clau i l'efecte), la seqüència de Ctrl/⌘+1…9,
   l'arbre de carpetes, les preferides i els grups. Els textos de Configuració
   que parlen de la navegació lateral («Mostra a la navegació lateral» i la
-  indicació del comptador) canvien a la peça 14b, quan la barra se'n va.
+  indicació del comptador) van canviar a la peça 14b, quan la barra se'n va anar.
 - **Amplada, zoom i dreta a esquerra:** els noms acaben en «…» i la indicació
   els mostra sencers; el comptador, l'estat i la imatge del tauler conserven la
   mida. Tot és en propietats lògiques. Per sota de 1025 px la subfinestra no es
@@ -830,17 +831,23 @@ arrencar) i `index.css` (els colors de la barra estreta).
   L'actiu porta `aria-current="page"`, el fons de selecció (`bg-active`), la icona
   en l'accent com a text i una barra d'accent (`accent-fg`): a la vora superior a
   la tira i a la vora inicial a la barra estreta, que és vertical. Un botó obre el
-  seu mòdul o, si ja és obert, torna al correu, com els de la barra vertical
-  (`toggleModule`).
+  seu mòdul o, si ja està obert, torna al correu, com feien els de la barra
+  vertical (`toggleModule`).
 - **Comptadors** (decisió 2 del propietari a #352): el Correu mostra el de la
   safata d'entrada unificada, la suma dels no llegits de la safata d'entrada dels
-  comptes que hi entren (`included_in_unified` no fals), el número que mostrava el
+  comptes que hi entren (`included_in_unified` diferent de `false`), el número que mostrava el
   botó de la safata unificada de la barra vertical, i només mentre «Mostra el
   comptador de no llegits» està activat. El Xat mostra els seus: els no llegits de
   les converses directes i dels grups del compte de xat obert, també dels
-  silenciats, que continuen comptant com a no llegits. Perquè el del Xat sigui cert
-  des de l'inici, el xat es llegeix quan hi ha el primer compte (`loadMessaging`), i
-  no només en obrir el Xat; després el manté `chat.changed`. El número es pinta sobre
+  silenciats, que continuen comptant com a no llegits (decisió del propietari a
+  #352: només el compte de xat obert). Perquè el del Xat sigui cert des de l'inici,
+  el xat es llegeix quan hi ha el primer compte (`loadMessaging`), i no només en
+  obrir el Xat; després el manté `chat.changed`. La conversa oberta continua oberta
+  quan es va a un altre mòdul, perquè hi sigui en tornar, però només és a la
+  pantalla mentre s'hi veu el Xat: un missatge que hi arriba mentrestant compta com
+  a no llegit al botó del Xat (abans es marcava com a llegit sense que ningú el
+  veiés), i es marca com a llegit en tornar al Xat, si la conversa encara està
+  oberta. El número es pinta sobre
   la icona (com a màxim «99+») i es diu en paraules com a descripció del botó
   («3 no llegits», `reading.unread`); el nom continua sent el del mòdul.
 - **El que no hi cap va a «Més»** (`common.more`): un `ResizeObserver` mesura
@@ -859,14 +866,28 @@ arrencar) i `index.css` (els colors de la barra estreta).
   (en àrab, la fletxa esquerra va endavant), i Inici i Fi van als extrems; a la barra
   estreta, també Amunt i Avall. Les fletxes només mouen el focus: Retorn o Espai
   obren el mòdul. Les tecles que el selector respon no arriben a les dreceres de
-  l'aplicació (`AppHotkeys`); Amunt i Avall a la tira sí, com a la barra vertical.
+  l'aplicació (`AppHotkeys`); Amunt i Avall a la tira sí, com feien a la barra
+  vertical.
 - **Focus:** cada mòdul pinta la seva subfinestra, de manera que, en obrir un mòdul
   des de la tira, se'n pinta una de nova i el focus aniria a la pàgina: la tira nova
   el posa al botó que s'ha premut. Un mòdul triat a «Més» passa a ocupar l'últim
   lloc i el focus va al seu botó. Si el botó que té el focus passa a «Més» perquè
   la tira s'estreny (la subfinestra, la finestra o el zoom), el focus va a «Més».
-  Un mòdul obert des d'un altre lloc (el menú de l'aplicació, la paleta) no mou el
-  focus.
+  La tira nova es pinta primer amb tots els botons i després es mesura: el focus
+  espera la mesura, de manera que, en tornar al correu des d'un mòdul que és a
+  «Més» (al 200 %, en una subfinestra de 260 px), va a «Més» i no a la pàgina. Si
+  «Més» es buida amb el seu menú obert (la tira s'eixampla), el menú es tanca i el
+  focus va a l'últim botó. Quan la finestra travessa els 1025 px amb el focus al
+  selector, la tira i la barra estreta, que són elements diferents, es passen el
+  focus: el botó del mateix mòdul el pren a l'altra forma, o «Més» si el mòdul hi
+  és, en qualsevol mòdul, el correu inclòs. Com que el navegador pot haver deixat
+  anar el focus abans (la subfinestra s'amaga per CSS en aquell moment), el
+  selector el segueix mentre es mou, com fa `folderPaneFocus.ts` amb els controls
+  de la subfinestra, que des d'ara deixa la tira al selector. Un mòdul obert des
+  d'un altre lloc (el menú de l'aplicació, la paleta) no mou el focus; el selector
+  no el pren a una ordre que l'ha posat en un altre lloc (com «Cerca a tots els
+  missatges», que el posa a la cerca de la banda), i un selector que es pinta més
+  tard no el pren mai.
 - **Colors** (decisió 4 del propietari a #352): el color del tema «Barra de
   mòduls» (`--me-bg-sidenav`, abans «Navegació lateral»; el token conserva el nom,
   i els temes personalitzats desats, el seu valor) només pinta la barra estreta; la
@@ -874,12 +895,16 @@ arrencar) i `index.css` (els colors de la barra estreta).
   prenen l'extrem clar de la paleta: el to del marc als temes clars i el text
   principal als foscos, a 10:1 o més en els 16 temes integrats (a 6,85:1 o més
   sota el to del pas del punter). L'anell de la barra vertical, el farciment de l'accent, hi
-  quedava a 2,03:1 a Oreneta Light (vegeu [design-system.md](design-system.md)). La
+  quedava a 2,03:1 a Oreneta Light (vegeu [design-system.md](design-system.md)).
+  L'editor de temes personalitzats avisa, com fa amb el text i l'accent, quan les
+  icones de la barra estreta no arriben a 4,5:1 sobre el color triat
+  (`contrastShortfalls`, amb l'aspecte del tema), sense impedir desar-lo. La
   franja `MacTitleBar` de macOS, que també feia servir aquest color, pren el de la
   banda superior.
 - **El Xat sense cap compte de xat** (`ChatSetup`) no tenia subfinestra: a partir de
-  1025 px en té una, «Converses», buida, perquè la tira hi sigui; el formulari no
-  canvia, i per sota de 1025 px tot és com abans. Sense això, el Xat seria l'únic
+  1025 px en té una, «Converses», perquè la tira hi sigui, sense res més que la
+  línia «Encara no hi ha res» (`empty.nothingHereYet`); el formulari no canvia, i
+  per sota de 1025 px tot és com abans. Sense això, el Xat seria l'únic
   mòdul sense cap camí cap als altres fora del menú de l'aplicació.
 - **El que feia la barra vertical i on és ara:**
   - els comptes, els taulers i la safata d'entrada unificada, amb els seus menús i
@@ -890,7 +915,8 @@ arrencar) i `index.css` (els colors de la barra estreta).
     la bústia» hi espera mentre hi ha una comprovació en curs, desactivada i amb el
     motiu («S'està sol·licitant una comprovació del correu…»), com feia el menú
     «Més». Afegir un tauler el crea de seguida amb el nom per defecte, sense el
-    diàleg del nom de la barra vertical, com ja feia la paleta;
+    diàleg del nom de la barra vertical, com ja feia la paleta (decisió del
+    propietari a #352, a tot arreu); el diàleg (`BoardDialog`) se'n va;
   - el clic dret sobre la barra buida, que obria el menú «Més»: el mateix contingut,
     des del botó del menú de l'aplicació;
   - l'indicador del mode No molestis: a la banda superior des de #345, i ara és
@@ -899,17 +925,18 @@ arrencar) i `index.css` (els colors de la barra estreta).
 
   El menú «Més» de per sota de 769 px, a `CompactNavigation` i a la capçalera de la
   llista estreta, i `QuickSettingsMenu` també se'n van (decisió 3 del propietari a
-  #352); la fletxa per tornar al correu es queda.
+  #352); la fletxa per tornar al correu es manté.
 - **Configuració:** els textos ja no parlen de la navegació lateral. El grup de la
   safata unificada es diu «Comptes i carpetes» (`mailNavigation.title`); la
-  casella de cada compte, «Mostra a «Comptes i carpetes»»
+  casella de cada compte, «Mostra a “Comptes i carpetes”»
   (`settings.account.showInMailNavigation`); i la indicació del comptador, «Mostra
-  els no llegits de la safata d'entrada de cada compte a «Comptes i carpetes», i els
+  els no llegits de la safata d'entrada de cada compte a “Comptes i carpetes”, i els
   de la safata d'entrada unificada al botó Correu»
-  (`settings.appearance.unreadBadgeHint`). Les claus d'abans es queden al catàleg,
+  (`settings.appearance.unreadBadgeHint`). Les claus d'abans continuen al catàleg,
   sense canvis, perquè les fa servir l'aplicació mòbil, que sí que té una navegació
   lateral (ADR-0068 la deixa fora d'abast). `sidenav.actions.hideFromSideNav` i
-  `sidenav.actions.viewAndTheme`, que ja no feia servir res, surten dels catàlegs.
+  `sidenav.actions.viewAndTheme`, que ja no feia servir cap component, surten dels
+  catàlegs, i `kanban.actions.addBoardShort`, el botó del diàleg del nom, també.
   Les claus de les preferències (`show_unified_inbox_in_sidenav` i
   `hidden_sidenav_accounts`) no canvien, i no cal cap migració.
 - **Ctrl/⌘+1…9 no canvien:** la safata unificada si es mostra, els taulers i els
@@ -928,9 +955,11 @@ arrencar) i `index.css` (els colors de la barra estreta).
   `<main>`, perquè la pinta cada mòdul; la barra estreta hi és al lloc de la barra
   vertical. ADR-0068 §1 vol que `<main>` només contingui el mòdul: treure-les-en és
   un pas propi.
-- **Textos nous,** als 20 catàlegs: «Mostra a «Comptes i carpetes»»
-  (`settings.account.showInMailNavigation`) i la indicació del comptador
-  (`settings.appearance.unreadBadgeHint`). Canvien, també als 20: «Barra de mòduls»
+- **Textos nous,** als 20 catàlegs: «Mostra a “Comptes i carpetes”»
+  (`settings.account.showInMailNavigation`), la indicació del comptador
+  (`settings.appearance.unreadBadgeHint`) i l'avís de l'editor de temes «Les
+  icones es llegeixen malament sobre la barra de mòduls ({ratio}:1; cal com a
+  mínim 4,5:1).» (`theme.lowContrast.moduleBar`). Canvien, també als 20: «Barra de mòduls»
   (`theme.fields.sideNav`, abans «Navegació lateral») i «La barra d'icones dels
   mòduls en una finestra d'amplada mitjana» (`theme.fields.sideNavHint`, abans «La
   navegació de comptes de l'esquerra»).
@@ -940,8 +969,19 @@ arrencar) i `index.css` (els colors de la barra estreta).
   diferents en els 20 catàlegs; l'actiu i la seva barra d'accent a la tira i a la barra;
   obrir i tornar; els comptadors del Correu, amb la preferència i el màxim, i del Xat;
   «Més» amb una amplada simulada, a 260 px al 100 % i al 200 % i a la barra; l'actiu
-  mai a «Més»; el focus quan el botó hi passa i quan la tira es torna a pintar; el
-  teclat d'esquerra a dreta i de dreta a esquerra, i les tecles que deixa passar),
+  mai a «Més»; el focus quan el botó hi passa, quan la tira es torna a pintar, en
+  tornar al correu des d'un mòdul que és a «Més», quan «Més» es buida amb el
+  menú obert i quan la tira i la barra es passen el lloc, tant si es pinten alhora
+  com l'una després de l'altra, sense prendre'l a una ordre que l'ha posat en un
+  altre lloc; el menú, que no torna a subscriure's als
+  esdeveniments cada vegada que es pinta; el teclat d'esquerra a dreta i de dreta a
+  esquerra, i les tecles que deixa passar),
+  `components/messaging/MessagingView.test.tsx` (el missatge que arriba a la
+  conversa oberta mentre no es veu el Xat, i el retorn),
+  `useAppEffects.test.tsx` (el xat es llegeix en arrencar, quan hi ha un compte, i
+  només una vegada),
+  `components/dialog/ThemeEditorDialog.test.tsx` i `lib/themes.test.ts` (l'avís de
+  la barra de mòduls),
   `components/shell/FolderPane.test.tsx` (la tira al peu, només a partir de 1025 px),
   els `*FolderPane.test.tsx` de cada mòdul (la tira és l'única regió dins de la
   subfinestra; el Xat sense compte, amb la subfinestra buida),
@@ -955,12 +995,17 @@ arrencar) i `index.css` (els colors de la barra estreta).
   la barra estreta en els 16 temes) i `frontend/e2e/startup.e2e.ts` («#354»: la tira,
   la barra estreta i el menú compacte a 1025, 1024, 769 i 768 px, amb el color de
   cada una, els comptadors, el teclat i el focus; el desbordament de la tira al 200 %
-  a 1440 i 1025 px; la barra estreta al 200 % a 1024 px, sense desplaçament
+  a 1440 i 1025 px; el focus a «Més» en tornar al correu al 200 %; el focus al
+  mateix botó de 1440 a 1000 px i tornant a 1440, al correu i a Notes; la barra estreta al 200 % a 1024 px, sense desplaçament
   horitzontal; el teclat en català i en àrab; les regles de regions d'axe i les WCAG
   a 1440, 1024 i 768 px i al 200 % amb «Més» obert). Les proves que trobaven la barra
   vertical (`main > aside`, el `complementary` «Mòduls», el seu menú «Més» i el
   seu indicador del mode No molestis) busquen ara el `<nav>` «Mòduls», el menú de
   l'aplicació i la banda; les que calculaven l'espai amb els 60 px de la barra, la
-  fila sense; i les de Xat i Adjunts amb la subfinestra a 200 px els obren des de
-  «Més». Les de límits, de zoom, de dreta a esquerra i d'axe es mantenen amb les
-  mateixes expectatives.
+  fila sense, de manera que les amplades que esperen guanyen aquests 60 px; i les
+  de Xat i Adjunts amb la subfinestra a 200 px els obren des de «Més». A la taula
+  de #317, la llista passa de 405 a 465 px a 1025 px i de 480 a 540 px a 1100 px,
+  les carpetes fan els 260 px sencers a 1200 px (abans, 220), i hi ha una fila nova
+  a 1140 px, la primera amplada amb la llista sencera i les carpetes a 220 px. La
+  resta de les proves de límits, de zoom, de dreta a esquerra i d'axe es mantenen
+  amb les mateixes expectatives.
