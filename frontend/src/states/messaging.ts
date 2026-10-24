@@ -382,9 +382,11 @@ export async function readOpenConversation() {
   const account = messaging$.account.peek()
   const open = messaging$.conversation.peek()
   if (!account || !open) return
-  const entry = [...messaging$.conversations.peek(), ...messaging$.rooms.peek()].find(
-    (item) => ('room' in item ? item.room : item.conversation) === open,
-  )
+  // A conversation always carries `room` from the core (null when direct), so
+  // conversations match by `conversation` and rooms by `room`.
+  const entry =
+    messaging$.conversations.peek().find((item) => item.conversation === open) ??
+    messaging$.rooms.peek().find((item) => item.room === open)
   if (!entry || !(entry.unread > 0)) return
   await invoke('chat.markRead', { account, conversation: open })
   await refreshConversations()

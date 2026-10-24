@@ -83,6 +83,9 @@ beforeEach(() => {
         last_stamp: 1_760_000_120,
         last_direction: 'out',
         unread: 1,
+        // As the core sends a direct conversation: `room` is always there.
+        kind: 'chat',
+        room: null,
       },
     ],
     'chat.history': () => history,
