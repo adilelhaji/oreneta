@@ -4,16 +4,20 @@ import { removeKanbanBoard } from '../../states/kanban'
 import { confirmAction, ui$ } from '../../states/ui'
 import { RailContextMenu, RailMenuItem } from './RailContextMenu'
 
-// Right-click menu for a kanban board in the rail: settings or delete.
+// The menu of a kanban board, on the rail (right click) and in the folder
+// pane (right click, Shift+F10 and the context menu key): settings or delete.
 export function BoardContextMenu({
   board,
   x,
   y,
+  onDelete,
   onClose,
 }: {
   board: { id: string; name: string }
   x: number
   y: number
+  /** Told once the deletion is confirmed, just before the board goes, so the focus can move on from its row. */
+  onDelete?: () => void
   onClose: () => void
 }) {
   const { t } = useTranslation()
@@ -43,6 +47,7 @@ export function BoardContextMenu({
                 tone: 'danger',
               })
             ) {
+              onDelete?.()
               removeKanbanBoard(board.id)
             }
           })()

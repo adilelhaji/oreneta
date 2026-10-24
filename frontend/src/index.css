@@ -55,7 +55,8 @@
   padding: 0 8px 12px;
   font-size: var(--text-ui);
 }
-.mail-navigation h3 {
+.mail-navigation h3,
+.mail-navigation-label {
   padding: 8px;
   color: var(--me-text-secondary);
   font-size: var(--text-caption);
@@ -101,6 +102,31 @@
 .mail-account-destination small {
   font-size: var(--text-caption);
   color: var(--me-text-secondary);
+}
+/* What the pane took over from the vertical rail (piece 14a): the boards, a
+   labelled group between the unified inbox and the accounts, and each
+   account's state and unread count, which keep their size beside a name that
+   ends in "…". The state's icon is secondary text: the words are for the
+   screen reader and the tooltip. */
+.mail-navigation-boards {
+  border-block: 1px solid var(--me-border);
+  padding-block: 4px;
+  margin-block: 4px;
+}
+.mail-account-destination > .mail-board-mark {
+  display: flex;
+  flex: none;
+  align-items: center;
+  overflow: visible;
+}
+.mail-account-destination > svg.mail-account-status {
+  color: var(--me-text-secondary);
+}
+.mail-account-destination > small.mail-account-unread {
+  flex-shrink: 0;
+  overflow: visible;
+  color: inherit;
+  font-variant-numeric: tabular-nums;
 }
 .mail-navigation button:hover {
   background: var(--me-bg-hover);

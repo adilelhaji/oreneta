@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type MouseEvent } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { ChevronRight, Eye, EyeOff, Layers, Mail, X } from 'lucide-react'
+import { ChevronRight, Eye, EyeOff, Layers, X } from 'lucide-react'
 import { accounts$ } from '../../states/accounts'
 import { accountGroups$, inUnifiedScope, showAccountGroup, type AccountGroup } from '../../states/accountGroups'
 import { folderList, mail$, inboxUnread, moveFolder } from '../../states/mail'
@@ -14,7 +14,7 @@ import {
 } from '../../states/folderPrefs'
 import { settings$ } from '../../states/settings'
 import { clearBulkSelection, ui$ } from '../../states/ui'
-import { openMailAccount } from '../../states/kanban'
+import { kanban$, openKanbanBoard, openMailAccount } from '../../states/kanban'
 import { buildFolderTree, type TreeNode } from '../../lib/folderTree'
 import { folderIcon } from '../../lib/folderIcon'
 import { unifiedFolders } from '../../lib/unifiedFolders'
@@ -25,7 +25,16 @@ import { hiddenFolderIds } from '../../lib/folderHiding'
 import type { Account, Folder } from '../../types'
 import { FolderContextMenu } from './FolderContextMenu'
 import { FolderMoveDialog } from './FolderMoveDialog'
-import { documentDirection } from '../../lib/direction'
+import {
+  AccountRows,
+  BoardsSection,
+  keyboardMenuPoint,
+  menuKey,
+  UnifiedInboxRow,
+  useNavRowFocus,
+  type NavBoard,
+} from './MailNavigationDestinations'
+import { isRssAccount } from './accountNav'
 
 /** Drag payload types, for other windows and drop targets that read them. */
 export const FOLDER_DRAG_TYPE = 'application/x-oreneta-folder'
@@ -43,16 +52,6 @@ type FolderRowActions = {
   startDrag: (folder: Folder, event: DragEvent<HTMLElement>) => void
   endDrag: () => void
   canDrag: (folder: Folder) => boolean
-}
-
-function menuKey(event: KeyboardEvent<HTMLElement>): boolean {
-  return event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)
-}
-
-function keyboardMenuPoint(element: HTMLElement): { x: number; y: number } {
-  const rect = element.getBoundingClientRect()
-  // A little in from the row's start edge, whichever side that is.
-  return { x: documentDirection() === 'rtl' ? rect.right - 16 : rect.left + 16, y: rect.bottom }
 }
 
 function ColorDot({ color }: { color: FolderColorId | undefined }) {
@@ -407,6 +406,9 @@ export function MailNavigationView({
   foldersByAccount,
   onOpenFolder,
   onMoveFolder = () => {},
+  boards = [],
+  activeBoard = '',
+  onBoard = () => {},
 }: {
   accounts: Account[]
   folders: Folder[]
@@ -426,6 +428,11 @@ export function MailNavigationView({
   onOpenFolder?: (accountId: string, folderId: string) => void
   /** Move a folder under `parentId` (null: top level) after the rules allowed it. */
   onMoveFolder?: (accountId: string, folderId: string, parentId: string | null) => void
+  /** The kanban boards, in their order: the «Taulers» section (ADR-0068 §4). */
+  boards?: NavBoard[]
+  /** The board open, if any: then it is what the pane marks as current, not mail's account or folder. */
+  activeBoard?: string
+  onBoard?: (id: string) => void
 }) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
@@ -436,7 +443,9 @@ export function MailNavigationView({
   // Hidden folders (#273): shown again only on request, for as long as this
   // account stays open; the hidden marks themselves are kept in folderPrefs.
   const [showHiddenAsked, setShowHidden] = useState(false)
-  const [hideAnnouncement, setHideAnnouncement] = useState('')
+  // What the pane says through its live region: a folder or an account
+  // hidden, a row moved from the keyboard.
+  const [announcement, setAnnouncement] = useState('')
   const focusToggle = useRef(false)
   const showHiddenButton = useRef<HTMLButtonElement | null>(null)
   const draggedRef = useRef<Folder | null>(null)
@@ -472,8 +481,13 @@ export function MailNavigationView({
     focusToggle.current = false
     showHiddenButton.current?.focus()
   })
+  // With a board open the pane marks the board, not the account or folder
+  // the mail view was on (ADR-0068 §4).
+  const boardOpen = !!activeBoard
+  const currentFolder = boardOpen ? '' : selectedFolder
+  const refocusRow = useNavRowFocus(setAnnouncement)
   const active = accounts.find((account) => account.id === selectedAccount)
-  const isRSS = active?.provider === 'rss' || active?.auth_type === 'rss'
+  const isRSS = !!active && isRssAccount(active)
   const everyAccount = allAccounts ?? accounts
   const accountOf = (id: string) => everyAccount.find((account) => account.id === id)
   const foldersOf = (id: string): Folder[] => foldersByAccount?.[id] ?? (id === selectedAccount ? folders : [])
@@ -547,7 +561,7 @@ export function MailNavigationView({
         favorites={favorites}
         favoriteCount={favoriteRefs.length}
         selectedAccount={selectedAccount}
-        selectedFolder={selectedFolder}
+        selectedFolder={currentFolder}
         showAccount={showAccount}
         dropped={dropped}
         actions={actions}
@@ -558,18 +572,24 @@ export function MailNavigationView({
       />
       <h3>{t('mailNavigation.accounts')}</h3>
       <div className="mail-navigation-accounts">
+        {/* The unified inbox, the boards and the accounts, in the order of the
+            rail and of Ctrl/⌘+1…9 (ADR-0068 §5), the account groups after
+            the boards. */}
         {unifiedVisible && (
-          <button
-            type="button"
-            className="mail-account-destination"
-            title={t('kanban.columns.unifiedInbox')}
-            aria-current={selectedAccount === 'unified' && !activeGroup ? 'true' : undefined}
-            onClick={() => onAccount('unified')}
-          >
-            <Mail size={16} strokeWidth={1.75} />
-            <span>{t('kanban.columns.unifiedInbox')}</span>
-          </button>
+          <UnifiedInboxRow
+            current={!boardOpen && selectedAccount === 'unified' && !activeGroup}
+            onOpen={() => onAccount('unified')}
+            onShowGroup={onGroup}
+            refocus={refocusRow}
+          />
         )}
+        <BoardsSection
+          boards={boards}
+          activeBoard={activeBoard}
+          onOpen={onBoard}
+          refocus={refocusRow}
+          announce={setAnnouncement}
+        />
         {/* Account groups (#99): each shows its own accounts together. */}
         {groups.map((group) => (
           <button
@@ -577,34 +597,20 @@ export function MailNavigationView({
             type="button"
             className="mail-account-destination"
             title={t('accountGroups.showGroup', { name: group.name, defaultValue: 'Show {name} together' })}
-            aria-current={selectedAccount === 'unified' && activeGroup === group.id ? 'true' : undefined}
+            aria-current={!boardOpen && selectedAccount === 'unified' && activeGroup === group.id ? 'true' : undefined}
             onClick={() => onGroup(group.id)}
           >
             <Layers size={16} strokeWidth={1.75} />
             <span>{group.name}</span>
           </button>
         ))}
-        {accounts.map((account) => (
-          <button
-            key={account.id}
-            type="button"
-            className="mail-account-destination"
-            // Both lines can end in "…" in a narrow pane: the tooltip has them whole.
-            title={
-              account.display_name && account.email && account.display_name !== account.email
-                ? `${account.display_name} — ${account.email}`
-                : account.email || account.display_name
-            }
-            aria-current={account.id === selectedAccount ? 'true' : undefined}
-            onClick={() => onAccount(account.id)}
-          >
-            <Mail size={16} strokeWidth={1.75} />
-            <span>
-              <strong>{account.display_name || account.email}</strong>
-              {account.email && <small>{account.email}</small>}
-            </span>
-          </button>
-        ))}
+        <AccountRows
+          accounts={accounts}
+          isCurrent={(account) => !boardOpen && account.id === selectedAccount}
+          onOpen={onAccount}
+          refocus={refocusRow}
+          announce={setAnnouncement}
+        />
       </div>
       {/* Dropping a dragged folder on the heading moves it to the top level. */}
       <h3
@@ -670,7 +676,7 @@ export function MailNavigationView({
                 <FolderBranch
                   key={node.folder?.id ?? node.name}
                   node={node}
-                  selected={selectedFolder}
+                  selected={currentFolder}
                   onSelect={onFolder}
                   actions={actions}
                 />
@@ -694,7 +700,7 @@ export function MailNavigationView({
             setMoving(folder)
           }}
           onHiddenChange={(folder, hidden) => {
-            setHideAnnouncement(
+            setAnnouncement(
               hidden
                 ? t('folders.hide.hidden', { folder: folder.name, defaultValue: '{folder} hidden' })
                 : t('folders.hide.shown', { folder: folder.name, defaultValue: '{folder} shown again' }),
@@ -727,7 +733,7 @@ export function MailNavigationView({
         />
       )}
       <p className="sr-only" aria-live="polite">
-        {hideAnnouncement}
+        {announcement}
       </p>
     </div>
   )
@@ -744,6 +750,8 @@ export function MailNavigation() {
   const hidden = useValue(settings$.hiddenSideNavAccounts)
   const showUnified = useValue(settings$.showUnifiedInboxInSideNav)
   const favoriteRefs = useValue(folderPrefs$.favorites)
+  const boards = useValue(settings$.kanbanBoards)
+  const activeBoard = useValue(kanban$.activeBoardId)
   const visibleAccounts = accounts.filter((account) => account.id === selectedAccount || !hidden.includes(account.id))
   const folders =
     selectedAccount === 'unified'
@@ -787,6 +795,13 @@ export function MailNavigation() {
     ui$.mobilePane.set('threads')
     openMailAccount(account, folder, false)
   }
+  // From a board (ADR-0068 §4), an account goes back to mail; the one the
+  // mail view was on comes back on the folder it was showing, as from the rail.
+  function leaveBoard(account: string) {
+    clearBulkSelection()
+    ui$.mobilePane.set('threads')
+    openMailAccount(account)
+  }
   return (
     <MailNavigationView
       key={selectedAccount}
@@ -799,7 +814,15 @@ export function MailNavigation() {
       unifiedVisible={showUnified || selectedAccount === 'unified'}
       groups={groups}
       activeGroup={activeGroup}
+      boards={boards}
+      activeBoard={activeBoard}
+      onBoard={openKanbanBoard}
       onAccount={(account) => {
+        if (activeBoard) {
+          leaveBoard(account)
+          if (account === 'unified') showAccountGroup(null)
+          return
+        }
         if (account === 'unified' && activeGroup) {
           showAccountGroup(null)
           return
@@ -807,6 +830,11 @@ export function MailNavigation() {
         if (account !== selectedAccount) navigate(account, 'inbox')
       }}
       onGroup={(group) => {
+        if (activeBoard) {
+          leaveBoard('unified')
+          showAccountGroup(group)
+          return
+        }
         if (selectedAccount === 'unified' && group === activeGroup) return
         clearBulkSelection()
         ui$.selectedThread.set('')
@@ -814,10 +842,10 @@ export function MailNavigation() {
         showAccountGroup(group)
       }}
       onFolder={(folder) => {
-        if (folder !== selectedFolder) navigate(selectedAccount, folder)
+        if (activeBoard || folder !== selectedFolder) navigate(selectedAccount, folder)
       }}
       onOpenFolder={(account, folder) => {
-        if (account !== selectedAccount || folder !== selectedFolder) navigate(account, folder)
+        if (activeBoard || account !== selectedAccount || folder !== selectedFolder) navigate(account, folder)
       }}
       onMoveFolder={(account, folder, parent) => void moveFolder(account, folder, parent)}
     />

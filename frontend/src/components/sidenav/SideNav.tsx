@@ -1,16 +1,13 @@
 import { useState } from 'react'
-import type { DragEvent } from 'react'
 import {
   Mail,
   MoreHorizontal,
-  EyeOff,
   CalendarDays,
   BookUser,
   ListTodo,
   StickyNote,
   Paperclip,
   MessagesSquare,
-  Layers,
 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
@@ -18,22 +15,21 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import type { DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
-import { accounts$, reorderAccountIds } from '../../states/accounts'
-import { moveFeed, RSS_FEED_DRAG_TYPE } from '../../states/feeds'
-import { kanban$, openMailAccount, reorderKanbanBoards, selectKanbanBoard } from '../../states/kanban'
+import { accounts$, moveShownAccount } from '../../states/accounts'
+import { kanban$, openKanbanBoard, openMailAccount, reorderKanbanBoards } from '../../states/kanban'
 import { mail$, inboxUnread } from '../../states/mail'
-import { settings$, setUnifiedInboxSideNavVisible } from '../../states/settings'
+import { settings$ } from '../../states/settings'
 import { toggleModule, ui$ } from '../../states/ui'
 import { QuickSettingsMenu } from './QuickSettingsMenu'
 import { QuietIndicator } from './QuietIndicator'
 import { SortableBoard, SortableAccount } from './SortableRailItems'
 import { UnreadCountBadge } from './UnreadCountBadge'
-import { RailContextMenu, RailMenuItem } from './RailContextMenu'
 import { AccountContextMenu } from './AccountContextMenu'
 import { BoardContextMenu } from './BoardContextMenu'
 import { BoardDialog, type BoardDialogState } from './BoardDialog'
-import type { Account } from '../../types'
-import { accountGroups$, showAccountGroup } from '../../states/accountGroups'
+import { UnifiedInboxContextMenu } from './UnifiedInboxContextMenu'
+import { feedDragOver, feedDrop } from './accountNav'
+import { showAccountGroup } from '../../states/accountGroups'
 import { besideEndX } from '../../lib/direction'
 
 export function SideNav() {
@@ -53,7 +49,6 @@ export function SideNav() {
   const foldersByAccount = useValue(mail$.foldersByAccount)
   const activeBoardId = useValue(kanban$.activeBoardId)
   const selectedAccount = useValue(ui$.selectedAccount)
-  const accountGroups = useValue(accountGroups$.groups)
   // Right-click context menu anchored at the cursor for one account.
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const menuAccount = menu ? accounts.find((acc) => acc.id === menu.id) : null
@@ -79,38 +74,6 @@ export function SideNav() {
   const hasBoards = boards.length > 0
   const hasAccounts = sideNavAccounts.length > 0
 
-  const isRssAccount = (account: { provider: string; auth_type: string }) =>
-    account.provider === 'rss' || account.auth_type === 'rss'
-
-  function parseFeedDrag(event: DragEvent): { threadId: string; accountId?: string } | null {
-    if (!Array.from(event.dataTransfer.types).includes(RSS_FEED_DRAG_TYPE)) return null
-    try {
-      const raw = event.dataTransfer.getData(RSS_FEED_DRAG_TYPE)
-      const parsed = JSON.parse(raw) as { threadId?: string; accountId?: string }
-      if (!parsed.threadId) return null
-      return { threadId: parsed.threadId, accountId: parsed.accountId }
-    } catch {
-      return null
-    }
-  }
-
-  function handleFeedDragOver(event: DragEvent<HTMLDivElement>, account: Account) {
-    if (!isRssAccount(account)) return
-    const payload = parseFeedDrag(event)
-    if (!payload || payload.accountId === account.id) return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-  }
-
-  function handleFeedDrop(event: DragEvent<HTMLDivElement>, account: Account) {
-    if (!isRssAccount(account)) return
-    const payload = parseFeedDrag(event)
-    if (!payload || payload.accountId === account.id) return
-    event.preventDefault()
-    event.stopPropagation()
-    void moveFeed(payload.threadId, account.id)
-  }
-
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -119,20 +82,11 @@ export function SideNav() {
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (over && active.id !== over.id) {
-      const visible = [...sideNavAccounts]
-      const oldIndex = visible.findIndex((account) => account.id === active.id)
-      const newIndex = visible.findIndex((account) => account.id === over.id)
-      if (oldIndex === -1 || newIndex === -1) return
-      const [removed] = visible.splice(oldIndex, 1)
-      visible.splice(newIndex, 0, removed)
-      const next = [...accounts]
-      const visiblePositions = accounts.flatMap((account, index) =>
-        hiddenSideNavAccountIds.has(account.id) ? [] : [index],
+      void moveShownAccount(
+        sideNavAccounts.map((account) => account.id),
+        String(active.id),
+        String(over.id),
       )
-      visiblePositions.forEach((position, index) => {
-        next[position] = visible[index]
-      })
-      void reorderAccountIds(next.map((account) => account.id))
     }
   }
 
@@ -352,10 +306,7 @@ export function SideNav() {
                     key={board.id}
                     board={board}
                     active={board.id === activeBoardId}
-                    onSelect={() => {
-                      ui$.module.set('mail')
-                      selectKanbanBoard(board.id)
-                    }}
+                    onSelect={() => openKanbanBoard(board.id)}
                     onContextMenu={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
@@ -391,8 +342,8 @@ export function SideNav() {
                       e.stopPropagation()
                       setMenu({ id: account.id, x: e.clientX, y: e.clientY })
                     }}
-                    onFeedDragOver={handleFeedDragOver}
-                    onFeedDrop={handleFeedDrop}
+                    onFeedDragOver={feedDragOver}
+                    onFeedDrop={feedDrop}
                   />
                 ))}
               </SortableContext>
@@ -434,33 +385,17 @@ export function SideNav() {
       )}
 
       {unifiedMenu && (
-        <RailContextMenu
+        <UnifiedInboxContextMenu
           x={unifiedMenu.x}
           y={unifiedMenu.y}
           label={t('accounts.unified')}
+          hideLabel={t('sidenav.actions.hideFromSideNav')}
+          onShowGroup={(groupId) => {
+            selectAccount('unified')
+            showAccountGroup(groupId)
+          }}
           onClose={() => setUnifiedMenu(null)}
-        >
-          {accountGroups.map((group) => (
-            <RailMenuItem
-              key={group.id}
-              icon={<Layers size={14} className="text-secondary" strokeWidth={1.75} />}
-              label={t('accountGroups.showGroup', { name: group.name, defaultValue: 'Show {name} together' })}
-              onClick={() => {
-                selectAccount('unified')
-                showAccountGroup(group.id)
-                setUnifiedMenu(null)
-              }}
-            />
-          ))}
-          <RailMenuItem
-            icon={<EyeOff size={14} className="text-secondary" strokeWidth={1.75} />}
-            label={t('sidenav.actions.hideFromSideNav')}
-            onClick={() => {
-              setUnifiedInboxSideNavVisible(false)
-              setUnifiedMenu(null)
-            }}
-          />
-        </RailContextMenu>
+        />
       )}
 
       {menu && menuAccount && (

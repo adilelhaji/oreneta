@@ -10,6 +10,26 @@ import { loadThreads, loadFolders } from './mail'
 // These drive the add-feed / edit-feed dialogs and OPML import/export.
 export const RSS_FEED_DRAG_TYPE = 'application/x-oreneta-rss-feed'
 
+// The RSS account the feed being dragged comes from, while one is. A drop
+// target sees only the drag's type until the drop, not its data, so this is
+// how it knows a feed held over the account it is already in (#353).
+let feedDragSource: string | null = null
+
+/** A feed starts being dragged from the list of `accountId`. */
+export function beginFeedDrag(accountId: string) {
+  feedDragSource = accountId
+}
+
+/** The feed drag is over, dropped or not. */
+export function endFeedDrag() {
+  feedDragSource = null
+}
+
+/** The account the feed being dragged comes from; null when no feed is. */
+export function feedDragSourceAccount(): string | null {
+  return feedDragSource
+}
+
 // Default name for a new RSS account, so adding one is a single click: "RSS",
 // then "RSS1", "RSS2"… for the first name not already taken by a feed account.
 export function nextRssAccountDisplayName(accounts: Account[]): string {

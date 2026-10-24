@@ -35,7 +35,7 @@ vistes de cada mòdul.
 | Cerca de la banda (des de #344): el camp, amb l'abast del mòdul en pantalla, al centre de la banda o, per sota de 769 px, damunt de la banda quan s'obre | `role="search"`, dins de la banda | «Cerca» | — (és dins de `search`) |
 | Barra de la sincronització (des de #345, només en el cas destacat: una sessió per tornar a iniciar, o una fallada o un problema sense compte no descartats) | `<section>` (`region`), sota la capçalera, fora de `<main>` | «Sincronització dels comptes» | — |
 | Barra vertical | `<aside>` | «Mòduls» | `modules` |
-| Subfinestra de carpetes del correu (`FolderPane`, des de #317) | `<nav>` | el de la seva fila de títol: «Comptes i carpetes» | `folders` |
+| Subfinestra de carpetes del correu (`FolderPane`, des de #317; des de #353, també amb un tauler obert) | `<nav>` | el de la seva fila de títol: «Comptes i carpetes» | `folders` |
 | Subfinestra de carpetes del Calendari (`FolderPane`, des de #323); per sota de 1025 px, la columna d'abans | `<nav>` | «Calendaris» | `folders` |
 | Subfinestra de carpetes de Persones (`FolderPane`, des de #326): els grups; per sota de 1025 px, el filtre de grups d'abans, sota la capçalera de la llista | `<nav>` | «Grups de contactes» | `folders` |
 | Subfinestra de carpetes de Tasques (`FolderPane`, des de #329): les llistes; per sota de 1025 px, les pestanyes d'abans, sota la capçalera | `<nav>` | «Llistes de tasques» | `folders` |
