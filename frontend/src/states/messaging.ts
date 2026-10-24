@@ -154,6 +154,20 @@ export const messaging$ = observable({
   uploads: {} as Record<string, ChatUpload>,
 })
 
+/**
+ * Chat's own unread count, the one its button in the module switcher shows
+ * (owner decision 2 on #352): the unread messages of the open account's direct
+ * conversations and groups, muted ones included (they still count as unread).
+ */
+export function chatUnread(
+  conversations: readonly Pick<ChatConversation, 'unread'>[],
+  rooms: readonly Pick<ChatRoom, 'unread'>[],
+): number {
+  const count = (items: readonly { unread: number }[]) =>
+    items.reduce((sum, item) => sum + (Number.isFinite(item.unread) && item.unread > 0 ? item.unread : 0), 0)
+  return count(conversations) + count(rooms)
+}
+
 export async function loadMessaging() {
   const [accounts, status] = await Promise.all([
     invoke<ChatAccount[]>('chat.accounts', {}),
@@ -349,6 +363,35 @@ export async function refreshHistory() {
   messaging$.history.set((await invoke<ChatMessage[]>('chat.history', { account, conversation })) ?? [])
 }
 
+// Whether the Chat view is drawn. The open conversation is kept when the
+// person goes to another module, so it is there on the way back, but it is
+// on screen only while the view is: a message that arrives meanwhile counts
+// as unread on the Chat button (#354), and is read on the way back.
+let chatViews = 0
+
+/** Marks the Chat view as on screen until the returned function is called. */
+export function showChatView(): () => void {
+  chatViews++
+  return () => {
+    chatViews--
+  }
+}
+
+/** On the way back to Chat: the open conversation is on screen again, so what arrived in it meanwhile is read. */
+export async function readOpenConversation() {
+  const account = messaging$.account.peek()
+  const open = messaging$.conversation.peek()
+  if (!account || !open) return
+  // A conversation always carries `room` from the core (null when direct), so
+  // conversations match by `conversation` and rooms by `room`.
+  const entry =
+    messaging$.conversations.peek().find((item) => item.conversation === open) ??
+    messaging$.rooms.peek().find((item) => item.room === open)
+  if (!entry || !(entry.unread > 0)) return
+  await invoke('chat.markRead', { account, conversation: open })
+  await refreshConversations()
+}
+
 /** Opens a conversation and counts it as read. */
 export async function openConversation(conversation: string) {
   messaging$.conversation.set(normalizeConversation(conversation))
@@ -487,9 +530,10 @@ export function onChatEvent(name: string, detail: ChatEventDetail) {
   }
   if (name === 'chat.changed' && detail.account === messaging$.account.peek()) {
     void refreshConversations().then(async () => {
-      // A message arriving in the conversation on screen is read as it arrives.
+      // A message arriving in the conversation on screen is read as it arrives;
+      // with the person in another module, it waits as unread.
       const open = messaging$.conversation.peek()
-      if (open && detail.conversation === open) {
+      if (open && detail.conversation === open && chatViews > 0) {
         await invoke('chat.markRead', { account: detail.account, conversation: open })
         await refreshConversations()
       }

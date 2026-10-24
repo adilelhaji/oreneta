@@ -152,7 +152,11 @@ describe('Tasks in the common folder pane (ADR-0068 §4, #329)', () => {
     expect(content(screen).contains(nav)).toBe(false)
     expect(nav.compareDocumentPosition(content(screen)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.container.querySelectorAll('[data-region="folders"]')).toHaveLength(1)
-    expect(nav.querySelectorAll('[data-region]')).toHaveLength(0)
+    // The one region inside it is the module strip at its foot (#354).
+    expect([...nav.querySelectorAll<HTMLElement>('[data-region]')].map((region) => region.dataset.region)).toEqual([
+      'modules',
+    ])
+    expect(nav.querySelector('[data-region="modules"]')?.getAttribute('aria-label')).toBe('Modules')
     // The tabs are not drawn in the header as well.
     expect(screen.queryByRole('tablist')).toBeNull()
     expect(screen.queryByRole('tab')).toBeNull()
@@ -169,9 +173,10 @@ describe('Tasks in the common folder pane (ADR-0068 §4, #329)', () => {
     const screen = render(<TasksView />)
     await ready(screen)
     const nav = within(pane(screen))
-    const names = [...pane(screen).querySelectorAll('ul > li > button')].map((button) =>
-      button.getAttribute('aria-label'),
-    )
+    // The pane's own lists, not the module strip at its foot (#354).
+    const names = [...pane(screen).querySelectorAll('ul > li > button')]
+      .filter((button) => !button.closest('[data-module-switcher]'))
+      .map((button) => button.getAttribute('aria-label'))
     // "All" has no count; a list with nothing open has none either.
     expect(names).toEqual([
       'All',

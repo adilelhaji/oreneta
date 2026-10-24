@@ -9,6 +9,7 @@ import {
   deriveThemeTokens,
   newCustomThemeId,
   type Appearance,
+  type ContrastShortfall,
   type CustomTheme,
   type CustomThemeInput,
 } from '../../lib/themes'
@@ -32,6 +33,13 @@ const COLOR_FIELDS: { key: ColorField; labelKey: string; hintKey: string }[] = [
   { key: 'accent', labelKey: 'theme.fields.accent', hintKey: 'theme.fields.accentHint' },
   { key: 'text', labelKey: 'theme.fields.text', hintKey: 'theme.fields.textHint' },
 ]
+
+/** What the editor says of each pair that reads badly. */
+const LOW_CONTRAST: Record<ContrastShortfall['pair'], string> = {
+  text: 'theme.lowContrast.text',
+  accent: 'theme.lowContrast.accent',
+  moduleBar: 'theme.lowContrast.moduleBar',
+}
 
 /** Normalized "#rrggbb" for the native color input, or null if not expressible. */
 function toHex6(value: string): string | null {
@@ -136,11 +144,9 @@ export function ThemeEditorDialog({
         </div>
 
         {tokens &&
-          contrastShortfalls(tokens).map(({ pair, ratio }) => (
+          contrastShortfalls(tokens, input.appearance).map(({ pair, ratio }) => (
             <Notice key={pair} tone="warning">
-              {t(pair === 'text' ? 'theme.lowContrast.text' : 'theme.lowContrast.accent', {
-                ratio: ratio.toFixed(1),
-              })}
+              {t(LOW_CONTRAST[pair], { ratio: ratio.toFixed(1) })}
             </Notice>
           ))}
 

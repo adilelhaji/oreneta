@@ -167,7 +167,7 @@ export type KanbanBoard = {
   id: string
   name: string
   columns: KanbanBoardColumn[]
-  /** Custom rail/header image, e.g. "/media/avatars/kb-…/<uuid>.png". Unset = Columns3 tile. */
+  /** Custom board image (its row in «Taulers», its header), e.g. "/media/avatars/kb-…/<uuid>.png". Unset = Columns3 tile. */
   avatarUrl?: string
   /** Background behind the board's columns. Unset = plain theme surface. */
   wallpaper?: ChatWallpaper | null
@@ -211,7 +211,7 @@ export type Settings = {
   /** Message body text size, in percent, applied on top of `fontScale`. */
   messageFontScale: number
   showRealAvatars: boolean
-  /** Whether to overlay an inbox unread-count badge on side navigation account avatars. */
+  /** Whether to show the inbox unread counts: of each account in «Comptes i carpetes», and of the unified inbox on the module switcher's Mail button. */
   showUnreadAccountBadge: boolean
   sendShortcut: SendShortcut
   /** Chat bubbles or the traditional stacked reading view (desktop only). */
@@ -291,9 +291,9 @@ export type Settings = {
   kanbanColumnWidth: number
   /** kanbanColumnKey -> whether the column is collapsed to a vertical bar. */
   kanbanMinimizedColumns: Record<string, boolean>
-  /** Account ids hidden from the desktop side navigation. */
+  /** Account ids hidden from «Comptes i carpetes» and from Ctrl/⌘+1…9 (key from the days of the rail). */
   hiddenSideNavAccounts: string[]
-  /** Whether the synthetic unified inbox appears in the desktop side navigation. */
+  /** Whether the synthetic unified inbox appears in «Comptes i carpetes» and in Ctrl/⌘+1…9 (key from the days of the rail). */
   showUnifiedInboxInSideNav: boolean
   /** Whether to poll for new releases in the background (see states/update.ts). */
   autoUpdateCheck: boolean

@@ -812,6 +812,22 @@ export function inboxUnread(folders: Folder[] | undefined): number {
   return folderUnread(folders, 'inbox')
 }
 
+/**
+ * The unified inbox's unread count: the inbox unread of every account it
+ * takes in (`included_in_unified` not false), from the folder cache. The Mail
+ * button of the module switcher shows it (owner decision 2 on #352), as the
+ * rail's unified inbox button did.
+ */
+export function unifiedInboxUnread(
+  accounts: readonly Account[],
+  foldersByAccount: Readonly<Record<string, Folder[] | undefined>>,
+): number {
+  return accounts.reduce(
+    (sum, account) => (account.included_in_unified !== false ? sum + inboxUnread(foldersByAccount[account.id]) : sum),
+    0,
+  )
+}
+
 /** Unread count of a folder in a folder list, treating INBOX case-insensitively. */
 export function folderUnread(folders: Folder[] | undefined, folderId: string): number {
   if (!folders) return 0

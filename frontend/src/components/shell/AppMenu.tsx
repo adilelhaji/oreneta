@@ -85,7 +85,7 @@ export function AppMenuButton() {
 /**
  * The app menu: every command of the palette (`useCommandList`, the one
  * list), grouped by area with a title per group, which takes in what the
- * rail's More menu offers. A command that shows a state (the module on
+ * rail's More menu offered (#354). A command that shows a state (the module on
  * screen, the theme, a filter) is a radio item.
  */
 function AppMenu({

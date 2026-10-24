@@ -22,7 +22,8 @@ const [
   { tasks$ },
   { openComposeTab },
   { default: i18n },
-  { SideNav },
+  { ModuleSwitcher },
+  { useWideWindow },
   { ThreadList },
   { MessagePane },
   { TasksView },
@@ -36,7 +37,8 @@ const [
   import('../src/states/tasks'),
   import('../src/states/compose'),
   import('../src/lib/i18n'),
-  import('../src/components/sidenav/SideNav'),
+  import('../src/components/shell/ModuleSwitcher'),
+  import('../src/components/resizer/useElementWidth'),
   import('../src/components/threads/ThreadList'),
   import('../src/components/chat/MessagePane'),
   import('../src/components/tasks/TasksView'),
@@ -79,6 +81,14 @@ const tabId =
       })
     : undefined
 
+// The narrow module bar where the app draws it, from 769 to 1024 px (#354).
+// The baseline has no folder pane, so no module strip either.
+function ModuleBar() {
+  const fromNarrow = useWideWindow(769)
+  const wide = useWideWindow(1025)
+  return fromNarrow && !wide ? <ModuleSwitcher variant="bar" /> : null
+}
+
 createRoot(document.getElementById('root')!).render(
   <div className="flex h-full flex-col bg-app text-primary">
     <header
@@ -88,7 +98,7 @@ createRoot(document.getElementById('root')!).render(
       Synthetic baseline · {scene} · {theme} · no real backend
     </header>
     <main className="flex min-h-0 flex-1 overflow-hidden" data-testid="baseline-content">
-      <SideNav />
+      <ModuleBar />
       {scene === 'tasks' ? (
         <TasksView />
       ) : scene === 'composer' && tabId ? (

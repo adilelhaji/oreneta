@@ -35,12 +35,14 @@ import {
   messaging$,
   openConversation,
   pickChatFile,
+  readOpenConversation,
   removeChatAccount,
   retryChat,
   saveChatAccount,
   saveChatFile,
   sendChat,
   sendChatFile,
+  showChatView,
   refreshConversations,
   mutedConversations$,
   setConversationMuted,
@@ -120,8 +122,11 @@ export function MessagingView() {
   const end = useRef<HTMLDivElement | null>(null)
   const composer = useRef<HTMLTextAreaElement | null>(null)
 
+  useEffect(() => showChatView(), [])
   useEffect(() => {
-    void loadMessaging().catch(() => {})
+    void loadMessaging()
+      .then(readOpenConversation)
+      .catch(() => {})
   }, [])
   useEffect(() => {
     end.current?.scrollIntoView?.({ block: 'end' })
@@ -1385,9 +1390,15 @@ function Bubble({ message, room }: { message: ChatMessage; room?: string }) {
   )
 }
 
-/** Adding a chat account: an XMPP address and its password. */
+/**
+ * Adding a chat account: an XMPP address and its password. From 1025 px the
+ * folder pane is drawn beside it, with no conversations yet, because the
+ * module strip is at its foot (ADR-0068 §5, #354): without it, Chat would be
+ * the one module with no way to the others but the app menu.
+ */
 function ChatSetup() {
   const { t } = useTranslation()
+  const inPane = useWideWindow(FOLDER_PANE_MIN_WINDOW)
   const [form, setForm] = useState({ jid: '', password: '', host: '', port: '5222' })
   const [busy, setBusy] = useState(false)
   const save = async () => {
@@ -1409,60 +1420,67 @@ function ChatSetup() {
     }
   }
   return (
-    <div className="flex flex-1 items-start justify-center bg-chats p-6">
-      <form
-        aria-label={t('messaging.setup', { defaultValue: 'Add a chat account' })}
-        className="flex w-full max-w-md flex-col gap-3 rounded-panel border border-border bg-header p-5"
-        onSubmit={(e) => {
-          e.preventDefault()
-          void save()
-        }}
-      >
-        <div className="flex items-center gap-2">
-          <CompactNavigation />
-          <h2 className="text-base font-semibold text-primary">
-            {t('messaging.setup', { defaultValue: 'Add a chat account' })}
-          </h2>
-        </div>
-        <p className="text-caption text-secondary">
-          {t('messaging.setupHint', {
-            defaultValue:
-              'Chat with any XMPP (Jabber) account. The connection always uses TLS. Teams, Slack and others are not available yet.',
-          })}
-        </p>
-        <label className="flex flex-col gap-1 text-caption text-secondary">
-          {t('messaging.address', { defaultValue: 'Address' })}
-          <input
-            className={input}
-            placeholder="name@server.example"
-            value={form.jid}
-            onChange={(e) => setForm({ ...form, jid: e.target.value })}
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-caption text-secondary">
-          {t('messaging.password', { defaultValue: 'Password' })}
-          <input
-            type="password"
-            autoComplete="off"
-            className={input}
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-          />
-        </label>
-        <div className="flex gap-2">
-          <label className="flex flex-1 flex-col gap-1 text-caption text-secondary">
-            {t('messaging.server', { defaultValue: 'Server (optional)' })}
-            <input className={input} value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} />
+    <>
+      {inPane && (
+        <FolderPane title={t('messaging.conversations', { defaultValue: 'Conversations' })}>
+          <p className="px-4 py-2 text-caption text-secondary">{t('empty.nothingHereYet')}</p>
+        </FolderPane>
+      )}
+      <div className="flex flex-1 items-start justify-center bg-chats p-6">
+        <form
+          aria-label={t('messaging.setup', { defaultValue: 'Add a chat account' })}
+          className="flex w-full max-w-md flex-col gap-3 rounded-panel border border-border bg-header p-5"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void save()
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <CompactNavigation />
+            <h2 className="text-base font-semibold text-primary">
+              {t('messaging.setup', { defaultValue: 'Add a chat account' })}
+            </h2>
+          </div>
+          <p className="text-caption text-secondary">
+            {t('messaging.setupHint', {
+              defaultValue:
+                'Chat with any XMPP (Jabber) account. The connection always uses TLS. Teams, Slack and others are not available yet.',
+            })}
+          </p>
+          <label className="flex flex-col gap-1 text-caption text-secondary">
+            {t('messaging.address', { defaultValue: 'Address' })}
+            <input
+              className={input}
+              placeholder="name@server.example"
+              value={form.jid}
+              onChange={(e) => setForm({ ...form, jid: e.target.value })}
+            />
           </label>
-          <label className="flex w-24 flex-col gap-1 text-caption text-secondary">
-            {t('messaging.port', { defaultValue: 'Port' })}
-            <input className={input} value={form.port} onChange={(e) => setForm({ ...form, port: e.target.value })} />
+          <label className="flex flex-col gap-1 text-caption text-secondary">
+            {t('messaging.password', { defaultValue: 'Password' })}
+            <input
+              type="password"
+              autoComplete="off"
+              className={input}
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
           </label>
-        </div>
-        <Button type="submit" disabled={busy || !form.jid.includes('@') || !form.password}>
-          {t('messaging.add', { defaultValue: 'Add' })}
-        </Button>
-      </form>
-    </div>
+          <div className="flex gap-2">
+            <label className="flex flex-1 flex-col gap-1 text-caption text-secondary">
+              {t('messaging.server', { defaultValue: 'Server (optional)' })}
+              <input className={input} value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} />
+            </label>
+            <label className="flex w-24 flex-col gap-1 text-caption text-secondary">
+              {t('messaging.port', { defaultValue: 'Port' })}
+              <input className={input} value={form.port} onChange={(e) => setForm({ ...form, port: e.target.value })} />
+            </label>
+          </div>
+          <Button type="submit" disabled={busy || !form.jid.includes('@') || !form.password}>
+            {t('messaging.add', { defaultValue: 'Add' })}
+          </Button>
+        </form>
+      </div>
+    </>
   )
 }

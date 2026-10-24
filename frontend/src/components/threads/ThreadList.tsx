@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type { CSSProperties, DragEvent } from 'react'
-import { Plus, SquarePen, MoreHorizontal } from 'lucide-react'
+import { Plus, SquarePen } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { beginFeedDrag, endFeedDrag, openAddFeed, RSS_FEED_DRAG_TYPE } from '../../states/feeds'
@@ -59,7 +59,6 @@ import { isUnifiedStarred } from '../../lib/unifiedFolders'
 import { EmptyState } from '../empty-state/EmptyState'
 import { LoadingState } from '../empty-state/StateViews'
 import { IconButton } from '../button/IconButton'
-import { QuickSettingsMenu } from '../sidenav/QuickSettingsMenu'
 import { FolderSwitcher } from '../menu/FolderSwitcher'
 import { ThreadActionsMenu } from './ThreadActionsMenu'
 import { ScheduledSendsBar } from './ScheduledSendsBar'
@@ -74,7 +73,6 @@ import { ThreadListResizer } from '../resizer/PaneResizers'
 import { useElementAtLeast } from '../resizer/useElementWidth'
 import { AUTO_TABLE_MIN_WIDTH, resolveListView } from './listView'
 import { accountGroups$ } from '../../states/accountGroups'
-import { endAlignedX } from '../../lib/direction'
 
 type ThreadListProps = {
   width?: number
@@ -138,10 +136,6 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
         : [{ group: 'today' as const, items: filteredThreads }],
     [groupByDates, filteredThreads],
   )
-  // Quick-settings (view + theme) anchor for the narrow-window header button.
-  // The side navigation that normally hosts these controls is hidden at this width.
-  const [quickMenu, setQuickMenu] = useState<{ x: number; y: number } | null>(null)
-
   // Keep the selected thread visible when it changes — chiefly so j/k keyboard
   // navigation can walk past the fold. `block: "nearest"` leaves already-visible
   // rows (e.g. mouse clicks) untouched.
@@ -375,7 +369,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
               />
             )}
             <div className="ms-auto flex shrink-0 items-center gap-2">
-              {/* Add account: only reachable here when the side navigation is hidden (narrow). */}
+              {/* Add account, beside the list in a narrow window, as well as in the app menu. */}
               <IconButton
                 icon={Plus}
                 iconSize={20}
@@ -456,31 +450,9 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
                   onClick={() => openAddFeed(selectedAccount)}
                 />
               )}
-              {/* View + theme: only reachable here when the side navigation is hidden (narrow). */}
-              <IconButton
-                icon={MoreHorizontal}
-                iconSize={20}
-                label={t('common.more')}
-                aria-haspopup="menu"
-                aria-expanded={quickMenu !== null}
-                size="md"
-                radius="lg"
-                className="min-[769px]:hidden"
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect()
-                  setQuickMenu({ x: endAlignedX(rect, 208), y: rect.bottom })
-                }}
-              />
             </div>
           </div>
         </div>
-      )}
-
-      {quickMenu && (
-        <QuickSettingsMenu
-          anchor={{ x: quickMenu.x, y: quickMenu.y, placement: 'down' }}
-          onClose={() => setQuickMenu(null)}
-        />
       )}
 
       {/* Not in the starred view, which is starred-only by definition, and not

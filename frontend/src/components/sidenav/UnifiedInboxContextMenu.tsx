@@ -3,7 +3,7 @@ import { EyeOff, Layers } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { accountGroups$ } from '../../states/accountGroups'
 import { setUnifiedInboxSideNavVisible } from '../../states/settings'
-import { RailContextMenu, RailMenuItem } from './RailContextMenu'
+import { NavContextMenu, NavMenuItem } from './NavContextMenu'
 
 // The unified inbox's menu (right click, or Shift+F10 and the context menu key
 // in the folder pane): one row per account group, to show it together, and one
@@ -13,7 +13,6 @@ export function UnifiedInboxContextMenu({
   x,
   y,
   label,
-  hideLabel,
   onShowGroup,
   onHidden,
   onClose,
@@ -22,8 +21,6 @@ export function UnifiedInboxContextMenu({
   y: number
   /** The menu's accessible name: what it is for. */
   label: string
-  /** The hide row's text, which says where it hides from. */
-  hideLabel: string
   onShowGroup: (groupId: string) => void
   /** Told after the unified inbox was hidden, before the menu closes. */
   onHidden?: () => void
@@ -32,9 +29,9 @@ export function UnifiedInboxContextMenu({
   const { t } = useTranslation()
   const groups = useValue(accountGroups$.groups)
   return (
-    <RailContextMenu x={x} y={y} label={label} onClose={onClose}>
+    <NavContextMenu x={x} y={y} label={label} onClose={onClose}>
       {groups.map((group) => (
-        <RailMenuItem
+        <NavMenuItem
           key={group.id}
           icon={<Layers size={14} className="text-secondary" strokeWidth={1.75} />}
           label={t('accountGroups.showGroup', { name: group.name, defaultValue: 'Show {name} together' })}
@@ -44,15 +41,15 @@ export function UnifiedInboxContextMenu({
           }}
         />
       ))}
-      <RailMenuItem
+      <NavMenuItem
         icon={<EyeOff size={14} className="text-secondary" strokeWidth={1.75} />}
-        label={hideLabel}
+        label={t('mailNavigation.actions.hideUnified')}
         onClick={() => {
           setUnifiedInboxSideNavVisible(false)
           onHidden?.()
           onClose()
         }}
       />
-    </RailContextMenu>
+    </NavContextMenu>
   )
 }

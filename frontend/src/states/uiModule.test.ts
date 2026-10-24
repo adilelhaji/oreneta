@@ -11,7 +11,7 @@ describe('the module on screen', () => {
     expect([...APP_MODULES]).toEqual(['mail', 'calendar', 'people', 'tasks', 'notes', 'chat', 'attachments'])
   })
 
-  it('opens a module from its rail button, and the same button goes back to mail', () => {
+  it('opens a module from its button in the module switcher, and the same button goes back to mail', () => {
     ui$.module.set('mail')
     toggleModule('calendar')
     expect(ui$.module.peek()).toBe('calendar')

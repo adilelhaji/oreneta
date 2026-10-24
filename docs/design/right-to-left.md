@@ -88,3 +88,8 @@ es reflecteix; un xebró de desplegar amb `transition-transform` es gira 180°.
 - `e2e/startup.e2e.ts` («#306»): F6 i Maj+F6 recorren les regions en el mateix
   ordre en àrab que en anglès i en català, i les regles de regions d'axe no
   troben res a la bústia ni a cap mòdul en àrab.
+- `components/shell/ModuleSwitcher.test.tsx` i `e2e/startup.e2e.ts` («#354»): en
+  àrab la tira de mòduls és al peu de la subfinestra de carpetes, a la dreta, i
+  es llegeix de dreta a esquerra; la fletxa esquerra hi va endavant i la dreta
+  enrere, en cercle, amb Inici i Fi, i «Més» s'obre cap a l'inici de la línia, dins
+  de la finestra. La barra estreta de 769 a 1024 px és a la dreta de la fila.

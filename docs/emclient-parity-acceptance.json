@@ -200,6 +200,26 @@
           {
             "sha": "0aa8f4de1db7966b268c4f1ee0feb1fef0f9c785",
             "result": "frontend/src/components/sidenav/MailNavigationDestinations.test.tsx"
+          },
+          {
+            "sha": "54558d3854a99cb3dd7c87c848a3a0570ecd7300",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "54558d3854a99cb3dd7c87c848a3a0570ecd7300",
+            "result": "frontend/src/components/shell/ModuleSwitcher.test.tsx"
+          },
+          {
+            "sha": "387d0bfc5ca761b89b897263942eb978bb7f9a4b",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "387d0bfc5ca761b89b897263942eb978bb7f9a4b",
+            "result": "frontend/src/components/shell/ModuleSwitcher.test.tsx"
+          },
+          {
+            "sha": "387d0bfc5ca761b89b897263942eb978bb7f9a4b",
+            "result": "frontend/src/components/dialog/ThemeEditorDialog.test.tsx"
           }
         ],
         "native": [],
@@ -289,6 +309,22 @@
           {
             "sha": "0aa8f4de1db7966b268c4f1ee0feb1fef0f9c785",
             "result": "frontend/src/lib/paneResize.test.ts"
+          },
+          {
+            "sha": "54558d3854a99cb3dd7c87c848a3a0570ecd7300",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "54558d3854a99cb3dd7c87c848a3a0570ecd7300",
+            "result": "frontend/src/components/shell/ModuleSwitcher.test.tsx"
+          },
+          {
+            "sha": "387d0bfc5ca761b89b897263942eb978bb7f9a4b",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "387d0bfc5ca761b89b897263942eb978bb7f9a4b",
+            "result": "frontend/src/components/shell/ModuleSwitcher.test.tsx"
           }
         ],
         "native": [],
@@ -408,6 +444,22 @@
           {
             "sha": "e96fea042b5a60ac36266a5bdc3ece7cf8f5dd62",
             "result": "frontend/src/components/shell/SyncStatus.test.tsx"
+          },
+          {
+            "sha": "54558d3854a99cb3dd7c87c848a3a0570ecd7300",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "54558d3854a99cb3dd7c87c848a3a0570ecd7300",
+            "result": "frontend/src/components/sidenav/QuietIndicator.test.tsx"
+          },
+          {
+            "sha": "387d0bfc5ca761b89b897263942eb978bb7f9a4b",
+            "result": "frontend/src/components/messaging/MessagingView.test.tsx"
+          },
+          {
+            "sha": "387d0bfc5ca761b89b897263942eb978bb7f9a4b",
+            "result": "frontend/src/useAppEffects.test.tsx"
           }
         ],
         "native": [],
@@ -1805,6 +1857,14 @@
           {
             "sha": "07f16b1a17f225af9f0be91f2a5022e12abbef2c",
             "result": "frontend/src/components/sidenav/MailNavigationDestinations.test.tsx"
+          },
+          {
+            "sha": "54558d3854a99cb3dd7c87c848a3a0570ecd7300",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "54558d3854a99cb3dd7c87c848a3a0570ecd7300",
+            "result": "frontend/src/components/shell/ModuleSwitcher.test.tsx"
           }
         ],
         "native": [],
