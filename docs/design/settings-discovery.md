@@ -35,7 +35,7 @@ barra vertical: un «Ves a: …» per a cada mòdul, el mode No molestis i «Qua
 Oreneta». «Paleta d'ordres» només és al menú (`menuOnly`): la paleta no es
 llista a si mateixa. Les destinacions del correu («Ves a: Correu», un compte, un
 tauler, una carpeta o un tauler nou) tornen al correu des d'un altre mòdul, com
-fa la barra vertical, i només es marquen quan el correu és a la pantalla. Sense
+feia la barra vertical, i només es marquen quan el correu és a la pantalla. Sense
 cap compte (la pantalla d'alta del primer compte), la llista només té la
 configuració, els temes i les ordres de l'aplicació.
 

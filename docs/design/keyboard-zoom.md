@@ -31,7 +31,11 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
   continuen llegint l'amplada real.
 - **El que no s'escala sol**, i s'ha canviat perquè ho faci:
   - la barra lateral mesurava 60 px fixos amb botons en rem, i al 200 % els
-    botons sortien per l'esquerra; ara mesura `w-15` (3,75 rem);
+    botons sortien per l'esquerra; va passar a mesurar `w-15` (3,75 rem). Des de
+    #354 aquesta barra vertical no hi és: la tira de mòduls, al peu de la
+    subfinestra de carpetes, fa 2,5 rem d'alçada, amb llocs de 2 rem, i la barra
+    estreta de 769 a 1024 px, 3 rem d'amplada; el que no hi cap va a «Més» (al 200 %,
+    en una subfinestra de 260 px, dos mòduls i «Més»);
   - a la capçalera de la conversa, els botons que deixen espai quan el tauler
     és estret (destacar, no llegit, assistent i, després, arxivar i paperera)
     s'amaguen segons l'amplada de la mateixa capçalera (per sota de 24 rem i
@@ -67,7 +71,7 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
     subfinestra, i la columna de la llista és de 288 px, no de 18 rem, perquè al
     200 % la persona no es quedi sense lloc. A Tasques (#329), a partir de 1025
     px les llistes són a la subfinestra, i les tasques ocupen tot l'espai que la
-    barra vertical i la subfinestra deixen. A Notes (#335), a partir de 1025 px
+    subfinestra deixa (fins a #354, també la barra vertical). A Notes (#335), a partir de 1025 px
     les etiquetes són a la subfinestra, i la columna de la llista és de 320 px,
     no de 20 rem, perquè al 200 % la nota no es quedi sense lloc. A Xat (#337),
     a partir de 1025 px les converses són a la subfinestra, i la conversa

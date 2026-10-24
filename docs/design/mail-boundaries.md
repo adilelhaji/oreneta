@@ -3,6 +3,9 @@
 Per sota de 769 píxels CSS, el correu fa servir una sola subfinestra: la llista o
 la conversa, segons l'estat existent `mobilePane`. La barra de comptes s'oculta;
 el menú existent de la llista i el selector de carpetes continuen disponibles.
+Des de #354 no hi ha cap barra a cap amplada per sota de 1025 px que no sigui la
+barra estreta de mòduls (de 769 a 1024 px); per sota de 769 px els mòduls i el que
+oferia el menú «Més» de la llista són al menú de l'aplicació de la banda superior.
 Enrere torna a la llista sense tancar la conversa. A partir de 769 px, l'amplada
 desada de la llista i el lector coexisteixen; el lector es pot encongir dins de
 l'espai restant.
@@ -22,7 +25,9 @@ que la llista, i la llista abans que el lector.
 El menú compacte de l'aplicació també enllaça a Persones, Tasques i Calendari
 (#177). Aquestes superfícies conserven el menú i una tornada a l'espai de treball
 del correu actual mentre la barra està oculta; els seus canvis es detallen a
-[coherència de les pantalles](screen-consistency.md).
+[coherència de les pantalles](screen-consistency.md). Des de #354 el menú compacte
+«Més» no hi és (decisió 3 del propietari a #352): la tornada es queda, i els mòduls
+s'obren des del menú de l'aplicació.
 
 El límit anterior de la llista a amplada completa (769 px) no coincidia amb el de
 visibilitat (600 px), i deixava el lector retallat entre 600 i 768 px. Les proves

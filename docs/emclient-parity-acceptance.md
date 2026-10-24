@@ -289,6 +289,28 @@ amb el teclat i el punter, el menú del compte, obrir un tauler des de la subfin
 canal, el menú de la safata unificada, i l'àrab amb axe i el 200 %; i, a 1025 i 1280 px, un missatge
 nou que es veu sencer al costat d'un tauler. És una nota d'evidència: cap fila
 no canvia d'estat (S01-04, S01-05, SET-27), i l'evidència nativa de Windows continua pendent.
+El 2026-10-24 (#354, peça 14b, pas 4 d'ADR-0068, `docs/design/mail-navigation.md`) la barra
+vertical se'n va, i els mòduls passen al selector de mòduls: a partir de 1025 px, una tira de
+mòduls de 2,5 rem al peu de la subfinestra de carpetes de cada mòdul, del color de la
+subfinestra; entre 769 i 1024 px, una barra estreta d'icones de 3 rem, l'única superfície amb el
+color «Barra de mòduls» (abans «Navegació lateral», decisió del propietari a #352); i per sota de
+769 px, el menú de l'aplicació. Totes dues formes són el `<nav>` «Mòduls», la regió `modules`
+d'F6, amb Correu, Calendari, Persones, Tasques, Notes, Xat i Adjunts: l'actiu marcat
+(`aria-current="page"`), el comptador de la safata d'entrada unificada al Correu i el del Xat, i
+el que no hi cap a «Més», en l'ordre de la tira i mai el mòdul actiu; cada botó és una parada de
+Tab i les fletxes els recorren en el sentit de lectura. El menú «Més» de la barra vertical i els
+de per sota de 769 px se'n van: el que oferien és al menú de l'aplicació, que també diu, com
+abans, quan hi ha una comprovació del correu en curs. Els textos de Configuració ja no parlen de
+la navegació lateral; les preferències i Ctrl/⌘+1…9 no canvien. Les proves de límits, de dreta a
+esquerra, de zoom, de regions i d'axe es mantenen amb les mateixes expectatives, amb els
+localitzadors de la barra vertical apuntats al `<nav>` «Mòduls», al menú de l'aplicació i a la
+banda, i se n'hi afegeixen de noves: unitàries del desbordament amb una amplada simulada, dels
+comptadors, del teclat en els dos sentits i de Ctrl/⌘+1…9, i, al punt d'entrada de producció, la
+tira, la barra estreta i el menú compacte a 1025, 1024, 769 i 768 px, el desbordament al 200 % a
+1440 i 1025 px, la barra estreta al 200 % a 1024 px sense desplaçament horitzontal, el teclat en
+català i en àrab i les regles de regions d'axe al marc nou. És una nota d'evidència: cap fila no
+canvia d'estat (S01-04, S01-05, SET-01, SET-27), i l'evidència nativa de Windows i amb lectors
+de pantalla continua pendent.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per

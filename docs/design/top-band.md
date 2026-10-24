@@ -4,7 +4,8 @@ Peça 13a del redisseny, pas 3 de l'ordre de migració
 d'[ADR-0068](../adr/0068-marc-comu-de-l-aplicacio.md) (§1, §2 i §9). Les
 decisions del propietari per a tota la peça 13 consten a
 [#342](https://github.com/adilelhaji/oreneta/issues/342): la barra vertical
-conserva el menú «Més» i l'indicador del mode No molestis fins a la peça 14, i
+conserva el menú «Més» i l'indicador del mode No molestis fins a la peça 14 (se'n
+van anar amb la barra a #354; vegeu [Sense la barra vertical](#sense-la-barra-vertical-354)), i
 la peça es lliura en tres PR (13a, la banda i el menú; 13b, la cerca, #344; 13c,
 l'estat de la sincronització i l'indicador del mode No molestis a la banda,
 #345). Les decisions que van sorgir durant la implementació de 13a consten a
@@ -65,8 +66,8 @@ La cerca de la conversa demanada des d'un altre mòdul (#344) és a
 ## El menú de l'aplicació
 
 - **Botó:** «Menú de l'aplicació» (`appMenu.label`), amb `aria-haspopup="menu"` i
-  `aria-expanded`. El nom és diferent del «Més» de la barra vertical en tots els
-  catàlegs.
+  `aria-expanded`. El nom és diferent del «Més» del selector de mòduls (abans, del
+  de la barra vertical) en tots els catàlegs.
 - **Contingut:** totes les ordres de la paleta (`useCommandList`), cadascuna una
   sola vegada, agrupades per àrea (`MenuGroup`, amb el títol de l'àrea com a nom
   del grup). No hi ha cap segona llista: el que el menú «Més» de la barra vertical
@@ -94,7 +95,8 @@ La cerca de la conversa demanada des d'un altre mòdul (#344) és a
 
   Dins d'una àrea, les accions van abans que les seccions de la configuració, i
   cada tipus conserva l'ordre de la llista. La paleta no fa servir les àrees.
-- **El menú «Més» de la barra vertical** es troba també al menú de l'aplicació:
+- **El menú «Més» de la barra vertical** es trobava també al menú de l'aplicació
+  (des de #354 només hi és el del menú de l'aplicació):
   els mòduls, la paleta, afegir un compte, afegir un tauler, sincronitzar, el
   mode No molestis, la configuració i «Quant a». Afegir un compte, afegir un
   tauler, sincronitzar i la configuració ja eren ordres de la paleta i hi surten
@@ -108,7 +110,7 @@ La cerca de la conversa demanada des d'un altre mòdul (#344) és a
   d'ordres» és nova al menú, no a la paleta, i no té sinònims als catàlegs:
   cap cerca no la busca.
 - **Destinacions del correu des d'un altre mòdul:** «Ves a: Correu», un compte,
-  un tauler, una carpeta o un tauler nou tornen al correu, com fa la barra
+  un tauler, una carpeta o un tauler nou tornen al correu, com feia la barra
   vertical. Abans, des del Calendari, la paleta canviava la selecció del correu
   sense mostrar-la. Només es marquen quan el correu és a la pantalla: «Ves a:
   Correu», un compte o una carpeta, sense cap tauler obert; un tauler, quan és
@@ -436,12 +438,13 @@ No molestis també es queda a la barra vertical fins a la peça 14.
   botó amb la campana barrada, en el to d'avís sobre el to suau, i un clic
   reprèn les notificacions. Hi és a totes les amplades, també per sota de
   769 px, on la barra vertical no es veu.
-- **A la barra vertical,** fins a la peça 14, es veu el mateix botó: tots dos
-  llegeixen el mateix estat, i apareixen, canvien i se'n van alhora. El de la
+- **A la barra vertical,** fins a la peça 14, es veia el mateix botó: tots dos
+  llegien el mateix estat, i apareixien, canviaven i se n'anaven alhora. El de la
   banda és la regió `role="status"` amb el nom de l'estat; el de la barra
-  vertical és només el botó, amb l'estat a la indicació, perquè un lector de
-  pantalla no trobi l'estat dues vegades. Quan la cerca cobreix la banda, a la
-  banda només el botó és inert, no la regió d'estat.
+  vertical era només el botó, amb l'estat a la indicació, perquè un lector de
+  pantalla no trobés l'estat dues vegades. Des de #354 la barra vertical no hi és
+  i l'indicador de la banda és l'únic. Quan la cerca cobreix la banda, a la banda
+  només el botó és inert, no la regió d'estat.
 
 ### Teclat, F6, dreta a esquerra i zoom
 
@@ -481,9 +484,45 @@ No molestis també es queda a la barra vertical fins a la peça 14.
 | e2e (`startup.e2e.ts`, «#345») | El final de la banda a 1440, 1025, 1024 i 768 px: el resum o la icona sola, una sola regió en directe, la finestra emergent amb el ratolí, dins de la finestra, Escapada i els clics; el teclat: Tab des del botó del menú, Retorn, Espai, Escapada, F6 i Maj+F6, i la configuració amb el focus de tornada al botó; una fallada torna la barra, a 1440 i 768 px, que plega el seu detall amb la finestra oberta i se'n va en descartar-la, i una sessió per tornar a iniciar no es pot descartar, amb les regles de regions d'axe; l'àrab amb axe i la finestra oberta a 1440 i 768 px; el 200 % a 1025, 1024, 900 i 769 px amb el mode No molestis activat; el mode No molestis a la banda a 1440 i 768 px. Les proves de «#343», de l'actualització manual i de les observacions de la sincronització busquen l'estat a la banda, i la barra només quan hi ha una fallada; la del mode No molestis troba la regió d'estat a la banda; a 768 px, amb la cerca damunt de la banda, una fallada s'anuncia: les dues regions d'estat són a l'arbre d'accessibilitat de Chromium i els controls no; «Torna-ho a provar» deixa el focus a l'entrada, a la finestra i a la barra, i la `j` no mou la conversa oberta |
 | N2 (`baseline/connectivityHealth.test.tsx`) | L'anunci d'una fallada sense moure el focus, ara des del botó de la banda (#345) |
 
+## Sense la barra vertical (#354)
+
+Peça 14b ([mail-navigation.md](mail-navigation.md#la-tira-de-mòduls-i-la-barra-estreta-la-barra-vertical-sen-va-354)):
+la barra vertical se'n va, amb el seu menú «Més» i la seva còpia de l'indicador
+del mode No molestis, i els mòduls passen a la tira de mòduls i a la barra
+estreta. Decisió 3 del propietari a
+[#352](https://github.com/adilelhaji/oreneta/issues/352): també se'n van els
+menús «Més» de per sota de 769 px, a `CompactNavigation` i a la capçalera de la
+llista estreta, amb `QuickSettingsMenu`; la fletxa per tornar al correu es queda.
+
+- **El menú de l'aplicació és on és tot:** cada element del menú «Més» de la
+  barra vertical hi és una vegada: «Ves a: …» per a cada mòdul, «Paleta d'ordres»,
+  «Afegeix un compte», «Crea un tauler kanban», «Sincronitza la bústia», les tres
+  pauses del mode No molestis o «Reprèn les notificacions», «Obre la configuració» i
+  «Quant a Oreneta». El clic dret sobre la barra buida, que obria aquest menú, no
+  té substitut propi: el contingut és al botó del menú de l'aplicació.
+- **Sincronitzar mentre se sincronitza:** el menú «Més» deia que hi havia una
+  comprovació del correu en curs i no en deixava demanar una altra. Ara ho fa
+  l'ordre «Sincronitza la bústia» (`mail.sync`), al menú de l'aplicació i a la
+  paleta: desactivada mentre `ui$.busy` i amb el motiu, «S'està sol·licitant una
+  comprovació del correu…», com a indicació i com a descripció accessible, com
+  qualsevol ordre que no es pot fer.
+- **Un tauler nou** es crea de seguida amb el nom per defecte i es mostra al correu,
+  com ja feia l'ordre de la paleta; el diàleg del nom de la barra vertical se'n va
+  amb ella.
+- **Per sota de 769 px,** on no hi ha selector de mòduls, els mòduls s'obren des
+  del menú de l'aplicació, i el focus torna al seu botó.
+- **El mode No molestis:** l'indicador de la banda és l'únic, a totes les
+  amplades.
+- **Proves:** les de «#343» i «#345» que trobaven el menú «Més» o l'indicador de
+  la barra vertical els busquen ara al menú de l'aplicació i a la banda, i
+  comproven que no hi ha cap més botó «Més» (la tira en té un només quan no hi
+  caben tots els mòduls); l'ordre del menú de l'aplicació executa també afegir un
+  compte, crear un tauler, sincronitzar i la configuració.
+  `baseline/manualRefreshUi.test.tsx` comprova l'ordre de sincronitzar en curs
+  al menú de l'aplicació, i `components/sidenav/QuietIndicator.test.tsx`, les
+  pauses del mode No molestis.
+
 ## Pendent
 
-- Peça 14: la barra vertical se'n va, amb el seu menú «Més» i la seva còpia de
-  l'indicador del mode No molestis.
 - El to «marc» (#287).
 - L'evidència nativa (N4) i amb lectors de pantalla continua pendent (#37).

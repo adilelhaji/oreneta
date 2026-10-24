@@ -55,7 +55,7 @@ en px, els dies s'encongeixen fins a cabre-hi.
   de la graella: deixar-lo anar damunt de les capçaleres no el porta a mitjanit.
   La graella es desplaça sola quan l'esdeveniment s'acosta a la vora superior o
   inferior (una franja del 8 % de l'alçada). S'usa `@dnd-kit` com al tauler
-  kanban i a la navegació lateral (`CalendarDnd.tsx`); cap dependència nova. La
+  kanban i a «Comptes i carpetes» (`CalendarDnd.tsx`); cap dependència nova. La
   creació per franja és una selecció, no un arrossegament d'un element, i usa
   esdeveniments de punter normals.
 - **Res no arriba al servidor abans de deixar anar l'esdeveniment o de prémer Retorn.**
