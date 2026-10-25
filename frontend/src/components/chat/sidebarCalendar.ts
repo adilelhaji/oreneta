@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { invoke } from '../../lib/bridge'
 import { accounts$ } from '../../states/accounts'
-import { allDayLocalDays, isFeedAccount, openCalendarOn, openEvent, type CalendarEvent } from '../../states/calendar'
+import {
+  allDayLocalDays,
+  calendar$,
+  isFeedAccount,
+  openCalendarOn,
+  openEvent,
+  type CalendarEvent,
+} from '../../states/calendar'
 import { closeSidebarOverlay } from '../../states/sidebar'
 
 // How the panels of the app's sidebar read the calendars: the agenda (#212,
@@ -79,8 +86,9 @@ export type SidebarReading<T> = {
  * - `read(true)` at once, and again whenever `key` changes: the cache answers
  *   and the server is asked behind it;
  * - `read(false)`, the cache again, when a calendar refresh lands
- *   (`calendar.synced`), just after local midnight, and whenever `subscribe`
- *   calls back;
+ *   (`calendar.synced`), when the app changes its events or calendars
+ *   (`calendar$.events`, `calendar$.calendars`) or closes an event's sheet or
+ *   editor, just after local midnight, and whenever `subscribe` calls back;
  * - only the newest read lands: an older, slower answer never replaces it;
  * - an account whose refresh failed (`calendar.syncError`) is stale until a
  *   `calendar.synced` of that account covers `covering()`, the window read; a
@@ -144,6 +152,20 @@ export function useSidebarCalendarReading<T>(
     const offError = eventsOn?.('calendar.syncError', (detail?: { account?: string }) => {
       setStale((accounts) => new Set(accounts).add(detail?.account ?? ''))
     })
+    // What the app itself changes syncs nothing behind it: an event deleted,
+    // a local calendar's event saved, a calendar hidden or shown, an answer
+    // to an invitation. The calendar's own state says so; the cache is read
+    // again then. Reading never writes that state, so this cannot loop.
+    const offEvents = calendar$.events.onChange(() => void reread(false))
+    const offCalendars = calendar$.calendars.onChange(() => void reread(false))
+    // So does an event's sheet or editor closing, whatever it was opened on:
+    // a delete or a save is in the cache by then.
+    const offSheet = calendar$.viewing.onChange(({ value }) => {
+      if (value === null) void reread(false)
+    })
+    const offEditor = calendar$.editing.onChange(({ value }) => {
+      if (value === null) void reread(false)
+    })
     const offMore = latest.current.subscribe?.(() => void reread(false))
     // What today is moves at midnight.
     let timer: ReturnType<typeof setTimeout>
@@ -158,6 +180,10 @@ export function useSidebarCalendarReading<T>(
       current = false
       if (typeof off === 'function') off()
       if (typeof offError === 'function') offError()
+      offEvents()
+      offCalendars()
+      offSheet()
+      offEditor()
       offMore?.()
       clearTimeout(timer)
     }

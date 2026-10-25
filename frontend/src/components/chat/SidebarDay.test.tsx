@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, it, jest } from 'bun:test'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { SidebarDay } from './SidebarDay'
 import { intlLocale } from '../../lib/i18n'
 import { accounts$ } from '../../states/accounts'
-import { calendar$, startOfDay, type CalendarEvent } from '../../states/calendar'
+import { calendar$, deleteEvent, setCalendarEnabled, startOfDay, type CalendarEvent } from '../../states/calendar'
 import { sidebar$ } from '../../states/sidebar'
 import { ui$ } from '../../states/ui'
 
@@ -40,6 +40,9 @@ const event = (id: string, start: number, end: number, extra: Partial<CalendarEv
 let requests: { command: string; payload: any }[] = []
 let replies: Record<string, (payload: any) => unknown> = {}
 let listeners: Record<string, (detail?: unknown) => void> = {}
+// What the core's cache no longer answers: events deleted, calendars hidden.
+let deleted = new Set<string>()
+let hidden = new Set<string>()
 
 const dayReads = () => requests.filter((request) => request.command === 'calendar.events')
 const eventButtons = (screen: ReturnType<typeof render>) =>
@@ -52,6 +55,8 @@ const rows = (screen: ReturnType<typeof render>) =>
 beforeEach(() => {
   requests = []
   listeners = {}
+  deleted = new Set()
+  hidden = new Set()
   accounts$.set([
     { id: 'work', email: 'me@work.test' } as any,
     { id: 'home', email: 'me@home.test' } as any,
@@ -88,6 +93,15 @@ beforeEach(() => {
         },
       ],
     }),
+    'calendar.delete': (p) => {
+      deleted.add(p.event_id)
+      return { ok: true }
+    },
+    'calendar.setEnabled': (p) => {
+      if (p.enabled) hidden.delete(p.calendar_id)
+      else hidden.add(p.calendar_id)
+      return { ok: true }
+    },
   }
   ;(window as any).go = {
     main: {
@@ -98,8 +112,12 @@ beforeEach(() => {
           if (!reply) throw new Error(`unexpected ${command}`)
           const answer: any = await reply(payload)
           if (command !== 'calendar.events') return answer
+          const calendar = `${payload.account_id}-cal`
+          if (hidden.has(calendar)) return { events: [] }
           return {
-            events: answer.events.map((e: CalendarEvent) => ({ ...e, calendar_id: `${payload.account_id}-cal` })),
+            events: answer.events
+              .filter((e: CalendarEvent) => !deleted.has(e.id))
+              .map((e: CalendarEvent) => ({ ...e, calendar_id: calendar })),
           }
         },
       },
@@ -119,6 +137,7 @@ afterEach(() => {
   delete (window as any).runtime
   calendar$.viewing.set(null)
   calendar$.calendars.set([])
+  calendar$.events.set([])
   calendar$.anchor.set(startOfDay(new Date()).getTime())
   calendar$.view.set('agenda')
   sidebar$.overlay.set(false)
@@ -129,13 +148,17 @@ describe('the day panel (ADR-0069 §3, #362)', () => {
   it('lists the day of every enabled calendar: all-day first, then by start, with the time now as a line', async () => {
     const screen = render(<SidebarDay now={() => NOW} />)
     await waitFor(() => expect(screen.getByText('Dentist')).toBeTruthy())
-    // Every account with mail is asked for the day, refreshed behind the cache; a feed is not.
+    // Every account with mail is asked for the day, refreshed behind the
+    // cache; a feed is not. (The calendars' names, loaded then, read the
+    // cache again.)
     expect(
       dayReads()
+        .filter((r) => r.payload.refresh)
         .map((r) => r.payload.account_id)
         .sort(),
     ).toEqual(['home', 'work'])
     expect(dayReads()[0].payload).toMatchObject({ ...windowOf(15), refresh: true })
+    expect(dayReads().every((r) => r.payload.from === windowOf(15).from)).toBe(true)
     expect(screen.getByRole('heading', { level: 3 }).textContent).toBe(`Today · ${dateOf(at(15))}`)
     // The holiday on its date; the night shift since yesterday, by its start;
     // the time now after what has begun; no cancelled call; not tomorrow's offsite.
@@ -250,7 +273,8 @@ describe('the day panel (ADR-0069 §3, #362)', () => {
     ui$.module.set('calendar')
     calendar$.anchor.set(at(16))
     const screen = render(<SidebarDay now={() => NOW} />)
-    await waitFor(() => expect(screen.getByText('Offsite')).toBeTruthy())
+    // Once the calendars' names are in, and the cache read again for them.
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Offsite, .*, Work$/ })).toBeTruthy())
     expect(dayReads()[0].payload).toMatchObject(windowOf(16))
     expect(screen.getByRole('heading', { level: 3 }).textContent).toBe(dateOf(at(16)))
     // Not today: no line.
@@ -305,18 +329,69 @@ describe('the day panel (ADR-0069 §3, #362)', () => {
   })
 
   it('never shows a slower answer for the day it left on the day it moved to', async () => {
-    let release: () => void = () => {}
+    // Every account's read of today waits, until let go.
+    const waiting: (() => void)[] = []
     const original = replies['calendar.events']
     replies['calendar.events'] = (p) =>
       p.from === windowOf(15).from
-        ? new Promise((resolve) => (release = () => resolve(original(p))))
+        ? new Promise((resolve) => waiting.push(() => resolve(original(p))))
         : { events: [event(`Day ${p.account_id}`, at(16, 9), at(16, 10))] }
     const screen = render(<SidebarDay now={() => NOW} />)
     fireEvent.click(screen.getByRole('button', { name: 'Next day' }))
     await waitFor(() => expect(screen.getByText('Day work')).toBeTruthy())
-    await act(async () => release())
+    expect(waiting.length).toBeGreaterThanOrEqual(2)
+    await act(async () => waiting.forEach((release) => release()))
     expect(screen.queryByText('Dentist')).toBeNull()
+    expect(screen.getByText('Day work')).toBeTruthy()
     expect(screen.getByRole('heading', { level: 3 }).textContent).toBe(dateOf(at(16)))
+  })
+
+  it('shows nothing of the day it left under the new day while that one is read', async () => {
+    const screen = render(<SidebarDay now={() => NOW} />)
+    await waitFor(() => expect(screen.getByText('Dentist')).toBeTruthy())
+    // Tomorrow's read waits; today's answer holds the offsite, which is tomorrow's.
+    const waiting: (() => void)[] = []
+    const original = replies['calendar.events']
+    replies['calendar.events'] = (p) => new Promise((resolve) => waiting.push(() => resolve(original(p))))
+    fireEvent.click(screen.getByRole('button', { name: 'Next day' }))
+    expect(screen.getByRole('heading', { level: 3 }).textContent).toBe(dateOf(at(16)))
+    await waitFor(() => expect(waiting.length).toBeGreaterThanOrEqual(2))
+    expect(screen.getByLabelText('Loading...')).toBeTruthy()
+    expect(screen.queryByText('Offsite')).toBeNull()
+    expect(screen.queryByText('No events')).toBeNull()
+    expect(screen.container.querySelectorAll('li')).toHaveLength(0)
+    await act(async () => waiting.forEach((release) => release()))
+    await waitFor(() => expect(screen.getByText('Offsite')).toBeTruthy())
+    expect(screen.queryByLabelText('Loading...')).toBeNull()
+  })
+
+  // What the app changes itself syncs nothing behind it: no calendar.synced
+  // follows a delete, nor a local calendar's save, nor a calendar hidden.
+  it('reads the day again when an event is deleted or a calendar hidden here, without a sync', async () => {
+    const screen = render(<SidebarDay now={() => NOW} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Dentist, .*, Family$/ })).toBeTruthy())
+    // Opened from the panel, deleted in its sheet.
+    fireEvent.click(screen.getByRole('button', { name: /^Dentist, / }))
+    const dentist = calendar$.viewing.peek()!
+    expect(dentist).toMatchObject({ subject: 'Dentist', accountId: 'home' })
+    await act(async () => {
+      await deleteEvent(dentist)
+    })
+    expect(requests.some((r) => r.command === 'calendar.delete')).toBe(true)
+    await waitFor(() => expect(screen.queryByText('Dentist')).toBeNull())
+    expect(screen.getByText('Design review')).toBeTruthy()
+    expect(dayReads().at(-1)!.payload.refresh).toBe(false)
+    // The work calendar hidden in the calendar list: its events go.
+    await act(async () => {
+      await setCalendarEnabled('work', 'work-cal', false)
+    })
+    await waitFor(() => expect(screen.queryByText('Design review')).toBeNull())
+    expect(screen.queryByText('Holiday')).toBeNull()
+    expect(screen.getByText('No events')).toBeTruthy()
+    // Reading the cache writes nothing back, so it does not read on and on.
+    const asked = dayReads().length
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 50)))
+    expect(dayReads()).toHaveLength(asked)
   })
 })
 
@@ -384,7 +459,7 @@ describe('what the day panel cannot read, it says (ADR-0069 §3)', () => {
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull())
   })
 
-  it('reads the cache again when a refresh lands, and at midnight, keeping its day', async () => {
+  it('reads the cache again when a refresh lands', async () => {
     const screen = render(<SidebarDay now={() => NOW} />)
     await waitFor(() => expect(screen.getByText('Dentist')).toBeTruthy())
     replies['calendar.events'] = (p) =>
@@ -396,17 +471,49 @@ describe('what the day panel cannot read, it says (ADR-0069 §3)', () => {
     expect(listeners['calendar.synced']).toBeUndefined()
     expect(listeners['calendar.syncError']).toBeUndefined()
   })
+})
 
-  it('takes the line away at midnight and stays on its day', async () => {
-    let clock = at(15, 23, 59, 59) + 900
+describe('the day panel at midnight (#362)', () => {
+  // Fake timers, and the panel's own clock: the answers are promises, which
+  // settle in act without a timer.
+  const settle = () =>
+    act(async () => {
+      for (let i = 0; i < 20; i++) await Promise.resolve()
+    })
+  const heading = (screen: ReturnType<typeof render>) => screen.getByRole('heading', { level: 3 }).textContent
+
+  beforeEach(() => jest.useFakeTimers())
+  afterEach(() => jest.useRealTimers())
+
+  it('moves on to the new today when it showed today, with its line', async () => {
+    let clock = at(15, 23, 59, 30)
     const screen = render(<SidebarDay now={() => clock} />)
-    await waitFor(() => expect(screen.getByText('Dentist')).toBeTruthy())
-    expect(screen.container.querySelector('[data-now-line]')).toBeTruthy()
+    await settle()
+    expect(heading(screen)).toBe(`Today · ${dateOf(at(15))}`)
+    expect(screen.getByText('Dentist')).toBeTruthy()
+    clock = at(16, 0, 0, 10)
+    act(() => jest.advanceTimersByTime(31_000))
+    await settle()
+    expect(heading(screen)).toBe(`Today · ${dateOf(at(16))}`)
+    expect(dayReads().at(-1)!.payload).toMatchObject({ ...windowOf(16), refresh: true })
+    expect(rows(screen)).toEqual(['Offsite', 'now'])
+    expect(screen.queryByText('Dentist')).toBeNull()
+  })
+
+  it('keeps another day, reading it again', async () => {
+    let clock = at(15, 23, 59, 30)
+    const screen = render(<SidebarDay now={() => clock} />)
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: 'Previous day' }))
+    await settle()
+    expect(heading(screen)).toBe(dateOf(at(14)))
     const asked = dayReads().length
-    clock = at(16, 0, 0, 1)
-    await waitFor(() => expect(dayReads().length).toBeGreaterThan(asked), { timeout: 2000 })
-    await waitFor(() => expect(screen.container.querySelector('[data-now-line]')).toBeNull())
-    expect(screen.getByRole('heading', { level: 3 }).textContent).toBe(dateOf(at(15)))
-    expect(dayReads().at(-1)!.payload).toMatchObject({ ...windowOf(15), refresh: false })
+    clock = at(16, 0, 0, 10)
+    act(() => jest.advanceTimersByTime(31_000))
+    await settle()
+    expect(heading(screen)).toBe(dateOf(at(14)))
+    expect(dayReads().length).toBeGreaterThan(asked)
+    expect(dayReads().at(-1)!.payload).toMatchObject({ ...windowOf(14), refresh: false })
+    expect(screen.getByText('Night shift')).toBeTruthy()
   })
 })

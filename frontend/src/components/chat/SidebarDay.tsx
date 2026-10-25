@@ -29,7 +29,8 @@ export async function readDay(day: number, refresh: boolean): Promise<DayReading
  * every account, all-day events on top and the rest by start, today's time as
  * a line. It opens on the day selected in Calendar, or today elsewhere, and
  * does not follow the calendar after that; previous day, next day and Today
- * move it. What could not be read is said, and «No events» only after every
+ * move it, and so does midnight while it shows today. What could not be read
+ * is said, and «No events» only after every
  * read went well. Each event is a native button named in full (title, time,
  * calendar and the reader's answer), opening it in the calendar on this day.
  */
@@ -53,7 +54,8 @@ export function SidebarDay({ now = () => Date.now() }: { now?: () => number }) {
     if (calendar$.calendars.peek().length === 0) void loadCalendars()
   }, [])
 
-  // On today, the line of the current time moves with the minutes.
+  // On today, the line of the current time moves with the minutes, and at
+  // midnight the panel moves on to the new today. Another day stays shown.
   const today = dayOf(now())
   const [, tick] = useState(0)
   useEffect(() => {
@@ -62,6 +64,8 @@ export function SidebarDay({ now = () => Date.now() }: { now?: () => number }) {
     const next = () => {
       timer = setTimeout(
         () => {
+          const current = dayOf(now())
+          if (current !== day) return setDay(current)
           tick((count) => count + 1)
           next()
         },
