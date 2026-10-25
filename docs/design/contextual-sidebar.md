@@ -350,8 +350,8 @@ a `AppSidebar.tsx`.
     llista d'aquestes persones, per triar-ne una, i el botó «Tria una altra
     persona» hi torna. Si a la conversa no hi ha ningú més que els comptes
     propis, el panell ho diu. Les persones surten dels missatges de la conversa,
-    mai dels de l'anterior: mentre els missatges encara són els de l'anterior i
-    es llegeixen els nous, el panell espera; si la lectura acaba sense cap
+    mai dels de l'anterior: mentre els missatges encara són els de la conversa
+    anterior i es llegeixen els nous, el panell espera; si la lectura acaba sense cap
     missatge de la conversa (ha fallat, o tots esperen el cos, cosa que sense
     connexió pot no arribar mai), surten de la fila de la llista, que és
     d'aquesta conversa;
@@ -383,8 +383,8 @@ a `AppSidebar.tsx`.
 - **Obrir:** una conversa de l'historial s'obre al correu, al compte de
   l'historial (des de Persones, el correu passa al davant), i la persona hi
   continua en context. Per sota de 769 px es mostra la conversa en lloc de la
-  llista, com quan s'obre des de Tasques o des d'Adjunts; un esdeveniment obre el seu dia al Calendari
-  (`openCalendarOn`). Abans d'obrir-ho, la capa es tanca, com a l'agenda.
+  llista, com quan s'obre des de Tasques o des d'Adjunts. Un esdeveniment obre
+  el seu dia al Calendari (`openCalendarOn`). Abans d'obrir-ho, la capa es tanca, com a l'agenda.
 - **«Historial amb …»**, al menú d'un participant del panell Conversa, obre el
   panell Persona amb aquella persona, sense canviar com es dibuixa la barra ni
   desar res més que el panell, i porta el focus a la pestanya Persona.
