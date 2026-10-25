@@ -1624,7 +1624,7 @@
       "section": "Widgets/General",
       "outcome": "Sidebar widgets, agenda and contextual history with reliable scope",
       "status": "partial",
-      "present": "Per-person history (conversations, upcoming meetings, files) in the open account with coverage stated (#86); in the same conversation details sidebar, an agenda section with the next 7 days of enabled calendars and dated open tasks, overdue first, each opening its item; the sidebar, thread list and board pane resizable by pointer and keyboard within limits and kept across restarts; the last section restored for the main window (#212, ADR-0059). Absent: a widget pane independent of the selected message, as the agenda is reachable only from an open conversation (not at startup without one, nor in the Calendar, Tasks, Contacts or Notes views)",
+      "present": "An app-wide sidebar in every module, independent of the selected message (#361, ADR-0069): expanded beside the content or as an overlay where it does not fit, minimised to a strip of panel icons, or hidden, with its state, width and last panel kept across restarts. Its Agenda panel lists the next 7 days of enabled calendars and dated open tasks, overdue first, each opening its item (#212, ADR-0059); its Dia panel lists one day of every account's enabled calendars, all-day events first and today's time as a line, with previous day, next day and Today, opening on the day selected in Calendar (#362). Both say when a calendar cannot be read or may be out of date, and read again after a sync, at midnight and after a local change. With a conversation open, the Conversa panel holds the participants, media and files and the per-person history (conversations, upcoming meetings, files) in the open account with coverage stated (#86). The sidebar, thread list and board pane are resizable by pointer and keyboard within limits. Absent: the Persona panel (#363); native Windows and screen-reader evidence",
       "code": "docs/design/contextual-sidebar.md",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -1773,6 +1773,18 @@
           {
             "sha": "d98a004dea9be52fe1a03b79a2aadb0d4d37e249",
             "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "8af3cb831f66d2a3fcde785efdf66c8ed271b447",
+            "result": "frontend/src/components/chat/sidebarCalendar.test.tsx"
+          },
+          {
+            "sha": "8af3cb831f66d2a3fcde785efdf66c8ed271b447",
+            "result": "frontend/src/components/chat/SidebarDay.test.tsx"
+          },
+          {
+            "sha": "8af3cb831f66d2a3fcde785efdf66c8ed271b447",
+            "result": "frontend/src/components/chat/SidebarAgenda.test.tsx"
           }
         ],
         "native": [],

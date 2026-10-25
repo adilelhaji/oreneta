@@ -378,16 +378,20 @@ barra lateral de l'aplicació va incorporar el panell Dia, a tots els mòduls, e
 Conversa: els esdeveniments d'un dia dels calendaris activats de tots els comptes, sense els
 cancel·lats, amb els de tot el dia a dalt per les seves dates, la resta per hora d'inici i, avui, una
 línia amb l'hora actual; dia anterior, dia següent i «Avui». A Calendari s'obre en el dia seleccionat
-i no el segueix després; als altres mòduls, avui. Llegeix com l'agenda, amb el mateix codi, ara
-compartit (`calendar.events` des de la memòria cau, actualització en segon pla, relectura amb
-`calendar.synced`, a mitjanit i en canviar de dia); diu quan un calendari no s'ha pogut llegir i quan
-una actualització ha fallat, fins que una sincronització d'aquell compte cobreixi el dia, i només diu
-«Cap esdeveniment» quan totes les lectures han anat bé. Cada esdeveniment és un botó natiu amb el nom
-complet (títol, hora, calendari i la resposta a la reunió) que obre el calendari en aquell dia amb la
-fitxa. `session_sidebar_section_main` desa `day` i el recupera. Hi ha proves noves: unitàries del dia
+i no el segueix després; als altres mòduls, avui; a mitjanit, si mostra avui, passa al nou dia
+d'avui. Llegeix com l'agenda, amb el mateix codi, ara compartit (`calendar.events` des de la memòria
+cau, actualització en segon pla, relectura amb `calendar.synced`, a mitjanit, en canviar de dia i
+quan l'aplicació mateixa suprimeix o desa un esdeveniment o amaga un calendari, accions que no
+sincronitzen res; l'agenda també es torna a llegir aleshores); diu quan un calendari no s'ha pogut
+llegir i quan una actualització ha fallat, fins que una sincronització d'aquell compte cobreixi el
+dia, i només diu «Cap esdeveniment» quan totes les lectures han anat bé. Cada esdeveniment és un botó
+natiu amb el nom complet (títol, hora, calendari i la resposta a la reunió) que obre el calendari en
+aquell dia amb la fitxa. `session_sidebar_section_main` desa `day` i el recupera. Hi ha proves
+noves: unitàries del dia
 (també als fusos de São Paulo i de Sydney), de components del panell (lectura parcial, avís de dades
 desactualitzades, «Cap esdeveniment» només amb lectures correctes, obrir un esdeveniment, el dia
-d'inici des de Calendari i des dels altres mòduls, la navegació, el teclat i la secció recordada) i,
+d'inici des de Calendari i des dels altres mòduls, la navegació, la mitjanit, un esdeveniment
+suprimit i un calendari amagat, el teclat i la secció recordada), de la lectura compartida i,
 al punt d'entrada de producció, a 1440 px, en clar i en fosc, en català i en àrab, des del correu i
 des del Calendari, amb axe. És una nota d'evidència: cap fila no canvia d'estat (SET-23 continua
 `partial`), i el panell Persona (12c) i l'evidència nativa de Windows i amb lectors de pantalla
