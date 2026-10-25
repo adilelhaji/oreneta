@@ -1512,7 +1512,7 @@
   "shortcuts.label.search.thread": "Otsi praegusest lõimest",
   "shortcuts.label.search.global": "Otsi kõigist kirjadest",
   "shortcuts.label.view.toggle": "Lülita Posti ja kanbani tahvli vahel",
-  "shortcuts.label.view.rail": "Mine üksusele {n} kaustas “Kontod ja kaustad”",
+  "shortcuts.label.view.rail": "Mine jaotise “Kontod ja kaustad” üksusele {n}",
   "shortcuts.label.tab.close": "Sulge vahekaart",
   "shortcuts.label.view.zoomIn": "Suurenda kõike",
   "shortcuts.label.view.zoomOut": "Vähenda kõike",

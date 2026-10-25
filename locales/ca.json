@@ -1525,7 +1525,7 @@
   "shortcuts.label.thread.star": "Commuta el destacat",
   "shortcuts.label.thread.unread": "Marca com a no llegit",
   "shortcuts.label.thread.delete": "Suprimeix la conversa",
-  "shortcuts.label.thread.details": "Commuta el tauler de conversa de la barra lateral",
+  "shortcuts.label.thread.details": "Commuta el panell de la conversa a la barra lateral",
   "shortcuts.nextThread": "Conversa següent",
   "shortcuts.pressKeys": "Prem les tecles…",
   "shortcuts.previousThread": "Conversa anterior",

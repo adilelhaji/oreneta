@@ -951,7 +951,7 @@ arrencar) i `index.css` (els colors de la barra estreta).
   comptes visibles, en l'ordre de «Comptes i carpetes»; canvien el lloc del correu
   sense canviar el mòdul en pantalla, com abans, i els mòduls no tenen drecera. Al
   diàleg de les dreceres de teclat, el grup es diu «Comptes i carpetes» i les files
-  «Ves a l'element N de «Comptes i carpetes»»: els noms i els títols dels grups
+  «Ves a l'element N de “Comptes i carpetes”»: els noms i els títols dels grups
   són al catàleg de traduccions (`shortcuts.label.*` i `shortcuts.group.*`, #358) i
   es resolen en pintar, de manera que segueixen la llengua de la interfície.
 - **Espai:** a partir de 1025 px la fila guanya els 60 px de la barra vertical.
