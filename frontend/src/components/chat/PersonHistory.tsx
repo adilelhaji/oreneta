@@ -13,9 +13,10 @@ export type PersonContext = {
 }
 
 /**
- * One person's history with the open account (#86): conversations, upcoming
+ * One person's history with one account (#86): conversations, upcoming
  * meetings and files, each opening where it came from. Only this account,
- * and only what is kept here, which is said.
+ * and only what is kept here, which is said. The sidebar's Persona panel
+ * shows it (ADR-0069 §4), for the account it chose.
  */
 export function PersonHistory({
   accountId,
@@ -29,23 +30,27 @@ export function PersonHistory({
   onOpenEvent: (start: number) => void
 }) {
   const { t } = useTranslation()
-  const [context, setContext] = useState<PersonContext | null>(null)
-  const [failed, setFailed] = useState('')
+  // An answer is kept with the account and the address it was asked for, so
+  // that the one for the previous person or account is never drawn under the
+  // new one, not even for the drawing before the new question goes out.
+  const asked = `${accountId}\n${address}`
+  const [answer, setAnswer] = useState<{ asked: string; context?: PersonContext; failed?: string } | null>(null)
 
   useEffect(() => {
     let current = true
-    setContext(null)
-    setFailed('')
     // An answer for another account or person never lands here.
     void invoke<PersonContext>('context.person', { account: accountId, address }).then(
-      (answer) => current && setContext(answer),
-      (error) => current && setFailed(error instanceof Error ? error.message : String(error)),
+      (context) => current && setAnswer({ asked, context }),
+      (error) => current && setAnswer({ asked, failed: error instanceof Error ? error.message : String(error) }),
     )
     return () => {
       current = false
     }
-  }, [accountId, address])
+  }, [accountId, address, asked])
 
+  const shown = answer?.asked === asked ? answer : null
+  const context = shown?.context ?? null
+  const failed = shown?.failed ?? ''
   if (failed) return <p className="p-4 text-caption text-danger">{failed}</p>
   if (!context)
     return (
@@ -75,7 +80,7 @@ export function PersonHistory({
             <li key={c.thread_id}>
               <button type="button" className={row} onClick={() => onOpenConversation(c.thread_id, c.folder)}>
                 <MessageSquare size={14} strokeWidth={1.75} className="shrink-0 text-accent-fg" aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate text-primary">
+                <span dir="auto" className="min-w-0 flex-1 truncate text-primary">
                   {c.subject || t('chat.noSubject', { defaultValue: '(no subject)' })}
                 </span>
                 <span className="shrink-0 text-secondary">{day(c.date)}</span>
@@ -96,7 +101,9 @@ export function PersonHistory({
             <li key={`${e.calendar_id}:${e.event_id}`}>
               <button type="button" className={row} onClick={() => onOpenEvent(e.start)}>
                 <CalendarDays size={14} strokeWidth={1.75} className="shrink-0 text-accent-fg" aria-hidden="true" />
-                <span dir="auto" className="min-w-0 flex-1 truncate text-primary">{e.subject}</span>
+                <span dir="auto" className="min-w-0 flex-1 truncate text-primary">
+                  {e.subject}
+                </span>
                 <span className="shrink-0 text-secondary">{day(e.start)}</span>
               </button>
             </li>
@@ -115,7 +122,9 @@ export function PersonHistory({
             <li key={`${f.thread_id}:${f.filename}:${index}`}>
               <button type="button" className={row} onClick={() => onOpenConversation(f.thread_id, f.folder)}>
                 <File size={14} strokeWidth={1.75} className="shrink-0 text-accent-fg" aria-hidden="true" />
-                <span dir="auto" className="min-w-0 flex-1 truncate text-primary">{f.filename}</span>
+                <span dir="auto" className="min-w-0 flex-1 truncate text-primary">
+                  {f.filename}
+                </span>
                 <span className="shrink-0 text-secondary">{formatFileSize(f.size)}</span>
               </button>
             </li>

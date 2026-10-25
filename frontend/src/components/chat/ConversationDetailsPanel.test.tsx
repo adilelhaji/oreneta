@@ -36,7 +36,8 @@ const message = (thread: string, subject: string): Message => ({
 })
 const budget = message('work#INBOX#budget', 'Budget')
 const other = message('work#INBOX#other', 'Other thread')
-const third = message('work#INBOX#third', 'Third thread')
+// Someone else's conversation: Bea's, not Ana's.
+const third = { ...message('work#INBOX#third', 'Third thread'), from_name: 'Bea', from_addr: 'bea@x.test' }
 
 function openConversation(thread: Message) {
   mail$.messages.set([thread])
@@ -121,19 +122,23 @@ describe('the sidebar panels (#212, ADR-0069)', () => {
     await waitFor(() => expect(screen.getByText('Nothing scheduled or due in the next 7 days.')).toBeTruthy())
   })
 
-  it('reads a stored section this version does not know as the Agenda (ADR-0069 §2)', () => {
+  it('reads a stored section this version does not know as the Agenda, and `person` as its panel (ADR-0069 §2)', () => {
     ui$.sidebarSection.set('files')
     restoreUiSession({ session_sidebar_section_main: 'widgets' }, [])
     expect(ui$.sidebarSection.get()).toBe('agenda')
-    // Dia and Persona are kept as they are, and shown as the Agenda until they arrive.
-    restoreUiSession({ session_sidebar_section_main: 'person' }, [])
-    expect(ui$.sidebarSection.get()).toBe('person')
-    const screen = render(<Frame />)
+    let screen = render(<Frame />)
     expect(screen.getByRole('heading', { name: 'Agenda' })).toBeTruthy()
     expect(screen.getByRole('tab', { name: 'Agenda' }).getAttribute('aria-selected')).toBe('true')
+    cleanup()
+    // Persona is a panel since #363: a stored `person` is that panel.
+    restoreUiSession({ session_sidebar_section_main: 'person' }, [])
+    expect(ui$.sidebarSection.get()).toBe('person')
+    screen = render(<Frame />)
+    expect(screen.getByRole('heading', { name: 'Person' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Person' }).getAttribute('aria-selected')).toBe('true')
   })
 
-  it("keeps the section when the conversation changes, but not one person's history", async () => {
+  it("keeps the section when the conversation changes, and never carries one person's history to another", async () => {
     ui$.sidebarSection.set('files')
     const screen = render(<Frame />)
     expect(screen.getByRole('heading', { name: 'Files' })).toBeTruthy()
@@ -144,11 +149,17 @@ describe('the sidebar panels (#212, ADR-0069)', () => {
     const person = screen.getByText('ana@x.test').closest('div')!.parentElement!
     fireEvent.contextMenu(person, { clientX: 10, clientY: 10 })
     fireEvent.click(screen.getByText('History with Ana'))
+    // Since #363 it is the sidebar's Persona panel, with Ana in it.
+    expect(screen.getByRole('tab', { name: 'Person' }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByRole('heading', { name: 'With Ana' })).toBeTruthy()
-    // A person's history is shown over the overview, not remembered as a section.
-    expect(ui$.sidebarSection.get()).toBe('overview')
+    // What is remembered is the panel, never the person (ADR-0069 §2).
+    expect(ui$.sidebarSection.get()).toBe('person')
+    expect(written('session_sidebar_section_main')).toEqual(['files', 'overview', 'person'])
+    expect(JSON.stringify(writes)).not.toContain('ana@x.test')
+    // Another conversation, someone else's: their history, never Ana's.
     act(() => openConversation(third))
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'With Ana' })).toBeNull())
+    expect(screen.getByRole('heading', { name: 'With Bea' })).toBeTruthy()
   })
 })
 

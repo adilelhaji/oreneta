@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
-import type { Attachment, Message } from '../../types'
-import { buildThreadMedia } from './conversationMedia'
+import type { Account, Attachment, Message } from '../../types'
+import { buildParticipants, buildThreadMedia } from './conversationMedia'
 
 function message(id: string, attachments: Attachment[]): Message {
   return {
@@ -44,6 +44,24 @@ describe('buildThreadMedia', () => {
     expect(fileItems.map(({ filename, messageId }) => ({ filename, messageId }))).toEqual([
       { filename: 'newer.pdf', messageId: 'newer-message' },
       { filename: 'older.txt', messageId: 'older-message' },
+    ])
+  })
+})
+
+describe('buildParticipants', () => {
+  it("counts every address of the reader's accounts as you, the aliases included (#363)", () => {
+    const account = {
+      id: 'account-1',
+      email: 'me@example.com',
+      aliases: [{ email: 'Desk@Example.com', name: 'Desk' }],
+    } as Account
+    const messages = [
+      { ...message('asked', []), to: 'Desk <desk@example.com>' },
+      { ...message('answered', []), from_name: 'Desk', from_addr: 'desk@example.com', to: 'sender@example.com' },
+    ]
+    expect(buildParticipants(messages, [account], false).map(({ email, isSelf }) => ({ email, isSelf }))).toEqual([
+      { email: 'sender@example.com', isSelf: false },
+      { email: 'desk@example.com', isSelf: true },
     ])
   })
 })

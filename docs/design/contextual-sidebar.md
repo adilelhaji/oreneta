@@ -1,15 +1,20 @@
 # Barra lateral contextual (#86)
 
-El panell Conversa de la barra lateral de l'aplicació (des de #361; abans, la barra
-lateral de detalls d'una conversa), amb la multimèdia, els fitxers i els
-participants, afegeix «Historial amb …» per a cada participant.
+L'historial d'una persona amb un compte. Des de #363 és el panell Persona de la
+barra lateral de l'aplicació, a tots els mòduls (vegeu [El panell
+Persona](#el-panell-persona-363)). Abans era una vista a sobre del panell
+Conversa (fins a #361, la barra lateral de detalls d'una conversa), que s'obria
+amb «Historial amb …» des d'un participant; aquesta entrada es manté i ara obre
+el panell Persona.
 
 - **Què mostra:** les converses amb aquella adreça, les reunions properes en què
   és (organitzador o assistent) i els fitxers que ha enviat. Cada element obre
   el seu origen: la conversa, el dia al calendari o el missatge del fitxer.
-- **Aïllament:** només el compte de la conversa oberta. Un altre compte que
-  tingui correu de la mateixa persona no hi apareix, i una resposta lenta per al
-  compte anterior no es dibuixa al nou.
+- **Aïllament:** només un compte: al correu, el de la conversa oberta, i a
+  Persones, el de la llibreta del contacte o el que es tria (des de #363). Un
+  altre compte que tingui correu de la mateixa persona no hi apareix, i una
+  resposta lenta per al compte anterior no es dibuixa al nou, ni tan sols abans
+  que surti la pregunta nova.
 - **Adreça completa:** `ana@x.test` no coincideix amb `diana@x.test`. La
   consulta filtra per subcadena i després es comprova l'adreça exacta.
 - **El que hi ha aquí:** s'indica de quants missatges desats surt i quants
@@ -25,7 +30,10 @@ participants, afegeix «Historial amb …» per a cada participant.
 - **Aplicació:**
   - cada element obre el seu origen;
   - avís d'historial parcial;
-  - una resposta tardana d'un altre compte no hi apareix.
+  - una resposta tardana d'un altre compte no hi apareix (al panell, també al
+    correu i a Persones, des de #363);
+  - el dibuix que segueix un canvi de compte no conté l'historial de l'anterior
+    (des de #363).
 
 ## Agenda, amplada i secció recordada (#212, ADR-0059)
 
@@ -55,9 +63,10 @@ participants, afegeix «Historial amb …» per a cada participant.
   lectura.
 - **Panell recordat:** es torna a obrir a l'últim que s'ha fet servir, també
   després de reiniciar (`session_sidebar_section_main`). Des de #361 aquesta
-  clau desa el tipus de panell (vegeu més avall). L'historial d'una persona no es
-  recorda. Fins a #361, si la barra era oberta o tancada només es recordava durant
-  la sessió; ara es desa (`app_sidebar_state`).
+  clau desa el tipus de panell (vegeu més avall). Des
+  de #363 es recorda el panell Persona (`person`), però mai la persona que hi havia. Fins a
+  #361, si la barra estava oberta o tancada només es recordava durant la sessió;
+  ara es desa (`app_sidebar_state`).
 - **Proves:** `lib/agenda.test.ts`, `lib/paneResize.test.ts`,
   `SidebarAgenda.test.tsx`, `PaneResizer.test.tsx`,
   `ConversationDetailsPanel.test.tsx` (des de #361, amb el contenidor nou) i
@@ -98,12 +107,12 @@ mateixa que llegeix `MessagePane`), `states/settings.ts` (`app_sidebar_state`) i
   |---|---|---|
   | Agenda | El d'ADR-0059, sense canvis | Tots els mòduls |
   | Dia | Un dia dels calendaris, des de #362 (vegeu [El panell Dia](#el-panell-dia-362)) | Tots els mòduls |
-  | Conversa | El resum (els participants), la multimèdia i els fitxers, i l'historial d'una persona a sobre, com abans | Correu i taulers, amb una conversa oberta |
+  | Persona | L'historial de #86 de la persona en context (des de #363; vegeu [El panell Persona](#el-panell-persona-363)) | Tots els mòduls; amb un estat buit on no n'hi ha cap |
+  | Conversa | El resum (els participants), la multimèdia i els fitxers; fins a #363, també l'historial d'una persona a sobre | Correu i taulers, amb una conversa oberta |
 
-  Persona arriba amb la peça 12c; fins aleshores no té pestanya ni icona.
   Afegir un panell és una entrada a la llista `SIDEBAR_PANELS` de
-  `AppSidebar.tsx`, com s'hi ha afegit Dia. L'agenda ja no és una fila del
-  resum: és un panell.
+  `AppSidebar.tsx`, com s'hi han afegit el Dia (#362) i la Persona (#363).
+  L'agenda ja no és una fila del resum: és un panell.
 - **Selector de panells**, al peu, de 2,5 rem: una llista de pestanyes
   (`tablist`, «Panells de la barra lateral»). Les fletxes esquerra i dreta
   passen a la pestanya següent o a l'anterior en el sentit de lectura, en bucle,
@@ -119,7 +128,7 @@ mateixa que llegeix `MessagePane`), `states/settings.ts` (`app_sidebar_state`) i
   | `overview`, `media`, `files` | Conversa, en aquella subsecció | Agenda |
   | `agenda` | Agenda | Agenda |
   | `day` | Dia (des de #362) | Dia |
-  | `person` | Agenda fins que hi hagi el panell; el valor es conserva | Agenda |
+  | `person` | Persona (des de #363) | Persona |
   | desconegut o buit | Agenda | Agenda |
 
   La pestanya Conversa torna a la subsecció que s'hi va veure l'última vegada en
@@ -134,8 +143,9 @@ mateixa que llegeix `MessagePane`), `states/settings.ts` (`app_sidebar_state`) i
   - `minimized`, minimitzada (per defecte, en un perfil nou i en actualitzar):
     una tira de 2,5 rem (40 px al 100 %) amb la icona de cada panell; una icona
     desplega la barra en aquell panell. Les icones es diuen «Obre el panell
-    Agenda», «Obre el panell Dia» i «Obre el panell Conversa», i no només com el
-    panell: el Calendari ja té un botó «Agenda», el de la seva visualització;
+    Agenda», «Obre el panell Dia» (des de #362), «Obre el panell Persona» (des
+    de #363) i «Obre el panell Conversa», i no només com el panell: el
+    Calendari ja té un botó «Agenda», el de la seva visualització;
   - `hidden`, amagada: no es dibuixa res.
 - **Què canvia l'estat desat:** el botó «Barra lateral» de la banda superior
   quan amaga la barra, la desplega al costat o hi torna a posar la tira, i les
@@ -312,10 +322,10 @@ mateixa que llegeix `MessagePane`), `states/settings.ts` (`app_sidebar_state`) i
 | N1 (`lib/paneResize.test.ts`) | La regla a 1100, 1119, 1120, 1180 i 1440 px, amb carpetes i sense, al correu, a Calendari, Tasques, Xat i Adjunts (540 px a 1100 px), a Persones (al costat a partir de 1128 px) i a Notes (a partir de 1160 px), i amb un tauler, amb una targeta oberta i sense, també el pas a la tira entre 1100 i 1119 px en obrir-ne una; el mínim que demana el contingut de cada mòdul com a base (`moduleContentStyle`); la fila mesurada; la tira a 769 i 768 px i a 600 px; la tira al 200 %, al correu i a Persones |
 | N1 (`states/settings.test.ts`) | `app_sidebar_state`: minimitzada per defecte i en actualitzar, els tres estats, valors no vàlids, i només els canvis s'escriuen |
 | N1 (`states/sidebar.test.ts`) | La taula de conversió de `session_sidebar_section_main`, també els valors desconeguts, buits, `day` i `person`; com es dibuixa la barra; el botó en cada estat i espai (la taula de més amunt: què es dibuixa, l'`aria-expanded`, l'acció, què fa un clic i què desa), també amagar la tira i tornar-la a posar on no hi cap al costat; la tira, minimitzar i `i` al costat, i `i` amb la barra amagada on no hi cap, que obre la capa sense desar res; què no canvia l'estat desat (la capa, l'obri el que l'obri, Escapada, canviar de mòdul); `i` sense conversa a la pantalla no fa res ni desa res; la resposta ràpida, la cerca de la conversa i una pestanya que passa al davant tanquen la capa |
-| N2 (`components/shell/AppSidebar.test.tsx`) | La barra a cada mòdul, després de `<main>`, amb l'Agenda, i la Conversa només amb una conversa oberta (també en un tauler); què canvia l'estat desat i què no, amb el focus; l'arrencada amb `expanded` en una finestra estreta; la finestra que s'eixampla i s'estreny; per sota de 769 px, la Conversa només amb la conversa a la pantalla; el selector de panells amb el teclat, en anglès i en àrab, amb els tres panells des de #362 (abans, amb un tercer panell de prova afegit amb una entrada); el botó de la banda (amaga, desplega, l'`aria-expanded`, la descripció per `aria-describedby` i el títol), i a 1024 px la tira que amaga i torna a posar, desada, amb el focus al botó; per sota de 769 px, la capa que obre des de res i el focus que hi torna; `i` sota una pestanya de redacció i per sota de 769 px amb la llista; la capa que es tanca amb «Missatge nou per a …», «Mostra els missatges amb …», una imatge de la galeria, una conversa de l'historial d'una persona i Ctrl/⌘+N; `<main>` inert sota la capa i el focus que hi torna en tancar-la; Escapada al camp de cerca de la banda abans que a la capa; la tira de 2,5 rem |
+| N2 (`components/shell/AppSidebar.test.tsx`) | La barra a cada mòdul, després de `<main>`, amb l'Agenda, el Dia (des de #362) i la Persona (des de #363), i la Conversa només amb una conversa oberta (també en un tauler); què canvia l'estat desat i què no, amb el focus; l'arrencada amb `expanded` en una finestra estreta; la finestra que s'eixampla i s'estreny; per sota de 769 px, la Conversa només amb la conversa a la pantalla; el selector de panells amb el teclat, en anglès i en àrab, amb els quatre panells des de #362 i #363 (abans, amb un panell de prova afegit amb una entrada); el botó de la banda (amaga, desplega, l'`aria-expanded`, la descripció per `aria-describedby` i el títol), i a 1024 px la tira que amaga i torna a posar, desada, amb el focus al botó; per sota de 769 px, la capa que obre des de res i el focus que hi torna; `i` sota una pestanya de redacció i per sota de 769 px amb la llista; la capa que es tanca amb «Missatge nou per a …», «Mostra els missatges amb …», una imatge de la galeria, una conversa de l'historial d'una persona i Ctrl/⌘+N; `<main>` inert sota la capa i el focus que hi torna en tancar-la; Escapada al camp de cerca de la banda abans que a la capa; la tira de 2,5 rem |
 | N2 (`components/palette/useCommandList.test.tsx`) | Les ordres que porten al davant el mòdul (un missatge nou, un filtre, una carpeta, un compte, un tauler, un mòdul) tanquen la capa abans d'actuar; les que actuen fora del mòdul o sobre les dades (la configuració, un tema, una pausa, «Quant a», la paleta, les dreceres, el catàleg, afegir un compte, la cerca de la banda, sincronitzar, marcar com a llegit) la deixen oberta; la de la barra la tanca sense amagar la tira |
 | N2 (`components/chat/SidebarAgenda.test.tsx`) | Un esdeveniment de l'agenda tanca la capa abans d'obrir-se al Calendari, també des del Calendari mateix |
-| N2 (`components/chat/ConversationDetailsPanel.test.tsx`) | Les proves de #212 al contenidor nou: l'agenda des de la seva pestanya i recordada, restaurada després de reiniciar, una secció desconeguda, la subsecció en canviar de conversa i l'historial d'una persona que no es recorda; l'amplada amb el teclat i restaurada |
+| N2 (`components/chat/ConversationDetailsPanel.test.tsx`) | Les proves de #212 al contenidor nou: l'agenda des de la seva pestanya i recordada, restaurada després de reiniciar, una secció desconeguda, la subsecció en canviar de conversa i, des de #363, «Historial amb …», que obre el panell Persona, recordat com a `person` i mai amb la persona, que no passa a una altra conversa; l'amplada amb el teclat i restaurada |
 | N2 (`components/shell/SyncStatus.test.tsx`) | El botó «Barra lateral» al final de la banda, després de l'estat de la sincronització, en l'ordre de Tab |
 | e2e (`startup.e2e.ts`, «#212») | Les proves de la barra de detalls amb el botó de la banda i la regió nova, amb les mateixes expectatives (a 1100 px ja acceptaven la capa) |
 | e2e (`startup.e2e.ts`, «#361») | A 600, 1024, 1100, 1180 i 1440 px, en clar i en fosc, en català i en àrab: la tira en arrencar, l'agenda sense conversa des del botó de la banda, al correu i des de Calendari, Tasques, Persones i Notes, al costat o com a capa segons la regla, al costat final de la línia (a l'esquerra en àrab), sense desplaçament horitzontal, amb axe; l'estat desat després de reiniciar, sense capa en arrencar. Al 200 % a 1440 i 1024 px: la tira i el selector de 80 px, sense desplaçament horitzontal, amb axe. L'estat i l'amplada després de reiniciar, el botó de minimitzar, el botó de la banda que amaga la tira i la desplega des de res, amb la descripció i el títol, l'ordre del menú, la capa que no es desa (des d'una icona de la tira), a 1100 px el botó que torna a posar la tira amagada, desada com a `minimized`, i F6 i Maj+F6 a través de la barra. A 1024 px, el botó i l'ordre del menú que amaguen la tira i la tornen a posar, desada després de reiniciar, sense capa i amb `<main>` actiu; la capa, només des de la icona. A Persones a 1127, 1128, 1180 i 1440 px i a Notes a 1159, 1160, 1180 i 1440 px, amb `expanded` desat: la barra al costat o la tira segons el mínim del mòdul, i la persona i la nota, mesurades, d'almenys 360 px, abans de la barra. Al 200 % a 1025 px, la tira per defecte: 80 px, la subfinestra de carpetes de 225 px amb Correu, Calendari i «Més», sense desplaçament horitzontal. A 1024 px, la capa de `i`: `<main>` inert, F6 i Maj+F6 només entre la banda i la barra, Tab que no hi entra, el focus que torna a la fila, Escapada al camp de cerca de la banda abans que a la capa, i `r`, que la tanca i posa el focus a la resposta ràpida. La configuració oberta des de la paleta per sobre de la capa, que s'hi queda, i el focus que torna a la pestanya de la capa i, en tancar-la, a la icona de la tira |
@@ -414,5 +424,84 @@ resposta a una reunió, amb les paraules de la fitxa de l'esdeveniment).
 | N2 (`components/chat/SidebarDay.test.tsx`, també als dos fusos) | El dia de tots els comptes (no dels canals), amb la línia de l'hora; els noms complets i l'estat; obrir un esdeveniment en el dia del panell, també un del dia abans i un de tot el dia, i la capa que es tanca a Calendari; el dia d'inici a Calendari (el seleccionat, sense seguir-lo després) i als altres mòduls (avui); dia anterior, següent i «Avui», cadascun amb la seva lectura; una resposta tardana que no es dibuixa, i res del dia que es deixa sota la data del dia nou mentre aquest es llegeix; un esdeveniment suprimit des de la seva fitxa i un calendari amagat, que en desapareixen sense cap sincronització; la lectura parcial; «Cap esdeveniment» només amb les lectures bé; l'avís de dades desactualitzades fins a una sincronització del compte que cobreixi el dia; la relectura amb `calendar.synced`; a mitjanit (amb temporitzadors simulats), el pas al nou dia d'avui si mostrava avui, també quan una sincronització es dibuixa abans del temporitzador del minut, el dia de demà triat abans de mitjanit, que passa a ser avui, i un altre dia que s'hi queda i es torna a llegir |
 | N2 (`components/chat/sidebarCalendar.test.tsx`) | La lectura que comparteixen l'Agenda i el Dia: una primera lectura lenta que arriba després de la que segueix una sincronització no la substitueix; es torna a llegir quan l'aplicació canvia els esdeveniments o els calendaris, o tanca la fitxa o l'editor d'un esdeveniment, sense tornar-se a llegir sola, i res després de desmuntar-se |
 | N2 (`components/chat/SidebarAgenda.test.tsx`, #362) | L'agenda també es torna a llegir quan s'hi suprimeix un esdeveniment des de la seva fitxa o s'amaga un calendari, sense cap sincronització |
-| N2 (`components/shell/AppSidebar.test.tsx`) | La pestanya i la icona Dia a cada mòdul, entre l'Agenda i la Conversa; el selector de panells amb el teclat i en àrab amb tots tres; `day` desat que es recupera amb una conversa oberta i sense; la icona de la tira que el desplega amb el focus a la pestanya |
+| N2 (`components/shell/AppSidebar.test.tsx`) | La pestanya i la icona Dia a cada mòdul, entre l'Agenda i la Persona (des de #363, abans de la Conversa); el selector de panells amb el teclat i en àrab amb tots quatre; `day` desat que es recupera amb una conversa oberta i sense; la icona de la tira que el desplega amb el focus a la pestanya |
 | e2e (`startup.e2e.ts`, «#362») | A 1440 px, en clar i en fosc, en català i en àrab: el panell des de la icona de la tira al correu, al costat del contingut i al final de la línia, sense desplaçament horitzontal, amb axe; avui amb el festiu i la línia de l'hora, el dia anterior amb «Cap esdeveniment», «Avui» i el dia següent amb la reunió; Retorn a la reunió, que obre el Calendari en aquell dia amb la fitxa; a Calendari, el panell que s'obre en el dia seleccionat i no el segueix després, amb axe; `day` desat i recuperat després de reiniciar |
+
+## El panell Persona (#363)
+
+Peça 12c del redisseny, segons
+[ADR-0069](../adr/0069-barra-lateral-de-tota-l-aplicacio.md) (§1, §2 i §4).
+Codi: `frontend/src/components/chat/PersonPanel.tsx` (el panell, que fa servir
+el `PersonHistory` de #86, sense copiar-lo), `states/person.ts` (qui és la persona en context, i
+`resolvePersonPanel`, la regla del §4) i l'entrada `person` de `SIDEBAR_PANELS`
+a `AppSidebar.tsx`.
+
+- **On és:** a tots els mòduls, amb la pestanya «Persona» després de l'Agenda i
+  del Dia i abans de la Conversa, i la icona «Obre el panell Persona» a la
+  tira. On no hi ha ningú, un estat buit diu què s'ha de
+  seleccionar.
+- **Qui és la persona:**
+  - al correu, amb una conversa oberta (també en un tauler amb la subfinestra
+    de conversa), la persona que hi participa i no és cap dels comptes propis
+    (ni cap dels seus àlies), si n'hi ha una de sola; si n'hi ha diverses, la
+    llista d'aquestes persones, per triar-ne una, i el botó «Tria una altra
+    persona» hi torna. Si a la conversa no hi ha ningú més que els comptes
+    propis, el panell ho diu. Les persones surten dels missatges de la conversa,
+    mai dels de l'anterior: mentre els missatges encara són els de la conversa
+    anterior i es llegeixen els nous, el panell espera; si la lectura acaba sense cap
+    missatge de la conversa (ha fallat, o tots esperen el cos, cosa que sense
+    connexió pot no arribar mai), surten de la fila de la llista, que és
+    d'aquesta conversa;
+  - a Persones, el contacte seleccionat a la llista;
+  - als altres mòduls, o sense conversa ni contacte, ningú: «Obre una conversa
+    per veure l'historial…», «Selecciona un contacte…» o «Obre una conversa al
+    Correu o un contacte a Persones…». No s'endevina ningú.
+- **Com ho sap la barra:** el panell llegeix el mòdul que hi ha a la pantalla i
+  `person$` (`states/person.ts`), que no es desa mai:
+  - al correu, la persona triada (a la llista del panell o amb «Historial amb …»)
+    es guarda amb la conversa i el compte on s'ha triat: en una altra conversa,
+    o en el mateix fil d'un altre compte, no compta;
+  - a Persones, la persona és la selecció de la llista (`people$.selectedId`),
+    sense còpia, i `person$` només guarda el que el panell ha demanat per a
+    aquell contacte: l'adreça, si en té més d'una, i el compte, si la llibreta
+    no en té. Seleccionar un altre contacte comença sense res triat.
+- **El compte (aïllament de #86):** al correu, el de la conversa. A Persones, el
+  de la llibreta del contacte (`contact_sources.account`, que arriba amb cada
+  persona de `people.list`). Si la llibreta no és de cap compte (la d'aquest
+  ordinador, o una de CardDAV sense compte), o si el compte ja no hi és, el
+  panell ho diu i demana el compte en un desplegable («Tria un compte», amb els
+  comptes de correu i sense els canals), sense triar-ne cap tot sol, ni tan sols
+  quan només n'hi ha un. No barreja mai comptes.
+- **L'adreça:** l'historial és d'una adreça sencera (#86). Un contacte amb més
+  d'una adreça la demana en un altre desplegable («Tria una adreça»), i un
+  contacte sense cap adreça ho diu.
+- **El contingut i les regles** són els de #86 (vegeu més amunt). A sobre, la
+  capçalera diu amb qui («Amb …»), l'adreça i el compte («Compte: …»).
+- **Obrir:** una conversa de l'historial s'obre al correu, al compte de
+  l'historial (des de Persones, el correu passa al davant), i la persona hi
+  continua en context. Per sota de 769 px es mostra la conversa en lloc de la
+  llista, com quan s'obre des de Tasques o des d'Adjunts. Un esdeveniment obre
+  el seu dia al Calendari (`openCalendarOn`). Abans d'obrir-ho, la capa es tanca, com a l'agenda.
+- **«Historial amb …»**, al menú d'un participant del panell Conversa, obre el
+  panell Persona amb aquella persona, sense canviar com es dibuixa la barra ni
+  desar res més que el panell, i porta el focus a la pestanya Persona.
+- **El focus:** triar una persona de la llista el porta al títol del seu
+  historial, i «Tria una altra persona», a la persona que s'hi veia.
+- **Panell recordat:** `session_sidebar_section_main` desa `person`, mai la
+  persona ni l'adreça. Després de reiniciar, el panell torna amb la persona que
+  hi ha en context en aquell moment, o amb l'estat buit.
+- **Cadenes noves:** `sidebar.person` i 14 claus `person.*` (els estats buits,
+  la llista, les tries de l'adreça i del compte i la línia del compte), en els
+  20 catàlegs.
+
+### Proves
+
+| Nivell | Què cobreix |
+|---|---|
+| N1 (`states/person.test.ts`) | La regla del §4: al correu, una persona, diverses (la llista, sense triar-ne cap), la triada en aquesta conversa i aquest compte (i no la d'una altra conversa, d'un altre compte o de fora de la conversa), ningú més i la conversa que encara es llegeix; a Persones, el compte de la llibreta, la llibreta que no és de ningú (demana el compte, també amb un sol compte i sense els canals, i un compte que ja no hi és), la tria per contacte, diverses adreces i cap; l'estat buit als altres mòduls; el que es guarda per contacte; «Historial amb …» desa el panell i no la persona |
+| N2 (`components/chat/PersonPanel.test.tsx`) | Al correu: una persona, al compte de la conversa; diverses, amb la llista, el focus al títol i de tornada a la persona; ningú més; «Historial amb …» des del panell Conversa, amb el focus a la pestanya; una resposta tardana per al compte anterior que no hi apareix; obrir una conversa (la persona hi continua) i un esdeveniment. A Persones: el contacte seleccionat a la llista, al compte de la seva llibreta, i la conversa que s'obre al correu en aquell compte; la llibreta que no és de ningú, que demana el compte, i la resposta tardana del compte deixat; diverses adreces i cap. A tots els mòduls, l'estat buit |
+| N2 (`components/chat/PersonPanel.test.tsx`, revisió) | Una conversa en què s'ha respost des d'un àlies té una sola persona més; la fila de la llista quan la lectura acaba sense cap missatge de la conversa, i l'espera mentre es llegeix; cap consulta de les persones de la conversa anterior al compte de la següent; la resposta tardana per al contacte deixat, amb una altra adreça; a 600 px, una conversa de l'historial obre la conversa i no la llista |
+| N2 (`components/chat/conversationMedia.test.ts`) | Els àlies dels comptes propis compten com a propis (també per a l'etiqueta «Tu» del resum) |
+| N2 (`components/chat/PersonHistory.test.tsx`) | Les proves de #86, i el dibuix que segueix un canvi de compte, sense l'historial de l'anterior |
+| N2 (`components/chat/ConversationDetailsPanel.test.tsx`, `states/sidebar.test.ts`, `components/shell/AppSidebar.test.tsx`) | La taula de conversió amb `person`; «Historial amb …», que obre el panell i no passa a una altra conversa; la pestanya i la icona Persona a cada mòdul, i el selector de panells amb el teclat, en anglès i en àrab |
+| e2e (`startup.e2e.ts`, «#363») | A 1440 px, en català i en àrab: la icona de la tira; l'estat buit al correu sense conversa; la conversa amb Morgan, al seu compte; «Historial amb …» des del panell Conversa, amb el focus a la pestanya; a Persones, el contacte d'una llibreta de compte, i el d'una llibreta que no és de ningú, que demana el compte i no consulta res fins que es tria; al final de la línia (a l'esquerra en àrab), sense desplaçament horitzontal i amb axe; el panell recordat com a `person`, sense cap adreça a les preferències, després de reiniciar |

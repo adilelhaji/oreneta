@@ -1,3 +1,4 @@
+import { accountIdentities } from '../../states/accounts'
 import type { Account, Message } from '../../types'
 import type { GalleryItem } from './Gallery'
 import type { ConversationMediaItem, ConversationFileItem, Participant } from './ConversationDetailsPanel'
@@ -72,10 +73,14 @@ export function buildThreadMedia(messages: Message[], accounts: Account[], revea
 // Thread participants: the union of every From/To/Cc across the thread, keyed
 // by lowercased address. Email threads don't have a fixed roster the way a
 // group chat does, so this is a "who has appeared on this conversation" list.
-// RSS feeds have no real participants, so it stays empty there.
+// RSS feeds have no real participants, so it stays empty there. "You" is any
+// address of your own accounts, their aliases included: a conversation answered
+// from an alias has one other person in it, not two.
 export function buildParticipants(messages: Message[], accounts: Account[], isRSS: boolean): Participant[] {
   if (isRSS) return []
-  const ownEmails = new Set(accounts.map((acc) => acc.email.trim().toLowerCase()))
+  const ownEmails = new Set(
+    accounts.flatMap((acc) => accountIdentities(acc).map((identity) => identity.email.trim().toLowerCase())),
+  )
   const byEmail = new Map<string, Participant>()
   const add = (name: string, email: string) => {
     const key = email.trim().toLowerCase()

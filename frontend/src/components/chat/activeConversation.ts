@@ -1,9 +1,10 @@
+import { useMemo } from 'react'
 import { useValue } from '@legendapp/state/react'
 import { t as translate } from '../../lib/i18n'
 import { accounts$ } from '../../states/accounts'
-import { compose$ } from '../../states/compose'
+import { compose$, withoutHydratedQuickReplyDraft } from '../../states/compose'
 import { kanban$ } from '../../states/kanban'
-import { getActiveThread } from '../../states/mail'
+import { getActiveThread, mail$ } from '../../states/mail'
 import { ui$ } from '../../states/ui'
 import type { Message, MessageTab } from '../../types'
 import { useWideWindow } from '../resizer/useElementWidth'
@@ -51,6 +52,26 @@ export function useActiveConversation() {
     : (accounts.find((account) => account.id === selectedAccountId) ?? null)
   const isRSS = activeAccount?.provider === 'rss' || activeAccount?.auth_type === 'rss'
   return { accounts, activeTab, activeTabData, activeDocumentTab, activeThread, activeAccount, isRSS }
+}
+
+/**
+ * The open conversation's messages as the conversation pane shows them (its
+ * hydrated quick-reply draft left out), for the sidebar's Conversa and
+ * Persona panels. `loading` while a freshly selected conversation loads and
+ * the messages are still the previous one's, as the pane says it; `ours`
+ * once any of them is this conversation's.
+ */
+export function useConversationMessages(activeThread: Message | null) {
+  const messages = useValue(mail$.messages)
+  const threadLoading = useValue(mail$.threadLoading)
+  const quickReplyDraftId = useValue(compose$.quickReplyDraftId)
+  const quickReplyDraftSaved = useValue(compose$.quickReplyDraftSaved)
+  const displayMessages = useMemo(
+    () => withoutHydratedQuickReplyDraft(messages, quickReplyDraftId, quickReplyDraftSaved),
+    [messages, quickReplyDraftId, quickReplyDraftSaved],
+  )
+  const ours = !!activeThread && messages.some((message) => message.thread_id === activeThread.thread_id)
+  return { displayMessages, loading: threadLoading && !ours, ours }
 }
 
 /**

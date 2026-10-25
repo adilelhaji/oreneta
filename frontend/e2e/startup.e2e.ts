@@ -9960,6 +9960,169 @@ test('Settings opened from the palette over the sidebar overlay leaves it open a
   expect(errors).toEqual([])
 })
 
+// #363: the Persona panel (ADR-0069 §4, piece 12c): one person's history
+// (#86) as a panel of the app's sidebar, in every module. In mail, the open
+// conversation's one other person, in the conversation's account; in
+// Persones, the selected contact, in the account of the contact's book, or,
+// for a book that is nobody's, the account the reader chooses. The panel is
+// remembered as `person`, never the person.
+async function personSidebarStartup(page: Page, options: SetupOptions) {
+  const errors = await agendaSidebarStartup(page, options)
+  await page.addInitScript(() => {
+    const probe = (window as any).startupProbe
+    const app = (window as any).go.main.App
+    const person = (id: string, name: string, addr: string, account: string, source: string, book: string) => ({
+      id, source, account, book, name, given: name.split(' ')[0], family: name.split(' ')[1], organisation: '',
+      note: '', photo: '', emails: [{ addr, label: '' }], phones: [], version: '1', editable: source === 'local',
+    })
+    probe.replies['people.list'] = {
+      people: [
+        // In the Google book of the account the conversation is in.
+        person('google::google-synthetic-account:m', 'Morgan Rivera', 'morgan@example.test', 'synthetic-account', 'google', 'google-synthetic-account'),
+        // In the book on this computer, which is nobody's.
+        person('local::local:a', 'Ada Lovelace', 'ada@example.test', '', 'local', 'local'),
+      ],
+    }
+    const invoke = app.Invoke
+    app.Invoke = async (command: string, payload: Record<string, unknown>) => {
+      if (command !== 'context.person') return invoke(command, payload)
+      probe.calls.push(command)
+      probe.requests.push({ command, payload: structuredClone(payload) })
+      // Each account's own history with the address, and nothing else.
+      return {
+        address: payload.address,
+        conversations: [
+          {
+            thread_id: `${payload.account}#INBOX#history`, folder: 'INBOX', from_them: true, date: 1_790_000_000,
+            subject: `Synthetic history of ${payload.address} in ${payload.account}`,
+          },
+        ],
+        events: [],
+        files: [],
+        coverage: { messages: 6, downloaded: 6 },
+      }
+    }
+  })
+  return errors
+}
+
+const personRequests = (page: Page) =>
+  page.evaluate(() =>
+    ((window as any).startupProbe.requests as Array<{ command: string; payload: Record<string, unknown> }>)
+      .filter((request) => request.command === 'context.person')
+      .map((request) => `${request.payload.account} ${request.payload.address}`),
+  )
+
+for (const language of ['ca', 'ar']) {
+  test(`app sidebar: the Persona panel from Mail and from People at 1440px: ${language} (#363)`, async ({ page }, info) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    const errors = await personSidebarStartup(page, { language })
+    const catalog = sidebarCatalogs[language]
+    await page.goto('/')
+    await expect(page.locator('html')).toHaveAttribute('lang', language)
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    const { toggle, sidebar } = sidebarParts(page, catalog)
+    const panel = sidebar.getByRole('tabpanel')
+    const personTab = sidebar.getByRole('tab', { name: catalog['sidebar.person'], exact: true })
+    const blocking: string[] = []
+    const say = (key: string, values: Record<string, string> = {}) =>
+      Object.entries(values).reduce((text, [name, value]) => text.replace(`{${name}}`, value), catalog[key])
+    const atLineEnd = async (where: string) => {
+      await sidebarSettled(sidebar)
+      const box = (await sidebar.boundingBox())!
+      if (language === 'ar') expect(Math.round(box.x), where).toBe(0)
+      else expect(Math.round(box.x + box.width), where).toBe(1440)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), where).toBe(true)
+    }
+
+    // The strip has the Persona panel's icon in every module, with nothing open.
+    await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+    const icon = sidebar.getByRole('button', { name: stripIconName(catalog, 'sidebar.person'), exact: true })
+    await expect(icon).toBeVisible()
+
+    // Mail with no conversation open: what to select, and nobody guessed.
+    await icon.click()
+    await expect(sidebar).toHaveAttribute('data-layout', 'beside')
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(personTab).toBeFocused()
+    await expect(personTab).toHaveAttribute('aria-selected', 'true')
+    await expect(sidebar.getByRole('heading', { name: catalog['sidebar.person'], exact: true })).toBeVisible()
+    await expect(panel.getByText(catalog['person.emptyMail'], { exact: true })).toBeVisible()
+    await atLineEnd('mail, empty')
+    await auditSidebar(page, info, `person-mail-empty-${language}`, blocking)
+
+    // A conversation with Morgan: Morgan's history, in the conversation's account.
+    await page.getByRole('table').getByRole('button', { name: /Pilot checklist/ }).click()
+    await expect(panel.getByRole('heading', { name: say('person.title', { name: 'Morgan Rivera' }), exact: true })).toBeVisible()
+    await expect(panel.getByText(say('person.inAccount', { account: 'Alex · Demo' }), { exact: true })).toBeVisible()
+    await expect(panel.getByText('Synthetic history of morgan@example.test in synthetic-account')).toBeVisible()
+    // Only the conversation's account, only Morgan's address.
+    expect([...new Set(await personRequests(page))]).toEqual(['synthetic-account morgan@example.test'])
+    await atLineEnd('mail, Morgan')
+    await auditSidebar(page, info, `person-mail-${language}`, blocking)
+    await info.attach(`person-mail-${language}`, {
+      body: await page.screenshot({ path: info.outputPath('person-mail.png'), animations: 'disabled' }),
+      contentType: 'image/png',
+    })
+
+    // «History with …» in the Conversa panel's participant menu comes back
+    // here, with the focus on the tab.
+    await sidebar.getByRole('tab', { name: catalog['sidebar.conversation'], exact: true }).click()
+    await panel.getByText('morgan@example.test', { exact: true }).click({ button: 'right' })
+    await page.getByRole('menuitem', { name: say('person.history', { name: 'Morgan Rivera' }), exact: true }).click()
+    await expect(personTab).toHaveAttribute('aria-selected', 'true')
+    await expect(personTab).toBeFocused()
+    await expect(panel.getByText('Synthetic history of morgan@example.test in synthetic-account')).toBeVisible()
+
+    // Persones: the selected contact, in the account of the contact's book.
+    await page.getByTitle(catalog['people.title'], { exact: true }).click()
+    await expect(page.getByRole('main', { name: catalog['people.title'], exact: true })).toBeVisible()
+    await expect(sidebar).toHaveAttribute('data-layout', 'beside')
+    await expect(panel.getByText(catalog['person.emptyPeople'], { exact: true })).toBeVisible()
+    const list = page.getByRole('listbox', { name: catalog['people.title'], exact: true })
+    await list.getByRole('option', { name: /Rivera/ }).click()
+    await expect(panel.getByRole('heading', { name: /Morgan/ })).toBeVisible()
+    await expect(panel.getByText(say('person.inAccount', { account: 'Alex · Demo' }), { exact: true })).toBeVisible()
+    await expect(panel.getByText('Synthetic history of morgan@example.test in synthetic-account')).toBeVisible()
+    await atLineEnd('people, Morgan')
+    await auditSidebar(page, info, `person-people-${language}`, blocking)
+
+    // A contact whose book is nobody's: the panel asks for the account, and
+    // reads nothing until one is chosen.
+    const before = (await personRequests(page)).length
+    await list.getByRole('option', { name: /Lovelace/ }).click()
+    await expect(panel.getByText(catalog['person.noBookAccount'], { exact: true })).toBeVisible()
+    const account = panel.getByRole('combobox', { name: catalog['person.account'], exact: true })
+    await expect(account).toHaveValue('')
+    await auditSidebar(page, info, `person-people-ask-${language}`, blocking)
+    await info.attach(`person-people-ask-${language}`, {
+      body: await page.screenshot({ path: info.outputPath('person-people-ask.png'), animations: 'disabled' }),
+      contentType: 'image/png',
+    })
+    expect((await personRequests(page)).length).toBe(before)
+    await account.selectOption('second-account')
+    await expect(panel.getByText('Synthetic history of ada@example.test in second-account')).toBeVisible()
+    expect([...new Set((await personRequests(page)).slice(before))]).toEqual(['second-account ada@example.test'])
+    await atLineEnd('people, Ada')
+    await auditSidebar(page, info, `person-people-chosen-${language}`, blocking)
+
+    // The panel is remembered, never the person; after a restart, mail with
+    // no conversation is the empty state again.
+    await expect.poll(async () => (await storedPrefs(page)).session_sidebar_section_main).toBe('person')
+    const stored = JSON.stringify(await storedPrefs(page))
+    expect(stored).not.toContain('morgan@example.test')
+    expect(stored).not.toContain('ada@example.test')
+    await page.reload()
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    await expect(sidebar).toHaveAttribute('data-layout', 'beside')
+    await expect(personTab).toHaveAttribute('aria-selected', 'true')
+    await expect(panel.getByText(catalog['person.emptyMail'], { exact: true })).toBeVisible()
+    expect(blocking).toEqual([])
+    expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+    expect(errors).toEqual([])
+  })
+}
+
 // #362: the Dia panel (ADR-0069 §3, piece 12b), from Mail and from Calendar
 // at 1440 px, in Catalan and in Arabic, light and dark. One day of every
 // account's calendars: the all-day holiday on top, the time now as a line on

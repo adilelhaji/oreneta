@@ -9,8 +9,7 @@ import { isConversationSection, ui$, type ConversationSection, type SidebarSecti
 
 /**
  * The panels of the app's sidebar (ADR-0069 §1). The ones this version shows
- * are listed by AppSidebar; Persona arrives with its piece (12c), and until
- * then a stored `person` shows the Agenda.
+ * are listed by AppSidebar: Agenda, Dia, Persona and Conversa.
  */
 export type SidebarPanelId = 'agenda' | 'day' | 'person' | 'conversation'
 
@@ -44,7 +43,7 @@ export function panelOfSection(section: SidebarSection): SidebarPanelId {
 /**
  * The panel shown for the stored section (ADR-0069 §2): the Conversa panel,
  * on its subsection, only with a conversation open, and otherwise the Agenda;
- * a panel `panels` does not have (Persona, for now) is the Agenda too.
+ * a panel `panels` does not have is the Agenda too.
  */
 export function resolveSidebarPanel(
   section: SidebarSection,
@@ -118,6 +117,23 @@ export function takeSidebarRefocus(): 'tab' | 'strip' | null {
   const target = refocus
   refocus = null
   return target
+}
+
+/**
+ * Moves the focus to the sidebar's tab of `panel` once it is the selected one,
+ * for a control that goes with the panel it was in: the Conversa panel's
+ * participant menu, whose «History with …» shows the Persona panel. Tried
+ * again for a few frames while the sidebar draws it.
+ */
+export function focusSidebarTab(panel: SidebarPanelId) {
+  const attempt = (left: number) => {
+    const tab = document.querySelector<HTMLElement>(
+      `[data-app-sidebar] [data-sidebar-tab="${panel}"][aria-selected="true"]`,
+    )
+    if (tab) tab.focus({ preventScroll: true })
+    else if (left > 0) setTimeout(() => attempt(left - 1), 16)
+  }
+  queueMicrotask(() => attempt(10))
 }
 
 /** For AppSidebar, once an overlay closed: what had the focus when it opened. */

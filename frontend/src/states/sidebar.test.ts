@@ -49,7 +49,8 @@ afterEach(() => {
   delete (window as any).go
 })
 
-const SHIPPED: SidebarPanelId[] = ['agenda', 'day', 'conversation']
+// The panels AppSidebar lists: the Agenda, Dia (#362), Persona (#363) and Conversa.
+const SHIPPED: SidebarPanelId[] = ['agenda', 'day', 'person', 'conversation']
 
 describe('the remembered panel (session_sidebar_section_main)', () => {
   it('keeps the panel type, Dia and Persona included, and reads anything else as the Agenda', () => {
@@ -88,13 +89,15 @@ describe('the remembered panel (session_sidebar_section_main)', () => {
     expect(resolveSidebarPanel('agenda', false, SHIPPED)).toBe('agenda')
   })
 
-  it('shows Dia and Persona as themselves once they are there, and as the Agenda until then', () => {
-    // Dia is there since #362, with a conversation open and without one.
-    expect(resolveSidebarPanel('day', true, SHIPPED)).toBe('day')
-    expect(resolveSidebarPanel('day', false, SHIPPED)).toBe('day')
-    expect(resolveSidebarPanel('day', true, ['agenda', 'conversation'])).toBe('agenda')
-    expect(resolveSidebarPanel('person', true, SHIPPED)).toBe('agenda')
-    expect(resolveSidebarPanel('person', false, SHIPPED)).toBe('agenda')
+  it('shows Dia and Persona as themselves, and a panel the list lacks as the Agenda', () => {
+    // Both are there (Dia since #362, Persona since #363), with a conversation
+    // open and without one; a list that lacks one shows the Agenda instead.
+    for (const section of ['day', 'person'] as const) {
+      expect(resolveSidebarPanel(section, true, SHIPPED)).toBe(section)
+      expect(resolveSidebarPanel(section, false, SHIPPED)).toBe(section)
+      expect(resolveSidebarPanel(section, true, ['agenda', 'conversation'])).toBe('agenda')
+      expect(resolveSidebarPanel(section, false, ['agenda', 'conversation'])).toBe('agenda')
+    }
     const later: SidebarPanelId[] = ['agenda', 'day', 'person', 'conversation']
     expect(resolveSidebarPanel('day', false, later)).toBe('day')
     expect(resolveSidebarPanel('person', true, later)).toBe('person')

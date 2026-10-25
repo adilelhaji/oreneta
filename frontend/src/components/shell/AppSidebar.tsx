@@ -9,7 +9,7 @@ import {
   type RefObject,
 } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { Calendar1, CalendarDays, MessagesSquare, PanelRightClose, X, type LucideIcon } from 'lucide-react'
+import { Calendar1, CalendarDays, MessagesSquare, PanelRightClose, UserRound, X, type LucideIcon } from 'lucide-react'
 import { handleGroupArrowKeys } from '../../lib/direction'
 import { useTranslation, type t as translate } from '../../lib/i18n'
 import {
@@ -39,6 +39,7 @@ import { ui$ } from '../../states/ui'
 import { IconButton } from '../button/IconButton'
 import { useConversationOpen } from '../chat/activeConversation'
 import { ConversationPanel } from '../chat/ConversationDetailsPanel'
+import { PersonPanel } from '../chat/PersonPanel'
 import { SidebarAgenda } from '../chat/SidebarAgenda'
 import { SidebarDay } from '../chat/SidebarDay'
 import { PaneResizer } from '../resizer/PaneResizer'
@@ -60,7 +61,8 @@ export type SidebarPanelDef = {
 
 /**
  * The panels of the sidebar, in the order of its tabs (ADR-0069 §1). Adding
- * one is one entry here: Persona comes with 12c, before Conversa, which is
+ * one is one entry here: Dia comes after the Agenda, Persona is in every
+ * module with an empty state where there is nobody (§4), and Conversa is
  * there only with a conversation open (in mail, or in a board with its
  * conversation pane).
  */
@@ -85,6 +87,13 @@ export const SIDEBAR_PANELS: readonly SidebarPanelDef[] = [
     available: () => true,
     // One day of the calendars (ADR-0069 §3), with its own day navigation.
     content: () => <SidebarDay />,
+  },
+  {
+    id: 'person',
+    icon: UserRound,
+    label: (t) => t('sidebar.person'),
+    available: () => true,
+    content: () => <PersonPanel />,
   },
   {
     id: 'conversation',
@@ -367,6 +376,7 @@ export function AppSidebar({ row, content, panels: offered = SIDEBAR_PANELS }: A
                 type="button"
                 role="tab"
                 id={tabId(entry.id)}
+                data-sidebar-tab={entry.id}
                 aria-selected={selected}
                 aria-controls={panelElementId}
                 title={name}

@@ -1,4 +1,5 @@
 import { afterEach, expect, it, mock } from 'bun:test'
+import { useLayoutEffect, useRef } from 'react'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { PersonHistory, type PersonContext } from './PersonHistory'
 
@@ -59,4 +60,36 @@ it('a slow answer for the account left behind never shows in the new one', async
   await act(async () => pending.work(context('work')))
   expect(screen.getByText('Budget (home)')).toBeTruthy()
   expect(screen.queryByText('Budget (work)')).toBeNull()
+})
+
+// The sidebar's Persona panel moves from one person or account to another
+// under the same history (#363): the drawing for the new one never holds the
+// previous one's answer, not even before the new question goes out.
+it("never draws the previous account's history for the new one", async () => {
+  ;(window as any).go = { main: { App: { Invoke: async (_: string, p: any) => context(p.account) } } }
+  const drawn: string[] = []
+  function Probe({ accountId }: { accountId: string }) {
+    const box = useRef<HTMLDivElement | null>(null)
+    // After each drawing of this account's history, before its effects run.
+    useLayoutEffect(() => {
+      drawn.push(`${accountId}: ${box.current?.textContent?.includes('Budget (work)') ? 'work' : '-'}`)
+    })
+    return (
+      <div ref={box}>
+        <PersonHistory
+          accountId={accountId}
+          address="ana@x.test"
+          onOpenConversation={() => {}}
+          onOpenEvent={() => {}}
+        />
+      </div>
+    )
+  }
+  const screen = render(<Probe accountId="work" />)
+  await waitFor(() => expect(screen.getByText('Budget (work)')).toBeTruthy())
+  drawn.length = 0
+  screen.rerender(<Probe accountId="home" />)
+  expect(drawn[0]).toBe('home: -')
+  await waitFor(() => expect(screen.getByText('Budget (home)')).toBeTruthy())
+  expect(drawn.every((entry) => entry === 'home: -')).toBe(true)
 })
