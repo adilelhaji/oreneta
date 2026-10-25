@@ -132,11 +132,34 @@ function inConversation(el: Element | null): boolean {
   return !!el?.closest('[data-conversation]') && !el.closest('[data-quick-reply]')
 }
 
-// The thread actions that take the conversation out of view or are hard to undo
-// (#365): they act only where it is the obvious target, like Delete (#355).
-// Star, unread, next/prev and details change nothing that disappears, so they
-// keep acting from any module.
+// The thread actions that act on the conversation of mail (#365). Removing
+// ones (delete, archive, junk) take it out of view or are hard to undo; star and
+// unread change it silently. All act only in the mail module and not under a
+// reader or compose tab, whatever their chord: mail's own surfaces (folder pane,
+// the docked sidebar's Conversa panel) count, the other modules' do not. Next,
+// previous and details change nothing that disappears and stay ungated.
 const REMOVING_THREAD_ACTIONS: ReadonlySet<ShortcutId> = new Set(['thread.delete', 'thread.archive', 'thread.junk'])
+const MAIL_THREAD_ACTIONS: ReadonlySet<ShortcutId> = new Set([
+  ...REMOVING_THREAD_ACTIONS,
+  'thread.star',
+  'thread.unread',
+])
+
+// The conversation view of mail is the one on screen: mail module, no reader or
+// compose tab over it (activeTab "" is the conversation).
+function mailConversationShowing(): boolean {
+  return ui$.module.peek() === 'mail' && !compose$.activeTab.peek()
+}
+
+// Where a bare removing key (not Delete or Backspace, which follow #355) acts:
+// the list, or under no tab the conversation view or nothing focused (a click on the pane's
+// background leaves the body focused). Not the quick reply, a tab or a toolbar.
+function removingKeyFocusAllowed(): boolean {
+  const el = document.activeElement
+  if (ui$.module.peek() !== 'mail') return false
+  // The list stays the target under a tab; the rest is the conversation's.
+  return inThreadList(el) || (!compose$.activeTab.peek() && (inConversation(el) || bodyFocused()))
+}
 
 /** The keys that delete, whatever shortcut they are bound to. */
 function isDeleteKey(key: string): boolean {
@@ -346,18 +369,20 @@ export function AppHotkeys({ setup = false }: { setup?: boolean }) {
       if (ui$.paletteOpen.peek() && action !== 'palette.open') return
 
       // Gate single-key shortcuts: never steal a keystroke from a text field,
-      // and only act in the chat view with no modal open.
-      // A chord on Delete or Backspace (Ctrl+Backspace deletes a word) is gated
-      // like a bare key: it edits text in a field (#365).
-      if (isBareShortcut(action) || isDeleteKey(shortcutChord(action).key)) {
+      // and act only with no modal open. A thread action on Delete or Backspace,
+      // chord or not (Ctrl+Backspace deletes a word), is gated like a bare key
+      // and acts only where the conversation is the obvious target (#355, #365).
+      // A removing thread action on another bare key acts from the list, the
+      // conversation view or the body of mail; its chords need only mail.
+      const chordKey = shortcutChord(action).key
+      const bare = isBareShortcut(action)
+      const deleteKey = isDeleteKey(chordKey) && (bare || action.startsWith('thread.'))
+      const focusGated = bare || deleteKey
+      if (focusGated) {
         if (isTyping(event.target) || !bareShortcutsActive()) return
-        // Whatever it is bound to, a Delete or Backspace shortcut and the
-        // actions that remove a thread act only where the conversation is the
-        // obvious target (#355, #365).
-        if (
-          (isDeleteKey(shortcutChord(action).key) || REMOVING_THREAD_ACTIONS.has(action)) &&
-          !deleteKeyFocusAllowed(true)
-        ) {
+        if (deleteKey) {
+          if (!deleteKeyFocusAllowed(true)) return
+        } else if (REMOVING_THREAD_ACTIONS.has(action) && !removingKeyFocusAllowed()) {
           return
         }
       } else if (isFunctionKey(shortcutChord(action).key) && (modalOpen() || modalDialogOpen())) {
@@ -365,6 +390,14 @@ export function AppHotkeys({ setup = false }: { setup?: boolean }) {
         // single key still stands down while a modal dialog is open: it keeps
         // the focus, and F6 does nothing there.
         event.preventDefault()
+        return
+      }
+      // The rest (chords, star, unread) need only mail, with no tab over it.
+      if (
+        !(focusGated && REMOVING_THREAD_ACTIONS.has(action)) &&
+        MAIL_THREAD_ACTIONS.has(action) &&
+        !mailConversationShowing()
+      ) {
         return
       }
 

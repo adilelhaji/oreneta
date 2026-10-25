@@ -5176,6 +5176,33 @@ test('Shift+# and e in the default scheme leave the selected conversation alone 
   expect(errors).toEqual([])
 })
 
+test('e archives the selected conversation after a click on the conversation background (#365)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await page.evaluate(() => {
+    ;(window as any).startupProbe.replies['mail.archive'] = {}
+  })
+  const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+  await row.click()
+  await expect(row).toHaveAttribute('aria-current', 'true')
+  // A click on the pane's background leaves the body focused.
+  await page.locator('[data-conversation]').click({ position: { x: 1, y: 1 } })
+  expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('BODY')
+  await page.keyboard.press('e')
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).startupProbe.requests
+          .map((request: { command: string }) => request.command)
+          .filter((command: string) => command === 'mail.archive'),
+      ),
+    )
+    .toEqual(['mail.archive'])
+  expect(errors).toEqual([])
+})
+
 test('the app menu runs what the palette and the rail\'s More menu ran (#343, #354)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   const errors = await prepareStartup(page, true, { navigation: true })
