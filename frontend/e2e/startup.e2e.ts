@@ -5048,6 +5048,77 @@ test('Delete and Backspace in an open menu leave the selected conversation alone
   expect(errors).toEqual([])
 })
 
+test('Delete in the Outlook scheme leaves the selected conversation alone from Calendar (#355)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, {
+    navigation: true,
+    preferences: { shortcut_overrides: SHORTCUT_SCHEMES.outlook },
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await page.evaluate(() => {
+    const replies = (window as any).startupProbe.replies
+    replies['calendar.list'] = {
+      calendars: [
+        {
+          id: 'local-team',
+          name: 'Team',
+          is_default: true,
+          enabled: true,
+          kind: 'local',
+          read_only: false,
+          synced_at: 0,
+        },
+      ],
+    }
+    replies['calendar.events'] = { events: [] }
+    replies['mail.delete'] = {}
+  })
+  const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+  await row.click()
+  await expect(row).toHaveAttribute('aria-current', 'true')
+  const { button, menu } = await appMenuParts(page)
+  await button.click()
+  await menu.getByRole('menuitemradio', { name: 'Go to: Calendar', exact: true }).click()
+  const calendar = page.getByRole('main', { name: 'Calendar', exact: true })
+  await expect(calendar).toBeVisible()
+  // A button of the calendar has the focus: Delete is not the conversation's.
+  const control = calendar.getByRole('button').first()
+  await control.focus()
+  await expect(control).toBeFocused()
+  await page.keyboard.press('Delete')
+  await page.keyboard.press('Backspace')
+  const sent = () =>
+    page.evaluate(() =>
+      (window as any).startupProbe.requests
+        .map((request: { command: string }) => request.command)
+        .filter((command: string) => command === 'mail.delete'),
+    )
+  expect(await sent()).toEqual([])
+  // Back in mail, a compose tab is open over the conversation: its buttons
+  // are not the conversation's, and neither is the tab strip.
+  await button.click()
+  await menu.getByRole('menuitemradio', { name: 'Go to: Mail', exact: true }).click()
+  await expect(page.getByRole('main', { name: 'Mail', exact: true })).toBeVisible()
+  await page.keyboard.press('Control+n')
+  const attach = page.getByRole('button', { name: 'Attach files', exact: true }).first()
+  await expect(attach).toBeVisible()
+  await attach.focus()
+  await expect(attach).toBeFocused()
+  await page.keyboard.press('Delete')
+  const tab = page.locator('[data-region="reader"]').getByTitle('Current conversation').first()
+  await expect(tab).toBeVisible()
+  await tab.focus()
+  await expect(tab).toBeFocused()
+  await page.keyboard.press('Delete')
+  expect(await sent()).toEqual([])
+  // From the list, the same key deletes it, once.
+  await row.focus()
+  await page.keyboard.press('Delete')
+  await expect.poll(sent).toEqual(['mail.delete'])
+  expect(errors).toEqual([])
+})
+
 test('the app menu runs what the palette and the rail\'s More menu ran (#343, #354)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   const errors = await prepareStartup(page, true, { navigation: true })
@@ -10050,4 +10121,140 @@ for (const language of ['ca', 'ar']) {
     expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
     expect(errors).toEqual([])
   })
+}
+
+// #362: the Dia panel (ADR-0069 §3, piece 12b), from Mail and from Calendar
+// at 1440 px, in Catalan and in Arabic, light and dark. One day of every
+// account's calendars: the all-day holiday on top, the time now as a line on
+// today, «Cap esdeveniment» only once every read went well; previous day,
+// next day and «Avui». In Calendar it opens on the day selected there and
+// does not follow it after. An event is a native button named in full, and
+// Enter opens it in the calendar on that day with its sheet. The remembered
+// panel `day` survives a restart.
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  for (const language of ['ca', 'ar']) {
+    test(`app sidebar: the Dia panel from Mail and from Calendar at 1440px: ${theme}, ${language} (#362)`, async ({
+      page,
+    }, info) => {
+      await page.setViewportSize({ width: 1440, height: 900 })
+      const errors = await agendaSidebarStartup(page, { theme, language })
+      const catalog = sidebarCatalogs[language]
+      await page.goto('/')
+      await expect(page.locator('html')).toHaveAttribute('lang', language)
+      await expect(page.locator('[data-thread-list]')).toBeVisible()
+      const { toggle, sidebar } = sidebarParts(page, catalog)
+      const blocking: string[] = []
+      const dayTab = sidebar.getByRole('tab', { name: catalog['sidebar.day'], exact: true })
+      const date = sidebar.getByRole('heading', { level: 3 })
+      const nowLine = sidebar.locator('[data-now-line]')
+      const button = (name: string) => sidebar.getByRole('button', { name: catalog[name], exact: true })
+      // The calendars' names are not listed in this profile: an event's
+      // calendar is said by its account's address.
+      const fullName = (title: string, time: string) =>
+        catalog['sidebar.dayEventName']
+          .replace('{title}', title)
+          .replace('{time}', time)
+          .replace('{calendar}', 'alex@example.test')
+      const holiday = sidebar.getByRole('button', { name: fullName('Synthetic holiday', catalog['calendar.allDay']), exact: true })
+      const planning = sidebar.getByRole('button', { name: /^Synthetic planning meeting/ })
+      const todayPrefix = `${catalog['calendar.today']} · `
+      const atLineEnd = async (where: string) => {
+        const box = (await sidebar.boundingBox())!
+        if (language === 'ar') expect(Math.round(box.x), where).toBe(0)
+        else expect(Math.round(box.x + box.width), where).toBe(1440)
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), where).toBe(true)
+      }
+
+      // From Mail, with no conversation open: the strip's Dia icon expands
+      // it beside the content, on today.
+      await expect(sidebar).toHaveAttribute('data-layout', 'strip')
+      await sidebar.getByRole('button', { name: stripIconName(catalog, 'sidebar.day'), exact: true }).click()
+      await expect(sidebar).toHaveAttribute('data-layout', 'beside')
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+      await sidebarSettled(sidebar)
+      await expect(dayTab).toHaveAttribute('aria-selected', 'true')
+      await expect(dayTab).toBeFocused()
+      await expect(sidebar.getByRole('heading', { level: 2, name: catalog['sidebar.day'], exact: true })).toBeVisible()
+      await expect(date).toHaveText(new RegExp(`^${todayPrefix}`))
+      const todayText = (await date.textContent())!
+      // Today's holiday on its date, whatever the zone; the line of the time now.
+      await expect(holiday).toBeVisible()
+      await expect(nowLine).toBeVisible()
+      await expect(nowLine).toContainText(catalog['sidebar.dayNow'].replace('{time}', '').trim())
+      await expect(planning).toHaveCount(0)
+      await expect(sidebar.getByText(catalog['sidebar.dayEmpty'], { exact: true })).toHaveCount(0)
+      await atLineEnd('mail')
+      await auditSidebar(page, info, `day-mail-${theme}-${language}`, blocking)
+      await info.attach(`sidebar-day-mail-${theme}-${language}`, {
+        body: await page.screenshot({ path: info.outputPath('sidebar-day-mail.png'), animations: 'disabled' }),
+        contentType: 'image/png',
+      })
+
+      // The day before: nothing, and every read went well.
+      await button('sidebar.dayPrevious').click()
+      await expect(date).not.toHaveText(todayText)
+      await expect(sidebar.getByText(catalog['sidebar.dayEmpty'], { exact: true })).toBeVisible()
+      await expect(holiday).toHaveCount(0)
+      await expect(nowLine).toHaveCount(0)
+      // «Avui», then the day after: the planning meeting, no line.
+      await button('calendar.today').click()
+      await expect(date).toHaveText(todayText)
+      await expect(holiday).toBeVisible()
+      await button('sidebar.dayNext').click()
+      await expect(planning).toBeVisible()
+      await expect(nowLine).toHaveCount(0)
+      await expect(holiday).toHaveCount(0)
+      const tomorrowText = (await date.textContent())!
+      expect(tomorrowText.startsWith(todayPrefix)).toBe(false)
+
+      // From the keyboard: Enter on the meeting opens the calendar on that
+      // day with its sheet open; the sidebar stays beside it.
+      await planning.focus()
+      await page.keyboard.press('Enter')
+      await expect(page.getByRole('main', { name: catalog['calendar.title'], exact: true })).toBeVisible()
+      const sheet = page.getByRole('dialog', { name: 'Synthetic planning meeting', exact: true })
+      await expect(sheet).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(sheet).toHaveCount(0)
+      await expect(sidebar).toHaveAttribute('data-layout', 'beside')
+      await expect(date).toHaveText(tomorrowText)
+
+      // In Calendar, the panel opens on the day selected there: back to
+      // today in the panel, then opened again from its tab, it is on the
+      // calendar's day (tomorrow, where the meeting opened it).
+      await button('calendar.today').click()
+      await expect(date).toHaveText(todayText)
+      await sidebar.getByRole('tab', { name: catalog['sidebar.agenda'], exact: true }).click()
+      await dayTab.click()
+      await expect(date).toHaveText(tomorrowText)
+      await expect(planning).toBeVisible()
+      // And it does not follow the calendar after: today chosen in the
+      // month at a glance leaves the panel where it is.
+      const todayMs = await page.evaluate(() => new Date(new Date().setHours(0, 0, 0, 0)).getTime())
+      await page.locator(`[data-mini-day="${todayMs}"]`).click()
+      await expect(page.locator(`[data-mini-day="${todayMs}"]`)).toHaveAttribute('aria-pressed', 'true')
+      await expect(date).toHaveText(tomorrowText)
+      await expect(planning).toBeVisible()
+      await atLineEnd('calendar')
+      await auditSidebar(page, info, `day-calendar-${theme}-${language}`, blocking)
+      await info.attach(`sidebar-day-calendar-${theme}-${language}`, {
+        body: await page.screenshot({ path: info.outputPath('sidebar-day-calendar.png'), animations: 'disabled' }),
+        contentType: 'image/png',
+      })
+
+      // The panel is remembered (`day`), and after a restart in Mail it is
+      // there again, on today.
+      await expect.poll(async () => (await storedPrefs(page)).session_sidebar_section_main).toBe('day')
+      await expect.poll(async () => (await storedPrefs(page)).app_sidebar_state).toBe('expanded')
+      await page.reload()
+      await expect(page.locator('[data-thread-list]')).toBeVisible()
+      await expect(sidebar).toHaveAttribute('data-layout', 'beside')
+      await expect(dayTab).toHaveAttribute('aria-selected', 'true')
+      await expect(date).toHaveText(todayText)
+      await expect(holiday).toBeVisible()
+      expect(blocking).toEqual([])
+      expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+      expect(errors).toEqual([])
+    })
+  }
 }

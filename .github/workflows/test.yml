@@ -176,11 +176,12 @@ jobs:
         run: bun test --coverage --coverage-reporter=lcov --coverage-reporter=text --coverage-dir=coverage
         working-directory: frontend
       # As for the core's calendar: in UTC all-day dates and instants coincide.
-      # Run the agenda tests again west and east of UTC (#212, ADR-0059).
+      # Run the agenda and day panel tests again west and east of UTC (#212,
+      # ADR-0059; #362, ADR-0069 §3).
       - name: Calendar tests outside UTC
         run: |
-          TZ=America/Sao_Paulo bun test src/lib/agenda.test.ts src/components/chat/SidebarAgenda.test.tsx
-          TZ=Australia/Sydney bun test src/lib/agenda.test.ts src/components/chat/SidebarAgenda.test.tsx
+          TZ=America/Sao_Paulo bun test src/lib/agenda.test.ts src/components/chat/SidebarAgenda.test.tsx src/lib/dayPanel.test.ts src/components/chat/SidebarDay.test.tsx
+          TZ=Australia/Sydney bun test src/lib/agenda.test.ts src/components/chat/SidebarAgenda.test.tsx src/lib/dayPanel.test.ts src/components/chat/SidebarDay.test.tsx
           # Dragging events keeps the wall clock across a clock change (#266).
           TZ=Europe/Madrid bun test src/lib/calendarDrag.test.ts
         working-directory: frontend

@@ -49,8 +49,8 @@ afterEach(() => {
   delete (window as any).go
 })
 
-// The panels AppSidebar lists today: Persona since #363, Dia still to come (12b).
-const SHIPPED: SidebarPanelId[] = ['agenda', 'person', 'conversation']
+// The panels AppSidebar lists: the Agenda, Dia (#362), Persona (#363) and Conversa.
+const SHIPPED: SidebarPanelId[] = ['agenda', 'day', 'person', 'conversation']
 
 describe('the remembered panel (session_sidebar_section_main)', () => {
   it('keeps the panel type, Dia and Persona included, and reads anything else as the Agenda', () => {
@@ -68,6 +68,8 @@ describe('the remembered panel (session_sidebar_section_main)', () => {
     expect(ui$.sidebarSection.get()).toBe('media')
     restoreUiSession({ session_sidebar_section_main: 'person' }, [])
     expect(ui$.sidebarSection.get()).toBe('person')
+    restoreUiSession({ session_sidebar_section_main: 'day' }, [])
+    expect(ui$.sidebarSection.get()).toBe('day')
     restoreUiSession({ session_sidebar_section_main: 'widgets' }, [])
     expect(ui$.sidebarSection.get()).toBe('agenda')
     ui$.sidebarSection.set('files')
@@ -87,13 +89,12 @@ describe('the remembered panel (session_sidebar_section_main)', () => {
     expect(resolveSidebarPanel('agenda', false, SHIPPED)).toBe('agenda')
   })
 
-  it('shows Dia and Persona as themselves once they are there, and as the Agenda until then', () => {
-    // Persona is there since #363, with a conversation open and without.
-    expect(resolveSidebarPanel('person', true, SHIPPED)).toBe('person')
-    expect(resolveSidebarPanel('person', false, SHIPPED)).toBe('person')
-    expect(resolveSidebarPanel('day', true, SHIPPED)).toBe('agenda')
-    expect(resolveSidebarPanel('day', false, SHIPPED)).toBe('agenda')
+  it('shows Dia and Persona as themselves, and a panel the list lacks as the Agenda', () => {
+    // Both are there (Dia since #362, Persona since #363), with a conversation
+    // open and without one; a list that lacks one shows the Agenda instead.
     for (const section of ['day', 'person'] as const) {
+      expect(resolveSidebarPanel(section, true, SHIPPED)).toBe(section)
+      expect(resolveSidebarPanel(section, false, SHIPPED)).toBe(section)
       expect(resolveSidebarPanel(section, true, ['agenda', 'conversation'])).toBe('agenda')
       expect(resolveSidebarPanel(section, false, ['agenda', 'conversation'])).toBe('agenda')
     }

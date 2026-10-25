@@ -289,6 +289,7 @@ export function MessagePane() {
               focusable, while the transition runs, and Tab could land inside
               an aria-hidden region (#243). */}
           <div
+            data-conversation
             aria-hidden={!!activeDocumentTab}
             inert={!!activeDocumentTab}
             className={`relative flex min-h-0 flex-1 flex-col ${

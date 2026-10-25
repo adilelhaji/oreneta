@@ -9,7 +9,7 @@ import {
   type RefObject,
 } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { CalendarDays, MessagesSquare, PanelRightClose, UserRound, X, type LucideIcon } from 'lucide-react'
+import { Calendar1, CalendarDays, MessagesSquare, PanelRightClose, UserRound, X, type LucideIcon } from 'lucide-react'
 import { handleGroupArrowKeys } from '../../lib/direction'
 import { useTranslation, type t as translate } from '../../lib/i18n'
 import {
@@ -41,6 +41,7 @@ import { useConversationOpen } from '../chat/activeConversation'
 import { ConversationPanel } from '../chat/ConversationDetailsPanel'
 import { PersonPanel } from '../chat/PersonPanel'
 import { SidebarAgenda } from '../chat/SidebarAgenda'
+import { SidebarDay } from '../chat/SidebarDay'
 import { PaneResizer } from '../resizer/PaneResizer'
 import { useElementWidth, useWideWindow, useWindowWidth } from '../resizer/useElementWidth'
 import { FOLDER_PANE_MIN_WINDOW } from './FolderPane'
@@ -60,9 +61,9 @@ export type SidebarPanelDef = {
 
 /**
  * The panels of the sidebar, in the order of its tabs (ADR-0069 §1). Adding
- * one is one entry here: Dia comes with 12b, after the Agenda. Persona is in
- * every module, with an empty state where there is nobody (§4), and Conversa
- * is there only with a conversation open (in mail, or in a board with its
+ * one is one entry here: Dia comes after the Agenda, Persona is in every
+ * module with an empty state where there is nobody (§4), and Conversa is
+ * there only with a conversation open (in mail, or in a board with its
  * conversation pane).
  */
 export const SIDEBAR_PANELS: readonly SidebarPanelDef[] = [
@@ -78,6 +79,14 @@ export const SIDEBAR_PANELS: readonly SidebarPanelDef[] = [
         <SidebarAgenda />
       </div>
     ),
+  },
+  {
+    id: 'day',
+    icon: Calendar1,
+    label: (t) => t('sidebar.day'),
+    available: () => true,
+    // One day of the calendars (ADR-0069 §3), with its own day navigation.
+    content: () => <SidebarDay />,
   },
   {
     id: 'person',
