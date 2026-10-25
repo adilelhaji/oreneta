@@ -120,6 +120,23 @@ export function takeSidebarRefocus(): 'tab' | 'strip' | null {
   return target
 }
 
+/**
+ * Moves the focus to the sidebar's tab of `panel` once it is the selected one,
+ * for a control that goes with the panel it was in: the Conversa panel's
+ * participant menu, whose «History with …» shows the Persona panel. Tried
+ * again for a few frames while the sidebar draws it.
+ */
+export function focusSidebarTab(panel: SidebarPanelId) {
+  const attempt = (left: number) => {
+    const tab = document.querySelector<HTMLElement>(
+      `[data-app-sidebar] [data-sidebar-tab="${panel}"][aria-selected="true"]`,
+    )
+    if (tab) tab.focus({ preventScroll: true })
+    else if (left > 0) setTimeout(() => attempt(left - 1), 16)
+  }
+  queueMicrotask(() => attempt(10))
+}
+
 /** For AppSidebar, once an overlay closed: what had the focus when it opened. */
 export function takeOverlayOpener(): Element | null {
   const opener = overlayOpener

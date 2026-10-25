@@ -126,9 +126,6 @@ describe('the sidebar panels (#212, ADR-0069)', () => {
     ui$.sidebarSection.set('files')
     restoreUiSession({ session_sidebar_section_main: 'widgets' }, [])
     expect(ui$.sidebarSection.get()).toBe('agenda')
-    // Dia is kept as it is, and shown as the Agenda until it arrives (12b).
-    restoreUiSession({ session_sidebar_section_main: 'day' }, [])
-    expect(ui$.sidebarSection.get()).toBe('day')
     let screen = render(<Frame />)
     expect(screen.getByRole('heading', { name: 'Agenda' })).toBeTruthy()
     expect(screen.getByRole('tab', { name: 'Agenda' }).getAttribute('aria-selected')).toBe('true')

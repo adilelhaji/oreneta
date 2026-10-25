@@ -9,7 +9,7 @@ import { mail$ } from '../../states/mail'
 import { people$ } from '../../states/people'
 import { person$ } from '../../states/person'
 import { settings$ } from '../../states/settings'
-import { sidebar$ } from '../../states/sidebar'
+import { openSidebarPanel, sidebar$ } from '../../states/sidebar'
 import { APP_MODULES, ui$ } from '../../states/ui'
 import type { Account, Message, Person } from '../../types'
 import { PeopleView } from '../people/PeopleView'
@@ -141,6 +141,8 @@ afterEach(() => {
   ui$.module.set('mail')
   ui$.selectedThread.set('')
   ui$.selectedAccount.set('')
+  ui$.mobilePane.set('threads')
+  mail$.threadLoading.set(false)
   mail$.threads.set([])
   mail$.messages.set([])
   people$.people.set([])
@@ -164,7 +166,7 @@ describe('the Persona panel in mail', () => {
     await waitFor(() => expect(panel(screen).getByText('Budget (work)')).toBeTruthy())
     expect(asked).toEqual([{ account: 'work', address: 'ana@x.test' }])
     // Nobody to choose from: no way back to a list.
-    expect(screen.queryByRole('button', { name: 'Choose someone else' })).toBeNull()
+    expect(screen.queryAllByRole('button', { name: 'Choose someone else' })).toHaveLength(0)
   })
 
   it('lists the people when there are several, and shows the one picked', async () => {
@@ -228,7 +230,7 @@ describe('the Persona panel in mail', () => {
     await act(async () => pending.home(history('home')))
     await act(async () => pending.work(history('work')))
     expect(panel(screen).getByText('Budget (home)')).toBeTruthy()
-    expect(panel(screen).queryByText('Budget (work)')).toBeNull()
+    expect(panel(screen).queryAllByText('Budget (work)')).toHaveLength(0)
     expect(asked.map((question) => question.account)).toEqual(['work', 'home'])
   })
 
@@ -273,7 +275,7 @@ describe('the Persona panel in Persones', () => {
     expect(panel(screen).getByText('Account: Home')).toBeTruthy()
     await waitFor(() => expect(panel(screen).getByText('Budget (home)')).toBeTruthy())
     expect(asked).toEqual([{ account: 'home', address: 'ana@x.test' }])
-    expect(panel(screen).queryByRole('combobox')).toBeNull()
+    expect(panel(screen).queryAllByRole('combobox')).toHaveLength(0)
     // From the history, the conversation opens in mail, in that account.
     fireEvent.click(panel(screen).getByText('Budget (home)'))
     expect(ui$.module.get()).toBe('mail')
@@ -308,7 +310,7 @@ describe('the Persona panel in Persones', () => {
     await act(async () => pending.home(history('home')))
     await act(async () => pending.work(history('work')))
     expect(panel(screen).getByText('Budget (home)')).toBeTruthy()
-    expect(panel(screen).queryByText('Budget (work)')).toBeNull()
+    expect(panel(screen).queryAllByText('Budget (work)')).toHaveLength(0)
     expect(asked.map((question) => question.account)).toEqual(['work', 'home'])
   })
 
@@ -362,5 +364,107 @@ describe('the Persona panel elsewhere', () => {
       panel(screen).getByText('Open a conversation in Mail or a contact in People to see your history with someone.'),
     ).toBeTruthy()
     expect(asked).toEqual([])
+  })
+})
+
+describe('the Persona panel and the conversation it reads (review of #363)', () => {
+  it('counts an alias of your account as you: a conversation answered from it has one other person', async () => {
+    accounts$.set([{ ...work, aliases: [{ email: 'Desk@Work.test', name: 'Desk' }] } as Account, home])
+    // Ana wrote to the alias, and the alias answered.
+    openConversation(
+      message('work', 'work#INBOX#alias', { to: 'Desk <desk@work.test>' }),
+      message('work', 'work#INBOX#alias', {
+        id: 'work#INBOX#alias#2',
+        from_name: 'Desk',
+        from_addr: 'desk@work.test',
+        to: 'Ana <ana@x.test>',
+      }),
+    )
+    const screen = render(<Frame />)
+    // No list with the alias in it as somebody else: Ana's history.
+    expect(panel(screen).queryAllByRole('list', { name: 'Choose whose history to see' })).toHaveLength(0)
+    expect(panel(screen).getByRole('heading', { name: 'With Ana' })).toBeTruthy()
+    await waitFor(() => expect(asked).toEqual([{ account: 'work', address: 'ana@x.test' }]))
+  })
+
+  it('reads the list row when none of the messages is there and nothing loads, but waits while they load', async () => {
+    // A conversation whose messages all wait for their bodies (offline, maybe
+    // for good): none of them is listed, and nothing is loading.
+    const row = message('work', 'work#INBOX#bodies')
+    mail$.threads.set([row])
+    mail$.messages.set([])
+    mail$.threadLoading.set(true)
+    ui$.selectedThread.set(row.thread_id)
+    const screen = render(<Frame />)
+    expect(panel(screen).getByLabelText('Loading...')).toBeTruthy()
+    expect(asked).toEqual([])
+    act(() => mail$.threadLoading.set(false))
+    expect(panel(screen).getByRole('heading', { name: 'With Ana' })).toBeTruthy()
+    await waitFor(() => expect(asked).toEqual([{ account: 'work', address: 'ana@x.test' }]))
+  })
+
+  it("never asks about the previous conversation's people in the account of the next one", async () => {
+    const working = message('work', 'work#INBOX#budget')
+    const athome = message('home', 'home#INBOX#garden', { from_name: 'Bea', from_addr: 'bea@x.test' })
+    openConversation(working)
+    mail$.threads.set([working, athome])
+    const screen = render(<Frame />)
+    await waitFor(() => expect(asked).toEqual([{ account: 'work', address: 'ana@x.test' }]))
+    // Another account's conversation, while the messages are still the work one's.
+    act(() => {
+      mail$.threadLoading.set(true)
+      ui$.selectedThread.set(athome.thread_id)
+    })
+    expect(panel(screen).getByLabelText('Loading...')).toBeTruthy()
+    // The read ends with none of its messages: the row, which is Bea's.
+    act(() => mail$.threadLoading.set(false))
+    expect(panel(screen).getByRole('heading', { name: 'With Bea' })).toBeTruthy()
+    act(() => mail$.messages.set([athome]))
+    await waitFor(() => expect(panel(screen).getByText('Budget (home)')).toBeTruthy())
+    expect(asked).toContainEqual({ account: 'home', address: 'bea@x.test' })
+    expect(asked).not.toContainEqual({ account: 'home', address: 'ana@x.test' })
+  })
+
+  it('never shows the answer for the contact left behind, when the next one has another address', async () => {
+    const pending: Record<string, (context: PersonContext) => void> = {}
+    answer = (account, address) => new Promise((resolve) => (pending[address] = resolve))
+    const said = (address: string): PersonContext => ({
+      ...history('work', address),
+      conversations: [{ ...history('work').conversations[0], subject: `About ${address}` }],
+    })
+    people$.people.set([
+      contact({ id: 'c-ana', account: 'work' }),
+      contact({ id: 'c-marc', account: 'work', name: 'Marc Roca', emails: [{ addr: 'marc@x.test', label: '' }] }),
+    ])
+    people$.selectedId.set('c-ana')
+    ui$.module.set('people')
+    const screen = render(<Frame />)
+    act(() => people$.selectedId.set('c-marc'))
+    expect(panel(screen).getByRole('heading', { name: 'With Marc Roca' })).toBeTruthy()
+    await act(async () => pending['marc@x.test'](said('marc@x.test')))
+    await act(async () => pending['ana@x.test'](said('ana@x.test')))
+    expect(panel(screen).getByText('About marc@x.test')).toBeTruthy()
+    expect(panel(screen).queryAllByText('About ana@x.test')).toHaveLength(0)
+    expect(asked).toEqual([
+      { account: 'work', address: 'ana@x.test' },
+      { account: 'work', address: 'marc@x.test' },
+    ])
+  })
+
+  it('below 769 px, opens a conversation from the history in Persones on the conversation, not the list', async () => {
+    ;(window as any).happyDOM.setViewport({ width: 600, height: 800 })
+    people$.people.set([contact({ account: 'work' })])
+    people$.selectedId.set('carddav::src-1:c1')
+    ui$.module.set('people')
+    const screen = render(<Frame />)
+    // Below 769 px the sidebar is only an overlay.
+    act(() => openSidebarPanel('person'))
+    expect(screen.getByRole('complementary', { name: 'Sidebar' }).dataset.layout).toBe('overlay')
+    await waitFor(() => expect(panel(screen).getByText('Budget (work)')).toBeTruthy())
+    fireEvent.click(panel(screen).getByText('Budget (work)'))
+    expect(ui$.module.get()).toBe('mail')
+    expect(ui$.selectedThread.get()).toBe('work#INBOX#t1')
+    expect(ui$.mobilePane.get()).toBe('conversation')
+    expect(sidebar$.overlay.get()).toBe(false)
   })
 })

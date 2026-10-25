@@ -5,7 +5,6 @@ import { useTranslation } from '../../lib/i18n'
 import { openCalendarOn } from '../../states/calendar'
 import { useContactNames } from '../../states/contactNames'
 import { openMailAccount } from '../../states/kanban'
-import { mail$ } from '../../states/mail'
 import { people$ } from '../../states/people'
 import {
   chooseForContact,
@@ -14,7 +13,7 @@ import {
   resolvePersonPanel,
   type PanelParticipant,
 } from '../../states/person'
-import { closeSidebarOverlay, type SidebarPanelId } from '../../states/sidebar'
+import { closeSidebarOverlay } from '../../states/sidebar'
 import { ui$ } from '../../states/ui'
 import type { Account } from '../../types'
 import { Avatar } from '../avatar/Avatar'
@@ -23,22 +22,6 @@ import { SelectInput } from '../field/Field'
 import { useActiveConversation, useConversationMessages, useConversationOpen } from './activeConversation'
 import { buildParticipants } from './conversationMedia'
 import { PersonHistory } from './PersonHistory'
-
-/**
- * Moves the focus to the sidebar's tab of `panel` once it is the selected one:
- * after the participant menu's «History with …», whose menu and row go with
- * the Conversa panel. Tried again for a few frames while the sidebar draws it.
- */
-export function focusSidebarTab(panel: SidebarPanelId) {
-  const attempt = (left: number) => {
-    const tab = document.querySelector<HTMLElement>(
-      `[data-app-sidebar] [data-sidebar-tab="${panel}"][aria-selected="true"]`,
-    )
-    if (tab) tab.focus({ preventScroll: true })
-    else if (left > 0) setTimeout(() => attempt(left - 1), 16)
-  }
-  queueMicrotask(() => attempt(10))
-}
 
 const accountName = (account: Account | undefined) => account?.display_name || account?.email || ''
 
@@ -55,24 +38,22 @@ export function PersonPanel() {
   const appModule = useValue(ui$.module)
   const conversationOpen = useConversationOpen()
   const { accounts, activeThread, isRSS } = useActiveConversation()
-  const { displayMessages, ours } = useConversationMessages(activeThread)
-  const threadErrorId = useValue(mail$.threadErrorId)
+  const { displayMessages, loading, ours } = useConversationMessages(activeThread)
   const participant = useValue(person$.participant)
   const choice = useValue(person$.contact)
   const selectedId = useValue(people$.selectedId)
   const everyone = useValue(people$.people)
   const names = useContactNames()
 
-  // The conversation's people from its own messages only: while they are
-  // still the previous conversation's, nobody (a failed read leaves the row
-  // the list shows, which is this conversation's).
-  const failed = !!activeThread && threadErrorId === activeThread.thread_id
+  // The conversation's people from its own messages only, never from the
+  // previous conversation's, which the messages still are while it loads.
+  // With none of its messages there and nothing loading (a failed read, or
+  // messages whose bodies are still to come, which offline may be never),
+  // they are the people on the row the list shows, which is this
+  // conversation's.
   const participants = useMemo(
-    () =>
-      activeThread && (ours || failed)
-        ? buildParticipants(ours ? displayMessages : [activeThread], accounts, isRSS)
-        : [],
-    [activeThread, ours, failed, displayMessages, accounts, isRSS],
+    () => (activeThread && !loading ? buildParticipants(ours ? displayMessages : [activeThread], accounts, isRSS) : []),
+    [activeThread, loading, ours, displayMessages, accounts, isRSS],
   )
   const view = resolvePersonPanel({
     module: appModule,
@@ -81,7 +62,7 @@ export function PersonPanel() {
         ? {
             thread: activeThread.thread_id,
             account: activeThread.account_id,
-            loading: !ours && !failed,
+            loading,
             participants,
           }
         : null,
@@ -118,12 +99,15 @@ export function PersonPanel() {
 
   // A history's items open where they came from, as the agenda's do (an
   // overlay goes first): a conversation in mail, in the account of the
-  // history, with the person still in context; an event's day in Calendar.
+  // history, with the person still in context, and below 769 px the
+  // conversation in place of the list, as Tasks and Attachments open one; an
+  // event's day in Calendar.
   const openConversation = (account: string, address: string, name: string) => (threadId: string, folder: string) => {
     closeSidebarOverlay()
     if (ui$.module.peek() !== 'mail') ui$.module.set('mail')
     openMailAccount(account, folder, false)
     ui$.selectedThread.set(threadId)
+    ui$.mobilePane.set('conversation')
     pickParticipant({ thread: threadId, account, address, name })
   }
   const openEvent = (start: number) => {
