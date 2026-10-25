@@ -351,7 +351,7 @@ resposta a una reunió, amb les paraules de la fitxa de l'esdeveniment).
   tardana del dia que ja no es mostra no s'hi dibuixa. També es torna a llegir
   quan l'aplicació mateixa canvia un esdeveniment o un calendari, perquè
   aleshores no se sincronitza res i no arriba cap `calendar.synced`: un
-  esdeveniment suprimit, un de desat en un calendari local, un calendari amagat
+  esdeveniment suprimit, un esdeveniment desat en un calendari local, un calendari amagat
   o mostrat, una resposta a una invitació, o la fitxa o l'editor d'un
   esdeveniment que es tanquen (`calendar$.events`, `calendar$.calendars`,
   `calendar$.viewing` i `calendar$.editing`). La lectura no escriu aquest
@@ -365,9 +365,9 @@ resposta a una reunió, amb les paraules de la fitxa de l'esdeveniment).
   arrencar amb el panell desat. Després no el segueix, perquè no es mogui mentre
   es llegeix. Als altres mòduls, avui. A mitjanit, si el panell mostra avui,
   passa al nou dia d'avui, amb la línia de l'hora; si mostra un altre dia, s'hi
-  queda i només el torna a llegir. Ho decideix el primer cop que es dibuixa
-  després de mitjanit (la relectura de mitjanit, una sincronització o el minut
-  de la línia), no només un temporitzador, que una finestra amagada endarrereix.
+  queda i només el torna a llegir. Ho decideix el primer dibuix
+  posterior a mitjanit (la relectura de mitjanit, una sincronització o el minut
+  de la línia), i no només un temporitzador, que una finestra amagada endarrereix.
 - **El que no es pot llegir es diu:**
   - un calendari que no es pot llegir: «No s'han pogut llegir alguns calendaris,
     així que aquest dia pot estar incomplet.», amb el que sí que s'ha llegit.
