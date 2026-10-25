@@ -388,7 +388,12 @@ ara el dibuix que segueix un canvi de compte tampoc no conté l'historial de l'a
 `ConversationDetailsPanel`, `AppSidebar` i `states/sidebar`) i, al punt d'entrada de producció, el
 panell des del Correu i des de Persones a 1440 px, en català i en àrab, amb axe. És una nota
 d'evidència: SET-23 continua `partial`, i el panell Dia (12b) i l'evidència nativa de Windows i amb
-lectors de pantalla continuen pendents.
+lectors de pantalla continuen pendents. El 2026-10-25, amb la revisió de la peça: per sota de 769 px,
+una conversa oberta des de l'historial a Persones es mostra en lloc de la llista; els àlies dels
+comptes propis compten com a propis; i, quan la lectura d'una conversa acaba sense cap dels seus
+missatges, les persones surten de la fila de la llista, de manera que el panell no espera per sempre
+ni consulta mai les persones de la conversa anterior. Les proves de components ho comproven, també a
+600 px, i SET-23 continua `partial`.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per

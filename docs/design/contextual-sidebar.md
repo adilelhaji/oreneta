@@ -345,11 +345,16 @@ a `AppSidebar.tsx`.
   seleccionar.
 - **Qui és la persona:**
   - al correu, amb una conversa oberta (també en un tauler amb la subfinestra
-    de conversa), la persona que hi participa i no és cap dels comptes propis,
-    si n'hi ha una de sola; si n'hi ha diverses, la llista d'aquestes persones,
-    per triar-ne una, i el botó «Tria una altra persona» hi torna. Si a la
-    conversa no hi ha ningú més que els comptes propis, el panell ho diu. Mentre
-    els missatges encara són els de la conversa anterior, el panell espera;
+    de conversa), la persona que hi participa i no és cap dels comptes propis
+    (ni cap dels seus àlies), si n'hi ha una de sola; si n'hi ha diverses, la
+    llista d'aquestes persones, per triar-ne una, i el botó «Tria una altra
+    persona» hi torna. Si a la conversa no hi ha ningú més que els comptes
+    propis, el panell ho diu. Les persones surten dels missatges de la conversa,
+    mai dels de l'anterior: mentre els missatges encara són els de l'anterior i
+    es llegeixen els nous, el panell espera; si la lectura acaba sense cap
+    missatge de la conversa (ha fallat, o tots esperen el cos, cosa que sense
+    connexió pot no arribar mai), surten de la fila de la llista, que és
+    d'aquesta conversa;
   - a Persones, el contacte seleccionat a la llista;
   - als altres mòduls, o sense conversa ni contacte, ningú: «Obre una conversa
     per veure l'historial…», «Selecciona un contacte…» o «Obre una conversa al
@@ -377,7 +382,8 @@ a `AppSidebar.tsx`.
   capçalera diu amb qui («Amb …»), l'adreça i el compte («Compte: …»).
 - **Obrir:** una conversa de l'historial s'obre al correu, al compte de
   l'historial (des de Persones, el correu passa al davant), i la persona hi
-  continua en context; un esdeveniment obre el seu dia al Calendari
+  continua en context. Per sota de 769 px es mostra la conversa en lloc de la
+  llista, com quan s'obre des de Tasques o des d'Adjunts; un esdeveniment obre el seu dia al Calendari
   (`openCalendarOn`). Abans d'obrir-ho, la capa es tanca, com a l'agenda.
 - **«Historial amb …»**, al menú d'un participant del panell Conversa, obre el
   panell Persona amb aquella persona, sense canviar com es dibuixa la barra ni
@@ -397,6 +403,8 @@ a `AppSidebar.tsx`.
 |---|---|
 | N1 (`states/person.test.ts`) | La regla del §4: al correu, una persona, diverses (la llista, sense triar-ne cap), la triada en aquesta conversa i aquest compte (i no la d'una altra conversa, d'un altre compte o de fora de la conversa), ningú més i la conversa que encara es llegeix; a Persones, el compte de la llibreta, la llibreta que no és de ningú (demana el compte, també amb un sol compte i sense els canals, i un compte que ja no hi és), la tria per contacte, diverses adreces i cap; l'estat buit als altres mòduls; el que es guarda per contacte; «Historial amb …» desa el panell i no la persona |
 | N2 (`components/chat/PersonPanel.test.tsx`) | Al correu: una persona, al compte de la conversa; diverses, amb la llista, el focus al títol i de tornada a la persona; ningú més; «Historial amb …» des del panell Conversa, amb el focus a la pestanya; una resposta tardana per al compte anterior que no hi apareix; obrir una conversa (la persona hi continua) i un esdeveniment. A Persones: el contacte seleccionat a la llista, al compte de la seva llibreta, i la conversa que s'obre al correu en aquell compte; la llibreta que no és de ningú, que demana el compte, i la resposta tardana del compte deixat; diverses adreces i cap. A tots els mòduls, l'estat buit |
+| N2 (`components/chat/PersonPanel.test.tsx`, revisió) | Una conversa en què s'ha respost des d'un àlies té una sola persona més; la fila de la llista quan la lectura acaba sense cap missatge de la conversa, i l'espera mentre es llegeix; cap consulta de les persones de la conversa anterior al compte de la següent; la resposta tardana per al contacte deixat, amb una altra adreça; a 600 px, una conversa de l'historial obre la conversa i no la llista |
+| N2 (`components/chat/conversationMedia.test.ts`) | Els àlies dels comptes propis compten com a propis (també per a l'etiqueta «Tu» del resum) |
 | N2 (`components/chat/PersonHistory.test.tsx`) | Les proves de #86, i el dibuix que segueix un canvi de compte, sense l'historial de l'anterior |
 | N2 (`components/chat/ConversationDetailsPanel.test.tsx`, `states/sidebar.test.ts`, `components/shell/AppSidebar.test.tsx`) | La taula de conversió amb `person`; «Historial amb …», que obre el panell i no passa a una altra conversa; la pestanya i la icona Persona a cada mòdul, i el selector de panells amb el teclat, en anglès i en àrab |
 | e2e (`startup.e2e.ts`, «#363») | A 1440 px, en català i en àrab: la icona de la tira; l'estat buit al correu sense conversa; la conversa amb Morgan, al seu compte; «Historial amb …» des del panell Conversa, amb el focus a la pestanya; a Persones, el contacte d'una llibreta de compte, i el d'una llibreta que no és de ningú, que demana el compte i no consulta res fins que es tria; al final de la línia (a l'esquerra en àrab), sense desplaçament horitzontal i amb axe; el panell recordat com a `person`, sense cap adreça a les preferències, després de reiniciar |

@@ -1773,6 +1773,18 @@
           {
             "sha": "04452885e56852257c382d057e4a1537156ed2ad",
             "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "d96ddef2f379d94a64557bcd559cc6d69edb3fac",
+            "result": "frontend/src/components/chat/PersonPanel.test.tsx"
+          },
+          {
+            "sha": "d96ddef2f379d94a64557bcd559cc6d69edb3fac",
+            "result": "frontend/src/components/chat/conversationMedia.test.ts"
+          },
+          {
+            "sha": "d96ddef2f379d94a64557bcd559cc6d69edb3fac",
+            "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
         "native": [],
