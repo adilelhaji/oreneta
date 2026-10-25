@@ -237,3 +237,185 @@ describe('keys inside an open menu', () => {
     expect(ui$.paletteOpen.peek()).toBe(true)
   })
 })
+
+// Delete and Backspace bound to the delete shortcut act only where the
+// conversation is the obvious target: its list or the reading pane in mail
+// (#355). Every other control, a native <select> included, leaves it alone.
+describe('Delete outside the conversation list', () => {
+  const calls: string[] = []
+  const nextTick = () => new Promise((resolve) => setTimeout(resolve, 0))
+  const deleted = () => calls.filter((command) => command === 'mail.delete')
+
+  beforeEach(() => {
+    calls.length = 0
+    mail$.threads.set([
+      {
+        id: 'acc:inbox:thread:1#101',
+        account_id: 'acc',
+        folder_id: 'inbox',
+        thread_id: 'acc:inbox:thread:1',
+        from_name: 'Sender',
+        from_addr: 'sender@example.com',
+        to: 'me@example.com',
+        subject: 'Subject',
+        preview: '',
+        body: '',
+        date: 1_780_000_000,
+        unread: false,
+        starred: false,
+        has_attachments: false,
+      },
+    ])
+    mail$.messages.set([])
+    ui$.selectedAccount.set('acc')
+    ui$.selectedFolder.set('inbox')
+    ui$.selectedThread.set('acc:inbox:thread:1')
+    ;(window as any).go = {
+      main: {
+        App: {
+          Invoke: async (command: string) => {
+            calls.push(command)
+            return {}
+          },
+        },
+      },
+    }
+  })
+
+  afterEach(() => {
+    delete (window as any).go
+    ui$.module.set('mail')
+    ui$.selectedThread.set('')
+    ui$.selectedAccount.set('')
+    ui$.selectedFolder.set('')
+    mail$.threads.set([])
+  })
+
+  function surface() {
+    const view = render(
+      <>
+        <AppHotkeys />
+        <section data-region="content" data-thread-list>
+          <button id="row">Row</button>
+        </section>
+        <div data-region="reader">
+          <nav>
+            <button id="conversation-tab">Current conversation</button>
+          </nav>
+          <div data-conversation>
+            <button id="conversation-button">Reply</button>
+            <textarea id="conversation-field" />
+            <footer data-quick-reply>
+              <button id="attach">Attach files</button>
+            </footer>
+          </div>
+          <div id="document-tab">
+            <button id="composer-attach">Attach files</button>
+            <button id="reader-tab-button">Print</button>
+          </div>
+        </div>
+        <main>
+          <button id="people">New contact</button>
+          <button id="toolbar">Toolbar</button>
+          <select id="font">
+            <option>Sans</option>
+            <option>Serif</option>
+          </select>
+        </main>
+      </>,
+    )
+    return (id: string) => view.container.querySelector<HTMLElement>(`#${id}`)!
+  }
+
+  const schemes = Object.keys(SHORTCUT_SCHEMES) as ShortcutScheme[]
+  // The scheme's own bindings, plus the key under test bound to the delete
+  // shortcut. The default scheme with Delete binds nothing: the built-in key.
+  const bindings = (scheme: ShortcutScheme, key: string) =>
+    scheme === 'oreneta' && key === 'Delete'
+      ? SHORTCUT_SCHEMES.oreneta
+      : scheme === 'outlook' && key === 'Delete'
+        ? SHORTCUT_SCHEMES.outlook
+        : { ...SHORTCUT_SCHEMES[scheme], 'thread.delete': { key } }
+  // Bound to a shortcut, the key also acts in the conversation view; the
+  // built-in Delete of the default scheme stays with the list.
+  const bound = (scheme: ShortcutScheme, key: string) => !(scheme === 'oreneta' && key === 'Delete')
+
+  for (const scheme of schemes) {
+    for (const key of ['Delete', 'Backspace']) {
+      it(`${key} leaves the conversation alone on a People button, a toolbar button and a select: ${scheme} scheme`, async () => {
+        setShortcutOverrides(bindings(scheme, key))
+        const el = surface()
+        ui$.module.set('people')
+        el('people').focus()
+        fireEvent.keyDown(el('people'), { key })
+        ui$.module.set('mail')
+        for (const id of ['toolbar', 'font']) {
+          el(id).focus()
+          fireEvent.keyDown(el(id), { key })
+        }
+        await nextTick()
+        expect(deleted()).toEqual([])
+        expect(ui$.selectedThread.peek()).toBe('acc:inbox:thread:1')
+      })
+
+      it(`${key} leaves the conversation alone on its tab, a compose or reader tab and the quick reply: ${scheme} scheme`, async () => {
+        setShortcutOverrides(bindings(scheme, key))
+        const el = surface()
+        for (const id of ['conversation-tab', 'composer-attach', 'reader-tab-button', 'attach']) {
+          el(id).focus()
+          fireEvent.keyDown(el(id), { key })
+        }
+        await nextTick()
+        expect(deleted()).toEqual([])
+      })
+
+      it(`${key} still deletes from a row: ${scheme} scheme`, async () => {
+        setShortcutOverrides(bindings(scheme, key))
+        const el = surface()
+        el('row').focus()
+        fireEvent.keyDown(el('row'), { key })
+        await nextTick()
+        expect(deleted()).toHaveLength(1)
+      })
+
+      it(`${key} ${bound(scheme, key) ? 'deletes from' : 'leaves alone'} the conversation view: ${scheme} scheme`, async () => {
+        setShortcutOverrides(bindings(scheme, key))
+        const el = surface()
+        el('conversation-button').focus()
+        fireEvent.keyDown(el('conversation-button'), { key })
+        await nextTick()
+        expect(deleted()).toHaveLength(bound(scheme, key) ? 1 : 0)
+      })
+    }
+
+    it(`Delete or Backspace from the conversation view or a row of another module does nothing: ${scheme} scheme`, async () => {
+      setShortcutOverrides(bindings(scheme, 'Backspace'))
+      const el = surface()
+      ui$.module.set('calendar')
+      el('conversation-button').focus()
+      fireEvent.keyDown(el('conversation-button'), { key: 'Backspace' })
+      el('row').focus()
+      fireEvent.keyDown(el('row'), { key: 'Backspace' })
+      await nextTick()
+      expect(deleted()).toEqual([])
+    })
+  }
+
+  it('Delete in a text field of the conversation view edits text, not the conversation', async () => {
+    setShortcutOverrides(SHORTCUT_SCHEMES.outlook)
+    const el = surface()
+    el('conversation-field').focus()
+    fireEvent.keyDown(el('conversation-field'), { key: 'Delete' })
+    await nextTick()
+    expect(deleted()).toEqual([])
+  })
+
+  it('a select counts as typing for the other bare shortcuts', async () => {
+    setShortcutOverrides(SHORTCUT_SCHEMES.outlook)
+    const el = surface()
+    el('font').focus()
+    fireEvent.keyDown(el('font'), { key: 'e' })
+    await nextTick()
+    expect(calls.filter((command) => command === 'mail.archive')).toEqual([])
+  })
+})
