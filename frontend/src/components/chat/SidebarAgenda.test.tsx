@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
 import { SidebarAgenda, untilNextDay } from './SidebarAgenda'
 import { accounts$ } from '../../states/accounts'
-import { calendar$, type CalendarEvent } from '../../states/calendar'
+import { calendar$, deleteEvent, setCalendarEnabled, type CalendarEvent } from '../../states/calendar'
 import { tasks$, type Task } from '../../states/tasks'
 import { ui$ } from '../../states/ui'
 import { sidebar$ } from '../../states/sidebar'
@@ -88,6 +88,8 @@ afterEach(() => {
   delete (window as any).go
   delete (window as any).runtime
   calendar$.viewing.set(null)
+  calendar$.events.set([])
+  calendar$.calendars.set([])
   ui$.module.set('mail')
   ui$.taskEditor.set(null)
   tasks$.accountLists.set([])
@@ -227,6 +229,58 @@ describe('sidebar agenda widget (#212)', () => {
     expect(requests.filter((r) => r.command === 'calendar.events').at(-1)?.payload.refresh).toBe(false)
     screen.unmount()
     expect(listeners['calendar.synced']).toBeUndefined()
+  })
+
+  // A delete or a calendar hidden here syncs nothing, so no calendar.synced
+  // follows: the week is read again all the same (#362).
+  it('reads the week again when an event is deleted here or a calendar hidden, without a sync', async () => {
+    const gone = new Set<string>()
+    const original = replies['calendar.events']
+    replies['calendar.events'] = (p) =>
+      gone.has(`calendar:${p.account_id}`)
+        ? { events: [] }
+        : { events: (original(p) as { events: CalendarEvent[] }).events.filter((e) => !gone.has(e.id)) }
+    replies['calendar.delete'] = (p) => {
+      gone.add(p.event_id)
+      return { ok: true }
+    }
+    replies['calendar.setEnabled'] = (p) => {
+      if (!p.enabled) gone.add(`calendar:${p.account_id}`)
+      return { ok: true }
+    }
+    ui$.module.set('tasks')
+    const screen = render(<SidebarAgenda now={() => NOW} />)
+    await waitFor(() => expect(screen.getByText('Dentist')).toBeTruthy())
+    // Opened from the agenda, deleted in its sheet.
+    fireEvent.click(screen.getByRole('button', { name: /Dentist/ }))
+    await act(async () => {
+      await deleteEvent(calendar$.viewing.peek()!)
+    })
+    await waitFor(() => expect(screen.queryByText('Dentist')).toBeNull())
+    expect(screen.getByText('Design review')).toBeTruthy()
+    // The work account's calendar hidden in the calendar list, which has
+    // the calendars: its events go, the tasks stay.
+    act(() =>
+      calendar$.calendars.set([
+        {
+          id: 'cal',
+          name: 'Work',
+          is_default: true,
+          enabled: true,
+          kind: 'account',
+          read_only: false,
+          synced_at: 0,
+          accountId: 'work',
+        },
+      ]),
+    )
+    await act(async () => {
+      await setCalendarEnabled('work', 'cal', false)
+    })
+    await waitFor(() => expect(screen.queryByText('Design review')).toBeNull())
+    expect(screen.queryByText('Offsite')).toBeNull()
+    expect(screen.getByText('Book flights')).toBeTruthy()
+    expect(requests.filter((r) => r.command === 'calendar.events').at(-1)?.payload.refresh).toBe(false)
   })
 
   it('says the agenda may be out of date while a calendar refresh has failed, until a later sync of the week lands', async () => {

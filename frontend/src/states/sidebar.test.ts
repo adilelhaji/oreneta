@@ -49,7 +49,7 @@ afterEach(() => {
   delete (window as any).go
 })
 
-const SHIPPED: SidebarPanelId[] = ['agenda', 'conversation']
+const SHIPPED: SidebarPanelId[] = ['agenda', 'day', 'conversation']
 
 describe('the remembered panel (session_sidebar_section_main)', () => {
   it('keeps the panel type, Dia and Persona included, and reads anything else as the Agenda', () => {
@@ -67,6 +67,8 @@ describe('the remembered panel (session_sidebar_section_main)', () => {
     expect(ui$.sidebarSection.get()).toBe('media')
     restoreUiSession({ session_sidebar_section_main: 'person' }, [])
     expect(ui$.sidebarSection.get()).toBe('person')
+    restoreUiSession({ session_sidebar_section_main: 'day' }, [])
+    expect(ui$.sidebarSection.get()).toBe('day')
     restoreUiSession({ session_sidebar_section_main: 'widgets' }, [])
     expect(ui$.sidebarSection.get()).toBe('agenda')
     ui$.sidebarSection.set('files')
@@ -87,10 +89,12 @@ describe('the remembered panel (session_sidebar_section_main)', () => {
   })
 
   it('shows Dia and Persona as themselves once they are there, and as the Agenda until then', () => {
-    for (const section of ['day', 'person'] as const) {
-      expect(resolveSidebarPanel(section, true, SHIPPED)).toBe('agenda')
-      expect(resolveSidebarPanel(section, false, SHIPPED)).toBe('agenda')
-    }
+    // Dia is there since #362, with a conversation open and without one.
+    expect(resolveSidebarPanel('day', true, SHIPPED)).toBe('day')
+    expect(resolveSidebarPanel('day', false, SHIPPED)).toBe('day')
+    expect(resolveSidebarPanel('day', true, ['agenda', 'conversation'])).toBe('agenda')
+    expect(resolveSidebarPanel('person', true, SHIPPED)).toBe('agenda')
+    expect(resolveSidebarPanel('person', false, SHIPPED)).toBe('agenda')
     const later: SidebarPanelId[] = ['agenda', 'day', 'person', 'conversation']
     expect(resolveSidebarPanel('day', false, later)).toBe('day')
     expect(resolveSidebarPanel('person', true, later)).toBe('person')
