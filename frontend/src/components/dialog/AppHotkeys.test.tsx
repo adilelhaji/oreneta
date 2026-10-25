@@ -11,6 +11,7 @@ import {
 import { mail$ } from '../../states/mail'
 import { ui$ } from '../../states/ui'
 import { compose$ } from '../../states/compose'
+import type { MessageTab } from '../../types'
 import { MenuList } from '../menu/Menu'
 import { MenuItem } from '../menu/MenuItem'
 
@@ -434,6 +435,16 @@ describe('Delete outside the conversation list', () => {
     ctrlKey: !!chord.mod,
     altKey: !!chord.alt,
   })
+  const tab = (id: string, kind: 'reader' | 'compose' | 'thread'): MessageTab => ({
+    id,
+    kind,
+    messageId: '',
+    threadId: 'acc:inbox:thread:1',
+    subject: '',
+    from: '',
+    body: '',
+    viewMode: 'plain',
+  })
   const bodyTarget = () => {
     ;(document.activeElement as HTMLElement | null)?.blur()
     return document.body
@@ -467,6 +478,7 @@ describe('Delete outside the conversation list', () => {
       it(`stays off a reader or compose tab of mail, ${name}`, async () => {
         setShortcutOverrides(SHORTCUT_SCHEMES[scheme])
         const el = surface()
+        compose$.tabs.set([tab('reader-1', 'reader')])
         compose$.activeTab.set('reader-1')
         try {
           // The list stays the target of a bare removing key under a tab.
@@ -483,6 +495,25 @@ describe('Delete outside the conversation list', () => {
           expect(sent()).toEqual([])
         } finally {
           compose$.activeTab.set('')
+          compose$.tabs.set([])
+        }
+      })
+
+      // A thread tab shows its own live conversation: nothing is covered.
+      it(`acts under a thread tab, ${name}`, async () => {
+        setShortcutOverrides(SHORTCUT_SCHEMES[scheme])
+        const el = surface()
+        compose$.tabs.set([tab('thread-1', 'thread')])
+        compose$.activeTab.set('thread-1')
+        try {
+          const target = isBare && removing ? 'conversation-button' : 'attach'
+          el(target).focus()
+          press(el(target))
+          await nextTick()
+          expect(sent()).toHaveLength(1)
+        } finally {
+          compose$.activeTab.set('')
+          compose$.tabs.set([])
         }
       })
 

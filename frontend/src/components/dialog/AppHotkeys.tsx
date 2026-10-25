@@ -35,6 +35,7 @@ import {
   bulkStarSelected,
 } from '../../states/mail'
 import { compose$, openComposeTab, openReplyInFullEditor, closeMessageTab } from '../../states/compose'
+import { documentTabOf } from '../chat/activeConversation'
 import { handleEditUndoKeyDown } from '../../lib/editUndo'
 import { focusInMenu } from '../../lib/menuKeyboard'
 import { zoom } from '../../states/zoom'
@@ -145,10 +146,16 @@ const MAIL_THREAD_ACTIONS: ReadonlySet<ShortcutId> = new Set([
   'thread.unread',
 ])
 
+// A reader or compose tab covers the conversation; a thread tab does not, it
+// shows its own conversation (the same notion as the message pane's).
+function documentTabShowing(): boolean {
+  return !!documentTabOf(compose$.tabs.peek(), compose$.activeTab.peek())
+}
+
 // The conversation view of mail is the one on screen: mail module, no reader or
 // compose tab over it (activeTab "" is the conversation).
 function mailConversationShowing(): boolean {
-  return ui$.module.peek() === 'mail' && !compose$.activeTab.peek()
+  return ui$.module.peek() === 'mail' && !documentTabShowing()
 }
 
 // Where a bare removing key (not Delete or Backspace, which follow #355) acts:
@@ -158,7 +165,7 @@ function removingKeyFocusAllowed(): boolean {
   const el = document.activeElement
   if (ui$.module.peek() !== 'mail') return false
   // The list stays the target under a tab; the rest is the conversation's.
-  return inThreadList(el) || (!compose$.activeTab.peek() && (inConversation(el) || bodyFocused()))
+  return inThreadList(el) || (!documentTabShowing() && (inConversation(el) || bodyFocused()))
 }
 
 /** The keys that delete, whatever shortcut they are bound to. */
