@@ -500,6 +500,37 @@ describe('the day panel at midnight (#362)', () => {
     expect(screen.queryByText('Dentist')).toBeNull()
   })
 
+  // Re-review of #362: a drawing after midnight but before the minute's timer
+  // (here a sync landing; in a hidden window, whose timers are throttled,
+  // anything) used to clear that timer, and the panel stayed on yesterday.
+  it('moves on to the new today when something is drawn after midnight before the minute’s timer', async () => {
+    let clock = at(15, 23, 59, 30)
+    const screen = render(<SidebarDay now={() => clock} />)
+    await settle()
+    expect(heading(screen)).toBe(`Today · ${dateOf(at(15))}`)
+    clock = at(16, 0, 0, 0) + 10
+    act(() => listeners['calendar.synced']())
+    await settle()
+    act(() => jest.advanceTimersByTime(120_000))
+    await settle()
+    expect(heading(screen)).toBe(`Today · ${dateOf(at(16))}`)
+    expect(rows(screen)).toEqual(['Offsite', 'now'])
+  })
+
+  it('keeps tomorrow, chosen before midnight, which becomes today', async () => {
+    let clock = at(15, 23, 59, 30)
+    const screen = render(<SidebarDay now={() => clock} />)
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: 'Next day' }))
+    await settle()
+    expect(heading(screen)).toBe(dateOf(at(16)))
+    clock = at(16, 0, 0, 10)
+    act(() => jest.advanceTimersByTime(31_000))
+    await settle()
+    expect(heading(screen)).toBe(`Today · ${dateOf(at(16))}`)
+    expect(rows(screen)).toEqual(['Offsite', 'now'])
+  })
+
   it('keeps another day, reading it again', async () => {
     let clock = at(15, 23, 59, 30)
     const screen = render(<SidebarDay now={() => clock} />)

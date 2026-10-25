@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useValue } from '@legendapp/state/react'
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { intlLocale, useTranslation } from '../../lib/i18n'
@@ -54,9 +54,20 @@ export function SidebarDay({ now = () => Date.now() }: { now?: () => number }) {
     if (calendar$.calendars.peek().length === 0) void loadCalendars()
   }, [])
 
-  // On today, the line of the current time moves with the minutes, and at
-  // midnight the panel moves on to the new today. Another day stays shown.
+  // At midnight a panel showing today moves on to the new today; another day
+  // stays shown. Decided from today changing, in whichever drawing first sees
+  // it (the reading's own midnight re-read, a sync, a change of the
+  // calendars, or the minute tick below), never only inside a timer that a
+  // drawing before it may clear: a hidden window's timers are throttled.
   const today = dayOf(now())
+  const shownToday = useRef(today)
+  useLayoutEffect(() => {
+    if (shownToday.current === today) return
+    if (day === shownToday.current) setDay(today)
+    shownToday.current = today
+  }, [today, day])
+
+  // On today, the line of the current time moves with the minutes.
   const [, tick] = useState(0)
   useEffect(() => {
     if (day !== today) return
@@ -64,8 +75,6 @@ export function SidebarDay({ now = () => Date.now() }: { now?: () => number }) {
     const next = () => {
       timer = setTimeout(
         () => {
-          const current = dayOf(now())
-          if (current !== day) return setDay(current)
           tick((count) => count + 1)
           next()
         },
