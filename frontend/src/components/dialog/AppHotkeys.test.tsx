@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { AppHotkeys } from './AppHotkeys'
-import { SHORTCUT_SCHEMES, setShortcutOverrides, type ShortcutScheme } from '../../lib/shortcuts'
+import {
+  DEFAULT_SHORTCUTS,
+  SHORTCUT_SCHEMES,
+  setShortcutOverrides,
+  type Chord,
+  type ShortcutScheme,
+} from '../../lib/shortcuts'
 import { mail$ } from '../../states/mail'
 import { ui$ } from '../../states/ui'
 import { MenuList } from '../menu/Menu'
@@ -409,6 +415,76 @@ describe('Delete outside the conversation list', () => {
     await nextTick()
     expect(deleted()).toEqual([])
   })
+
+  // Archive, delete and junk remove the conversation from view (#365): bare,
+  // they act only from the list and the conversation view of mail.
+  const removing = [
+    { id: 'thread.archive', command: 'mail.archive' },
+    { id: 'thread.delete', command: 'mail.delete' },
+    { id: 'thread.junk', command: 'mail.markJunk' },
+  ] as const
+  const chordEvent = (chord: { shift?: boolean; key: string }) => ({ key: chord.key, shiftKey: !!chord.shift })
+
+  for (const scheme of schemes) {
+    for (const { id, command } of removing) {
+      const chord = () => (SHORTCUT_SCHEMES[scheme][id] ?? DEFAULT_SHORTCUTS[id]) as Chord
+      const bare = () => !chord().mod && !chord().alt
+      const sent = () => calls.filter((c) => c === command)
+
+      it(`${id} stays off controls of another module and the tabs: ${scheme} scheme`, async () => {
+        setShortcutOverrides(SHORTCUT_SCHEMES[scheme])
+        const el = surface()
+        if (!bare()) return
+        ui$.module.set('people')
+        el('people').focus()
+        fireEvent.keyDown(el('people'), chordEvent(chord()))
+        ui$.module.set('calendar')
+        el('conversation-button').focus()
+        fireEvent.keyDown(el('conversation-button'), chordEvent(chord()))
+        ui$.module.set('mail')
+        for (const target of ['toolbar', 'conversation-tab', 'composer-attach', 'attach']) {
+          el(target).focus()
+          fireEvent.keyDown(el(target), chordEvent(chord()))
+        }
+        await nextTick()
+        expect(sent()).toEqual([])
+      })
+
+      it(`${id} still acts from a row and the conversation view: ${scheme} scheme`, async () => {
+        setShortcutOverrides(SHORTCUT_SCHEMES[scheme])
+        const el = surface()
+        if (!bare()) return
+        el('row').focus()
+        fireEvent.keyDown(el('row'), chordEvent(chord()))
+        el('conversation-button').focus()
+        fireEvent.keyDown(el('conversation-button'), chordEvent(chord()))
+        await nextTick()
+        expect(sent().length).toBeGreaterThan(0)
+      })
+    }
+  }
+
+  for (const key of ['Delete', 'Backspace']) {
+    it(`Ctrl+${key} bound to a thread action edits text instead of acting`, async () => {
+      setShortcutOverrides({ 'thread.delete': { mod: true, key }, 'thread.archive': { alt: true, key } })
+      const el = surface()
+      el('conversation-field').focus()
+      fireEvent.keyDown(el('conversation-field'), { key, ctrlKey: true })
+      fireEvent.keyDown(el('conversation-field'), { key, altKey: true })
+      await nextTick()
+      expect(deleted()).toEqual([])
+      expect(calls.filter((c) => c === 'mail.archive')).toEqual([])
+    })
+
+    it(`Ctrl+${key} bound to delete still acts from a row`, async () => {
+      setShortcutOverrides({ 'thread.delete': { mod: true, key } })
+      const el = surface()
+      el('row').focus()
+      fireEvent.keyDown(el('row'), { key, ctrlKey: true })
+      await nextTick()
+      expect(deleted()).toHaveLength(1)
+    })
+  }
 
   it('a select counts as typing for the other bare shortcuts', async () => {
     setShortcutOverrides(SHORTCUT_SCHEMES.outlook)

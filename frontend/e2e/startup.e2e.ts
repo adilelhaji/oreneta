@@ -5119,6 +5119,63 @@ test('Delete in the Outlook scheme leaves the selected conversation alone from C
   expect(errors).toEqual([])
 })
 
+test('Shift+# and e in the default scheme leave the selected conversation alone from Calendar (#365)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await page.evaluate(() => {
+    const replies = (window as any).startupProbe.replies
+    replies['calendar.list'] = {
+      calendars: [
+        {
+          id: 'local-team',
+          name: 'Team',
+          is_default: true,
+          enabled: true,
+          kind: 'local',
+          read_only: false,
+          synced_at: 0,
+        },
+      ],
+    }
+    replies['calendar.events'] = { events: [] }
+    replies['mail.delete'] = {}
+    replies['mail.archive'] = {}
+  })
+  const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+  await row.click()
+  await expect(row).toHaveAttribute('aria-current', 'true')
+  const { button, menu } = await appMenuParts(page)
+  await button.click()
+  await menu.getByRole('menuitemradio', { name: 'Go to: Calendar', exact: true }).click()
+  const calendar = page.getByRole('main', { name: 'Calendar', exact: true })
+  await expect(calendar).toBeVisible()
+  const control = calendar.getByRole('button').first()
+  await control.focus()
+  await expect(control).toBeFocused()
+  await page.keyboard.press('Shift+#')
+  await page.keyboard.press('e')
+  await page.keyboard.press('Shift+!')
+  const sent = () =>
+    page.evaluate(() =>
+      (window as any).startupProbe.requests
+        .map((request: { command: string }) => request.command)
+        .filter((command: string) => ['mail.delete', 'mail.archive', 'mail.markJunk'].includes(command)),
+    )
+  expect(await sent()).toEqual([])
+  // In the list of mail, the same key archives it.
+  await button.click()
+  await menu.getByRole('menuitemradio', { name: 'Go to: Mail', exact: true }).click()
+  await expect(page.getByRole('main', { name: 'Mail', exact: true })).toBeVisible()
+  await row.focus()
+  await page.keyboard.press('e')
+  await expect.poll(sent).toEqual(['mail.archive'])
+  expect(errors).toEqual([])
+})
+
 test('the app menu runs what the palette and the rail\'s More menu ran (#343, #354)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   const errors = await prepareStartup(page, true, { navigation: true })

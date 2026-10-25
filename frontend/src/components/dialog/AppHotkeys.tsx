@@ -132,6 +132,12 @@ function inConversation(el: Element | null): boolean {
   return !!el?.closest('[data-conversation]') && !el.closest('[data-quick-reply]')
 }
 
+// The thread actions that take the conversation out of view or are hard to undo
+// (#365): they act only where it is the obvious target, like Delete (#355).
+// Star, unread, next/prev and details change nothing that disappears, so they
+// keep acting from any module.
+const REMOVING_THREAD_ACTIONS: ReadonlySet<ShortcutId> = new Set(['thread.delete', 'thread.archive', 'thread.junk'])
+
 /** The keys that delete, whatever shortcut they are bound to. */
 function isDeleteKey(key: string): boolean {
   return key === 'Delete' || key === 'Backspace'
@@ -341,11 +347,19 @@ export function AppHotkeys({ setup = false }: { setup?: boolean }) {
 
       // Gate single-key shortcuts: never steal a keystroke from a text field,
       // and only act in the chat view with no modal open.
-      if (isBareShortcut(action)) {
+      // A chord on Delete or Backspace (Ctrl+Backspace deletes a word) is gated
+      // like a bare key: it edits text in a field (#365).
+      if (isBareShortcut(action) || isDeleteKey(shortcutChord(action).key)) {
         if (isTyping(event.target) || !bareShortcutsActive()) return
-        // Whatever it is bound to, a Delete or Backspace shortcut acts only
-        // where the conversation is the obvious target (#355).
-        if (isDeleteKey(shortcutChord(action).key) && !deleteKeyFocusAllowed(true)) return
+        // Whatever it is bound to, a Delete or Backspace shortcut and the
+        // actions that remove a thread act only where the conversation is the
+        // obvious target (#355, #365).
+        if (
+          (isDeleteKey(shortcutChord(action).key) || REMOVING_THREAD_ACTIONS.has(action)) &&
+          !deleteKeyFocusAllowed(true)
+        ) {
+          return
+        }
       } else if (isFunctionKey(shortcutChord(action).key) && (modalOpen() || modalDialogOpen())) {
         // F1–F12 type nothing, so they work while typing (ADR-0068 §6), but a
         // single key still stands down while a modal dialog is open: it keeps
