@@ -529,6 +529,14 @@
           {
             "sha": "59a036338f10e1ab1a37764ef53af35ea66cb65f",
             "result": "frontend/src/components/shell/BandSearch.test.tsx"
+          },
+          {
+            "sha": "01f79f959c1ccb13e262062327528fdb17d90680",
+            "result": "frontend/src/components/dialog/ShortcutsDialog.test.tsx"
+          },
+          {
+            "sha": "01f79f959c1ccb13e262062327528fdb17d90680",
+            "result": "frontend/src/lib/shortcuts.test.ts"
           }
         ],
         "native": [],
