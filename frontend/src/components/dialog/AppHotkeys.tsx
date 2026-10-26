@@ -175,7 +175,8 @@ function removingKeyFocusAllowed(): boolean {
 function focusedRowIsOtherThread(): boolean {
   // Only while a reader or compose tab covers the conversation: otherwise j/k
   // retarget the selection without moving focus. A bulk selection is the target.
-  if (selectedBulkItems().length > 0 || !documentTabShowing()) return false
+  // On a board activeThreadId() already follows the open card.
+  if (kanban$.activeBoardId.peek() || selectedBulkItems().length > 0 || !documentTabShowing()) return false
   const row = document.activeElement?.closest('[data-thread-row]')
   return !!row && row.getAttribute('data-thread-row') !== activeThreadId()
 }

@@ -11,6 +11,7 @@ import {
 import { mail$ } from '../../states/mail'
 import { ui$, toggleBulkSelection } from '../../states/ui'
 import { compose$ } from '../../states/compose'
+import { kanban$ } from '../../states/kanban'
 import type { MessageTab } from '../../types'
 import { MenuList } from '../menu/Menu'
 import { MenuItem } from '../menu/MenuItem'
@@ -648,18 +649,44 @@ describe('Delete outside the conversation list', () => {
     compose$.tabs.set([])
     compose$.activeTab.set('')
     ui$.bulkSelection.set({})
+    kanban$.activeBoardId.set('')
+    kanban$.paneThreadId.set('')
   })
 
-  it('a thread action on an RSS row under a reader tab leaves the selected conversation alone', async () => {
-    compose$.tabs.set([readerTab()])
-    compose$.activeTab.set('reader-1')
-    const row = rows()
-    row('rss-row').focus()
-    for (const key of ['e', 's', 'u', '#', '!', 'Delete']) fireEvent.keyDown(row('rss-row'), { key })
-    await nextTick()
-    expect(acted()).toEqual([])
-    expect(ui$.selectedThread.peek()).toBe('acc:inbox:thread:1')
-  })
+  const guarded: { name: string; init: KeyboardEventInit; command: string }[] = [
+    { name: 'e', init: { key: 'e' }, command: 'mail.archive' },
+    { name: 'Delete', init: { key: 'Delete' }, command: 'mail.delete' },
+    { name: 'Shift+#', init: { key: '#', shiftKey: true }, command: 'mail.delete' },
+    { name: 'Shift+!', init: { key: '!', shiftKey: true }, command: 'mail.junk' },
+    { name: 's', init: { key: 's' }, command: 'mail.star' },
+    { name: 'u', init: { key: 'u' }, command: 'mail.markUnread' },
+  ]
+  for (const { name, init } of guarded) {
+    it(`${name} on an RSS row under a reader tab leaves the selected conversation alone`, async () => {
+      compose$.tabs.set([readerTab()])
+      compose$.activeTab.set('reader-1')
+      const row = rows()
+      row('rss-row').focus()
+      fireEvent.keyDown(row('rss-row'), init)
+      await nextTick()
+      expect(acted()).toEqual([])
+      expect(ui$.selectedThread.peek()).toBe('acc:inbox:thread:1')
+    })
+  }
+
+  for (const { name, init, command } of guarded.slice(0, 2)) {
+    it(`${name} on a board acts on the open card although focus is on another card`, async () => {
+      kanban$.activeBoardId.set('board-1')
+      kanban$.paneThreadId.set('acc:inbox:thread:2')
+      compose$.tabs.set([readerTab()])
+      compose$.activeTab.set('reader-1')
+      const row = rows()
+      row('row-1').focus()
+      fireEvent.keyDown(row('row-1'), init)
+      await nextTick()
+      expect(calls).toContain(command)
+    })
+  }
 
   it('j then e acts on the newly selected row although focus stays on the first', async () => {
     const row = rows()
