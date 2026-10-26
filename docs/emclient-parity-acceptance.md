@@ -417,12 +417,14 @@ comptes propis compten com a propis; i, quan la lectura d'una conversa acaba sen
 missatges, les persones surten de la fila de la llista, de manera que el panell no espera per sempre
 ni consulta mai les persones de la conversa anterior. Les proves de components ho comproven, també a
 600 px, i SET-23 continua `partial`.
-El 2026-10-26 (#358, `docs/design/mail-navigation.md`) els noms de les dreceres i els títols dels grups del diàleg de
-dreceres de teclat (SET-02) passen del codi al catàleg de traduccions: `shortcuts.label.*` i `shortcuts.group.*`, als 20
-idiomes, i es resolen en pintar, de manera que el diàleg segueix la llengua de la interfície. Les proves comproven que cada
-drecera té nom i cada grup títol a tots els catàlegs, el missatge amb `{n}` de la subfinestra de carpetes, el diàleg obert
-en anglès i en català, i el canvi de llengua amb el diàleg obert. És una nota d'evidència: SET-02 continua `partial`, i
-l'evidència nativa de Windows continua pendent. El text dels idiomes que no són el català no l'ha revisat cap parlant nadiu.
+El 2026-10-26 (#358, `docs/design/mail-navigation.md`), els noms de les dreceres i els títols dels grups
+del diàleg de dreceres de teclat (SET-02) passen del codi al catàleg de traduccions: `shortcuts.label.*`
+i `shortcuts.group.*`, als 20 idiomes. Es resolen en mostrar el diàleg, de manera que segueix la llengua
+de la interfície. Les proves comproven que cada drecera té nom i cada grup té títol a tots els catàlegs,
+que el missatge amb `{n}` de les dreceres «Ves a l'element» de la subfinestra de carpetes es resol
+correctament, que el diàleg es mostra en anglès i en català, i que la llengua canvia amb el diàleg obert.
+SET-02 continua `partial` i l'evidència nativa de Windows continua pendent. Cap parlant nadiu no ha
+revisat el text dels altres idiomes.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per
