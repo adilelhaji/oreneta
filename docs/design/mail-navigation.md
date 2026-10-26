@@ -950,8 +950,10 @@ arrencar) i `index.css` (els colors de la barra estreta).
 - **Ctrl/⌘+1…9 no canvien:** la safata unificada si es mostra, els taulers i els
   comptes visibles, en l'ordre de «Comptes i carpetes»; canvien el lloc del correu
   sense canviar el mòdul en pantalla, com abans, i els mòduls no tenen drecera. Al
-  diàleg de les dreceres de teclat, el grup «Side navigation» es diu «Accounts and
-  folders» (aquests noms encara no són al catàleg de traduccions).
+  diàleg de les dreceres de teclat, el grup es diu «Comptes i carpetes» i les files
+  «Ves a l'element N de “Comptes i carpetes”»: els noms i els títols dels grups
+  són al catàleg de traduccions (`shortcuts.label.*` i `shortcuts.group.*`, #358) i
+  es resolen en pintar, de manera que segueixen la llengua de la interfície.
 - **Espai:** a partir de 1025 px la fila guanya els 60 px de la barra vertical.
   Amb una llista desada de 560 px, a 1025 px les carpetes fan 200 px i la llista
   465 px (abans, 405); a 1100 px, 200 i 540 px (abans, 480); a 1140 px, 220 px i la

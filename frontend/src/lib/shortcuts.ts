@@ -235,48 +235,56 @@ export function sanitizeShortcutOverrides(raw: unknown): ShortcutOverrides | nul
   return out
 }
 
-/** Human-readable name for each shortcut, shown in the help overlay. */
+/** Catalog key of each shortcut's name, shown in the help overlay. Resolve it
+ * with `shortcutLabel` at render time so a language change takes effect. */
 export const SHORTCUT_LABELS: Record<ShortcutId, string> = {
-  'palette.open': 'Command palette',
-  'shortcuts.help': 'Keyboard shortcuts',
-  'settings.open': 'Open settings',
-  'compose.new': 'Compose new message',
-  'compose.replyFull': 'Reply in full editor',
-  'thread.junk': 'Mark as junk',
-  'reply.focus': 'Reply (focus quick reply)',
-  'mail.sync': 'Sync mailbox',
-  'search.thread': 'Search current thread',
-  'search.global': 'Search all messages',
-  'view.toggle': 'Toggle Mail / Kanban board',
-  'view.rail1': 'Go to item 1 of Accounts and folders',
-  'view.rail2': 'Go to item 2 of Accounts and folders',
-  'view.rail3': 'Go to item 3 of Accounts and folders',
-  'view.rail4': 'Go to item 4 of Accounts and folders',
-  'view.rail5': 'Go to item 5 of Accounts and folders',
-  'view.rail6': 'Go to item 6 of Accounts and folders',
-  'view.rail7': 'Go to item 7 of Accounts and folders',
-  'view.rail8': 'Go to item 8 of Accounts and folders',
-  'view.rail9': 'Go to item 9 of Accounts and folders',
-  'tab.close': 'Close tab',
-  'view.zoomIn': 'Make everything larger',
-  'view.zoomOut': 'Make everything smaller',
-  'view.zoomReset': 'Reset size',
-  'pane.next': 'Next region',
-  'pane.prev': 'Previous region',
-  'thread.next': 'Next thread',
-  'thread.prev': 'Previous thread',
-  'thread.archive': 'Archive thread',
-  'thread.star': 'Toggle star',
-  'thread.unread': 'Mark unread',
-  'thread.delete': 'Delete thread',
-  'thread.details': 'Toggle the sidebar conversation panel',
+  'palette.open': 'shortcuts.label.palette.open',
+  'shortcuts.help': 'shortcuts.label.shortcuts.help',
+  'settings.open': 'shortcuts.label.settings.open',
+  'compose.new': 'shortcuts.label.compose.new',
+  'compose.replyFull': 'shortcuts.label.compose.replyFull',
+  'thread.junk': 'shortcuts.label.thread.junk',
+  'reply.focus': 'shortcuts.label.reply.focus',
+  'mail.sync': 'shortcuts.label.mail.sync',
+  'search.thread': 'shortcuts.label.search.thread',
+  'search.global': 'shortcuts.label.search.global',
+  'view.toggle': 'shortcuts.label.view.toggle',
+  'view.rail1': 'shortcuts.label.view.rail',
+  'view.rail2': 'shortcuts.label.view.rail',
+  'view.rail3': 'shortcuts.label.view.rail',
+  'view.rail4': 'shortcuts.label.view.rail',
+  'view.rail5': 'shortcuts.label.view.rail',
+  'view.rail6': 'shortcuts.label.view.rail',
+  'view.rail7': 'shortcuts.label.view.rail',
+  'view.rail8': 'shortcuts.label.view.rail',
+  'view.rail9': 'shortcuts.label.view.rail',
+  'tab.close': 'shortcuts.label.tab.close',
+  'view.zoomIn': 'shortcuts.label.view.zoomIn',
+  'view.zoomOut': 'shortcuts.label.view.zoomOut',
+  'view.zoomReset': 'shortcuts.label.view.zoomReset',
+  'pane.next': 'shortcuts.label.pane.next',
+  'pane.prev': 'shortcuts.label.pane.prev',
+  'thread.next': 'shortcuts.label.thread.next',
+  'thread.prev': 'shortcuts.label.thread.prev',
+  'thread.archive': 'shortcuts.label.thread.archive',
+  'thread.star': 'shortcuts.label.thread.star',
+  'thread.unread': 'shortcuts.label.thread.unread',
+  'thread.delete': 'shortcuts.label.thread.delete',
+  'thread.details': 'shortcuts.label.thread.details',
+}
+
+/** The translated name of a shortcut. The rail slots share one message that
+ * takes the slot number. */
+export function shortcutLabel(t: (key: string, values?: Record<string, unknown>) => string, id: ShortcutId): string {
+  const rail = /^view\.rail(\d)$/.exec(id)
+  return rail ? t(SHORTCUT_LABELS[id], { n: Number(rail[1]) }) : t(SHORTCUT_LABELS[id])
 }
 
 /** Grouping for the help overlay, in display order. */
-export const SHORTCUT_GROUPS: { title: string; ids: ShortcutId[] }[] = [
-  { title: 'General', ids: ['palette.open', 'shortcuts.help', 'settings.open'] },
+export const SHORTCUT_GROUPS: { titleKey: string; ids: ShortcutId[] }[] = [
+  { titleKey: 'shortcuts.group.general', ids: ['palette.open', 'shortcuts.help', 'settings.open'] },
   {
-    title: 'Threads',
+    titleKey: 'shortcuts.group.threads',
     ids: [
       'thread.next',
       'thread.prev',
@@ -289,17 +297,17 @@ export const SHORTCUT_GROUPS: { title: string; ids: ShortcutId[] }[] = [
     ],
   },
   {
-    title: 'Mail',
+    titleKey: 'shortcuts.group.mail',
     ids: ['compose.new', 'reply.focus', 'compose.replyFull', 'mail.sync', 'search.thread', 'search.global'],
   },
   {
-    title: 'View',
+    titleKey: 'shortcuts.group.view',
     ids: ['view.toggle', 'tab.close', 'view.zoomIn', 'view.zoomOut', 'view.zoomReset', 'pane.next', 'pane.prev'],
   },
   // Every slot gets a row, so all nine are visible and rebindable. The slots
   // are the rail's, in «Comptes i carpetes» since the rail went (#354): the
   // unified inbox if shown, the boards, then the accounts shown.
-  { title: 'Accounts and folders', ids: [...RAIL_SHORTCUT_IDS] },
+  { titleKey: 'shortcuts.group.rail', ids: [...RAIL_SHORTCUT_IDS] },
 ]
 
 export const isMac = /mac|iphone|ipad|ipod/i.test(navigator.userAgent + ' ' + (navigator.platform ?? ''))

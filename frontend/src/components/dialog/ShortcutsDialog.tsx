@@ -8,7 +8,7 @@ import {
   formatShortcut,
   isMac,
   SHORTCUT_GROUPS,
-  SHORTCUT_LABELS,
+  shortcutLabel,
   shortcutConflict,
   type ShortcutId,
 } from '../../lib/shortcuts'
@@ -134,8 +134,8 @@ export function ShortcutsDialog() {
       </div>
 
       {SHORTCUT_GROUPS.map((group) => (
-        <section key={group.title}>
-          <h3 className="mb-1.5 text-xs font-semibold text-secondary">{group.title}</h3>
+        <section key={group.titleKey}>
+          <h3 className="mb-1.5 text-xs font-semibold text-secondary">{t(group.titleKey)}</h3>
           <div className="overflow-hidden rounded-control-sm border border-border">
             {group.ids.map((id, i) => (
               <ShortcutRow
@@ -182,7 +182,7 @@ function ShortcutRow({
   return (
     <div className={`px-3 py-2 text-ui text-primary ${first ? '' : 'border-t border-border'}`}>
       <div className="flex items-center justify-between gap-4">
-        <span>{SHORTCUT_LABELS[id]}</span>
+        <span>{shortcutLabel(t, id)}</span>
         <div className="flex shrink-0 items-center gap-1">
           {customized && (
             <IconButton
@@ -211,7 +211,7 @@ function ShortcutRow({
       </div>
       {conflict && (
         <p role="alert" className="mt-1 text-end text-caption text-danger">
-          {t('shortcuts.conflict', { name: SHORTCUT_LABELS[conflict] })}
+          {t('shortcuts.conflict', { name: shortcutLabel(t, conflict) })}
         </p>
       )}
     </div>
