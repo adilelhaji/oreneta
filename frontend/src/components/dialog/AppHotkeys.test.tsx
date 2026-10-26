@@ -597,4 +597,31 @@ describe('Delete outside the conversation list', () => {
     await nextTick()
     expect(calls.filter((command) => command === 'mail.archive')).toEqual([])
   })
+
+  // #369: an RSS row of the Starred view opens a reader tab and leaves
+  // ui$.selectedThread on the earlier conversation.
+  it('a thread action with focus on a row of another conversation leaves the selection alone', async () => {
+    const view = render(
+      <>
+        <AppHotkeys />
+        <section data-region="content" data-thread-list>
+          <button id="rss-row" data-thread-row="rss:feed:item-1">
+            Feed item
+          </button>
+          <button id="selected-row" data-thread-row="acc:inbox:thread:1">
+            Selected
+          </button>
+        </section>
+      </>,
+    )
+    const row = (id: string) => view.container.querySelector<HTMLElement>(`#${id}`)!
+    row('rss-row').focus()
+    for (const key of ['e', 's', 'Delete']) fireEvent.keyDown(row('rss-row'), { key })
+    await nextTick()
+    expect(calls.filter((command) => command !== 'mail.sync')).toEqual([])
+    row('selected-row').focus()
+    fireEvent.keyDown(row('selected-row'), { key: 'e' })
+    await nextTick()
+    expect(calls.filter((command) => command === 'mail.archive')).toHaveLength(1)
+  })
 })

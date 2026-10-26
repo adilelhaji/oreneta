@@ -172,6 +172,7 @@ export function ThreadTable({
           return (
             <tr
               key={thread.id}
+              data-thread-row={thread.thread_id}
               onClick={(event) => onSelect(thread, event)}
               onContextMenu={(event) => onContextMenu(thread, event)}
               data-opened={active || undefined}
