@@ -173,6 +173,9 @@ function removingKeyFocusAllowed(): boolean {
 // sit on a row that is not the selected conversation: a thread action must not
 // fall through to the earlier selection (#369).
 function focusedRowIsOtherThread(): boolean {
+  // Only while a reader or compose tab covers the conversation: otherwise j/k
+  // retarget the selection without moving focus. A bulk selection is the target.
+  if (selectedBulkItems().length > 0 || !documentTabShowing()) return false
   const row = document.activeElement?.closest('[data-thread-row]')
   return !!row && row.getAttribute('data-thread-row') !== activeThreadId()
 }

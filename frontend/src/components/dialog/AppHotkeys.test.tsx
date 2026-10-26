@@ -9,7 +9,7 @@ import {
   type ShortcutScheme,
 } from '../../lib/shortcuts'
 import { mail$ } from '../../states/mail'
-import { ui$ } from '../../states/ui'
+import { ui$, toggleBulkSelection } from '../../states/ui'
 import { compose$ } from '../../states/compose'
 import type { MessageTab } from '../../types'
 import { MenuList } from '../menu/Menu'
@@ -600,7 +600,7 @@ describe('Delete outside the conversation list', () => {
 
   // #369: an RSS row of the Starred view opens a reader tab and leaves
   // ui$.selectedThread on the earlier conversation.
-  it('a thread action with focus on a row of another conversation leaves the selection alone', async () => {
+  const rows = () => {
     const view = render(
       <>
         <AppHotkeys />
@@ -608,20 +608,88 @@ describe('Delete outside the conversation list', () => {
           <button id="rss-row" data-thread-row="rss:feed:item-1">
             Feed item
           </button>
-          <button id="selected-row" data-thread-row="acc:inbox:thread:1">
-            Selected
+          <button id="row-1" data-thread-row="acc:inbox:thread:1">
+            One
+          </button>
+          <button id="row-2" data-thread-row="acc:inbox:thread:2">
+            Two
           </button>
         </section>
       </>,
     )
-    const row = (id: string) => view.container.querySelector<HTMLElement>(`#${id}`)!
+    return (id: string) => view.container.querySelector<HTMLElement>(`#${id}`)!
+  }
+  const readerTab = (): MessageTab => ({
+    id: 'reader-1',
+    kind: 'reader',
+    messageId: '',
+    threadId: 'rss:feed:item-1',
+    subject: '',
+    from: '',
+    body: '',
+    viewMode: 'plain',
+  })
+  const bulkItem = (n: number) => ({
+    key: `thread-list:acc:inbox:thread:${n}`,
+    groupKey: 'thread-list:acc:inbox',
+    threadId: `acc:inbox:thread:${n}`,
+    accountId: 'acc',
+    folderId: 'inbox',
+    surface: 'thread-list',
+    kind: 'mail',
+    unread: false,
+    starred: false,
+    draft: false,
+    trash: false,
+  })
+  const acted = () => calls.filter((command) => command !== 'mail.sync')
+
+  afterEach(() => {
+    compose$.tabs.set([])
+    compose$.activeTab.set('')
+    ui$.bulkSelection.set({})
+  })
+
+  it('a thread action on an RSS row under a reader tab leaves the selected conversation alone', async () => {
+    compose$.tabs.set([readerTab()])
+    compose$.activeTab.set('reader-1')
+    const row = rows()
     row('rss-row').focus()
-    for (const key of ['e', 's', 'Delete']) fireEvent.keyDown(row('rss-row'), { key })
+    for (const key of ['e', 's', 'u', '#', '!', 'Delete']) fireEvent.keyDown(row('rss-row'), { key })
     await nextTick()
-    expect(calls.filter((command) => command !== 'mail.sync')).toEqual([])
-    row('selected-row').focus()
-    fireEvent.keyDown(row('selected-row'), { key: 'e' })
+    expect(acted()).toEqual([])
+    expect(ui$.selectedThread.peek()).toBe('acc:inbox:thread:1')
+  })
+
+  it('j then e acts on the newly selected row although focus stays on the first', async () => {
+    const row = rows()
+    const [first] = mail$.threads.peek()
+    mail$.threads.set([
+      first,
+      { ...first, id: 'acc:inbox:thread:2#1', thread_id: 'acc:inbox:thread:2', date: first.date - 1 },
+    ])
+    row('row-1').focus()
+    fireEvent.keyDown(row('row-1'), { key: 'j' })
+    expect(ui$.selectedThread.peek()).toBe('acc:inbox:thread:2')
+    fireEvent.keyDown(row('row-1'), { key: 'e' })
     await nextTick()
     expect(calls.filter((command) => command === 'mail.archive')).toHaveLength(1)
+  })
+
+  it('a bulk selection is the target of a thread action with focus on a row', async () => {
+    compose$.tabs.set([readerTab()])
+    compose$.activeTab.set('reader-1')
+    const row = rows()
+    toggleBulkSelection(bulkItem(2) as never)
+    row('row-1').focus()
+    fireEvent.keyDown(row('row-1'), { key: 'e' })
+    await nextTick()
+    expect(calls).toContain('mail.archive')
+    calls.length = 0
+    toggleBulkSelection(bulkItem(2) as never)
+    setShortcutOverrides(SHORTCUT_SCHEMES.outlook)
+    fireEvent.keyDown(row('row-1'), { key: 'Delete' })
+    await nextTick()
+    expect(calls).toContain('mail.delete')
   })
 })
