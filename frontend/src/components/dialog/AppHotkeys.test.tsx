@@ -1,9 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { AppHotkeys } from './AppHotkeys'
-import { SHORTCUT_SCHEMES, setShortcutOverrides, type ShortcutScheme } from '../../lib/shortcuts'
+import {
+  DEFAULT_SHORTCUTS,
+  SHORTCUT_SCHEMES,
+  setShortcutOverrides,
+  type Chord,
+  type ShortcutScheme,
+} from '../../lib/shortcuts'
 import { mail$ } from '../../states/mail'
 import { ui$ } from '../../states/ui'
+import { compose$ } from '../../states/compose'
+import type { MessageTab } from '../../types'
 import { MenuList } from '../menu/Menu'
 import { MenuItem } from '../menu/MenuItem'
 
@@ -409,6 +417,177 @@ describe('Delete outside the conversation list', () => {
     await nextTick()
     expect(deleted()).toEqual([])
   })
+
+  // Delete, archive and junk remove the conversation from view; star and unread
+  // change it silently (#365). All act only in the mail module, under no reader
+  // or compose tab. The removing ones on a bare key also need the list, the
+  // conversation view or nothing focused; a chord needs nothing more.
+  const threadActions = [
+    { id: 'thread.archive', command: 'mail.archive', removing: true },
+    { id: 'thread.delete', command: 'mail.delete', removing: true },
+    { id: 'thread.junk', command: 'mail.markJunk', removing: true },
+    { id: 'thread.star', command: 'mail.markStarred', removing: false },
+    { id: 'thread.unread', command: 'mail.markRead', removing: false },
+  ] as const
+  const chordEvent = (chord: Chord) => ({
+    key: chord.key,
+    shiftKey: !!chord.shift,
+    ctrlKey: !!chord.mod,
+    altKey: !!chord.alt,
+  })
+  const tab = (id: string, kind: 'reader' | 'compose' | 'thread'): MessageTab => ({
+    id,
+    kind,
+    messageId: '',
+    threadId: 'acc:inbox:thread:1',
+    subject: '',
+    from: '',
+    body: '',
+    viewMode: 'plain',
+  })
+  const bodyTarget = () => {
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    return document.body
+  }
+
+  for (const scheme of schemes) {
+    for (const { id, command, removing } of threadActions) {
+      const chord = (SHORTCUT_SCHEMES[scheme][id] ?? DEFAULT_SHORTCUTS[id]) as Chord
+      const isBare = !chord.mod && !chord.alt
+      const isDeleteKey = chord.key === 'Delete' || chord.key === 'Backspace'
+      const sent = () => calls.filter((c) => c === command)
+      const press = (target: Element) => fireEvent.keyDown(target, chordEvent(chord))
+      const name = `${id} (${isBare ? 'bare' : 'chord'}): ${scheme} scheme`
+
+      it(`stays off every control of another module, ${name}`, async () => {
+        setShortcutOverrides(SHORTCUT_SCHEMES[scheme])
+        const el = surface()
+        ui$.module.set('people')
+        el('people').focus()
+        press(el('people'))
+        ui$.module.set('calendar')
+        for (const target of ['conversation-button', 'row', 'attach', 'toolbar']) {
+          el(target).focus()
+          press(el(target))
+        }
+        press(bodyTarget())
+        await nextTick()
+        expect(sent()).toEqual([])
+      })
+
+      it(`stays off a reader or compose tab of mail, ${name}`, async () => {
+        setShortcutOverrides(SHORTCUT_SCHEMES[scheme])
+        const el = surface()
+        compose$.tabs.set([tab('reader-1', 'reader')])
+        compose$.activeTab.set('reader-1')
+        try {
+          // The list stays the target of a bare removing key under a tab.
+          const list = isBare && removing ? [] : ['row']
+          // The Delete key keeps #355's rule, which has no tab: the conversation
+          // view is not on screen then, though this surface draws it.
+          const view = isDeleteKey ? [] : ['conversation-button']
+          for (const target of [...list, ...view, 'composer-attach', 'toolbar']) {
+            el(target).focus()
+            press(el(target))
+          }
+          press(bodyTarget())
+          await nextTick()
+          expect(sent()).toEqual([])
+        } finally {
+          compose$.activeTab.set('')
+          compose$.tabs.set([])
+        }
+      })
+
+      // A thread tab shows its own live conversation: nothing is covered.
+      it(`acts under a thread tab, ${name}`, async () => {
+        setShortcutOverrides(SHORTCUT_SCHEMES[scheme])
+        const el = surface()
+        compose$.tabs.set([tab('thread-1', 'thread')])
+        compose$.activeTab.set('thread-1')
+        try {
+          const target = isBare && removing ? 'conversation-button' : 'attach'
+          el(target).focus()
+          press(el(target))
+          await nextTick()
+          expect(sent()).toHaveLength(1)
+        } finally {
+          compose$.activeTab.set('')
+          compose$.tabs.set([])
+        }
+      })
+
+      if (isBare && removing) {
+        it(`stays off the toolbar, the tab strip and the quick reply of mail, ${name}`, async () => {
+          setShortcutOverrides(SHORTCUT_SCHEMES[scheme])
+          const el = surface()
+          for (const target of ['toolbar', 'conversation-tab', 'composer-attach', 'attach']) {
+            el(target).focus()
+            press(el(target))
+          }
+          await nextTick()
+          expect(sent()).toEqual([])
+        })
+      }
+
+      // Each target on its own: a chord and a star or unread key act wherever
+      // mail is showing; a bare removing key from the list and conversation.
+      const targets =
+        isBare && removing ? ['row', 'conversation-button'] : ['row', 'conversation-button', 'toolbar', 'attach']
+      for (const target of targets) {
+        it(`acts from ${target}, ${name}`, async () => {
+          setShortcutOverrides(SHORTCUT_SCHEMES[scheme])
+          const el = surface()
+          el(target).focus()
+          press(el(target))
+          await nextTick()
+          expect(sent()).toHaveLength(1)
+        })
+      }
+
+      // Delete and Backspace keys keep the stricter #355 rule: no body focus.
+      if (!isDeleteKey) {
+        it(`acts with nothing focused in mail, ${name}`, async () => {
+          setShortcutOverrides(SHORTCUT_SCHEMES[scheme])
+          surface()
+          press(bodyTarget())
+          await nextTick()
+          expect(sent()).toHaveLength(1)
+        })
+      }
+    }
+  }
+
+  it('a non-thread action on Ctrl+Backspace still acts outside mail', async () => {
+    setShortcutOverrides({ 'palette.open': { mod: true, key: 'Backspace' } })
+    const el = surface()
+    ui$.module.set('calendar')
+    el('toolbar').focus()
+    fireEvent.keyDown(el('toolbar'), { key: 'Backspace', ctrlKey: true })
+    expect(ui$.paletteOpen.peek()).toBe(true)
+  })
+
+  for (const key of ['Delete', 'Backspace']) {
+    it(`Ctrl+${key} bound to a thread action edits text instead of acting`, async () => {
+      setShortcutOverrides({ 'thread.delete': { mod: true, key }, 'thread.archive': { alt: true, key } })
+      const el = surface()
+      el('conversation-field').focus()
+      fireEvent.keyDown(el('conversation-field'), { key, ctrlKey: true })
+      fireEvent.keyDown(el('conversation-field'), { key, altKey: true })
+      await nextTick()
+      expect(deleted()).toEqual([])
+      expect(calls.filter((c) => c === 'mail.archive')).toEqual([])
+    })
+
+    it(`Ctrl+${key} bound to delete still acts from a row`, async () => {
+      setShortcutOverrides({ 'thread.delete': { mod: true, key } })
+      const el = surface()
+      el('row').focus()
+      fireEvent.keyDown(el('row'), { key, ctrlKey: true })
+      await nextTick()
+      expect(deleted()).toHaveLength(1)
+    })
+  }
 
   it('a select counts as typing for the other bare shortcuts', async () => {
     setShortcutOverrides(SHORTCUT_SCHEMES.outlook)

@@ -29,6 +29,12 @@ function threadFromTab(tab: MessageTab, fallback: Message | null): Message {
   }
 }
 
+/** The reader or compose tab that covers the conversation, if one is active. */
+export function documentTabOf(tabs: MessageTab[], activeTab: string): MessageTab | null {
+  const tab = tabs.find((candidate) => candidate.id === activeTab)
+  return tab?.kind === 'reader' || tab?.kind === 'compose' ? tab : null
+}
+
 /**
  * The conversation the conversation pane shows: the selected thread, or the
  * thread tab on top of it, and whether a reader or compose tab covers it. The
@@ -41,7 +47,7 @@ export function useActiveConversation() {
   const tabs = useValue(compose$.tabs)
   const activeTab = useValue(compose$.activeTab)
   const activeTabData = tabs.find((tab) => tab.id === activeTab) ?? null
-  const activeDocumentTab = activeTabData?.kind === 'reader' || activeTabData?.kind === 'compose' ? activeTabData : null
+  const activeDocumentTab = documentTabOf(tabs, activeTab)
   const listedActiveThread = useValue(getActiveThread)
   const activeThread =
     activeTabData?.kind === 'thread' && activeTabData.threadId === selectedThreadId
