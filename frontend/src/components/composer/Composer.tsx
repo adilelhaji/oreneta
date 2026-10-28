@@ -4,7 +4,7 @@ import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { settings$ } from '../../states/settings'
 import { BASE_ROOT_FONT_SIZE, clampFontScale } from '../../lib/fonts'
-import { useElementAtLeast } from '../resizer/useElementWidth'
+import { useElementAtLeastBeforePaint } from '../resizer/useElementWidth'
 import { accounts$ } from '../../states/accounts'
 import { keepsServerDrafts } from '../../lib/mailCapabilities'
 import { useComposer } from './useComposer'
@@ -67,11 +67,13 @@ export function Composer({ tabId }: { tabId: string }) {
   // Send, at their end, was cut off (#347). There the tools go at the end of
   // what scrolls and only the actions stay at the foot. In rem, so the app's
   // size moves the threshold; at 100 % the reader's 360 px are 22.5 rem and
-  // nothing changes. Unknown (null, in tests) reads as wide.
+  // nothing changes. Unknown (null, in tests) reads as wide. Measured before
+  // the first paint, so the tools are not drawn in the footer first.
   const rootRef = useRef<HTMLDivElement | null>(null)
   const fontScale = useValue(settings$.fontScale)
   const narrow =
-    useElementAtLeast(rootRef, (20 * BASE_ROOT_FONT_SIZE * clampFontScale(fontScale)) / 100, !!draft) === false
+    useElementAtLeastBeforePaint(rootRef, (20 * BASE_ROOT_FONT_SIZE * clampFontScale(fontScale)) / 100, !!draft) ===
+    false
 
   if (!draft) return null
 
@@ -321,8 +323,9 @@ export function Composer({ tabId }: { tabId: string }) {
           more than the pane is tall, and they used to push the footer out of
           it (#347); there the footer keeps only its actions, and its tools
           scroll with the rest. Where all of it fits, nothing scrolls but the
-          body, as before. */}
-      <div data-composer-scroll className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          body, as before. It never scrolls sideways (WCAG 1.4.10): what is
+          wider than the composer is cut, as the composer itself did before. */}
+      <div data-composer-scroll className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
         <ComposerHeaderFields draft={draft} update={update} focusTo={!focusBody} />
 
         {draft.rich && editor && <ComposerToolbar editor={editor} onSetLink={setLink} />}

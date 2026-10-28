@@ -63,9 +63,17 @@ export function SubmenuItem({
     }
     const anchor = anchorRef.current
     if (!anchor) return
-    const rect = anchor.getBoundingClientRect()
-    const x = flyoutX(rect, width, GAP_PX, window.innerWidth)
-    setPosition((current) => (current?.x === x && current.y === rect.top ? current : { x, y: rect.top }))
+    const place = () => {
+      const rect = anchor.getBoundingClientRect()
+      const x = flyoutX(rect, width, GAP_PX, window.innerWidth)
+      setPosition((current) => (current?.x === x && current.y === rect.top ? current : { x, y: rect.top }))
+    }
+    place()
+    // The menu it is a row of can scroll (a tall menu in a short window,
+    // #347): the submenu follows its row.
+    const menu = anchor.parentElement?.closest<HTMLElement>('[role="menu"]')
+    menu?.addEventListener('scroll', place)
+    return () => menu?.removeEventListener('scroll', place)
   }, [open, width])
 
   const show = (byKeyboard: boolean) => {

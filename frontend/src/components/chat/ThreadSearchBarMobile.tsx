@@ -24,14 +24,14 @@ export function ThreadSearchBarMobile({
 
   return (
     // Measured as the header is: hidden where the header holds the search,
-    // from 900 px and a header of 32 rem. This bar is as wide as the header,
-    // whose 0.5 rem padding on each side leaves it 1 rem less, hence 33 rem
+    // from 900 px and a header of 34 rem. This bar is as wide as the header,
+    // whose 0.5 rem padding on each side leaves it 1 rem less, hence 35 rem
     // here. At the app's 200 % in a 1025 px window the 360 px reader has room
     // for the search here and not in the header (#347). There, the field
     // keeps a row of its own and the previous and next buttons wrap to one
     // under it, at its end, instead of running past the reader.
     <div className="@container z-10 shrink-0">
-      <div className="min-[900px]:@min-[33rem]:hidden flex min-h-11 flex-wrap items-center gap-1 border-b border-border bg-header px-3 py-1">
+      <div className="min-[900px]:@min-[35rem]:hidden flex min-h-11 flex-wrap items-center gap-1 border-b border-border bg-header px-3 py-1">
         <div className="flex min-w-0 grow basis-48 items-center gap-2 rounded-control bg-hover px-2 py-1.5 border border-transparent focus-within:border-accent/40 focus-within:bg-chats">
           <Search size={14} className="text-secondary shrink-0" strokeWidth={1.75} />
           <input

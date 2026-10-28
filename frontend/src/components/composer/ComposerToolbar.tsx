@@ -225,7 +225,7 @@ export function ComposerToolbar({ editor, onSetLink }: { editor: Editor; onSetLi
   ]
 
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-0.5 border-b border-border bg-header px-3 py-1.5 select-none">
+    <div className="@container flex shrink-0 flex-wrap items-center gap-0.5 border-b border-border bg-header px-3 py-1.5 select-none">
       <ToolbarButton
         active={editor.isActive('bold')}
         onClick={() => editor.chain().focus().toggleBold().run()}
@@ -383,8 +383,11 @@ export function ComposerToolbar({ editor, onSetLink }: { editor: Editor; onSetLi
             {icon}
           </ToolbarButton>
         ))}
+      {/* Only where the toolbar has room for it on a line: about 13 rem wide,
+          it ran past a 360 px reader at the app's 200 % when the window's
+          width alone decided (#347). */}
       <span
-        className="ms-auto hidden items-center gap-1 pe-1 text-2xs font-medium text-secondary select-none min-[900px]:flex"
+        className="ms-auto hidden items-center gap-1 pe-1 text-2xs font-medium text-secondary select-none @min-[16rem]:flex"
         title={t('composer.toolbar.markdownHint')}
       >
         {t('composer.toolbar.markdown')}:<code className="rounded bg-raised px-1">**bold**</code>

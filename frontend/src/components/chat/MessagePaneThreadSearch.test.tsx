@@ -195,7 +195,7 @@ describe("the conversation's search asked for from another module (#344)", () =>
 
 // #347: the conversation's search has two fields, the header's and the bar's
 // under the header, and only one is drawn: the header's from 900 px in a header
-// of 32 rem, the bar's otherwise. The focus goes to the drawn one, which the
+// of 34 rem, the bar's otherwise. The focus goes to the drawn one, which the
 // window's width alone does not tell: at the app's 200 % a 1025 px window has a
 // 360 px reader, where the header's is hidden.
 describe("the focus of the conversation's search (#347)", () => {
@@ -234,6 +234,28 @@ describe("the focus of the conversation's search (#347)", () => {
     expect(header).toBeTruthy()
     await nextFrame()
     expect(document.activeElement).toBe(bar)
+  })
+
+  it('draws the header field and the bar on the same width, the bar measured without the header padding', () => {
+    // happy-dom has no stylesheet: the conditions are read from the classes.
+    // The bar is as wide as the header, whose content box is 1 rem narrower,
+    // so the bar's threshold is the header's plus 1 rem; out of step, both
+    // fields or neither would be drawn near the threshold.
+    const view = render(<MessagePane />)
+    act(() => thread$.searchOpen.set(true))
+    const { header, bar } = fields(view)
+    const threshold = (element: Element, display: string) => {
+      for (let node: Element | null = element; node; node = node.parentElement) {
+        const match = (node.getAttribute('class') ?? '').match(
+          new RegExp(`min-\\[900px\\]:@min-\\[([\\d.]+)rem\\]:${display}`),
+        )
+        if (match) return Number(match[1])
+      }
+      return NaN
+    }
+    const inHeader = threshold(header, 'flex')
+    expect(inHeader).toBe(34)
+    expect(threshold(bar, 'hidden')).toBe(inHeader + 1)
   })
 
   it("goes to the header's field where it is drawn", async () => {

@@ -308,11 +308,12 @@ export function ConversationHeader({
           ) : (
             // In the header only where it fits beside the subject, «Archive
             // thread», details and «More actions»: from 900 px and a header
-            // of 32 rem. Otherwise the bar under the header has the search
+            // of 34 rem, where they take 29.4 rem and the subject keeps 4.6
+            // (74 px at 100 %). Otherwise the bar under the header has the search
             // (ThreadSearchBarMobile, on the same two conditions). In rem, so
             // the app's size (#181) moves the threshold with it; 17.875 rem
             // is the 286 px it was at 100 % (#347).
-            <div className="hidden min-[900px]:@min-[32rem]:flex w-[17.875rem] items-center gap-1 rounded-control bg-hover px-2 py-1.5 border border-transparent focus-within:border-accent/40 focus-within:bg-chats">
+            <div className="hidden min-[900px]:@min-[34rem]:flex w-[17.875rem] items-center gap-1 rounded-control bg-hover px-2 py-1.5 border border-transparent focus-within:border-accent/40 focus-within:bg-chats">
               <Search size={14} className="text-secondary shrink-0" strokeWidth={1.75} />
               <input
                 ref={desktopSearchInputRef}

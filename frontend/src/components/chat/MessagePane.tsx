@@ -177,7 +177,7 @@ export function MessagePane() {
     // already open — including from inside an HTML message frame, which is
     // where focus otherwise stays.
     const frame = window.requestAnimationFrame(() => {
-      // The one drawn: the header's field from 900 px in a header of 32 rem,
+      // The one drawn: the header's field from 900 px in a header of 34 rem,
       // the bar under it otherwise (#347). The window's width alone chose the
       // header's at the app's 200 % in a 1025 px window, where it is hidden.
       const header = desktopThreadSearchInputRef.current

@@ -219,20 +219,22 @@ export function ComposerFooter({
     </>
   )
 
+  // Each bar is a container, and positioned: the template menu measures
+  // itself against it and, in a narrow one, opens from its start (#347).
   if (part === 'tools')
     return (
-      <div className="flex shrink-0 flex-wrap items-center gap-1 border-t border-border bg-header px-4 py-2.5 select-none">
+      <div className="@container relative flex shrink-0 flex-wrap items-center gap-1 border-t border-border bg-header px-4 py-2.5 select-none">
         {tools}
       </div>
     )
   if (part === 'actions')
     return (
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-border bg-header px-4 py-2.5 select-none">
+      <div className="@container relative flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-border bg-header px-4 py-2.5 select-none">
         {actions}
       </div>
     )
   return (
-    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-header px-4 py-2.5 select-none">
+    <div className="@container relative flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-header px-4 py-2.5 select-none">
       <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1">{tools}</div>
       <div className="ms-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-3">{actions}</div>
     </div>

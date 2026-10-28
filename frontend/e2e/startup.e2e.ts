@@ -5606,6 +5606,26 @@ for (const language of ['en', 'ar'] as const) {
     await expect(page.locator('.tiptap[contenteditable="true"]')).toHaveCount(1)
     await insideReader(page.getByRole('button', { name: catalog['buttons.send'], exact: true }), 'Send')
     await insideReader(page.getByRole('button', { name: catalog['buttons.discard'], exact: true }), 'Discard')
+    // Nothing in what scrolls is wider than the composer (WCAG 1.4.10): the
+    // toolbar's Markdown hint gives way, and the template menu, opened from
+    // the footer's tools, stays inside the reader.
+    const fields = page.locator('[data-composer-scroll]')
+    const sideways = () => fields.evaluate((element) => element.scrollWidth - element.clientWidth)
+    expect(await sideways(), 'the composer').toBeLessThanOrEqual(0)
+    const templates = page.getByRole('button', { name: catalog['templates.menu'], exact: true })
+    await templates.scrollIntoViewIfNeeded()
+    await templates.click()
+    const templatesMenu = page.getByRole('menu', { name: catalog['templates.menu'], exact: true })
+    await expect(templatesMenu).toBeVisible()
+    const templatesBox = await boxOf(templatesMenu)
+    expect(templatesBox.x, 'the template menu').toBeGreaterThanOrEqual(readerBox.x - 1)
+    expect(templatesBox.x + templatesBox.width, 'the template menu').toBeLessThanOrEqual(
+      readerBox.x + readerBox.width + 1,
+    )
+    expect(await sideways(), 'the composer, with the template menu open').toBeLessThanOrEqual(0)
+    await inView(page, 'the template menu at 200 %, 1025 px')
+    await page.keyboard.press('Escape')
+    await expect(templatesMenu).toHaveCount(0)
     await inView(page, 'the composer at 200 %, 1025 px')
     await audit('composer-200')
     expect(errors).toEqual([])
@@ -5743,6 +5763,18 @@ for (const [height, language] of [
     await attach.scrollIntoViewIfNeeded()
     await expect(attach).toBeInViewport({ ratio: 1 })
     await shownIn(attach, fields, 'Attach files')
+    // Nothing in what scrolls is wider than the composer (WCAG 1.4.10), also
+    // with the template menu open from the tools.
+    const sideways = () => fields.evaluate((element) => element.scrollWidth - element.clientWidth)
+    expect(await sideways(), 'the composer').toBeLessThanOrEqual(0)
+    const templates = page.getByRole('button', { name: catalog['templates.menu'], exact: true })
+    await templates.click()
+    const templatesMenu = page.getByRole('menu', { name: catalog['templates.menu'], exact: true })
+    await expect(templatesMenu).toBeVisible()
+    await shownIn(templatesMenu, reader, 'the template menu')
+    expect(await sideways(), 'the composer, with the template menu open').toBeLessThanOrEqual(0)
+    await page.keyboard.press('Escape')
+    await expect(templatesMenu).toHaveCount(0)
     // Above Discard and Send, not under them.
     expect((await boxOf(attach)).y + (await boxOf(attach)).height).toBeLessThanOrEqual(sendBox.y)
     expect(await boxOf(send)).toEqual(sendBox)
