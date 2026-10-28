@@ -10,6 +10,7 @@ import { mail$ } from '../../states/mail'
 import { notificationClock } from '../../states/notifications'
 import { settings$, type KanbanBoard } from '../../states/settings'
 import { currentSidebarShown, sidebar$ } from '../../states/sidebar'
+import { thread$ } from '../../states/thread'
 import { ui$ } from '../../states/ui'
 import type { Account, Folder } from '../../types'
 import { COMMAND_AREAS } from './paletteCommands'
@@ -399,5 +400,26 @@ describe('thread commands under a reader or compose tab (#374)', () => {
       for (const id of THREAD_COMMANDS) expect(offered, `${kind} ${id}`).not.toContain(id)
       expect(offered).toContain('tab.close')
     }
+  })
+
+  it('searches in the band, not in the covered conversation, under a reader tab', () => {
+    open('reader')
+    thread$.searchOpen.set(false)
+    const focus = ui$.globalSearchFocus.peek()
+    const entry = byId(list().current, 'search.thread')
+    act(() => entry.run())
+    expect(ui$.globalSearchFocus.peek()).toBe(focus + 1)
+    expect(thread$.searchOpen.peek()).toBe(false)
+  })
+
+  it('searches in the open conversation with no tab', () => {
+    open('')
+    thread$.searchOpen.set(false)
+    const focus = ui$.globalSearchFocus.peek()
+    const entry = byId(list().current, 'search.thread')
+    act(() => entry.run())
+    expect(thread$.searchOpen.peek()).toBe(true)
+    expect(ui$.globalSearchFocus.peek()).toBe(focus)
+    thread$.searchOpen.set(false)
   })
 })
