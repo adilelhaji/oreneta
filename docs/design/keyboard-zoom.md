@@ -45,21 +45,23 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
     a la conversa oberta, l'assistent, destacar, no llegit, etiquetar, el
     correu brossa i la paperera s'aparten, com abans. «Arxiva la conversa» i
     «Més accions» no s'amaguen mai (ADR-0068 §3), tampoc amb la cerca oberta:
-    fins a #347, arxivar s'amagava amb la paperera i quan s'obria la cerca, i
-    al 200 % a 1025 px, on el lector fa 360 px (11,25 rem), «Més accions»
-    acabava més enllà de la vora final del lector i quedava sota la tira de la
-    barra lateral de l'aplicació (#361), al final de la fila, no sota la tira
-    de mòduls, que des de #354 és al peu de la subfinestra de carpetes. Ara la
-    capçalera hi té l'assumpte, «Arxiva la conversa» i «Més accions». Al 100 %
-    es veuen com abans en totes les amplades que prova `mail boundary`, on la
-    capçalera fa 22,5 rem o més;
+    fins a #347, arxivar s'amagava amb la paperera i quan s'obria la cerca. Al
+    200 % a 1025 px, on el lector fa 360 px (11,25 rem), «Més accions» acabava
+    més enllà de la vora final del lector i quedava sota la tira de la barra
+    lateral de l'aplicació (#361), al final de la fila, no sota la tira de
+    mòduls, que des de #354 és al peu de la subfinestra de carpetes. Ara la
+    capçalera hi té l'assumpte, «Arxiva la conversa» i «Més accions». Al
+    100 %, en totes les amplades que prova `mail boundary` (capçalera de
+    22,5 rem o més), «Arxiva la conversa» i «Més accions» es veuen com abans;
   - la cerca a la conversa oberta és a la capçalera només des de 900 px i amb
-    una capçalera de 32 rem o més, on hi cap al costat de l'assumpte, «Arxiva
-    la conversa», els detalls i «Més accions»; el camp fa 17,875 rem, els
-    286 px d'abans al 100 %. Si no, és a la barra de sota la capçalera, que
-    rep el focus tant si s'obre des del menú com amb Ctrl/⌘ F. En un lector
+    una capçalera de 34 rem o més, on hi cap al costat de l'assumpte, «Arxiva
+    la conversa», els detalls i «Més accions», i l'assumpte en conserva
+    4,6 rem (74 px al 100 %); el camp fa 17,875 rem, els 286 px d'abans al
+    100 %. Si no, és a la barra de sota la capçalera, que rep el focus tant si
+    s'obre des del menú com amb Ctrl/⌘ F: al 200 % a 1025 px i, al 100 %,
+    també en una finestra de 1025 px, on el lector fa uns 365 px. En un lector
     estret, aquesta barra deixa el camp en una fila i els botons d'anterior i
-    de següent en una altra, al final. Fins a #347 només comptava l'amplada
+    de següent en una altra, al final. Fins a #347 només es mirava l'amplada
     de la finestra: al 200 % a 1025 px, la cerca s'obria a la capçalera, i el
     camp, de 286 px, empenyia «Més accions» fora del lector;
   - el menú «Més accions» té sempre destacar i, per als missatges de correu
@@ -72,11 +74,12 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
     se'n desa una, les etiquetes de tots dos queden desactivades, encara que
     el menú es tanqui i es torni a obrir. El menú no és mai més ample que la
     capçalera: al 200 %, els 13 rem d'abans no cabien en un lector de 360 px,
-    i el lector en retallava una part. Tampoc no és més alt que l'espai que
-    té a sota, fins a la vora de la finestra o del lector, i el que no hi cap
-    es desplaça dins del menú, que llavors també és una parada de Tab: al
-    200 %, en una finestra de 1025 × 768 px, el lector en tallava les últimes
-    files (els detalls i «Etiqueta»), i les fletxes hi arribaven igualment;
+    i el lector en retallava una part. Tampoc no és més alt que l'espai que té
+    a sota, fins a la vora de la finestra o del lector, i el que no hi cap es
+    desplaça dins del menú, que llavors també és una parada de Tab: al 200 %,
+    en una finestra de 1025 × 768 px, el lector en retallava les últimes files
+    (els detalls i «Etiqueta»), i les fletxes hi arribaven igualment. Quan el
+    menú es desplaça, el submenú «Etiqueta» segueix la seva fila;
   - a la resposta ràpida, quan el quadre fa menys de 16 rem, el text i el
     botó d'enviar passen a una fila pròpia, sota els botons d'adjuntar i de
     l'editor complet, i l'ordre de lectura no canvia. Abans el text es quedava
@@ -87,14 +90,20 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
     Envia), l'error de l'enviament i l'estat de la còpia local es queden a la
     vista; el cos no es fa més baix de 8 rem. Al 200 % a 1025 px, els camps i
     la barra de format ocupen diverses files i empenyien el peu fora de
-    l'editor (#347). On tot hi cap, només es desplaça el cos, com abans.
-    Quan l'editor fa menys de 20 rem d'amplada (al 200 %, en un lector de
-    360 px), al peu només hi queden l'estat de l'esborrany, Descarta,
-    l'enviament programat i Envia; les eines del peu (adjuntar, plantilles,
-    xifratge, confirmacions, format…) passen al final del que es desplaça,
-    després dels adjunts. Al 200 % ocupaven diverses files, i en una finestra
-    baixa, de 600 px, deixaven els camps sense lloc i tallaven Envia. Al
-    100 % l'editor fa 22,5 rem o més i el peu no canvia;
+    l'editor (#347). On tot hi cap, només es desplaça el cos, com abans. Quan
+    l'editor fa menys de 20 rem d'amplada (al 200 %, en un lector de 360 px),
+    al peu només hi queden l'estat de l'esborrany, Descarta, l'enviament
+    programat i Envia; les eines del peu (adjuntar, plantilles, xifratge,
+    confirmacions, format…) passen al final del que es desplaça, després dels
+    adjunts. Al 200 % ocupaven diverses files, i en una finestra baixa, de
+    600 px, deixaven els camps sense lloc i retallaven Envia. Al 100 %
+    l'editor fa 22,5 rem o més i el peu no canvia. La part que es desplaça no
+    ho fa mai cap als costats (WCAG 1.4.10): la pista de Markdown de la barra
+    de format només hi és quan la barra fa 16 rem o més, i no des de 900 px de
+    finestra, com abans, quan al 200 % feia 412 px en un lector de 360 px; i
+    el menú de plantilles, en un peu de menys de 21 rem, s'obre des de l'inici
+    del peu i no és més ample que el peu, en lloc dels 16 rem que el feien
+    sortir del lector;
   - al camp de destinataris faltava `min-w-0`, i l'amplada natural del camp
     empenyia «Cc/Cco» fora de la pantalla.
 - **La banda superior** (#343, ADR-0068 §2, [top-band.md](top-band.md)) es
@@ -144,7 +153,7 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
     com a base: la subfinestra cedeix abans;
   - el llindar de la cerca a la conversa (900 px), que va coordinat amb la
     barra de sota la capçalera. Des de #347 no hi va sol: la capçalera també
-    ha de fer 32 rem o més (vegeu més amunt), i el focus va al camp que es
+    ha de fer 34 rem o més (vegeu més amunt), i el focus va al camp que es
     veu, no al que indicava un `matchMedia`.
 - **Límit conegut (#347):** al 200 % a 1025 px, la conversa s'obre al primer
   missatge no llegit, i en un lector de 360 px la capçalera del missatge, que
@@ -168,11 +177,12 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
 | e2e (`startup.e2e.ts`, 1440 i 1024 px) | Al 200 % no hi ha desplaçament horitzontal i cap botó no queda fora de la pantalla a la bústia, al lector i a la redacció; Ctrl/⌘ `-` amb el focus en un camp no toca el text ni el focus; la mida es recupera després de recarregar; Ctrl/⌘ `0` la restableix |
 | e2e (`startup.e2e.ts`, «#343», 1025 px) | Al 200 % la banda superior fa 72 px, la pàgina no es desplaça i la llista, les carpetes, la resposta i els botons de la bústia i de la conversa continuen dins de l'alçada de la finestra |
 | e2e (`startup.e2e.ts`, «mail boundary … 200 %», «#347», 1025 px) | Al 200 %, en clar i en fosc, la comprovació de límits del correu (`verifyMailBoundary`): la llista, «Arxiva la conversa», «Més accions» i la resposta ràpida, de 160 px d'amplada o més, a la vista sense desplaçar res; el text de la resposta, desplaçant la conversa; a l'editor, Envia i Descarta a la vista en obrir-lo i el cos quan rep el focus; sense desplaçament de la pàgina en cap direcció |
-| e2e (`startup.e2e.ts`, «#347», 1025 px) | Al 200 %, en anglès i en àrab: el lector fa 360 px; «Arxiva la conversa» i «Més accions», en aquest ordre, al final de la línia i dins del lector; la cerca, etiquetar, la paperera i el botó dels detalls no hi són. «Més accions», obert amb el teclat, queda dins del lector, i Fi i Amunt arriben als detalls i a «Etiqueta»; «Etiqueta» obre les etiquetes al costat de la fila (14 rem), i n'hi treu una sense tancar el menú; Escapada torna el focus a la fila i, després, al botó; la cerca a la conversa, des del menú i amb Ctrl/⌘ F, és a la barra de sota la capçalera, amb el focus al camp, i el camp, els seus botons, «Arxiva la conversa» i «Més accions» queden dins del lector; Envia i Descarta queden dins del lector; res no surt de la finestra, i axe no troba res crític ni greu, amb els menús oberts, amb la cerca oberta i sense |
+| e2e (`startup.e2e.ts`, «#347», 1025 px) | Al 200 %, en anglès i en àrab: el lector fa 360 px; «Arxiva la conversa» i «Més accions», en aquest ordre, al final de la línia i dins del lector; la cerca, etiquetar, la paperera i el botó dels detalls no hi són. «Més accions», obert amb el teclat, queda dins del lector, i Fi i Amunt arriben als detalls i a «Etiqueta»; «Etiqueta» obre les etiquetes al costat de la fila (14 rem), i n'hi treu una sense tancar el menú; Escapada torna el focus a la fila i, després, al botó; la cerca a la conversa, des del menú i amb Ctrl/⌘ F, és a la barra de sota la capçalera, amb el focus al camp, i el camp, els seus botons, «Arxiva la conversa» i «Més accions» queden dins del lector; Envia i Descarta queden dins del lector, el que es desplaça a l'editor no és més ample que l'editor, tampoc amb el menú de plantilles obert, que queda dins del lector; res no surt de la finestra, i axe no troba res crític ni greu, amb els menús oberts, amb la cerca oberta i sense |
 | N2 (`ConversationHeader.test.tsx`, #347) | Cap regla no amaga «Arxiva la conversa» ni «Més accions»; al menú, la cerca obre la de la conversa, els detalls diuen si el panell Conversa és obert i el commuten com el botó, «Etiqueta» posa etiquetes sense tancar el menú (prémer el submenú no és prémer fora) i «Gestiona les etiquetes» obre la configuració; un canal no té «Etiqueta», i amb la cerca oberta el menú no té la cerca; amb la cerca oberta, «Arxiva la conversa» i «Més accions» hi són i la resta s'aparta; «Més accions» no passa de l'espai que té fins a la vora que el talla (la finestra o un avantpassat que retalla), també quan la finestra canvia de mida, i és una parada de Tab; el botó d'etiquetar i «Etiqueta» comparteixen el desament: les etiquetes de tots dos queden desactivades mentre se'n desa una, també tancant el menú i tornant-lo a obrir |
-| e2e (`startup.e2e.ts`, «#347», 1025 × 768 i 1025 × 600 px) | Al 200 %, en anglès, i a 600 px també en àrab: «Més accions», obert amb el teclat, acaba dins del lector i de la finestra, es desplaça i és una parada de Tab; amb Inici, Fi i Amunt, la fila que té el focus es veu sencera dins del menú; a l'editor, Descarta i Envia es veuen dins del lector en obrir-lo, el que es desplaça fa almenys 128 px (4 rem) i hi ha les eines del peu, per sobre d'Envia, que no es mou; la pàgina no es desplaça, res no surt de la finestra i axe no troba res crític ni greu |
+| e2e (`startup.e2e.ts`, «#347», 1025 × 768 i 1025 × 600 px) | Al 200 %, en anglès, i a 600 px també en àrab: «Més accions», obert amb el teclat, acaba dins del lector i de la finestra, es desplaça i és una parada de Tab; amb Inici, Fi i Amunt, la fila que té el focus es veu sencera dins del menú; a l'editor, Descarta i Envia es veuen dins del lector en obrir-lo, el que es desplaça fa almenys 128 px (4 rem), no és més ample que l'editor, tampoc amb el menú de plantilles obert, que queda dins del lector, i hi ha les eines del peu, per sobre d'Envia, que no es mou; la pàgina no es desplaça, res no surt de la finestra i axe no troba res crític ni greu |
 | e2e (`startup.e2e.ts`, «#347», 1440 i 1025 px, 100 %) | La cerca a la conversa és a la capçalera a 1440 px i a la barra de sota a 1025 px, on el lector fa uns 365 px; el camp, «Coincidència següent», «Arxiva la conversa» i «Més accions» són dins del lector, sense desplaçament horitzontal |
-| N2 (`MessagePaneThreadSearch.test.tsx`, #347) | El focus va al camp de la cerca que es veu: el de la barra quan la capçalera no dibuixa el seu, encara que la finestra sigui ampla, i el de la capçalera quan el dibuixa |
+| N2 (`MessagePaneThreadSearch.test.tsx`, #347) | El focus va al camp de la cerca que es veu: el de la barra quan la capçalera no dibuixa el seu, encara que la finestra sigui ampla, i el de la capçalera quan el dibuixa; la capçalera dibuixa el seu des de 34 rem, i la barra s'amaga des de 35 rem, l'amplada de la capçalera amb el seu marge |
+| N2 (`Menu.test.tsx`, #347) | Un submenú segueix la seva fila quan el menú on és es desplaça |
 | N2 (`Composer.test.tsx`, #347) | Per sota de 20 rem (320 px al 100 %, 640 px al 200 %), les eines del peu són al que es desplaça i Descarta i Envia, al peu; per sobre, un sol peu, com abans |
 | e2e (`startup.e2e.ts`, «#344», 1025 px i de 769 a 1024 px) | Al 200 % a 1025 px, i al 100 % a 1024, 900 i 769 px, el camp de cerca de la banda i els seus botons queden dins de la finestra, després del botó del menú, sense desplaçament horitzontal |
 | e2e (`startup.e2e.ts`, «#361», 1440 i 1024 px) | Al 200 %, en català i en àrab: la tira de la barra lateral fa 80 px; desplegada al correu i al Calendari, l'agenda i el selector de panells (80 px) són dins de la finestra, sense desplaçament horitzontal, amb axe |
