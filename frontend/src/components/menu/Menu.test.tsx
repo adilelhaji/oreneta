@@ -270,6 +270,32 @@ describe('a submenu that reports whether it is open (#289)', () => {
   })
 })
 
+describe('a submenu in a menu that scrolls (#347)', () => {
+  it('follows its row as the menu scrolls', () => {
+    const view = render(
+      <MenuList label="More actions" className="overflow-y-auto">
+        <MenuItem label="Print" />
+        <SubmenuItem label="Label">
+          <MenuItem label="Work" />
+        </SubmenuItem>
+      </MenuList>,
+    )
+    const row = view.getByRole('menuitem', { name: 'Label' }).parentElement!
+    let top = 300
+    row.getBoundingClientRect = () =>
+      ({ top, bottom: top + 28, left: 0, right: 200, width: 200, height: 28, x: 0, y: top }) as DOMRect
+    fireEvent.mouseEnter(row)
+    const panel = view.getByRole('menu', { name: 'Label' })
+    expect(panel.style.top).toBe('300px')
+    // The menu scrolls the row up by 120 px: the submenu goes with it.
+    top = 180
+    act(() => {
+      view.getByRole('menu', { name: 'More actions' }).dispatchEvent(new Event('scroll'))
+    })
+    expect(panel.style.top).toBe('180px')
+  })
+})
+
 describe('menu lists, groups and checkable items (#289)', () => {
   it('names groups by their caption and describes them', () => {
     const view = render(

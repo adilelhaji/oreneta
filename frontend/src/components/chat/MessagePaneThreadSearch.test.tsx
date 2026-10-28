@@ -4,6 +4,7 @@ import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { useValue } from '@legendapp/state/react'
 import i18n from '../../lib/i18n'
 import { accounts$ } from '../../states/accounts'
+import { compose$ } from '../../states/compose'
 import { mail$ } from '../../states/mail'
 import { clearThreadSearchRequest, pendingThreadSearch, requestThreadSearch, thread$ } from '../../states/thread'
 import { ui$ } from '../../states/ui'
@@ -189,5 +190,80 @@ describe("the conversation's search asked for from another module (#344)", () =>
     requestThreadSearch(pilot.thread_id)
     act(() => ui$.module.set('notes'))
     expect(pendingThreadSearch()).toBe('')
+  })
+})
+
+// #347: the conversation's search has two fields, the header's and the bar's
+// under the header, and only one is drawn: the header's from 900 px in a header
+// of 34 rem, the bar's otherwise. The focus goes to the drawn one, which the
+// window's width alone does not tell: at the app's 200 % a 1025 px window has a
+// 360 px reader, where the header's is hidden.
+describe("the focus of the conversation's search (#347)", () => {
+  const realRects = HTMLElement.prototype.getClientRects
+  // The conversation on screen, not under a compose or reader tab another
+  // file left open: there it is inert, and takes no focus.
+  beforeEach(() => {
+    compose$.tabs.set([])
+    compose$.activeTab.set('')
+  })
+  afterEach(() => {
+    HTMLElement.prototype.getClientRects = realRects
+  })
+  // Drawn or not, as the stylesheet would say (happy-dom has none).
+  const drawHeaderField = (drawn: boolean) => {
+    HTMLElement.prototype.getClientRects = function (this: HTMLElement) {
+      if (this.closest('header') && this.matches('input')) return (drawn ? realRects.call(this) : []) as DOMRectList
+      return realRects.call(this)
+    }
+  }
+  // The pane focuses the field in the frame after the search opens.
+  const nextFrame = () => act(async () => await new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+  const fields = (view: ReturnType<typeof render>) => {
+    const all = view.getAllByPlaceholderText('Search thread')
+    return {
+      header: all.find((input) => input.closest('header'))!,
+      bar: all.find((input) => !input.closest('header'))!,
+    }
+  }
+
+  it('goes to the bar under the header when the header does not draw its field, in a wide window', async () => {
+    drawHeaderField(false)
+    const view = render(<MessagePane />)
+    act(() => thread$.searchOpen.set(true))
+    const { header, bar } = fields(view)
+    expect(header).toBeTruthy()
+    await nextFrame()
+    expect(document.activeElement).toBe(bar)
+  })
+
+  it('draws the header field and the bar on the same width, the bar measured without the header padding', () => {
+    // happy-dom has no stylesheet: the conditions are read from the classes.
+    // The bar is as wide as the header, whose content box is 1 rem narrower,
+    // so the bar's threshold is the header's plus 1 rem; out of step, both
+    // fields or neither would be drawn near the threshold.
+    const view = render(<MessagePane />)
+    act(() => thread$.searchOpen.set(true))
+    const { header, bar } = fields(view)
+    const threshold = (element: Element, display: string) => {
+      for (let node: Element | null = element; node; node = node.parentElement) {
+        const match = (node.getAttribute('class') ?? '').match(
+          new RegExp(`min-\\[900px\\]:@min-\\[([\\d.]+)rem\\]:${display}`),
+        )
+        if (match) return Number(match[1])
+      }
+      return NaN
+    }
+    const inHeader = threshold(header, 'flex')
+    expect(inHeader).toBe(34)
+    expect(threshold(bar, 'hidden')).toBe(inHeader + 1)
+  })
+
+  it("goes to the header's field where it is drawn", async () => {
+    drawHeaderField(true)
+    const view = render(<MessagePane />)
+    act(() => thread$.searchOpen.set(true))
+    const { header } = fields(view)
+    await nextFrame()
+    expect(document.activeElement).toBe(header)
   })
 })
