@@ -168,6 +168,19 @@ function removingKeyFocusAllowed(): boolean {
   return inThreadList(el) || (!documentTabShowing() && (inConversation(el) || bodyFocused()))
 }
 
+// A list row carries its conversation's id. Opening an RSS row from the Starred
+// view shows a reader tab without retargeting ui$.selectedThread, so focus can
+// sit on a row that is not the selected conversation: a thread action must not
+// fall through to the earlier selection (#369).
+function focusedRowIsOtherThread(): boolean {
+  // Only while a reader or compose tab covers the conversation: otherwise j/k
+  // retarget the selection without moving focus. A bulk selection is the target.
+  // On a board activeThreadId() already follows the open card.
+  if (kanban$.activeBoardId.peek() || selectedBulkItems().length > 0 || !documentTabShowing()) return false
+  const row = document.activeElement?.closest('[data-thread-row]')
+  return !!row && row.getAttribute('data-thread-row') !== activeThreadId()
+}
+
 /** The keys that delete, whatever shortcut they are bound to. */
 function isDeleteKey(key: string): boolean {
   return key === 'Delete' || key === 'Backspace'
@@ -211,7 +224,7 @@ function handleDeleteKey(key: string, target: EventTarget | null): boolean {
     void bulkDeleteSelected(bulkItems)
     return true
   }
-  if (!threadId) return false
+  if (!threadId || focusedRowIsOtherThread()) return false
   void deleteThread(threadId)
   return true
 }
@@ -399,6 +412,7 @@ export function AppHotkeys({ setup = false }: { setup?: boolean }) {
         event.preventDefault()
         return
       }
+      if (MAIL_THREAD_ACTIONS.has(action) && focusedRowIsOtherThread()) return
       // The rest (chords, star, unread) need only mail, with no tab over it.
       if (
         !(focusGated && REMOVING_THREAD_ACTIONS.has(action)) &&

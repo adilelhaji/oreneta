@@ -96,7 +96,10 @@ export function ThreadListItem({
   // subject alone and not from the "Draft" marker before it (ADR-0061): a
   // Latin subject in the Arabic interface reads and truncates left to right.
   const subjectLine = (
-    <p dir={firstStrongDirection(threadTitle) ?? undefined} className={clsx('flex-1 truncate text-xs leading-snug', unread ? 'font-semibold' : 'font-normal')}>
+    <p
+      dir={firstStrongDirection(threadTitle) ?? undefined}
+      className={clsx('flex-1 truncate text-xs leading-snug', unread ? 'font-semibold' : 'font-normal')}
+    >
       {/* Before the subject, where they read as what this conversation is
           rather than as an afterthought at the end of a line that truncates. */}
       {!!thread.labels?.length && (
@@ -131,6 +134,7 @@ export function ThreadListItem({
   return (
     <div
       ref={rootRef}
+      data-thread-row={thread.thread_id}
       draggable={draggable}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
