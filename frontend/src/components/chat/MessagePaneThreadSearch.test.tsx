@@ -4,6 +4,7 @@ import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { useValue } from '@legendapp/state/react'
 import i18n from '../../lib/i18n'
 import { accounts$ } from '../../states/accounts'
+import { compose$ } from '../../states/compose'
 import { mail$ } from '../../states/mail'
 import { clearThreadSearchRequest, pendingThreadSearch, requestThreadSearch, thread$ } from '../../states/thread'
 import { ui$ } from '../../states/ui'
@@ -199,6 +200,12 @@ describe("the conversation's search asked for from another module (#344)", () =>
 // 360 px reader, where the header's is hidden.
 describe("the focus of the conversation's search (#347)", () => {
   const realRects = HTMLElement.prototype.getClientRects
+  // The conversation on screen, not under a compose or reader tab another
+  // file left open: there it is inert, and takes no focus.
+  beforeEach(() => {
+    compose$.tabs.set([])
+    compose$.activeTab.set('')
+  })
   afterEach(() => {
     HTMLElement.prototype.getClientRects = realRects
   })
