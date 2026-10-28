@@ -46,6 +46,8 @@ type SetupOptions = {
   installedModels?: string[]
   /** One conversation with an Arabic subject and sender (#226, ADR-0061). */
   arabicSubject?: boolean
+  /** The labels the synthetic core keeps; none unless given (#347). */
+  labels?: { id: string; name: string; colour: string; inBar: boolean; links: Record<string, string> }[]
 }
 
 // The registry the core ships, so the models the app is told about are real.
@@ -1310,7 +1312,8 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'mailto.consumePending': [],
         'i18n.setNativeLabels': { ok: true },
         'composer.pruneMedia': { removed: 0 },
-        'labels.list': { labels: [] },
+        'labels.list': { labels: options.labels ?? [] },
+        'labels.assign': {},
         'categories.list': { categories: [] },
         'spam.lists': { entries: [] },
         'privacy.info': { title: 'EasyPrivacy', version: 'test', rules: 1000, source: 'bundled' },
@@ -1655,6 +1658,25 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       expect(errors).toEqual([])
     })
   }
+
+  // The same boundary at the app's 200 % in the narrowest window with folders
+  // (#347): the reader is 360 px, 11.25 rem, and still keeps «Archive thread»,
+  // «More actions», the reply and the composer's Send on screen (ADR-0068 §3).
+  test(`mail boundary 1025px at the app's 200 % retains reader, archive, more actions and composer (${theme}, #347)`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize({ width: 1025, height: 1000 })
+    const errors = await prepareStartup(page, true, { navigation: true, theme })
+    await page.goto('/')
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    await zoomTo200(page)
+    await verifyMailBoundary(page, 1025, { zoomed: true })
+    await info.attach('production-boundary-composer-200', {
+      body: await page.screenshot({ path: info.outputPath('boundary-composer-200.png'), animations: 'disabled' }),
+      contentType: 'image/png',
+    })
+    expect(errors).toEqual([])
+  })
 }
 
 // A thread list widened on a large screen is remembered in pixels. On a
@@ -2427,19 +2449,33 @@ test('Graph mailbox reader remains read-only without automatic flag or draft wri
   expect(errors).toEqual([])
 })
 
-async function verifyMailBoundary(page: Page, width: number) {
+/**
+ * Mail at a boundary width: the list, the reader with its text and controls,
+ * the way back below 769 px, a folder, and the composer. `zoomed` is the app's
+ * 200 % (#347), where the 1025 px window leaves the reader 360 px, 11.25 rem:
+ * the conversation and the composer's fields are then taller than the pane,
+ * so the reply's text and the editor are scrolled to (they scroll, nothing cuts
+ * them), while the controls are on screen without any scrolling.
+ */
+async function verifyMailBoundary(page: Page, width: number, { zoomed = false } = {}) {
   const list = page.locator('[data-thread-list]')
   await expect(list).toBeInViewport({ ratio: 0.95 })
   const inbox = page.getByRole('table')
   await inbox.getByRole('button', { name: /Pilot checklist/ }).click()
   const reply = page.getByPlaceholder('Write a message...')
   await expect(reply).toBeInViewport({ ratio: 1 })
-  await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeInViewport()
+  const text = page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })
+  // Under the first, unread, message, where the conversation opens.
+  if (zoomed) await text.scrollIntoViewIfNeeded()
+  await expect(text).toBeInViewport()
   await expect(page.getByRole('button', { name: 'More actions', exact: true })).toBeInViewport({ ratio: 1 })
   await expect(page.getByRole('button', { name: 'Archive thread', exact: true })).toBeInViewport({ ratio: 1 })
   const box = await reply.boundingBox()
   expect(box!.x).toBeGreaterThanOrEqual(0)
   expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1)
+  // A row of its own under the buttons, not the column a letter wide (18 px)
+  // they used to leave it: at least 5 rem.
+  if (zoomed) expect(box!.width).toBeGreaterThanOrEqual(160)
   if (width < 769) {
     await expect(list).not.toBeVisible()
     await page.getByTitle('Back to Chats', { exact: true }).click()
@@ -2466,10 +2502,22 @@ async function verifyMailBoundary(page: Page, width: number) {
     )
     .toMatchObject({ account_id: 'synthetic-account', folder_id: 'Sent' })
   await page.keyboard.press('Control+n')
-  await expect(page.locator('.tiptap[contenteditable="true"]')).toBeInViewport()
-  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 1 })
-  await expect(page.getByRole('button', { name: 'Discard', exact: true })).toBeInViewport({ ratio: 1 })
+  const editor = page.locator('.tiptap[contenteditable="true"]')
+  const send = page.getByRole('button', { name: 'Send', exact: true })
+  const discard = page.getByRole('button', { name: 'Discard', exact: true })
+  if (zoomed) {
+    // The footer stays on screen as it opens, with the focus in To.
+    await expect(send).toBeInViewport({ ratio: 1 })
+    await expect(discard).toBeInViewport({ ratio: 1 })
+    // Below the fields and the toolbar; Tab or a click brings it up.
+    await editor.focus()
+  }
+  await expect(editor).toBeInViewport()
+  await expect(send).toBeInViewport({ ratio: 1 })
+  await expect(discard).toBeInViewport({ ratio: 1 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  // At the app's 200 % the band's 72 px come out of the panes too (#343).
+  if (zoomed) expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true)
 }
 
 for (const theme of ['oreneta-light', 'oreneta-dark']) {
@@ -5335,9 +5383,8 @@ for (const width of [1440, 768]) {
 // At the app's 200 %, the band is 4.5 rem (72 px). Its height comes out of the
 // panes under it: the page does not scroll, and mail's boundary controls stay
 // inside the window's height at 1025 px, the narrowest window with folders.
-// (At this size the conversation header already ran past the window's end
-// before the band, which moves nothing sideways; ADR-0068 §3's toolbar is what
-// changes that header.)
+// (The band moves nothing sideways. Until #347 the conversation header ran
+// past the reader's end at this size; #347's tests check it sideways.)
 test("at the app's 200 percent the band's height leaves mail's boundary controls on screen at 1025px (#343)", async ({
   page,
 }) => {
@@ -5385,6 +5432,150 @@ test("at the app's 200 percent the band's height leaves mail's boundary controls
   await page.keyboard.press(`${mod}+Digit0`)
   expect(errors).toEqual([])
 })
+
+// #347, ADR-0068 §3: in the 360 px (11.25 rem) reader of a 1025 px window at
+// the app's 200 %, the conversation header keeps «Archive thread» and «More
+// actions» at its end, inside the reader; the buttons that give way (search,
+// label, trash, details) are in «More actions», which opens inside the reader
+// and reaches them with the keyboard, and «Label» opens its labels beside it.
+// The composer keeps Send and Discard on screen. In English and in Arabic, with
+// axe, menus open.
+for (const language of ['en', 'ar'] as const) {
+  test(`at the app's 200 % at 1025px the reader keeps archive and more actions, the rest in the menu: ${language} (#347)`, async ({
+    page,
+  }, info) => {
+    const catalog = language === 'ar' ? arCatalog : enCatalog
+    const rtl = language === 'ar'
+    await page.setViewportSize({ width: 1025, height: 1000 })
+    // The fixture's first conversation carries `work` and `review`.
+    const errors = await prepareStartup(page, true, {
+      navigation: true,
+      language,
+      labels: [
+        { id: 'work', name: 'Work', colour: '#2563eb', inBar: false, links: {} },
+        { id: 'review', name: 'Review', colour: '#15803d', inBar: false, links: {} },
+      ],
+    })
+    await page.goto('/')
+    await expect(page.locator('html')).toHaveAttribute('dir', rtl ? 'rtl' : 'ltr')
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    await zoomTo200(page)
+    const inView = rtl ? rtlInView : ltrInView
+    const audit = async (where: string) => {
+      await settled(page)
+      const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+      await info.attach(`axe-${where}-${language}`, {
+        body: JSON.stringify(results.violations, null, 2),
+        contentType: 'application/json',
+      })
+      expect(
+        results.violations
+          .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+          .map((violation) => `${violation.id} on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`),
+        where,
+      ).toEqual([])
+    }
+
+    await page
+      .getByRole('table')
+      .getByRole('button', { name: /Pilot checklist/ })
+      .click()
+    const reader = page.locator('[data-message-pane]')
+    const header = reader.locator('header').first()
+    const readerBox = await boxOf(reader)
+    const insideReader = async (locator: ReturnType<Page['locator']>, name: string) => {
+      await expect(locator, name).toBeInViewport({ ratio: 1 })
+      const box = await boxOf(locator)
+      expect(box.x, name).toBeGreaterThanOrEqual(readerBox.x - 1)
+      expect(box.x + box.width, name).toBeLessThanOrEqual(readerBox.x + readerBox.width + 1)
+    }
+    expect(Math.round(readerBox.width)).toBe(360)
+    const archive = header.getByRole('button', { name: catalog['threads.actions.archiveThread'], exact: true })
+    const more = header.getByRole('button', { name: catalog['chat.moreActions'], exact: true })
+    await insideReader(archive, 'Archive thread')
+    await insideReader(more, 'More actions')
+    // The end of the line: «More actions» last, after «Archive thread».
+    const archiveBox = await boxOf(archive)
+    const moreBox = await boxOf(more)
+    if (rtl) expect(moreBox.x + moreBox.width).toBeLessThanOrEqual(archiveBox.x + 1)
+    else expect(moreBox.x).toBeGreaterThanOrEqual(archiveBox.x + archiveBox.width - 1)
+    // The subject keeps some room beside them.
+    expect((await boxOf(header.getByRole('heading').first())).width).toBeGreaterThan(40)
+    for (const key of ['chat.searchThread', 'labels.label', 'threads.actions.moveToTrash'])
+      await expect(header.getByRole('button', { name: catalog[key], exact: true }), key).toHaveCount(0)
+    // Of the two «Conversation details», the line under the subject, which
+    // opens the same panel, is left: before «Archive thread».
+    const summary = header.getByRole('button', { name: catalog['chat.conversationDetails'], exact: true })
+    await expect(summary).toHaveCount(1)
+    const summaryBox = await boxOf(summary)
+    if (rtl) expect(summaryBox.x).toBeGreaterThan(archiveBox.x + archiveBox.width)
+    else expect(summaryBox.x + summaryBox.width).toBeLessThan(archiveBox.x)
+    await inView(page, 'the reader at 200 %, 1025 px')
+    await audit('reader-200')
+
+    // The menu, from the keyboard: inside the reader, with what gave way last.
+    await more.focus()
+    await page.keyboard.press('Enter')
+    const menu = page.getByRole('menu', { name: catalog['chat.moreActions'], exact: true })
+    await insideReader(menu, 'the menu')
+    const details = menu.getByRole('menuitemcheckbox', { name: catalog['chat.conversationDetails'], exact: true })
+    const label = menu.getByRole('menuitem', { name: catalog['labels.label'], exact: true })
+    await expect(menu.getByRole('menuitem', { name: catalog['chat.searchThread'], exact: true })).toBeInViewport()
+    await expect(details).toHaveAttribute('aria-checked', 'false')
+    await page.keyboard.press('End')
+    await expect(details).toBeFocused()
+    await page.keyboard.press('ArrowUp')
+    await expect(label).toBeFocused()
+    await expect(label).toHaveAttribute('aria-haspopup', 'menu')
+    // «Label» opens the labels beside the menu, in the window.
+    await page.keyboard.press('Enter')
+    const labels = page.getByRole('menu', { name: catalog['labels.label'], exact: true })
+    await expect(labels).toBeInViewport({ ratio: 1 })
+    await expect(labels.getByRole('menuitem', { name: catalog['labels.manage'], exact: true })).toBeVisible()
+    // Beside its row, not over it, at the app's size (14 rem).
+    const rowBox = await boxOf(label)
+    const labelsBox = await boxOf(labels)
+    expect(Math.round(labelsBox.width)).toBe(14 * 32)
+    if (rtl) expect(labelsBox.x).toBeGreaterThanOrEqual(rowBox.x + rowBox.width)
+    else expect(labelsBox.x + labelsBox.width).toBeLessThanOrEqual(rowBox.x)
+    await inView(page, 'the menus at 200 %, 1025 px')
+    await audit('menus-200')
+    await info.attach(`reader-menu-200-${language}`, {
+      body: await page.screenshot({ path: info.outputPath(`reader-menu-200-${language}.png`), animations: 'disabled' }),
+      contentType: 'image/png',
+    })
+    // A label is put on and taken off from there, and the menu stays open:
+    // the labels are part of it.
+    const work = labels.getByRole('menuitemcheckbox', { name: 'Work', exact: true })
+    await expect(work).toHaveAttribute('aria-checked', 'true')
+    await work.click()
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as any).startupProbe.requests.filter((r: any) => r.command === 'labels.assign').at(-1)?.payload,
+        ),
+      )
+      .toEqual({ thread_id: 'thread-1', label_ids: ['review'] })
+    await expect(work).toHaveAttribute('aria-checked', 'false')
+    await expect(menu).toBeVisible()
+    await work.focus()
+    await page.keyboard.press('Escape')
+    await expect(labels).toHaveCount(0)
+    await expect(label).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(menu).toHaveCount(0)
+    await expect(more).toBeFocused()
+
+    // The composer: Send and Discard on screen, nothing past either edge.
+    await page.keyboard.press('Control+n')
+    await expect(page.locator('.tiptap[contenteditable="true"]')).toHaveCount(1)
+    await insideReader(page.getByRole('button', { name: catalog['buttons.send'], exact: true }), 'Send')
+    await insideReader(page.getByRole('button', { name: catalog['buttons.discard'], exact: true }), 'Discard')
+    await inView(page, 'the composer at 200 %, 1025 px')
+    await audit('composer-200')
+    expect(errors).toEqual([])
+  })
+}
 
 // A command that cannot run says why: in the tooltip, and as the item's
 // accessible description, which reaches the keyboard and a screen reader (#343).

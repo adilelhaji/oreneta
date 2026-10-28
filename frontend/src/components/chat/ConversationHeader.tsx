@@ -3,6 +3,7 @@ import type { MouseEvent as ReactMouseEvent, RefObject } from 'react'
 import {
   Archive,
   Ban,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronUp,
@@ -16,6 +17,7 @@ import {
   Search,
   SquarePen,
   Star,
+  Tag,
   Trash2,
   X,
   Printer,
@@ -23,6 +25,8 @@ import {
 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { assistantEnabled$ } from '../../states/assistant'
+import { settings$ } from '../../states/settings'
+import { BASE_ROOT_FONT_SIZE, clampFontScale } from '../../lib/fonts'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { showToast, ui$ } from '../../states/ui'
@@ -38,7 +42,7 @@ import {
   starThread,
 } from '../../states/mail'
 import { printFromReader } from '../../states/printing'
-import { LabelPicker } from './LabelPicker'
+import { LabelMenuItems, LabelPicker, useLabelToggle } from './LabelPicker'
 import { thread$, type ConversationMode } from '../../states/thread'
 import { closeKanbanPane, kanban$, openCorrespondentMail } from '../../states/kanban'
 import { toggleConversationPanel } from '../../states/sidebar'
@@ -51,6 +55,8 @@ import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { MenuItem } from '../menu/MenuItem'
 import { MenuList, MenuSeparator } from '../menu/Menu'
 import { menuItemCurrentClass } from '../menu/menuStyles'
+import { SubmenuItem } from '../menu/SubmenuItem'
+import { targetWithin } from '../menu/useDismissOnOutside'
 import { useEscapeKey } from '../../lib/useEscapeKey'
 import { ConversationSubject } from './ConversationSubject'
 import { ReadingHeaderSummary } from './ReadingHeaderSummary'
@@ -58,6 +64,9 @@ import { isConversation, summariseThread } from './readingHeader'
 import { accountIdentities, accounts$ } from '../../states/accounts'
 import { messageChangesBlocked, readOnlyTarget, sendBlocked } from '../../lib/mailCapabilities'
 import { AssistantReviewDialog } from './AssistantReviewDialog'
+
+/** Marks the «Label» submenu, drawn outside the header, as part of «More actions». */
+const ACTIONS_MENU_ATTRIBUTE = 'data-conversation-actions'
 
 // The conversation header: back/close affordances, sender info, the desktop
 // in-thread search box and the overflow actions menu (view mode, star, archive,
@@ -124,12 +133,20 @@ export function ConversationHeader({
   const [assistantOpen, setAssistantOpen] = useState(false)
   // Off until turned on in Settings (#51).
   const assistantEnabled = useValue(assistantEnabled$)
+  // The «Label» submenu is 14 rem wide, like the picker's own menu; its side
+  // is chosen from that width in px, at the app's size (#347).
+  const fontScale = useValue(settings$.fontScale)
+  const labelMenuWidth = (14 * BASE_ROOT_FONT_SIZE * clampFontScale(fontScale)) / 100
+  const labelToggle = useLabelToggle(activeThread.thread_id, activeThread.labels ?? [])
   const [senderMenu, setSenderMenu] = useState<{ x: number; y: number } | null>(null)
   const actionsMenuRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (!actionsMenuOpen) return
     const onDown = (event: MouseEvent) => {
+      // The «Label» submenu (#347) is drawn in a layer of its own, outside
+      // the header, but it is part of this menu.
+      if (targetWithin(event.target, `[${ACTIONS_MENU_ATTRIBUTE}]`)) return
       if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target as Node)) {
         setActionsMenuOpen(false)
       }
@@ -233,8 +250,19 @@ export function ConversationHeader({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          {/* Every button but «Archive thread» and «More actions» gives way in a
+              narrow header, measured on the header itself in rem, so a larger
+              app size (#181) makes room the same way a narrower window does.
+              Whatever gives way is in «More actions» (ADR-0068 §3, which keeps
+              those two on screen). At the app's 200 % in a 1025 px window the
+              reader is 360 px, 11.25 rem: the two and the subject (#347). */}
           {!threadSearchOpen ? (
-            <IconButton icon={Search} label={t('chat.searchThread')} onClick={() => thread$.searchOpen.set(true)} />
+            <IconButton
+              icon={Search}
+              label={t('chat.searchThread')}
+              className="hidden @min-[16rem]:flex"
+              onClick={() => thread$.searchOpen.set(true)}
+            />
           ) : (
             <div className="hidden min-[900px]:flex w-[286px] items-center gap-1 rounded-control bg-hover px-2 py-1.5 border border-transparent focus-within:border-accent/40 focus-within:bg-chats">
               <Search size={14} className="text-secondary shrink-0" strokeWidth={1.75} />
@@ -328,14 +356,19 @@ export function ConversationHeader({
               />
               {!isRSS && (
                 <>
-                  <LabelPicker threadId={activeThread.thread_id} applied={activeThread.labels ?? []} />
-                  {/* Next to give way, for the same reason; the menu has
-                      both. */}
+                  {/* Next to give way, with trash; the menu has both. */}
+                  <LabelPicker
+                    threadId={activeThread.thread_id}
+                    applied={activeThread.labels ?? []}
+                    className="hidden @min-[20rem]:block"
+                  />
+                  {/* Never gives way to a narrow header (ADR-0068 §3): the
+                      mail boundary tests expect it on screen at every width
+                      (#347). */}
                   <IconButton
                     icon={Archive}
                     disabled={changesBlocked}
                     label={t('threads.actions.archiveThread')}
-                    className="hidden @min-[20rem]:flex"
                     onClick={() => void archiveThread(activeThread.thread_id)}
                   />
                   {/* Junk is filed less often than it is archived, so it gives
@@ -364,11 +397,14 @@ export function ConversationHeader({
               )}
             </>
           )}
+          {/* Gives way last, with search; the line under the subject, `i` and
+              the menu also open the panel. */}
           <IconButton
             icon={PanelRight}
             label={isRSS ? t('chat.feedDetails') : t('chat.conversationDetails')}
             active={detailsOpen}
             aria-expanded={detailsOpen}
+            className="hidden @min-[16rem]:flex"
             onClick={toggleConversationPanel}
           />
           <div ref={actionsMenuRef} className="relative">
@@ -385,7 +421,10 @@ export function ConversationHeader({
                 label={t('chat.moreActions')}
                 autoFocus
                 onClose={() => setActionsMenuOpen(false)}
-                className="absolute end-0 top-full z-50 mt-2 w-52 rounded-control border border-border bg-chats p-1 shadow-overlay"
+                // No wider than the header: the reader clips what overflows
+                // it, and at the app's 200 % 13 rem is wider than a 360 px
+                // reader (#347).
+                className="absolute end-0 top-full z-50 mt-2 w-52 max-w-[calc(100cqw-1rem)] rounded-control border border-border bg-chats p-1 shadow-overlay"
               >
                 {/* How the conversation is shown: one of two, the one in force checked. */}
                 <MenuItem
@@ -471,6 +510,60 @@ export function ConversationHeader({
                     />
                   </>
                 )}
+                {/* The buttons a narrow header hides (#347), only while they
+                    are hidden: the same container widths as above, like the
+                    kanban board menu's filters. The menu keyboard skips rows
+                    that are not shown. */}
+                <div role="none" className={isRSS ? '@min-[16rem]:hidden' : '@min-[20rem]:hidden'}>
+                  <MenuSeparator />
+                  {!threadSearchOpen && (
+                    <div role="none" className="@min-[16rem]:hidden">
+                      <MenuItem
+                        icon={<Search size={14} className="shrink-0" strokeWidth={1.75} />}
+                        label={t('chat.searchThread')}
+                        onClick={() => {
+                          setActionsMenuOpen(false)
+                          thread$.searchOpen.set(true)
+                        }}
+                      />
+                    </div>
+                  )}
+                  {!isRSS && (
+                    <SubmenuItem
+                      icon={<Tag size={14} className="shrink-0" strokeWidth={1.75} />}
+                      label={t('labels.label')}
+                      dataAttribute={ACTIONS_MENU_ATTRIBUTE}
+                      width={labelMenuWidth}
+                      panelClassName="fixed z-[51] max-h-[calc(100vh-1rem)] w-56 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
+                    >
+                      <LabelMenuItems
+                        applied={activeThread.labels ?? []}
+                        {...labelToggle}
+                        onManage={() => {
+                          setActionsMenuOpen(false)
+                          ui$.settingsOpen.set(true)
+                        }}
+                      />
+                    </SubmenuItem>
+                  )}
+                  <div role="none" className="@min-[16rem]:hidden">
+                    <MenuItem
+                      role="menuitemcheckbox"
+                      checked={detailsOpen}
+                      icon={<PanelRight size={14} className="shrink-0" strokeWidth={1.75} />}
+                      label={isRSS ? t('chat.feedDetails') : t('chat.conversationDetails')}
+                      trailing={
+                        detailsOpen ? (
+                          <Check size={14} className="shrink-0 text-accent-fg" strokeWidth={1.75} />
+                        ) : undefined
+                      }
+                      onClick={() => {
+                        setActionsMenuOpen(false)
+                        toggleConversationPanel()
+                      }}
+                    />
+                  </div>
+                </div>
               </MenuList>
             )}
           </div>

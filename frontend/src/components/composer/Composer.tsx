@@ -274,45 +274,55 @@ export function Composer({ tabId }: { tabId: string }) {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-chat" onKeyDown={handleSendShortcut}>
-      <ComposerHeaderFields draft={draft} update={update} focusTo={!focusBody} />
+      {/* Everything above the footer and its notes scrolls as one when it
+          does not fit; the footer stays, with the send error and the local
+          copy's status: Send and Discard never leave the composer. At the
+          app's 200 % in a 360 px reader the fields and the toolbar wrap to
+          more than the pane is tall, and they used to push the footer out of
+          it (#347). Where all of it fits, nothing scrolls but the body, as
+          before. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <ComposerHeaderFields draft={draft} update={update} focusTo={!focusBody} />
 
-      {draft.rich && editor && <ComposerToolbar editor={editor} onSetLink={setLink} />}
+        {draft.rich && editor && <ComposerToolbar editor={editor} onSetLink={setLink} />}
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto px-4 py-3" onKeyDown={handleKeyDown}>
-        {draft.rich ? (
-          <>
-            <EditorContent editor={editor} />
-            {editor && grammar.pick && (
-              <GrammarPopover
-                editor={editor}
-                checker={grammar.checker}
-                pick={grammar.pick}
-                onClose={grammar.closePick}
-              />
-            )}
-            <GrammarStatus result={grammar.result} error={grammar.error} />
-          </>
-        ) : (
-          <textarea
-            ref={textRef}
-            autoFocus={focusBody}
-            value={draft.text}
-            onChange={(e) => update({ text: e.target.value })}
-            onPaste={handlePaste}
-            placeholder={t('composer.placeholders.message')}
-            spellCheck={spellCheck}
-            // Each paragraph in its own direction; empty, the interface's (ADR-0061).
-            dir={draft.text ? 'auto' : undefined}
-            className="bidi-plaintext h-full min-h-[240px] w-full resize-none bg-transparent text-sm leading-relaxed text-primary placeholder-secondary outline-none"
-          />
-        )}
+        {/* Body. It gives way before the region scrolls, down to 8 rem, so the
+            text being written keeps a usable height. */}
+        <div className="min-h-32 flex-1 overflow-y-auto px-4 py-3" onKeyDown={handleKeyDown}>
+          {draft.rich ? (
+            <>
+              <EditorContent editor={editor} />
+              {editor && grammar.pick && (
+                <GrammarPopover
+                  editor={editor}
+                  checker={grammar.checker}
+                  pick={grammar.pick}
+                  onClose={grammar.closePick}
+                />
+              )}
+              <GrammarStatus result={grammar.result} error={grammar.error} />
+            </>
+          ) : (
+            <textarea
+              ref={textRef}
+              autoFocus={focusBody}
+              value={draft.text}
+              onChange={(e) => update({ text: e.target.value })}
+              onPaste={handlePaste}
+              placeholder={t('composer.placeholders.message')}
+              spellCheck={spellCheck}
+              // Each paragraph in its own direction; empty, the interface's (ADR-0061).
+              dir={draft.text ? 'auto' : undefined}
+              className="bidi-plaintext h-full min-h-[240px] w-full resize-none bg-transparent text-sm leading-relaxed text-primary placeholder-secondary outline-none"
+            />
+          )}
+        </div>
+
+        <ComposerAttachments
+          attachments={draft.attachments}
+          onRemove={(id) => update({ attachments: draft.attachments.filter((a) => a.id !== id) })}
+        />
       </div>
-
-      <ComposerAttachments
-        attachments={draft.attachments}
-        onRemove={(id) => update({ attachments: draft.attachments.filter((a) => a.id !== id) })}
-      />
 
       {error && <p className="shrink-0 px-4 pb-1 text-caption font-medium text-danger">{error}</p>}
 
