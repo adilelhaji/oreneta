@@ -439,7 +439,7 @@ dona al text una fila pròpia quan el quadre fa menys de 16 rem (abans, el text 
 d'amplada), i l'editor de missatges manté el peu, amb Envia i Descarta, a la vista, mentre la resta
 es desplaça; per sota de 20 rem, les eines del peu es desplacen amb els camps i al peu només queden
 les accions. La part de l'editor que es desplaça no ho fa mai cap als costats: la pista de Markdown
-només hi és quan la barra de format en té lloc, i el menú de plantilles no surt del peu. Al 100 %, a
+hi és des de 900 px de finestra, com abans, i només quan la barra de format en té lloc, i el menú de plantilles no surt del peu. Al 100 %, a
 les amplades de les proves de límits, els botons de la capçalera, la resposta ràpida i l'editor es
 veuen com abans; només la cerca oberta passa a la barra de sota la capçalera quan la capçalera fa
 menys de 34 rem, com en una finestra de 1025 px. Les proves de límits, de dreta a esquerra, de zoom

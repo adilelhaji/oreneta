@@ -383,11 +383,11 @@ export function ComposerToolbar({ editor, onSetLink }: { editor: Editor; onSetLi
             {icon}
           </ToolbarButton>
         ))}
-      {/* Only where the toolbar has room for it on a line: about 13 rem wide,
-          it ran past a 360 px reader at the app's 200 % when the window's
-          width alone decided (#347). */}
+      {/* From a 900 px window, as before, and only where the toolbar has room for
+          it on a line: about 13 rem wide, it ran past a 360 px reader at the
+          app's 200 % when the window's width alone decided (#347). */}
       <span
-        className="ms-auto hidden items-center gap-1 pe-1 text-2xs font-medium text-secondary select-none @min-[16rem]:flex"
+        className="ms-auto hidden items-center gap-1 pe-1 text-2xs font-medium text-secondary select-none min-[900px]:@min-[16rem]:flex"
         title={t('composer.toolbar.markdownHint')}
       >
         {t('composer.toolbar.markdown')}:<code className="rounded bg-raised px-1">**bold**</code>
