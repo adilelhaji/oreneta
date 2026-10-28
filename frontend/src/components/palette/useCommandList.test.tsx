@@ -10,6 +10,7 @@ import { mail$ } from '../../states/mail'
 import { notificationClock } from '../../states/notifications'
 import { settings$, type KanbanBoard } from '../../states/settings'
 import { currentSidebarShown, sidebar$ } from '../../states/sidebar'
+import { thread$ } from '../../states/thread'
 import { ui$ } from '../../states/ui'
 import type { Account, Folder } from '../../types'
 import { COMMAND_AREAS } from './paletteCommands'
@@ -352,5 +353,73 @@ describe("the app sidebar's overlay (#361)", () => {
     act(() => entry.run())
     expect(currentSidebarShown()).toBe('strip')
     expect(settings$.appSidebarState.get()).toBe('minimized')
+  })
+})
+
+describe('thread commands under a reader or compose tab (#374)', () => {
+  const THREAD_COMMANDS = [
+    'reply.focus',
+    'compose.replyFull',
+    'thread.archive',
+    'thread.star',
+    'thread.unread',
+    'thread.delete',
+  ]
+  const tab = (kind: 'reader' | 'compose' | 'thread') => ({
+    id: `${kind}-1`,
+    kind,
+    messageId: '',
+    threadId: kind === 'thread' ? 'acc:inbox:thread:1' : 'rss:feed:item-1',
+    subject: '',
+    from: '',
+    body: '',
+    viewMode: 'plain' as const,
+  })
+  const ids = () => list().current.map((entry) => entry.id)
+  const open = (kind: 'reader' | 'compose' | 'thread' | '') => {
+    ui$.selectedThread.set('acc:inbox:thread:1')
+    compose$.tabs.set(kind ? [tab(kind) as never] : [])
+    compose$.activeTab.set(kind ? `${kind}-1` : '')
+  }
+  afterEach(() => {
+    compose$.tabs.set([])
+    compose$.activeTab.set('')
+  })
+
+  it('offers them for the selected conversation with no tab or a thread tab', () => {
+    for (const kind of ['', 'thread'] as const) {
+      open(kind)
+      expect(ids()).toEqual(expect.arrayContaining(THREAD_COMMANDS))
+    }
+  })
+
+  it('does not offer them while a reader or compose tab covers the conversation', () => {
+    for (const kind of ['reader', 'compose'] as const) {
+      open(kind)
+      const offered = ids()
+      for (const id of THREAD_COMMANDS) expect(offered, `${kind} ${id}`).not.toContain(id)
+      expect(offered).toContain('tab.close')
+    }
+  })
+
+  it('searches in the band, not in the covered conversation, under a reader tab', () => {
+    open('reader')
+    thread$.searchOpen.set(false)
+    const focus = ui$.globalSearchFocus.peek()
+    const entry = byId(list().current, 'search.thread')
+    act(() => entry.run())
+    expect(ui$.globalSearchFocus.peek()).toBe(focus + 1)
+    expect(thread$.searchOpen.peek()).toBe(false)
+  })
+
+  it('searches in the open conversation with no tab', () => {
+    open('')
+    thread$.searchOpen.set(false)
+    const focus = ui$.globalSearchFocus.peek()
+    const entry = byId(list().current, 'search.thread')
+    act(() => entry.run())
+    expect(thread$.searchOpen.peek()).toBe(true)
+    expect(ui$.globalSearchFocus.peek()).toBe(focus)
+    thread$.searchOpen.set(false)
   })
 })
