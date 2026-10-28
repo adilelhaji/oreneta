@@ -5681,15 +5681,18 @@ for (const [height, language] of [
 
     // From the keyboard: in a window this short the list's sticky rows cover
     // the conversation's row at 200 %.
-    await page
-      .getByRole('table')
-      .getByRole('button', { name: /Pilot checklist/ })
-      .focus()
-    await page.keyboard.press('Enter')
+    const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
     const reader = page.locator('[data-message-pane]')
     const header = reader.locator('header').first()
     const more = header.getByRole('button', { name: catalog['chat.moreActions'], exact: true })
-    await expect(more).toBeInViewport({ ratio: 1 })
+    // The list can still be redrawing when the row first takes the focus, and
+    // an Enter that lands on a row that has just been replaced opens nothing:
+    // press it again until the conversation is open.
+    await expect(async () => {
+      await row.focus()
+      await page.keyboard.press('Enter')
+      await expect(more).toBeInViewport({ ratio: 1, timeout: 2000 })
+    }).toPass({ timeout: 20_000 })
     const readerBox = await boxOf(reader)
     // Drawn whole inside `outer`'s box: what a clipping or scrolling box shows.
     const shownIn = async (inner: ReturnType<Page['locator']>, outer: ReturnType<Page['locator']>, name: string) => {
