@@ -164,8 +164,11 @@ function mailConversationShowing(): boolean {
 function removingKeyFocusAllowed(): boolean {
   const el = document.activeElement
   if (ui$.module.peek() !== 'mail') return false
-  // The list stays the target under a tab; the rest is the conversation's.
-  return inThreadList(el) || (!documentTabShowing() && (inConversation(el) || bodyFocused()))
+  // The list stays the target under a tab, but only through a row, whose id
+  // focusedRowIsOtherThread checks: a control in the list (folder switcher, Load
+  // more) would reach the selection under the tab (#374). The rest is the conversation's.
+  if (documentTabShowing()) return inThreadList(el) && !!el?.closest('[data-thread-row]')
+  return inThreadList(el) || inConversation(el) || bodyFocused()
 }
 
 // A list row carries its conversation's id. Opening an RSS row from the Starred
@@ -205,6 +208,8 @@ function deleteKeyFocusAllowed(withConversation = false): boolean {
   if (ui$.module.peek() !== 'mail') return false
   const el = document.activeElement
   if (inThreadList(el)) {
+    // Under a reader or compose tab only a row is a target (#374).
+    if (documentTabShowing() && !el?.closest('[data-thread-row]')) return false
     threadListDeleteScope = true
     return true
   }

@@ -674,6 +674,26 @@ describe('Delete outside the conversation list', () => {
     })
   }
 
+  for (const { name, init } of guarded) {
+    it(`${name} from a list control that is not a row, under a reader tab, leaves the selection alone (#374)`, async () => {
+      compose$.tabs.set([readerTab()])
+      compose$.activeTab.set('reader-1')
+      const view = render(
+        <>
+          <AppHotkeys />
+          <section data-region="content" data-thread-list>
+            <button id="load-more">Load more</button>
+          </section>
+        </>,
+      )
+      const control = view.container.querySelector<HTMLElement>('#load-more')!
+      control.focus()
+      fireEvent.keyDown(control, init)
+      await nextTick()
+      expect(acted()).toEqual([])
+    })
+  }
+
   for (const { name, init, command } of guarded.slice(0, 2)) {
     it(`${name} on a board acts on the open card although focus is on another card`, async () => {
       kanban$.activeBoardId.set('board-1')
