@@ -232,7 +232,7 @@
       "section": "Appearance/Layout",
       "outcome": "Reader, navigation and essential actions remain usable at pane boundaries",
       "status": "implemented-unverified",
-      "present": "Boundary e2e at 599/600/601, 768/769 and 1024/1025px keeps reader, back/list and composer reachable (#85); keyboard zoom to 200% via the app scale with no horizontal scroll at 1440/1024px (#181, keyboard-zoom.md); at the app's 200% in a 1025px window the boundary check keeps «Archive thread», «More actions», the reply and the composer's Send on screen (#347); native Windows 200% check (N4) pending on the final version",
+      "present": "Boundary e2e at 599/600/601, 768/769 and 1024/1025px keeps reader, back/list and composer reachable (#85); keyboard zoom to 200% via the app scale with no horizontal scroll at 1440/1024px (#181, keyboard-zoom.md); at the app's 200% in a 1025px window the boundary check keeps «Archive thread», «More actions», the reply and the composer's Send on screen, also with the thread search open and in 768 and 600px high windows (#347); native Windows 200% check (N4) pending on the final version",
       "code": "frontend/src/states/zoom.ts",
       "acceptance": "Positive visible-reader and back/list tests at 599/600/601, 1024/1025 and 200% zoom",
       "platform": "Windows desktop",
@@ -353,6 +353,18 @@
           {
             "sha": "97143d87127e058a8d8493c1dbdaee3f6017f297",
             "result": "frontend/src/components/chat/ConversationHeader.test.tsx"
+          },
+          {
+            "sha": "c4a41ae54236b231e353e8f55a659f2391780d63",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "c4a41ae54236b231e353e8f55a659f2391780d63",
+            "result": "frontend/src/components/chat/ConversationHeader.test.tsx"
+          },
+          {
+            "sha": "c4a41ae54236b231e353e8f55a659f2391780d63",
+            "result": "frontend/src/components/composer/Composer.test.tsx"
           }
         ],
         "native": [],
@@ -2060,6 +2072,10 @@
           },
           {
             "sha": "97143d87127e058a8d8493c1dbdaee3f6017f297",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "c4a41ae54236b231e353e8f55a659f2391780d63",
             "result": "frontend/e2e/startup.e2e.ts"
           }
         ],

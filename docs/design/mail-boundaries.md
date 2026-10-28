@@ -16,7 +16,10 @@ El peu de l'editor de missatges ajusta els seus controls a l'amplada real de la
 subfinestra perquè Envia, Descarta i l'estat de l'esborrany continuïn sent
 accessibles fins i tot en una subfinestra dividida estreta d'escriptori. Des de
 #347, quan l'editor no hi cap d'alçada (al 200 % de l'aplicació a 1025 px), els
-camps, la barra de format i el cos es desplacen i el peu es queda a la vista.
+camps, la barra de format i el cos es desplacen i el peu es queda a la vista; i
+quan fa menys de 20 rem d'amplada, mesurats amb un `ResizeObserver`, al peu
+només hi queden l'estat de l'esborrany, Descarta, l'enviament programat i Envia,
+i les eines del peu es desplacen amb els camps.
 La navegació completa de carpetes
 conserva el seu límit independent de >1024 px. No s'afegeix cap escoltador de canvi
 de mida ni cap estat nou. Des de #317 aquesta navegació és la subfinestra de
@@ -36,7 +39,8 @@ visibilitat (600 px), i deixava el lector retallat entre 600 i 768 px. Les prove
 de producció cobreixen 599/600/601, 768/769 i 1024/1025, tots dos temes, el
 context de lector, Enrere, selecció, carpeta i editor de missatges, i els límits
 de l'estructura de l'aplicació. Des de #347 també cobreixen 1025 px al 200 % de
-l'aplicació, amb «Arxiva la conversa», «Més accions» i Envia a la vista
+l'aplicació, amb «Arxiva la conversa», «Més accions» i Envia a la vista, i en
+finestres de 1025 × 768 i 1025 × 600 px
 ([zoom amb el teclat](keyboard-zoom.md)). La base sintètica de components ara
 exigeix contingut visible a 600 px en lloc d'acceptar el defecte conegut.
 

@@ -166,11 +166,14 @@ La cerca de la conversa demanada des d'un altre mòdul (#344) és a
   subfinestres: la pàgina no es desplaça i els controls dels límits del correu
   continuen dins de l'alçada de la finestra.
 - **Fins a #347,** al 200 % i a 1025 px, «Més accions» de la capçalera de la
-  conversa quedava en part fora de la vora final, també amb la banda amagada: la
+  conversa acabava més enllà de la vora final del lector i quedava sota la tira
+  de la barra lateral de l'aplicació (#361), també amb la banda amagada: la
   banda no mou res cap als costats. Des de #347 la capçalera conserva «Arxiva la
-  conversa» i «Més accions» dins del lector, i la resta dels seus botons és al
-  menú «Més accions» (vegeu [keyboard-zoom.md](keyboard-zoom.md)). La barra
-  d'eines principal (§3) és la peça que canviarà aquesta capçalera.
+  conversa» i «Més accions» dins del lector, també amb la cerca a la conversa
+  oberta, i la cerca, «Etiqueta» i els detalls són al menú «Més accions» mentre
+  els seus botons estan amagats (vegeu
+  [el zoom amb el teclat](keyboard-zoom.md)). La barra d'eines principal (§3) és
+  la peça que canviarà aquesta capçalera.
 
 ## La pantalla d'alta del primer compte
 
