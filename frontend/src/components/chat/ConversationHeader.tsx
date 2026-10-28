@@ -292,12 +292,12 @@ export function ConversationHeader({
               narrow header, measured on the header itself in rem, so a larger
               app size (#181) makes room the same way a narrower window does;
               those two never do (ADR-0068 §3). Not everything that gives way
-              is in «More actions»: it always has star and, for mail, junk
-              (where offered) and trash, and it has search, label and details
-              while their buttons are hidden; mark read or unread and «Review
-              with assistant» are not in it. At the app's 200 % in a 1025 px
-              window the reader is 360 px, 11.25 rem: the two and the subject
-              (#347). */}
+              is in «More actions»: it always has star and, for mail, archive,
+              junk (where offered) and trash, and it has search, label and
+              details while their buttons are hidden; mark read or unread and
+              «Review with assistant» are not in it. At the app's 200 % in a
+              1025 px window the reader is 360 px, 11.25 rem: the two and the
+              subject (#347). */}
           {!threadSearchOpen ? (
             <IconButton
               icon={Search}
