@@ -1,8 +1,10 @@
 import { EditorContent } from '@tiptap/react'
-import { useState } from 'react'
+import { useRef, useState, type ComponentProps } from 'react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { settings$ } from '../../states/settings'
+import { BASE_ROOT_FONT_SIZE, clampFontScale } from '../../lib/fonts'
+import { useElementAtLeast } from '../resizer/useElementWidth'
 import { accounts$ } from '../../states/accounts'
 import { keepsServerDrafts } from '../../lib/mailCapabilities'
 import { useComposer } from './useComposer'
@@ -60,6 +62,16 @@ export function Composer({ tabId }: { tabId: string }) {
   const [rewriting, setRewriting] = useState(false)
   const [sharing, setSharing] = useState(false)
   const assistantEnabled = useValue(assistantEnabled$)
+  // Below 20 rem the footer's tools wrap to rows that, at the app's 200 % in
+  // a 360 px reader, are taller than a short window leaves the composer, and
+  // Send, at their end, was cut off (#347). There the tools go at the end of
+  // what scrolls and only the actions stay at the foot. In rem, so the app's
+  // size moves the threshold; at 100 % the reader's 360 px are 22.5 rem and
+  // nothing changes. Unknown (null, in tests) reads as wide.
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const fontScale = useValue(settings$.fontScale)
+  const narrow =
+    useElementAtLeast(rootRef, (20 * BASE_ROOT_FONT_SIZE * clampFontScale(fontScale)) / 100, !!draft) === false
 
   if (!draft) return null
 
@@ -272,16 +284,45 @@ export function Composer({ tabId }: { tabId: string }) {
     }
   }
 
+  // One footer, drawn whole or, in a narrow composer, apart (below).
+  const footerProps: Omit<ComponentProps<typeof ComposerFooter>, 'part'> = {
+    rich: draft.rich,
+    sending,
+    saveStatus: error ? 'idle' : saveStatus,
+    saveError,
+    canSend,
+    onPickFiles: () => void pickAttachmentFiles(),
+    onPickInlineImages: () => void pickInlineImages(),
+    onToggleRich: toggleRich,
+    onUseTemplate: (template) => void useTemplate(template),
+    onTranslate: () => setTranslating(true),
+    onRewrite: assistantEnabled ? () => setRewriting(true) : undefined,
+    onShareLink: () => setSharing(true),
+    pgpSign: draft.pgpSign,
+    pgpEncrypt: draft.pgpEncrypt,
+    pgpPassphrase,
+    onPgpSignChange: (value) => update({ pgpSign: value }),
+    onPgpEncryptChange: (value) => update({ pgpEncrypt: value }),
+    onPgpPassphraseChange: setPgpPassphrase,
+    receipts: { read: !!draft.readReceipt, delivery: !!draft.deliveryReceipt },
+    onReceiptsChange: ({ read, delivery }) => update({ readReceipt: read, deliveryReceipt: delivery }),
+    onDiscard: () => void closeMessageTab(tabId),
+    onSubmit: () => void submit(),
+    onSchedule: (at) => void submit(at),
+    canSchedule: keepsServerDrafts(accounts.find((account) => account.id === draft.accountId)),
+  }
+
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-chat" onKeyDown={handleSendShortcut}>
+    <div ref={rootRef} className="flex flex-1 flex-col overflow-hidden bg-chat" onKeyDown={handleSendShortcut}>
       {/* Everything above the footer and its notes scrolls as one when it
           does not fit; the footer stays, with the send error and the local
           copy's status: Send and Discard never leave the composer. At the
           app's 200 % in a 360 px reader the fields and the toolbar wrap to
           more than the pane is tall, and they used to push the footer out of
-          it (#347). Where all of it fits, nothing scrolls but the body, as
-          before. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          it (#347); there the footer keeps only its actions, and its tools
+          scroll with the rest. Where all of it fits, nothing scrolls but the
+          body, as before. */}
+      <div data-composer-scroll className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <ComposerHeaderFields draft={draft} update={update} focusTo={!focusBody} />
 
         {draft.rich && editor && <ComposerToolbar editor={editor} onSetLink={setLink} />}
@@ -322,6 +363,10 @@ export function Composer({ tabId }: { tabId: string }) {
           attachments={draft.attachments}
           onRemove={(id) => update({ attachments: draft.attachments.filter((a) => a.id !== id) })}
         />
+
+        {/* Narrow, the footer's tools are the last of what scrolls; the
+            actions stay at the foot (#347). */}
+        {narrow && <ComposerFooter {...footerProps} part="tools" />}
       </div>
 
       {error && <p className="shrink-0 px-4 pb-1 text-caption font-medium text-danger">{error}</p>}
@@ -350,32 +395,7 @@ export function Composer({ tabId }: { tabId: string }) {
         />
       )}
 
-      <ComposerFooter
-        rich={draft.rich}
-        sending={sending}
-        saveStatus={error ? 'idle' : saveStatus}
-        saveError={saveError}
-        canSend={canSend}
-        onPickFiles={() => void pickAttachmentFiles()}
-        onPickInlineImages={() => void pickInlineImages()}
-        onToggleRich={toggleRich}
-        onUseTemplate={(template) => void useTemplate(template)}
-        onTranslate={() => setTranslating(true)}
-        onRewrite={assistantEnabled ? () => setRewriting(true) : undefined}
-        onShareLink={() => setSharing(true)}
-        pgpSign={draft.pgpSign}
-        pgpEncrypt={draft.pgpEncrypt}
-        pgpPassphrase={pgpPassphrase}
-        onPgpSignChange={(value) => update({ pgpSign: value })}
-        onPgpEncryptChange={(value) => update({ pgpEncrypt: value })}
-        onPgpPassphraseChange={setPgpPassphrase}
-        receipts={{ read: !!draft.readReceipt, delivery: !!draft.deliveryReceipt }}
-        onReceiptsChange={({ read, delivery }) => update({ readReceipt: read, deliveryReceipt: delivery })}
-        onDiscard={() => void closeMessageTab(tabId)}
-        onSubmit={() => void submit()}
-        onSchedule={(at) => void submit(at)}
-        canSchedule={keepsServerDrafts(accounts.find((account) => account.id === draft.accountId))}
-      />
+      <ComposerFooter {...footerProps} part={narrow ? 'actions' : 'all'} />
     </div>
   )
 }

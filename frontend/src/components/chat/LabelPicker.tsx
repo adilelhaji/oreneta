@@ -21,16 +21,25 @@ import { MenuList, MenuSeparator } from '../menu/Menu'
 export function LabelPicker({
   threadId,
   applied,
+  labelToggle: shared,
   className,
 }: {
   threadId: string
   applied: string[]
+  /**
+   * The saving state and toggle of the owner's `useLabelToggle`, when another
+   * menu puts the same labels on (the conversation header's «Label» submenu,
+   * #347): one save in flight disables the toggles in both. Without it the
+   * picker keeps its own.
+   */
+  labelToggle?: LabelToggle
   /** On the wrapper: a narrow header hides the button (#347). */
   className?: string
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
-  const labelToggle = useLabelToggle(threadId, applied)
+  const own = useLabelToggle(threadId, applied)
+  const labelToggle = shared ?? own
   const wrapRef = useRef<HTMLDivElement>(null)
   useDismissOnOutside(
     open,
@@ -69,13 +78,17 @@ export function LabelPicker({
   )
 }
 
+/** Whether a save of the labels is in flight, and the toggle that starts one. */
+export type LabelToggle = { saving: boolean; toggle: (id: string) => Promise<void> }
+
 /**
  * Saves the conversation's labels with one label turned on or off. Kept by
- * the menu's owner, not the menu: while a save is in flight the toggles stay
- * disabled, also in a menu closed and opened again, so a second toggle cannot
- * start from the set before the first.
+ * the menus' owner, not the menu: while a save is in flight the toggles stay
+ * disabled, also in a menu closed and opened again and in another menu with
+ * the same labels, so a second toggle cannot start from the set before the
+ * first.
  */
-export function useLabelToggle(threadId: string, applied: string[]) {
+export function useLabelToggle(threadId: string, applied: string[]): LabelToggle {
   const { t } = useTranslation()
   const [saving, setSaving] = useState(false)
 

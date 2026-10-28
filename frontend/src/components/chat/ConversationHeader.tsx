@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent, RefObject } from 'react'
 import {
   Archive,
@@ -67,6 +67,26 @@ import { AssistantReviewDialog } from './AssistantReviewDialog'
 
 /** Marks the «Label» submenu, drawn outside the header, as part of «More actions». */
 const ACTIONS_MENU_ATTRIBUTE = 'data-conversation-actions'
+
+/** Kept between «More actions» and the bottom edge it may not pass, in px. */
+const ACTIONS_MENU_MARGIN = 8
+
+/**
+ * The height left to `element` from its top down to the first edge that cuts
+ * it: the window's, or that of an ancestor clipping what overflows it (the
+ * reader does), in CSS px and whole pixels (#347).
+ */
+function roomBelow(element: HTMLElement, margin: number): number {
+  const clips = (overflow: string) => ['hidden', 'clip', 'auto', 'scroll'].includes(overflow)
+  let bottom = window.innerHeight
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    const style = getComputedStyle(node)
+    if (clips(style.overflowX) || clips(style.overflowY)) bottom = Math.min(bottom, node.getBoundingClientRect().bottom)
+  }
+  // Boxes are visual pixels; a style's are CSS pixels under a root zoom.
+  const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1
+  return Math.max(0, Math.floor((bottom - element.getBoundingClientRect().top - margin) / zoom))
+}
 
 // The conversation header: back/close affordances, sender info, the desktop
 // in-thread search box and the overflow actions menu (view mode, star, archive,
@@ -140,6 +160,24 @@ export function ConversationHeader({
   const labelToggle = useLabelToggle(activeThread.thread_id, activeThread.labels ?? [])
   const [senderMenu, setSenderMenu] = useState<{ x: number; y: number } | null>(null)
   const actionsMenuRef = useRef<HTMLDivElement | null>(null)
+
+  // «More actions» is no taller than the room under it: the reader clips
+  // what overflows it, and at the app's 200 % in a short window its last rows
+  // (details, «Label») were cut off while the arrow keys still reached them.
+  // It scrolls instead, and is a Tab stop as a scrolling region (#347).
+  const [actionsMenuMaxHeight, setActionsMenuMaxHeight] = useState<number | null>(null)
+  useLayoutEffect(() => {
+    if (!actionsMenuOpen) {
+      setActionsMenuMaxHeight(null)
+      return
+    }
+    const menu = actionsMenuRef.current?.querySelector<HTMLElement>('[role="menu"]')
+    if (!menu) return
+    const fit = () => setActionsMenuMaxHeight(roomBelow(menu, ACTIONS_MENU_MARGIN))
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [actionsMenuOpen])
 
   useEffect(() => {
     if (!actionsMenuOpen) return
@@ -252,10 +290,14 @@ export function ConversationHeader({
         <div className="flex shrink-0 items-center gap-1">
           {/* Every button but «Archive thread» and «More actions» gives way in a
               narrow header, measured on the header itself in rem, so a larger
-              app size (#181) makes room the same way a narrower window does.
-              Whatever gives way is in «More actions» (ADR-0068 §3, which keeps
-              those two on screen). At the app's 200 % in a 1025 px window the
-              reader is 360 px, 11.25 rem: the two and the subject (#347). */}
+              app size (#181) makes room the same way a narrower window does;
+              those two never do (ADR-0068 §3). Not everything that gives way
+              is in «More actions»: it always has star and, for mail, junk
+              (where offered) and trash, and it has search, label and details
+              while their buttons are hidden; mark read or unread and «Review
+              with assistant» are not in it. At the app's 200 % in a 1025 px
+              window the reader is 360 px, 11.25 rem: the two and the subject
+              (#347). */}
           {!threadSearchOpen ? (
             <IconButton
               icon={Search}
@@ -264,7 +306,13 @@ export function ConversationHeader({
               onClick={() => thread$.searchOpen.set(true)}
             />
           ) : (
-            <div className="hidden min-[900px]:flex w-[286px] items-center gap-1 rounded-control bg-hover px-2 py-1.5 border border-transparent focus-within:border-accent/40 focus-within:bg-chats">
+            // In the header only where it fits beside the subject, «Archive
+            // thread», details and «More actions»: from 900 px and a header
+            // of 32 rem. Otherwise the bar under the header has the search
+            // (ThreadSearchBarMobile, on the same two conditions). In rem, so
+            // the app's size (#181) moves the threshold with it; 17.875 rem
+            // is the 286 px it was at 100 % (#347).
+            <div className="hidden min-[900px]:@min-[32rem]:flex w-[17.875rem] items-center gap-1 rounded-control bg-hover px-2 py-1.5 border border-transparent focus-within:border-accent/40 focus-within:bg-chats">
               <Search size={14} className="text-secondary shrink-0" strokeWidth={1.75} />
               <input
                 ref={desktopSearchInputRef}
@@ -320,9 +368,11 @@ export function ConversationHeader({
               than as three lines inside a menu. Archiving a conversation
               should not cost two clicks and a read of five other options.
               They step aside while the thread search is open, which needs the
-              width more than they do. */}
+              width more than they do; «Archive thread» does not, like «More
+              actions» (ADR-0068 §3, #347). */}
           {!threadSearchOpen && (
             <>
+              {/* Gives way first, below 42 rem; not in the menu. */}
               {assistantEnabled && (
                 <IconButton
                   icon={Sparkles}
@@ -331,11 +381,10 @@ export function ConversationHeader({
                   className="hidden @min-[42rem]:flex"
                 />
               )}
-              {/* The two that give way first when the pane is narrow. They
-                  stay in the menu below, so nothing becomes unreachable —
-                  only less immediate. Measured on the header itself, in rem,
-                  so a larger app size (#181) makes room the same way a
-                  narrower window does. */}
+              {/* Below 24 rem, star and read state give way. Star stays in
+                  the menu below; read state is not in it. Measured on the
+                  header itself, in rem, so a larger app size (#181) makes
+                  room the same way a narrower window does. */}
               <IconButton
                 icon={Star}
                 disabled={changesBlocked}
@@ -354,23 +403,34 @@ export function ConversationHeader({
                     : markThreadUnread(activeThread.thread_id))
                 }
               />
+              {/* Next to give way, below 20 rem, with trash; the menu has
+                  both. Its toggles share one saving state with the menu's
+                  «Label» (#347). */}
+              {!isRSS && (
+                <LabelPicker
+                  threadId={activeThread.thread_id}
+                  applied={activeThread.labels ?? []}
+                  labelToggle={labelToggle}
+                  className="hidden @min-[20rem]:block"
+                />
+              )}
+            </>
+          )}
+          {/* Never gives way, to a narrow header or to the search (ADR-0068
+              §3): the mail boundary tests expect it on screen at every width
+              (#347). */}
+          {!isRSS && (
+            <IconButton
+              icon={Archive}
+              disabled={changesBlocked}
+              label={t('threads.actions.archiveThread')}
+              onClick={() => void archiveThread(activeThread.thread_id)}
+            />
+          )}
+          {!threadSearchOpen && (
+            <>
               {!isRSS && (
                 <>
-                  {/* Next to give way, with trash; the menu has both. */}
-                  <LabelPicker
-                    threadId={activeThread.thread_id}
-                    applied={activeThread.labels ?? []}
-                    className="hidden @min-[20rem]:block"
-                  />
-                  {/* Never gives way to a narrow header (ADR-0068 §3): the
-                      mail boundary tests expect it on screen at every width
-                      (#347). */}
-                  <IconButton
-                    icon={Archive}
-                    disabled={changesBlocked}
-                    label={t('threads.actions.archiveThread')}
-                    onClick={() => void archiveThread(activeThread.thread_id)}
-                  />
                   {/* Junk is filed less often than it is archived, so it gives
                       way before the others (#245); the menu below keeps it.
                       30rem is where the whole row still fits beside the back
@@ -420,11 +480,13 @@ export function ConversationHeader({
               <MenuList
                 label={t('chat.moreActions')}
                 autoFocus
+                tabStop
                 onClose={() => setActionsMenuOpen(false)}
-                // No wider than the header: the reader clips what overflows
-                // it, and at the app's 200 % 13 rem is wider than a 360 px
-                // reader (#347).
-                className="absolute end-0 top-full z-50 mt-2 w-52 max-w-[calc(100cqw-1rem)] rounded-control border border-border bg-chats p-1 shadow-overlay"
+                style={actionsMenuMaxHeight === null ? undefined : { maxHeight: actionsMenuMaxHeight }}
+                // No wider than the header, and no taller than the room under
+                // it (above): the reader clips what overflows it, and at the
+                // app's 200 % 13 rem is wider than a 360 px reader (#347).
+                className="absolute end-0 top-full z-50 mt-2 w-52 max-w-[calc(100cqw-1rem)] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-overlay"
               >
                 {/* How the conversation is shown: one of two, the one in force checked. */}
                 <MenuItem
@@ -510,10 +572,10 @@ export function ConversationHeader({
                     />
                   </>
                 )}
-                {/* The buttons a narrow header hides (#347), only while they
-                    are hidden: the same container widths as above, like the
-                    kanban board menu's filters. The menu keyboard skips rows
-                    that are not shown. */}
+                {/* Search, label and details, which a narrow header hides
+                    (#347), only while they are hidden: the same container
+                    widths as above, like the kanban board menu's filters.
+                    The menu keyboard skips rows that are not shown. */}
                 <div role="none" className={isRSS ? '@min-[16rem]:hidden' : '@min-[20rem]:hidden'}>
                   <MenuSeparator />
                   {!threadSearchOpen && (

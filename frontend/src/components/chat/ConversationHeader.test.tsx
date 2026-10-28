@@ -346,3 +346,147 @@ describe('what a narrow conversation header hides is in «More actions» (#347)'
     expect(view.getByRole('menuitem', { name: 'Label' })).toBeTruthy()
   })
 })
+
+// #347 review: the thread search must not take «Archive thread» with it (it
+// pushed «More actions» out of a narrow reader while the other buttons stepped
+// aside); «More actions» is no taller than the room under it; and the header's
+// label picker and its «Label» submenu share one save in flight.
+describe('the conversation header with the search open, a short window and labels (#347)', () => {
+  let previousLabels: ReturnType<typeof labels$.labels.peek>
+  beforeEach(() => {
+    previousLabels = labels$.labels.peek()
+    labels$.labels.set([
+      { id: 'work', name: 'Work', colour: '#2563eb', inBar: false, links: {} },
+      { id: 'review', name: 'Review', colour: '#15803d', inBar: false, links: {} },
+    ])
+  })
+  afterEach(() => {
+    cleanup()
+    labels$.labels.set(previousLabels)
+    thread$.searchOpen.set(false)
+  })
+
+  it('keeps «Archive thread» and «More actions» while the search is open; the others step aside', () => {
+    thread$.searchOpen.set(true)
+    const view = renderHeader(conversation('INBOX'))
+    for (const name of ['Archive thread', 'More actions']) {
+      const button = view.getByRole('button', { name })
+      expect(button.closest('.hidden')).toBeNull()
+    }
+    for (const name of ['Star', 'Mark as junk', 'Move to trash', 'Label'])
+      expect(view.queryByRole('button', { name })).toBeNull()
+    // In the order of the line: the search, «Archive thread», then «More actions».
+    const order = [view.getByPlaceholderText('Search thread'), ...view.getAllByRole('button')]
+    const archive = view.getByRole('button', { name: 'Archive thread' })
+    const more = view.getByRole('button', { name: 'More actions' })
+    expect(order.indexOf(archive)).toBeGreaterThan(0)
+    expect(order.indexOf(more)).toBeGreaterThan(order.indexOf(archive))
+  })
+
+  it('caps «More actions» at the room under it, down to the edge that clips it, and makes it a Tab stop', () => {
+    const realRect = HTMLElement.prototype.getBoundingClientRect
+    const rect = (top: number, bottom: number) =>
+      ({ top, bottom, left: 0, right: 200, width: 200, height: bottom - top, x: 0, y: top }) as DOMRect
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      if (this.getAttribute('role') === 'menu') return rect(300, 900)
+      if (this.hasAttribute('data-clips')) return rect(0, 500)
+      return realRect.call(this)
+    }
+    try {
+      // The window alone: its height less the menu's top and 8 px.
+      ;(window as any).happyDOM.setViewport({ width: 1024, height: 600 })
+      let view = renderHeader(conversation('INBOX'))
+      fireEvent.click(view.getByRole('button', { name: 'More actions' }))
+      let menu = view.getByRole('menu', { name: 'More actions' })
+      expect(menu.style.maxHeight).toBe('292px')
+      expect(menu.className.split(' ')).toContain('overflow-y-auto')
+      expect(menu.tabIndex).toBe(0)
+      cleanup()
+
+      // An ancestor that clips what overflows it (the reader) ends it sooner.
+      const clip = document.createElement('div')
+      clip.setAttribute('data-clips', '')
+      clip.style.overflowY = 'hidden'
+      document.body.appendChild(clip)
+      mail$.threads.set([conversation('INBOX')])
+      view = render(
+        <ConversationHeader
+          activeThread={conversation('INBOX')}
+          isRSS={false}
+          conversationMode="html"
+          setQuickConversationMode={() => {}}
+          searchMatches={[]}
+          activeSearchIndex={0}
+          goToSearchMatch={() => {}}
+          desktopSearchInputRef={createRef<HTMLInputElement>()}
+        />,
+        { container: clip },
+      )
+      fireEvent.click(view.getByRole('button', { name: 'More actions' }))
+      menu = view.getByRole('menu', { name: 'More actions' })
+      expect(menu.style.maxHeight).toBe('192px')
+      // A window resized while it is open moves the cap.
+      act(() => {
+        ;(window as any).happyDOM.setViewport({ width: 1024, height: 400 })
+        window.dispatchEvent(new Event('resize'))
+      })
+      expect(menu.style.maxHeight).toBe('92px')
+      cleanup()
+      clip.remove()
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = realRect
+      ;(window as any).happyDOM.setViewport({ width: 1024, height: 768 })
+    }
+  })
+
+  it('keeps every label toggle disabled while a save is in flight, in the picker and in «Label», closed and opened again', async () => {
+    let finish: () => void = () => {}
+    const invoke = (window as any).go.main.App.Invoke
+    ;(window as any).go.main.App.Invoke = (command: string, payload: any) => {
+      if (command !== 'labels.assign') return invoke(command, payload)
+      calls.push({ command, payload })
+      return new Promise((resolve) => {
+        finish = () => resolve({ labels: payload.label_ids })
+      })
+    }
+    const view = renderHeader(conversation('INBOX', { labels: ['review'] }))
+    const picker = view.getByRole('button', { name: 'Label' })
+    const toggles = (menu: HTMLElement) => within(menu).getAllByRole('menuitemcheckbox')
+    const disabled = (menu: HTMLElement) => toggles(menu).map((item) => item.getAttribute('aria-disabled'))
+
+    // A save from the picker.
+    fireEvent.click(picker)
+    const pickerMenu = view.getByRole('menu', { name: 'Label' })
+    await act(async () => {
+      fireEvent.click(within(pickerMenu).getByRole('menuitemcheckbox', { name: 'Work' }))
+    })
+    expect(sent('labels.assign')).toEqual([{ thread_id: 'acct#INBOX#k1', label_ids: ['review', 'work'] }])
+    expect(disabled(pickerMenu)).toEqual(['true', 'true'])
+    // Closed and opened again: still saving.
+    fireEvent.click(picker)
+    expect(view.queryByRole('menu', { name: 'Label' })).toBeNull()
+    fireEvent.click(picker)
+    expect(disabled(view.getByRole('menu', { name: 'Label' }))).toEqual(['true', 'true'])
+    fireEvent.click(picker)
+
+    // «More actions» → «Label», another menu with the same labels: the same
+    // save, so its toggles are disabled too, and a press starts nothing.
+    fireEvent.click(view.getByRole('button', { name: 'More actions' }))
+    fireEvent.click(view.getByRole('menuitem', { name: 'Label' }))
+    const submenu = view.getByRole('menu', { name: 'Label' })
+    expect(disabled(submenu)).toEqual(['true', 'true'])
+    fireEvent.click(within(submenu).getByRole('menuitemcheckbox', { name: 'Review' }))
+    expect(sent('labels.assign')).toHaveLength(1)
+
+    // The save ends: both menus take toggles again.
+    await act(async () => {
+      finish()
+    })
+    await waitFor(() => expect(disabled(view.getByRole('menu', { name: 'Label' }))).toEqual([null, null]))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.click(view.getByRole('button', { name: 'More actions' }))
+    expect(view.queryByRole('menu', { name: 'More actions' })).toBeNull()
+    fireEvent.click(picker)
+    expect(disabled(view.getByRole('menu', { name: 'Label' }))).toEqual([null, null])
+  })
+})

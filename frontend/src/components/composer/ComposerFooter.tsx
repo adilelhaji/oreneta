@@ -10,9 +10,19 @@ import { ReceiptComposeControls } from './ReceiptComposeControls'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
+/**
+ * Which part of the footer to draw: all of it, as one bar, or its tools and its
+ * actions apart. A narrow composer (the app's 200 % in a 360 px reader, #347)
+ * keeps only the actions, with Discard and Send, at its foot; the tools wrap to
+ * rows that would leave the fields no room, so they go at the end of what
+ * scrolls, after the attachments.
+ */
+export type ComposerFooterPart = 'all' | 'tools' | 'actions'
+
 // The composer's bottom action bar: attach/inline-image buttons, the rich/plain
 // toggle, autosave status and the Discard/Send buttons.
 export function ComposerFooter({
+  part = 'all',
   rich,
   sending,
   saveStatus,
@@ -38,6 +48,7 @@ export function ComposerFooter({
   onSchedule,
   canSchedule = true,
 }: {
+  part?: ComposerFooterPart
   rich: boolean
   sending: boolean
   saveStatus: SaveStatus
@@ -73,138 +84,157 @@ export function ComposerFooter({
   const { t } = useTranslation()
   const draftAutosaveFailed = t('composer.status.draftAutosaveFailed')
 
+  const tools = (
+    <>
+      <IconButton
+        icon={Paperclip}
+        iconSize={16}
+        label={t('composer.actions.attachFiles')}
+        radius="xl"
+        onClick={onPickFiles}
+      />
+      {rich && (
+        <IconButton
+          icon={ImageIcon}
+          iconSize={16}
+          label={t('composer.actions.insertInlineImage')}
+          radius="xl"
+          onClick={onPickInlineImages}
+        />
+      )}
+      <TemplateMenu onPick={onUseTemplate} />
+      {onShareLink && (
+        <IconButton
+          icon={Cloud}
+          iconSize={16}
+          label={t('cloud.title', { defaultValue: 'Share a file by link' })}
+          radius="xl"
+          onClick={onShareLink}
+        />
+      )}
+      {onRewrite && (
+        <IconButton
+          icon={Sparkles}
+          iconSize={16}
+          label={t('assistant.rewrite.title', { defaultValue: 'Rewrite with the assistant' })}
+          radius="xl"
+          onClick={onRewrite}
+        />
+      )}
+      {onTranslate && (
+        <IconButton
+          icon={Languages}
+          iconSize={16}
+          label={t('translation.draftTitle', { defaultValue: 'Translate this message' })}
+          radius="xl"
+          onClick={onTranslate}
+        />
+      )}
+      <ProtectionComposeControls
+        sign={pgpSign}
+        encrypt={pgpEncrypt}
+        passphrase={pgpPassphrase}
+        onSignChange={onPgpSignChange}
+        onEncryptChange={onPgpEncryptChange}
+        onPassphraseChange={onPgpPassphraseChange}
+      />
+      {receipts && onReceiptsChange && (
+        <ReceiptComposeControls
+          read={receipts.read}
+          delivery={receipts.delivery}
+          onReadChange={(read) => onReceiptsChange({ ...receipts, read })}
+          onDeliveryChange={(delivery) => onReceiptsChange({ ...receipts, delivery })}
+        />
+      )}
+      <button
+        onClick={onToggleRich}
+        className={`flex h-9 items-center gap-1.5 rounded-control px-2.5 text-caption font-semibold transition-colors cursor-pointer ${
+          rich ? 'bg-active text-accent-fg' : 'text-secondary hover:bg-hover'
+        }`}
+        title={rich ? t('composer.actions.switchToPlainText') : t('composer.actions.switchToRichText')}
+      >
+        <Type size={16} strokeWidth={1.75} />
+        {rich ? t('composer.modes.richText') : t('composer.modes.plainText')}
+      </button>
+    </>
+  )
+  const actions = (
+    <>
+      {saveStatus === 'saving' && (
+        <span className="flex items-center gap-1.5 text-caption text-secondary">
+          <RefreshCw size={14} className="animate-spin" strokeWidth={1.75} />
+          <span>{t('composer.status.savingDraft')}</span>
+        </span>
+      )}
+      {saveStatus === 'saved' && (
+        <span className="flex items-center gap-1.5 text-caption text-success font-medium">
+          <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+          <span>{t('composer.status.savedToServer')}</span>
+        </span>
+      )}
+      {saveStatus === 'error' && (
+        <span
+          role="alert"
+          className="max-w-full wrap-anywhere text-caption text-danger font-medium"
+          title={saveError || draftAutosaveFailed}
+        >
+          {saveError || draftAutosaveFailed}
+        </span>
+      )}
+      <button
+        onClick={onDiscard}
+        disabled={sending}
+        className="rounded-control px-4 py-2 text-xs font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer disabled:opacity-50"
+      >
+        {t('buttons.discard')}
+      </button>
+      <SendLaterMenu
+        disabled={!canSend || pgpSign || pgpEncrypt || !canSchedule}
+        title={
+          !canSchedule
+            ? t('composer.cannotScheduleGraph')
+            : pgpSign || pgpEncrypt
+              ? t('crypto.cannotSchedule')
+              : undefined
+        }
+        onSchedule={onSchedule}
+      />
+      <button
+        onClick={onSubmit}
+        disabled={!canSend}
+        title={t('composer.actions.sendWithShortcut', { shortcut: sendShortcutLabel('mod_enter') })}
+        className={`flex items-center justify-center gap-1.5 rounded-control px-5 py-2 text-xs font-bold transition-all ${
+          !canSend
+            ? 'cursor-not-allowed bg-hover text-secondary/70 shadow-none'
+            : 'bg-accent text-on-accent  hover:bg-accent-hover   cursor-pointer'
+        }`}
+      >
+        {sending ? (
+          <RefreshCw size={14} className="animate-spin" strokeWidth={1.75} />
+        ) : (
+          <Send size={14} strokeWidth={1.75} />
+        )}
+        <span>{t('buttons.send')}</span>
+      </button>
+    </>
+  )
+
+  if (part === 'tools')
+    return (
+      <div className="flex shrink-0 flex-wrap items-center gap-1 border-t border-border bg-header px-4 py-2.5 select-none">
+        {tools}
+      </div>
+    )
+  if (part === 'actions')
+    return (
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-border bg-header px-4 py-2.5 select-none">
+        {actions}
+      </div>
+    )
   return (
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-header px-4 py-2.5 select-none">
-      <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1">
-        <IconButton
-          icon={Paperclip}
-          iconSize={16}
-          label={t('composer.actions.attachFiles')}
-          radius="xl"
-          onClick={onPickFiles}
-        />
-        {rich && (
-          <IconButton
-            icon={ImageIcon}
-            iconSize={16}
-            label={t('composer.actions.insertInlineImage')}
-            radius="xl"
-            onClick={onPickInlineImages}
-          />
-        )}
-        <TemplateMenu onPick={onUseTemplate} />
-        {onShareLink && (
-          <IconButton
-            icon={Cloud}
-            iconSize={16}
-            label={t('cloud.title', { defaultValue: 'Share a file by link' })}
-            radius="xl"
-            onClick={onShareLink}
-          />
-        )}
-        {onRewrite && (
-          <IconButton
-            icon={Sparkles}
-            iconSize={16}
-            label={t('assistant.rewrite.title', { defaultValue: 'Rewrite with the assistant' })}
-            radius="xl"
-            onClick={onRewrite}
-          />
-        )}
-        {onTranslate && (
-          <IconButton
-            icon={Languages}
-            iconSize={16}
-            label={t('translation.draftTitle', { defaultValue: 'Translate this message' })}
-            radius="xl"
-            onClick={onTranslate}
-          />
-        )}
-        <ProtectionComposeControls
-          sign={pgpSign}
-          encrypt={pgpEncrypt}
-          passphrase={pgpPassphrase}
-          onSignChange={onPgpSignChange}
-          onEncryptChange={onPgpEncryptChange}
-          onPassphraseChange={onPgpPassphraseChange}
-        />
-        {receipts && onReceiptsChange && (
-          <ReceiptComposeControls
-            read={receipts.read}
-            delivery={receipts.delivery}
-            onReadChange={(read) => onReceiptsChange({ ...receipts, read })}
-            onDeliveryChange={(delivery) => onReceiptsChange({ ...receipts, delivery })}
-          />
-        )}
-        <button
-          onClick={onToggleRich}
-          className={`flex h-9 items-center gap-1.5 rounded-control px-2.5 text-caption font-semibold transition-colors cursor-pointer ${
-            rich ? 'bg-active text-accent-fg' : 'text-secondary hover:bg-hover'
-          }`}
-          title={rich ? t('composer.actions.switchToPlainText') : t('composer.actions.switchToRichText')}
-        >
-          <Type size={16} strokeWidth={1.75} />
-          {rich ? t('composer.modes.richText') : t('composer.modes.plainText')}
-        </button>
-      </div>
-      <div className="ms-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-3">
-        {saveStatus === 'saving' && (
-          <span className="flex items-center gap-1.5 text-caption text-secondary">
-            <RefreshCw size={14} className="animate-spin" strokeWidth={1.75} />
-            <span>{t('composer.status.savingDraft')}</span>
-          </span>
-        )}
-        {saveStatus === 'saved' && (
-          <span className="flex items-center gap-1.5 text-caption text-success font-medium">
-            <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-            <span>{t('composer.status.savedToServer')}</span>
-          </span>
-        )}
-        {saveStatus === 'error' && (
-          <span
-            role="alert"
-            className="max-w-full wrap-anywhere text-caption text-danger font-medium"
-            title={saveError || draftAutosaveFailed}
-          >
-            {saveError || draftAutosaveFailed}
-          </span>
-        )}
-        <button
-          onClick={onDiscard}
-          disabled={sending}
-          className="rounded-control px-4 py-2 text-xs font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer disabled:opacity-50"
-        >
-          {t('buttons.discard')}
-        </button>
-        <SendLaterMenu
-          disabled={!canSend || pgpSign || pgpEncrypt || !canSchedule}
-          title={
-            !canSchedule
-              ? t('composer.cannotScheduleGraph')
-              : pgpSign || pgpEncrypt
-                ? t('crypto.cannotSchedule')
-                : undefined
-          }
-          onSchedule={onSchedule}
-        />
-        <button
-          onClick={onSubmit}
-          disabled={!canSend}
-          title={t('composer.actions.sendWithShortcut', { shortcut: sendShortcutLabel('mod_enter') })}
-          className={`flex items-center justify-center gap-1.5 rounded-control px-5 py-2 text-xs font-bold transition-all ${
-            !canSend
-              ? 'cursor-not-allowed bg-hover text-secondary/70 shadow-none'
-              : 'bg-accent text-on-accent  hover:bg-accent-hover   cursor-pointer'
-          }`}
-        >
-          {sending ? (
-            <RefreshCw size={14} className="animate-spin" strokeWidth={1.75} />
-          ) : (
-            <Send size={14} strokeWidth={1.75} />
-          )}
-          <span>{t('buttons.send')}</span>
-        </button>
-      </div>
+      <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1">{tools}</div>
+      <div className="ms-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-3">{actions}</div>
     </div>
   )
 }

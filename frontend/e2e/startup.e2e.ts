@@ -5566,6 +5566,41 @@ for (const language of ['en', 'ar'] as const) {
     await expect(menu).toHaveCount(0)
     await expect(more).toBeFocused()
 
+    // The conversation's search, from the menu and with Ctrl/⌘+F: the bar
+    // under the header, its field focused, while «Archive thread» and «More
+    // actions» stay inside the reader and the window. The header has no room
+    // for the search beside them (it used to push «More actions» out).
+    const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+    const search = reader.getByPlaceholder(catalog['chat.searchThread'], { exact: true }).filter({ visible: true })
+    const searching = async (where: string) => {
+      await expect(search, where).toHaveCount(1)
+      await expect(search, where).toBeFocused()
+      await insideReader(search, `${where}: the field`)
+      for (const key of ['chat.closeThreadSearch', 'chat.previousMatch', 'chat.nextMatch'])
+        await insideReader(
+          reader.getByRole('button', { name: catalog[key], exact: true }).filter({ visible: true }),
+          key,
+        )
+      await insideReader(archive, `${where}: Archive thread`)
+      await insideReader(more, `${where}: More actions`)
+      // The bar is under the header, not in it.
+      expect((await boxOf(search)).y, where).toBeGreaterThanOrEqual(
+        (await boxOf(header)).y + (await boxOf(header)).height - 1,
+      )
+      await inView(page, where)
+    }
+    await page.keyboard.press('Enter')
+    await menu.getByRole('menuitem', { name: catalog['chat.searchThread'], exact: true }).click()
+    await expect(menu).toHaveCount(0)
+    await searching('the search from the menu')
+    await audit('search-200')
+    await page.keyboard.press('Escape')
+    await expect(search).toHaveCount(0)
+    await page.keyboard.press(`${mod}+KeyF`)
+    await searching('the search from Ctrl/⌘+F')
+    await page.keyboard.press('Escape')
+    await expect(search).toHaveCount(0)
+
     // The composer: Send and Discard on screen, nothing past either edge.
     await page.keyboard.press('Control+n')
     await expect(page.locator('.tiptap[contenteditable="true"]')).toHaveCount(1)
@@ -5573,6 +5608,202 @@ for (const language of ['en', 'ar'] as const) {
     await insideReader(page.getByRole('button', { name: catalog['buttons.discard'], exact: true }), 'Discard')
     await inView(page, 'the composer at 200 %, 1025 px')
     await audit('composer-200')
+    expect(errors).toEqual([])
+  })
+}
+
+// #347 in short windows, at the app's 200 % at 1025 px: «More actions» is no
+// taller than the room under it, and scrolls, so the arrow keys never land on
+// a row the reader cuts off; the composer keeps Discard and Send on screen,
+// with its tools scrolled to like its fields. 768 and 600 px high, the second
+// also in Arabic, with axe.
+for (const [height, language] of [
+  [768, 'en'],
+  [600, 'en'],
+  [600, 'ar'],
+] as const) {
+  test(`at the app's 200 % in a 1025x${height} window «More actions» and Send stay on screen: ${language} (#347)`, async ({
+    page,
+  }, info) => {
+    const catalog = language === 'ar' ? arCatalog : enCatalog
+    await page.setViewportSize({ width: 1025, height })
+    const errors = await prepareStartup(page, true, {
+      navigation: true,
+      language,
+      labels: [
+        { id: 'work', name: 'Work', colour: '#2563eb', inBar: false, links: {} },
+        { id: 'review', name: 'Review', colour: '#15803d', inBar: false, links: {} },
+      ],
+    })
+    await page.goto('/')
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    await zoomTo200(page)
+    const inView = language === 'ar' ? rtlInView : ltrInView
+    const audit = async (where: string) => {
+      await settled(page)
+      const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+      await info.attach(`axe-${where}-${height}-${language}`, {
+        body: JSON.stringify(results.violations, null, 2),
+        contentType: 'application/json',
+      })
+      expect(
+        results.violations
+          .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+          .map((violation) => `${violation.id} on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`),
+        where,
+      ).toEqual([])
+    }
+    const pageFits = () =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollHeight <= innerHeight && document.documentElement.scrollWidth <= innerWidth,
+      )
+
+    // From the keyboard: in a window this short the list's sticky rows cover
+    // the conversation's row at 200 %.
+    await page
+      .getByRole('table')
+      .getByRole('button', { name: /Pilot checklist/ })
+      .focus()
+    await page.keyboard.press('Enter')
+    const reader = page.locator('[data-message-pane]')
+    const header = reader.locator('header').first()
+    const more = header.getByRole('button', { name: catalog['chat.moreActions'], exact: true })
+    await expect(more).toBeInViewport({ ratio: 1 })
+    const readerBox = await boxOf(reader)
+    // Drawn whole inside `outer`'s box: what a clipping or scrolling box shows.
+    const shownIn = async (inner: ReturnType<Page['locator']>, outer: ReturnType<Page['locator']>, name: string) => {
+      const box = await boxOf(inner)
+      const room = await boxOf(outer)
+      expect(box.y, name).toBeGreaterThanOrEqual(room.y - 1)
+      expect(box.y + box.height, name).toBeLessThanOrEqual(room.y + room.height + 1)
+      expect(box.x, name).toBeGreaterThanOrEqual(room.x - 1)
+      expect(box.x + box.width, name).toBeLessThanOrEqual(room.x + room.width + 1)
+    }
+
+    // «More actions», from the keyboard: inside the reader, which clips it,
+    // and the window, scrolling what does not fit; a Tab stop as a scrolling
+    // region. Every row the arrows reach is drawn whole.
+    await more.focus()
+    await page.keyboard.press('Enter')
+    const menu = page.getByRole('menu', { name: catalog['chat.moreActions'], exact: true })
+    await expect(menu).toBeVisible()
+    await shownIn(menu, reader, 'the menu in the reader')
+    const menuBox = await boxOf(menu)
+    expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(Math.min(readerBox.y + readerBox.height, height))
+    expect(await menu.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
+    await expect(menu).toHaveAttribute('tabindex', '0')
+    const details = menu.getByRole('menuitemcheckbox', { name: catalog['chat.conversationDetails'], exact: true })
+    const label = menu.getByRole('menuitem', { name: catalog['labels.label'], exact: true })
+    const first = menu.getByRole('menuitemradio').first()
+    await expect(first).toBeFocused()
+    await shownIn(first, menu, 'the first row')
+    await page.keyboard.press('End')
+    await expect(details).toBeFocused()
+    await shownIn(details, menu, 'details, after End')
+    await expect(details).toBeInViewport({ ratio: 1 })
+    await page.keyboard.press('ArrowUp')
+    await expect(label).toBeFocused()
+    await shownIn(label, menu, '«Label», after ArrowUp')
+    await page.keyboard.press('Home')
+    await expect(first).toBeFocused()
+    await shownIn(first, menu, 'the first row, after Home')
+    await inView(page, `the menu at 200 %, 1025x${height}`)
+    await audit('menu-200')
+    await page.keyboard.press('Escape')
+    await expect(menu).toHaveCount(0)
+    await expect(more).toBeFocused()
+    expect(await pageFits()).toBe(true)
+
+    // The composer: Discard and Send on screen as it opens, inside the reader;
+    // the fields keep some room above them; the tools are scrolled to, and Send
+    // stays where it is meanwhile. The page does not scroll.
+    await page.keyboard.press('Control+n')
+    const editor = page.locator('.tiptap[contenteditable="true"]')
+    await expect(editor).toHaveCount(1)
+    const send = page.getByRole('button', { name: catalog['buttons.send'], exact: true })
+    const discard = page.getByRole('button', { name: catalog['buttons.discard'], exact: true })
+    for (const [button, name] of [
+      [send, 'Send'],
+      [discard, 'Discard'],
+    ] as const) {
+      await expect(button, name).toBeInViewport({ ratio: 1 })
+      await shownIn(button, reader, name)
+    }
+    // What scrolls keeps room for a field or two above the actions: 4 rem.
+    const fields = page.locator('[data-composer-scroll]')
+    expect((await boxOf(fields)).height).toBeGreaterThanOrEqual(128)
+    const to = page.getByPlaceholder(catalog['composer.placeholders.recipient'], { exact: true })
+    await expect(to).toBeFocused()
+    await to.scrollIntoViewIfNeeded()
+    await expect(to).toBeInViewport({ ratio: 1 })
+    await shownIn(to, fields, 'To')
+    const sendBox = await boxOf(send)
+    const attach = page.getByRole('button', { name: catalog['composer.actions.attachFiles'], exact: true })
+    await attach.scrollIntoViewIfNeeded()
+    await expect(attach).toBeInViewport({ ratio: 1 })
+    await shownIn(attach, fields, 'Attach files')
+    // Above Discard and Send, not under them.
+    expect((await boxOf(attach)).y + (await boxOf(attach)).height).toBeLessThanOrEqual(sendBox.y)
+    expect(await boxOf(send)).toEqual(sendBox)
+    await editor.focus()
+    await expect(editor).toBeInViewport()
+    await expect(send).toBeInViewport({ ratio: 1 })
+    await expect(discard).toBeInViewport({ ratio: 1 })
+    expect(await pageFits()).toBe(true)
+    await inView(page, `the composer at 200 %, 1025x${height}`)
+    await audit('composer-200')
+    await info.attach(`composer-200-${height}-${language}`, {
+      body: await page.screenshot({
+        path: info.outputPath(`composer-200-${height}-${language}.png`),
+        animations: 'disabled',
+      }),
+      contentType: 'image/png',
+    })
+    expect(errors).toEqual([])
+  })
+}
+
+// #347 at 100 %: the conversation's search is in the header where it fits
+// beside «Archive thread», details and «More actions» (1440 px), and under the
+// header where it does not (1025 px, a reader of about 365 px, where the
+// header's used to push «More actions» out of the reader). Either way the two
+// stay inside the reader while it is open.
+for (const width of [1440, 1025]) {
+  test(`the conversation's search, in its header or under it, keeps archive and more actions in the reader at ${width}px (#347)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 })
+    const errors = await prepareStartup(page, true, { navigation: true })
+    await page.goto('/')
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    await page
+      .getByRole('table')
+      .getByRole('button', { name: /Pilot checklist/ })
+      .click()
+    const reader = page.locator('[data-message-pane]')
+    const header = reader.locator('header').first()
+    const readerBox = await boxOf(reader)
+    const insideReader = async (locator: ReturnType<Page['locator']>, name: string) => {
+      await expect(locator, name).toBeInViewport({ ratio: 1 })
+      const box = await boxOf(locator)
+      expect(box.x, name).toBeGreaterThanOrEqual(readerBox.x - 1)
+      expect(box.x + box.width, name).toBeLessThanOrEqual(readerBox.x + readerBox.width + 1)
+    }
+    await header.getByRole('button', { name: 'Search thread', exact: true }).click()
+    const search = reader.getByPlaceholder('Search thread', { exact: true }).filter({ visible: true })
+    await expect(search).toHaveCount(1)
+    await expect(search).toBeFocused()
+    if (width === 1440) await expect(header.getByPlaceholder('Search thread', { exact: true })).toBeVisible()
+    else await expect(header.getByPlaceholder('Search thread', { exact: true })).toBeHidden()
+    await insideReader(search, 'the field')
+    await insideReader(
+      reader.getByRole('button', { name: 'Next match', exact: true }).filter({ visible: true }),
+      'Next match',
+    )
+    await insideReader(header.getByRole('button', { name: 'Archive thread', exact: true }), 'Archive thread')
+    await insideReader(header.getByRole('button', { name: 'More actions', exact: true }), 'More actions')
+    await ltrInView(page, `the search at ${width}px`)
     expect(errors).toEqual([])
   })
 }

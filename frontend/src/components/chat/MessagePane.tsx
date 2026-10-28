@@ -177,9 +177,11 @@ export function MessagePane() {
     // already open — including from inside an HTML message frame, which is
     // where focus otherwise stays.
     const frame = window.requestAnimationFrame(() => {
-      const input = window.matchMedia('(min-width: 900px)').matches
-        ? desktopThreadSearchInputRef.current
-        : mobileThreadSearchInputRef.current
+      // The one drawn: the header's field from 900 px in a header of 32 rem,
+      // the bar under it otherwise (#347). The window's width alone chose the
+      // header's at the app's 200 % in a 1025 px window, where it is hidden.
+      const header = desktopThreadSearchInputRef.current
+      const input = header && header.getClientRects().length > 0 ? header : mobileThreadSearchInputRef.current
       input?.focus()
     })
     return () => window.cancelAnimationFrame(frame)

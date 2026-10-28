@@ -191,3 +191,50 @@ describe("the conversation's search asked for from another module (#344)", () =>
     expect(pendingThreadSearch()).toBe('')
   })
 })
+
+// #347: the conversation's search has two fields, the header's and the bar's
+// under the header, and only one is drawn: the header's from 900 px in a header
+// of 32 rem, the bar's otherwise. The focus goes to the drawn one, which the
+// window's width alone does not tell: at the app's 200 % a 1025 px window has a
+// 360 px reader, where the header's is hidden.
+describe("the focus of the conversation's search (#347)", () => {
+  const realRects = HTMLElement.prototype.getClientRects
+  afterEach(() => {
+    HTMLElement.prototype.getClientRects = realRects
+  })
+  // Drawn or not, as the stylesheet would say (happy-dom has none).
+  const drawHeaderField = (drawn: boolean) => {
+    HTMLElement.prototype.getClientRects = function (this: HTMLElement) {
+      if (this.closest('header') && this.matches('input')) return (drawn ? realRects.call(this) : []) as DOMRectList
+      return realRects.call(this)
+    }
+  }
+  // The pane focuses the field in the frame after the search opens.
+  const nextFrame = () => act(async () => await new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+  const fields = (view: ReturnType<typeof render>) => {
+    const all = view.getAllByPlaceholderText('Search thread')
+    return {
+      header: all.find((input) => input.closest('header'))!,
+      bar: all.find((input) => !input.closest('header'))!,
+    }
+  }
+
+  it('goes to the bar under the header when the header does not draw its field, in a wide window', async () => {
+    drawHeaderField(false)
+    const view = render(<MessagePane />)
+    act(() => thread$.searchOpen.set(true))
+    const { header, bar } = fields(view)
+    expect(header).toBeTruthy()
+    await nextFrame()
+    expect(document.activeElement).toBe(bar)
+  })
+
+  it("goes to the header's field where it is drawn", async () => {
+    drawHeaderField(true)
+    const view = render(<MessagePane />)
+    act(() => thread$.searchOpen.set(true))
+    const { header } = fields(view)
+    await nextFrame()
+    expect(document.activeElement).toBe(header)
+  })
+})
