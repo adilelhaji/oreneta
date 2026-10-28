@@ -1852,7 +1852,7 @@ test('mail layout at 200-percent desktop zoom equivalent (1440 physical / 720 CS
   try {
     const page = await context.newPage()
     const errors = await prepareStartup(page, true, { navigation: true, theme: 'oreneta-dark' })
-    await page.goto('http://127.0.0.1:4182/')
+    await page.goto('/')
     await verifyMailBoundary(page, 720)
     expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
     expect(errors).toEqual([])
@@ -3893,7 +3893,7 @@ test('details sidebar agenda at 200-percent desktop zoom equivalent (1440 physic
     try {
       const page = await context.newPage()
       const errors = await agendaSidebarStartup(page, { theme, preferences: { session_sidebar_section_main: 'agenda' } })
-      await page.goto('http://127.0.0.1:4182/')
+      await page.goto('/')
       const panel = await openAgendaSidebar(page)
       // The remembered section, straight away.
       await expect(panel.getByRole('heading', { name: 'Agenda', exact: true })).toBeVisible()
@@ -3928,7 +3928,7 @@ for (const systemLocale of ['en-US', 'es-ES', 'ja-JP']) {
     try {
       const fresh = await context.newPage()
       const errors = await prepareStartup(fresh, true, { navigation: true, language: null })
-      await fresh.goto('http://127.0.0.1:4182/')
+      await fresh.goto('/')
       await expect(fresh.locator('html')).toHaveAttribute('lang', 'ca')
       await expect(fresh.getByTitle(caCatalog['people.title'], { exact: true })).toBeVisible()
       // Nothing was chosen, so nothing is written as a choice.
@@ -3942,7 +3942,7 @@ for (const systemLocale of ['en-US', 'es-ES', 'ja-JP']) {
 
       const saved = await context.newPage()
       const savedErrors = await prepareStartup(saved, true, { navigation: true, language: 'en' })
-      await saved.goto('http://127.0.0.1:4182/')
+      await saved.goto('/')
       await expect(saved.locator('html')).toHaveAttribute('lang', 'en')
       await expect(saved.getByTitle('People', { exact: true })).toBeVisible()
       expect(savedErrors).toEqual([])
