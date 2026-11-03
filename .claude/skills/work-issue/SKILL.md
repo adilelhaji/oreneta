@@ -1,6 +1,6 @@
 ---
 name: work-issue
-description: Takes one GitHub issue of Oreneta from start to pull request, using the project subagents. Usage: /work-issue 281.
+description: "Takes one GitHub issue of Oreneta from start to pull request, using the project subagents. Usage: /work-issue 281."
 disable-model-invocation: true
 argument-hint: <issue number>
 ---

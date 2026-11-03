@@ -12,16 +12,20 @@ const { spawnSync } = require('node:child_process')
 
 const hooks = path.join(__dirname, '..', '..', '.claude', 'hooks')
 
+// The owner's exception, if exported where the tests run, must not change them.
+const { ORENETA_ALLOW_PROTECTED: _exception, ...cleanEnv } = process.env
+
 function run(hook, input, options = {}) {
   return spawnSync('bash', [path.join(hooks, hook)], {
     input: JSON.stringify(input),
     encoding: 'utf8',
+    env: cleanEnv,
     ...options,
   })
 }
 
 function git(cwd, ...args) {
-  const result = spawnSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@example.invalid', ...args], {
+  const result = spawnSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', ...args], {
     cwd,
     encoding: 'utf8',
   })
@@ -61,6 +65,26 @@ for (const command of [
   'git branch --delete main',
   'git reset --hard origin/main',
   'git fetch origin && git push origin main',
+  'git push --force-with-lease=issue-1:abc origin issue-1',
+  'git push -fu origin issue-1',
+  'git push --mirror',
+  'git push --all origin',
+  'git push origin "main"',
+  "git push origin 'HEAD:main'",
+  'git push origin "+issue-1"',
+  "git push origin 'refs/heads/*:refs/heads/*'",
+  '(git push origin main)',
+  'git --no-pager push origin main',
+  'git commit -n -m text',
+  'git commit -nm text',
+  'git commit -m "text" --no-verify',
+  'git merge --no-verify origin/main',
+  'git branch -df main',
+  'git branch -d issue-1 main',
+  'git reset origin/main --hard',
+  'git diff --output=.claude/hooks/protect-main.sh',
+  'git log --output .claude/hooks/protect-main.sh',
+  'git fetch origin\ngit push origin main',
 ]) {
   test(`protect-main blocks: ${command}`, () => {
     const result = run('protect-main.sh', { tool_input: { command } }, { cwd: featureRepo })
@@ -77,6 +101,15 @@ for (const command of [
   'git branch -D issue-1-feature',
   'git reset --hard HEAD~1',
   'go test ./...',
+  'git push -n -u origin issue-1-feature',
+  'git push origin HEAD 2>&1',
+  'git push origin main:issue-1-feature',
+  'git push -u origin issue-1\ngit log --oneline main',
+  'git push -u origin issue-1\nrm -rf /tmp/scratch-dir',
+  'git commit -m "see git push origin main"',
+  'git commit -m "fix the -n flag"',
+  'git reset --hard origin/main-menu',
+  'git diff origin/main...HEAD',
 ]) {
   test(`protect-main allows: ${command}`, () => {
     const result = run('protect-main.sh', { tool_input: { command } }, { cwd: featureRepo })
@@ -84,12 +117,27 @@ for (const command of [
   })
 }
 
-for (const command of ['git push', 'git push origin', 'git push -u origin HEAD']) {
+for (const command of [
+  'git push',
+  'git push origin',
+  'git push -u origin HEAD',
+  'git push origin HEAD 2>&1',
+  'git push origin HEAD -u',
+  'git push origin @',
+  'git push -o ci.skip origin',
+]) {
   test(`protect-main blocks on main: ${command}`, () => {
     const result = run('protect-main.sh', { tool_input: { command } }, { cwd: mainRepo })
     assert.equal(result.status, 2, result.stderr)
   })
 }
+
+test('protect-main reads the checkout a command points at', () => {
+  for (const command of [`git -C ${mainRepo} push`, `cd ${mainRepo} && git push`]) {
+    const result = run('protect-main.sh', { tool_input: { command } }, { cwd: featureRepo })
+    assert.equal(result.status, 2, command)
+  }
+})
 
 for (const file of [
   '/repo/.env',
@@ -119,7 +167,7 @@ test('protect-paths honours the owner exception', () => {
   const result = run(
     'protect-paths.sh',
     { tool_input: { file_path: '/repo/.env' } },
-    { env: { ...process.env, ORENETA_ALLOW_PROTECTED: '1' } },
+    { env: { ...cleanEnv, ORENETA_ALLOW_PROTECTED: '1' } },
   )
   assert.equal(result.status, 0, result.stderr)
 })
@@ -131,7 +179,7 @@ test('check-on-stop checks each state once and blocks only on a failure', () => 
     const script = path.join(dir, 'scripts', 'comprobar.sh')
     const counter = path.join(dir, '.git', 'runs')
     const stop = () =>
-      run('check-on-stop.sh', {}, { cwd: dir, env: { ...process.env, CLAUDE_PROJECT_DIR: dir } })
+      run('check-on-stop.sh', {}, { cwd: dir, env: { ...cleanEnv, CLAUDE_PROJECT_DIR: dir } })
     const runs = () => fs.readFileSync(counter, 'utf8').length
     const scriptExiting = (code) => `printf x >> "${counter}"; echo the-output; exit ${code}\n`
 

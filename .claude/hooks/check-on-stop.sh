@@ -15,7 +15,9 @@ state_file="$(git rev-parse --git-path comprobar-last-state)"
 state="$({
   git rev-parse HEAD
   git diff HEAD
-  git ls-files --others --exclude-standard -z | xargs -0 git hash-object -- 2>/dev/null
+  git ls-files --others --exclude-standard -z | while IFS= read -r -d '' file; do
+    git hash-object -- "$file" 2>/dev/null
+  done
 } | git hash-object --stdin)"
 
 [ "$(cat "$state_file" 2>/dev/null)" = "$state" ] && exit 0

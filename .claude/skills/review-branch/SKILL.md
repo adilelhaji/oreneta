@@ -1,6 +1,6 @@
 ---
 name: review-branch
-description: Reviews the current Oreneta branch against origin/main before a push, with the project reviewers and the checks, and ranks the findings. Usage: /review-branch [issue number].
+description: "Reviews the current Oreneta branch against origin/main before a push, with the project reviewers and the checks, and ranks the findings. Usage: /review-branch [issue number]."
 argument-hint: [issue number]
 ---
 Review the current branch for issue `$ARGUMENTS` (if none is given, take it from the branch name `issue-<number>-...`) as someone who did not write it.

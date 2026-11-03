@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Runs on this machine the checks that CI runs (.github/workflows/test.yml).
-# It calls the same commands and adds no threshold of its own. It installs
-# nothing: a missing tool or dependency is reported as NOT RUN.
+# It calls the same commands and adds no threshold of its own. The one local
+# extra is prettier, which CLAUDE.md asks for and test.yml does not run. It
+# installs nothing: a missing tool or dependency folder is reported as NOT RUN.
+# A missing system library or SDK makes its check fail instead.
 #
 #   scripts/comprobar.sh           every area, without Docker or a browser
 #   scripts/comprobar.sh --quick   only the areas changed against origin/main,
@@ -13,7 +15,10 @@
 #            3 nothing failed, but some checks could not run here
 #
 # CI only: go-windows, linux-native, macos-native, POP3 against Dovecot, chat
-# against Prosody, the Flatpak metainfo check and the coverage artifacts.
+# against Prosody, the Flatpak metainfo check, the scan of the distributable
+# binary for inherited OAuth values, the repeat of the IDLE test and the coverage
+# artifacts. CI also fetches the translation test model: without it in
+# frontend/.translation-models, the tests that need it are skipped here.
 set -u
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root" || exit 1
@@ -28,6 +33,9 @@ case "${1:-}" in
     exit 64
     ;;
 esac
+
+# Never download a Go toolchain.
+export GOTOOLCHAIN="${GOTOOLCHAIN:-local}"
 
 passed=""
 failed=""
@@ -57,21 +65,33 @@ in_dir() {
   (cd "$dir" && "$@")
 }
 
-# `go list -m` fails when the toolchain go.mod requires is not available.
+# Not ready means the toolchain go.mod requires is not here. Any other error, such
+# as a broken go.mod, is left for `go test` to report as a failure.
 go_ready() {
-  command -v go >/dev/null 2>&1 && go list -m >/dev/null 2>&1
+  command -v go >/dev/null 2>&1 || return 1
+  local output
+  output="$(go list -m 2>&1)" && return 0
+  case "$output" in
+    *"requires go"* | *toolchain*) return 1 ;;
+  esac
+  return 0
 }
 
 # Which areas to check.
 want_policy=1 want_go=1 want_rust=1 want_frontend=1 want_mobile=1
 if [ "$mode" = "quick" ]; then
   want_policy=0 want_go=0 want_rust=0 want_frontend=0 want_mobile=0
+  # Without a base to compare with, check every area.
+  if ! git merge-base origin/main HEAD >/dev/null 2>&1; then
+    echo "comprobar.sh: no merge base with origin/main, checking every area"
+    want_go=1 want_rust=1 want_frontend=1
+  fi
   changed="$({
     git diff --name-only origin/main...HEAD 2>/dev/null
     git diff --name-only HEAD 2>/dev/null
     git ls-files --others --exclude-standard 2>/dev/null
   } | sort -u)"
-  if [ -z "$changed" ]; then
+  if [ -z "$changed" ] && [ "$want_go$want_rust$want_frontend" = "000" ]; then
     echo "comprobar.sh: nothing changed against origin/main"
     exit 0
   fi
@@ -106,7 +126,7 @@ if [ "$want_go" = "1" ]; then
     [ -d frontend/dist ] || { mkdir -p frontend/dist && touch frontend/dist/placeholder; }
     step "go test" go test -tags "$go_tags" ./...
     if [ "$mode" != "quick" ]; then
-      step "go distributable build refuses inherited OAuth" \
+      step "go distributable tests" \
         go test -tags "${go_tags:+$go_tags }distributable" -run 'OAuth|Distributable' -count=1 .
     fi
   else
@@ -167,6 +187,8 @@ if [ "$want_mobile" = "1" ]; then
     java_major="$(java -version 2>&1 | sed -nE '1s/.*version "([0-9]+).*/\1/p')"
     if [ "${java_major:-0}" -lt 21 ]; then
       skip "mobile" "CI uses Java 21, found ${java_major:-none}"
+    elif [ -z "${ANDROID_HOME:-}${ANDROID_SDK_ROOT:-}" ] && ! grep -qs '^sdk.dir=' mobile/local.properties; then
+      skip "mobile" "no Android SDK found"
     else
       step "mobile tests" ./mobile/gradlew -p mobile :shared:allTests :ui:allTests
     fi
