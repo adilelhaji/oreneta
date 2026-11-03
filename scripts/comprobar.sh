@@ -2,8 +2,8 @@
 # Runs on this machine the checks that CI runs (.github/workflows/test.yml).
 # It calls the same commands and adds no threshold of its own. The one local
 # extra is prettier, which CLAUDE.md asks for and test.yml does not run. It
-# installs nothing: a missing tool or dependency folder is reported as NOT RUN.
-# A missing system library or SDK makes its check fail instead.
+# installs nothing: a missing tool, dependency folder or Android SDK is reported
+# as NOT RUN. A missing system library or browser makes its check fail instead.
 #
 #   scripts/comprobar.sh           every area, without Docker or a browser
 #   scripts/comprobar.sh --quick   only the areas changed against origin/main,
@@ -35,7 +35,7 @@ case "${1:-}" in
 esac
 
 # Never download a Go toolchain.
-export GOTOOLCHAIN="${GOTOOLCHAIN:-local}"
+export GOTOOLCHAIN=local
 
 passed=""
 failed=""
@@ -72,7 +72,7 @@ go_ready() {
   local output
   output="$(go list -m 2>&1)" && return 0
   case "$output" in
-    *"requires go"* | *toolchain*) return 1 ;;
+    *"requires go >="* | *"toolchain not available"*) return 1 ;;
   esac
   return 0
 }

@@ -5,9 +5,10 @@
 # `git diff` and `git log`.
 #
 # It reads the command text, so it guards against mistakes, not against someone
-# determined: a command built in a variable or a path with spaces gets past it,
-# and a line of text that starts like a blocked command is blocked. Protecting
-# main on GitHub is what really enforces this.
+# determined: a command built in a variable or a path with spaces gets past it.
+# A line of text that starts like a blocked command is blocked, and so is a commit
+# message that mentions --no-verify. Protecting main on GitHub is what really
+# enforces this.
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 command_text="$(bash "$here/read-field.sh" .tool_input.command)"
 [ -z "$command_text" ] && exit 0
@@ -29,6 +30,7 @@ cd_dir=""
 check_push() {
   local dir="$1" remote_seen=0 refspec_count=0 uses_current=0 skip_next=0 arg destination
   shift
+  dir="${dir/#\~/$HOME}"
   for arg in "$@"; do
     if [ "$skip_next" = "1" ]; then
       skip_next=0
@@ -69,7 +71,9 @@ check_commit() {
   for arg in "$@"; do
     case "$arg" in
       --no-verify) block "no --no-verify" ;;
+      --message | --message=*) short_flags=0 ;;
       --*) ;;
+      -u*) ;;
       -*)
         if [ "$short_flags" = "1" ]; then
           case "$arg" in *n*) block "no --no-verify" ;; esac
@@ -78,6 +82,13 @@ check_commit() {
         fi
         ;;
     esac
+  done
+}
+
+check_merge() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in --no-verify) block "no --no-verify" ;; esac
   done
 }
 
@@ -124,9 +135,19 @@ check_segment() {
     cd_dir="${tokens[1]:-}"
     return 0
   fi
-  # The first git in the segment: later words may be a commit message.
-  while [ "$i" -lt "$count" ] && [ "${tokens[$i]}" != "git" ]; do i=$((i + 1)); done
+  # git counts only as the command itself, after a prefix that runs it. Anywhere
+  # else, as in grep or in the text of a message, it is just a word.
+  while [ "$i" -lt "$count" ]; do
+    case "${tokens[$i]}" in
+      *=* | env | command | sudo | time | exec | xargs | then | do | else | '{' | '!' | bash | sh | zsh | -c | -lc) i=$((i + 1)) ;;
+      *) break ;;
+    esac
+  done
   [ "$i" -ge "$count" ] && return 0
+  case "${tokens[$i]}" in
+    git | */git) ;;
+    *) return 0 ;;
+  esac
   i=$((i + 1))
   while [ "$i" -lt "$count" ]; do
     case "${tokens[$i]}" in
@@ -134,7 +155,7 @@ check_segment() {
         dir="${tokens[$((i + 1))]:-}"
         i=$((i + 2))
         ;;
-      -c) i=$((i + 2)) ;;
+      -c | --git-dir | --work-tree | --namespace | --config-env) i=$((i + 2)) ;;
       -*) i=$((i + 1)) ;;
       *) break ;;
     esac
@@ -144,17 +165,20 @@ check_segment() {
   local args=("${tokens[@]:$((i + 1))}")
   case "$subcommand" in
     push) check_push "${dir:-${cd_dir:-.}}" "${args[@]}" ;;
-    commit | merge) check_commit "${args[@]}" ;;
+    commit) check_commit "${args[@]}" ;;
+    merge) check_merge "${args[@]}" ;;
     branch) check_branch "${args[@]}" ;;
     reset) check_reset "${args[@]}" ;;
     diff | log) check_output_flag "${args[@]}" ;;
   esac
 }
 
-# One command per line: no quotes, no redirections of a stream to another, and
+# One command per line: continued lines joined, no quotes, no redirections, and
 # every separator turned into a line break.
+continuation=$'\\\n'
+command_text="${command_text//"$continuation"/ }"
 segments="$(printf '%s' "$command_text" |
-  sed -E "s/[0-9]*>&[0-9-]+//g; s/&>[^ ]*//g; s/[\"']//g" |
+  sed -E "s/[\"']//g; s/[0-9]*&?>>?&?[[:space:]]*[^[:space:]&|;()]*//g" |
   tr '&|();' '\n\n\n\n\n')"
 
 while IFS= read -r segment; do

@@ -67,6 +67,12 @@ for (const command of [
   'git fetch origin && git push origin main',
   'git push --force-with-lease=issue-1:abc origin issue-1',
   'git push -fu origin issue-1',
+  'git push origin main>/dev/null',
+  'git push \\\norigin main',
+  'git push \\\n--force origin issue-1',
+  '/usr/bin/git push origin main',
+  'env A=1 git push origin main',
+  'bash -c "git push origin main"',
   'git push --mirror',
   'git push --all origin',
   'git push origin "main"',
@@ -108,6 +114,12 @@ for (const command of [
   'git push -u origin issue-1\nrm -rf /tmp/scratch-dir',
   'git commit -m "see git push origin main"',
   'git commit -m "fix the -n flag"',
+  'git commit --message "fix the -n flag"',
+  'git commit -uno -m text',
+  'git merge -n issue-2',
+  'gh pr create --title "Explain why git commit -n is refused"',
+  'grep -rn "git commit -n" .claude',
+  'git commit -m "$(cat <<EOF\nDo not use git commit -n here.\nEOF\n)"',
   'git reset --hard origin/main-menu',
   'git diff origin/main...HEAD',
 ]) {
@@ -125,6 +137,12 @@ for (const command of [
   'git push origin HEAD -u',
   'git push origin @',
   'git push -o ci.skip origin',
+  'git push origin 2>/dev/null',
+  'git push origin > /tmp/out',
+  'git push 2> /dev/null',
+  'git push -u origin \\\nHEAD',
+  'git --git-dir .git push',
+  'git --work-tree . push',
 ]) {
   test(`protect-main blocks on main: ${command}`, () => {
     const result = run('protect-main.sh', { tool_input: { command } }, { cwd: mainRepo })
@@ -133,8 +151,18 @@ for (const command of [
 }
 
 test('protect-main reads the checkout a command points at', () => {
-  for (const command of [`git -C ${mainRepo} push`, `cd ${mainRepo} && git push`]) {
-    const result = run('protect-main.sh', { tool_input: { command } }, { cwd: featureRepo })
+  const fromHome = `~/${path.basename(mainRepo)}`
+  for (const command of [
+    `git -C ${mainRepo} push`,
+    `cd ${mainRepo} && git push`,
+    `git -C ${fromHome} push`,
+    `cd ${fromHome} && git push`,
+  ]) {
+    const result = run(
+      'protect-main.sh',
+      { tool_input: { command } },
+      { cwd: featureRepo, env: { ...cleanEnv, HOME: path.dirname(mainRepo) } },
+    )
     assert.equal(result.status, 2, command)
   }
 })
