@@ -62,7 +62,8 @@ Project subagents live in `.claude/agents/`. Delegate by task type:
 
 ## Workflow helpers
 
-- `/work-issue N`, `/review-branch` and `/open-pr` (`.claude/skills/`) apply the rules above in order. They never enable auto-merge.
+- `/work-issue N`, `/review-branch` and `/open-pr` (`.claude/skills/`) apply the rules above in order.
+- **Owner approval** (decided by Adil on 2026-11-03, confirmed on 2026-11-04). Adil only approves a pull request that changes the architecture or deviates from the original proposal; then stop and ask. The session merges everything else (squash) once `/review-branch` leaves no blockers and every check on GitHub has finished green. `CODEOWNERS` paths are a notice, not a block: say so in the pull request body and do not wait. Accepted ADRs and `## DECISION REQUIRED` still apply, because those are architecture and deviations.
 - `scripts/comprobar.sh` runs the local checks from CI, `--quick` only the changed areas, `--full` also Playwright and Docker. Exit code 3 means nothing failed but some checks could not run here.
 - `.claude/settings.json` and `.claude/hooks/` block pushes to main, force pushes, and writing secrets or generated catalogs, and run `--quick` when a turn ends. `.claude/rules/` holds reminders that load per folder.
 - `.gitignore` ignores `.claude/*` except `agents/`, so a new file in those folders needs `git add -f`.

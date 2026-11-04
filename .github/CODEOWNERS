@@ -1,4 +1,5 @@
-# What goes through the owner, taken from the rules in CLAUDE.md.
+# The sensitive paths, taken from the rules in CLAUDE.md. Since 2026-11-03 (decided by Adil) they
+# are a notice, not a block: Adil only approves architecture changes and deviations.
 # This only suggests reviewers until "Require review from Code Owners" is turned
 # on in the protection of main. GitHub does not let an author approve their own
 # pull request, so pull requests opened from the owner's account would then need

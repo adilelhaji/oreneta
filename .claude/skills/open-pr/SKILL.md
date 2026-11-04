@@ -17,7 +17,7 @@ Then:
 
 6. `git push -u origin <branch>`.
 7. Open the pull request ready for review, following `.github/pull_request_template.md`. Write `Closes #N` only if every acceptance criterion is met; otherwise write `Refs #N`.
-8. Do not enable auto-merge and do not merge, unless the owner asks for it.
+8. Wait for every check to finish, because `--auto` merges at once when the repository requires none. If they are green and `/review-branch` left no blockers, merge (squash). Adil decided on 2026-11-03, and confirmed on 2026-11-04, that only architecture changes and deviations from the original proposal need Adil's approval: for those, stop and ask.
 9. Return the link and say in one line what it is waiting for.
 
 If `gh` has no session, do not sign in: push the branch and return the link to create the pull request by hand, with the body ready to paste.
