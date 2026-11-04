@@ -1,0 +1,21 @@
+# What goes through the owner, taken from the rules in CLAUDE.md.
+# This only suggests reviewers until "Require review from Code Owners" is turned
+# on in the protection of main. GitHub does not let an author approve their own
+# pull request, so pull requests opened from the owner's account would then need
+# a repository rule that allows it.
+
+/CLAUDE.md                              @adilelhaji
+/.claude/                               @adilelhaji
+/.github/                               @adilelhaji
+/scripts/ci/                            @adilelhaji
+/scripts/comprobar.sh                   @adilelhaji
+
+# Architecture decisions and the parity ledger
+/docs/adr/                              @adilelhaji
+/docs/emclient-parity-acceptance.md     @adilelhaji
+/docs/emclient-parity-acceptance.json   @adilelhaji
+
+# OAuth registrations
+/oauth*.go                              @adilelhaji
+/graph_oauth*.go                        @adilelhaji
+/docs/oauth-registrations.md            @adilelhaji

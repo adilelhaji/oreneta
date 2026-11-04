@@ -59,3 +59,10 @@ Project subagents live in `.claude/agents/`. Delegate by task type:
 - Before every push, run `code-reviewer` on the diff, and `catalan-reviewer` too when Catalan text changed.
 - Subagents do not see this conversation. Pass them the issue number, the files involved and the acceptance criteria.
 - Escalate to `fable` (`/model claude-fable-5-1`) only when Opus has failed on a task twice.
+
+## Workflow helpers
+
+- `/work-issue N`, `/review-branch` and `/open-pr` (`.claude/skills/`) apply the rules above in order. They never enable auto-merge.
+- `scripts/comprobar.sh` runs the local checks from CI, `--quick` only the changed areas, `--full` also Playwright and Docker. Exit code 3 means nothing failed but some checks could not run here.
+- `.claude/settings.json` and `.claude/hooks/` block pushes to main, force pushes, and writing secrets or generated catalogs, and run `--quick` when a turn ends. `.claude/rules/` holds reminders that load per folder.
+- `.gitignore` ignores `.claude/*` except `agents/`, so a new file in those folders needs `git add -f`.
