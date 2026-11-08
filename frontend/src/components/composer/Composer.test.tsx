@@ -692,4 +692,52 @@ describe('Composer', () => {
       setSignaturePlacement('a', 'withText')
     }
   })
+
+  // #347: below 20 rem (the app's 200 % in a 360 px reader) the footer's tools
+  // wrap to rows taller than a short window leaves the composer, and Send, at
+  // their end, was cut off. There the tools are the last of what scrolls and
+  // only the actions stay at the foot; wider, one footer as before. In rem, so
+  // the app's size moves the threshold.
+  it('keeps only its actions at its foot when narrow, the tools scrolling with the fields (#347)', async () => {
+    const realRect = HTMLElement.prototype.getBoundingClientRect
+    let width = 0
+    // The composer's own box, as a stylesheet would draw it (happy-dom has none).
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      if (!this.firstElementChild?.hasAttribute('data-composer-scroll')) return realRect.call(this)
+      return { top: 0, left: 0, bottom: 600, right: width, width, height: 600, x: 0, y: 0 } as DOMRect
+    }
+    const scrolls = (name: string) =>
+      document.querySelector(`[aria-label="${name}"]`)?.closest('[data-composer-scroll]') ??
+      [...document.querySelectorAll('button')]
+        .find((button) => button.textContent === name)
+        ?.closest('[data-composer-scroll]')
+    const placed = async (px: number) => {
+      width = px
+      const tabId = openComposeTab({ to: 'x@example.com', subject: 'Hello', text: 'hi' })!
+      const view = render(<Composer tabId={tabId} />)
+      await act(async () => {})
+      const where = {
+        tools: !!scrolls('Attach files'),
+        send: !!scrolls('Send'),
+        discard: !!scrolls('Discard'),
+        attach: view.getAllByRole('button', { name: 'Attach files' }).length,
+      }
+      view.unmount()
+      return where
+    }
+    const previousScale = settings$.fontScale.peek()
+    try {
+      // 100 %: 20 rem are 320 px.
+      settings$.fontScale.set(100)
+      expect(await placed(300)).toEqual({ tools: true, send: false, discard: false, attach: 1 })
+      expect(await placed(400)).toEqual({ tools: false, send: false, discard: false, attach: 1 })
+      // 200 %: 640 px, and a 360 px reader is narrow.
+      settings$.fontScale.set(200)
+      expect(await placed(360)).toEqual({ tools: true, send: false, discard: false, attach: 1 })
+      expect(await placed(700)).toEqual({ tools: false, send: false, discard: false, attach: 1 })
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = realRect
+      settings$.fontScale.set(previousScale)
+    }
+  })
 })

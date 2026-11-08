@@ -32,11 +32,15 @@ export function QuickReplyComposer() {
       data-quick-reply
       className="p-3.5 bg-header border-t border-border z-10 flex flex-col items-center justify-center"
     >
-      <div className="flex flex-col gap-2 w-full bg-hover p-2 rounded-panel border border-border/50 shadow-sm focus-within:ring-1 focus-within:ring-accent-fg focus-within:bg-chats transition-all duration-120">
+      <div className="@container flex flex-col gap-2 w-full bg-hover p-2 rounded-panel border border-border/50 shadow-sm focus-within:ring-1 focus-within:ring-accent-fg focus-within:bg-chats transition-all duration-120">
         <QuickReplyFrom />
         <QuickReplyAttachments attachments={composerAttachments} />
 
-        <div className="flex items-end gap-2 w-full">
+        {/* One row from 16 rem. Narrower (the app's 200 % in a 360 px reader,
+            #347) the text and Send take a row of their own under the two
+            buttons, instead of the width the buttons leave, which was a
+            column a letter wide. The order stays the reading order. */}
+        <div className="flex w-full flex-wrap items-end gap-2">
           <button
             onClick={() => void pickAttachmentFiles()}
             className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-control text-secondary hover:bg-active transition-colors cursor-pointer"
@@ -60,7 +64,7 @@ export function QuickReplyComposer() {
             rows={1}
             spellCheck={spellCheck}
             dir={composer ? 'auto' : undefined}
-            className="bidi-plaintext flex-1 py-[7px] px-1 max-h-[254px] min-h-8.5 bg-transparent text-title text-primary resize-none placeholder-secondary border-none outline-none leading-5"
+            className="bidi-plaintext min-w-0 grow basis-[calc(100%-2.75rem)] @min-[16rem]:basis-0 py-[7px] px-1 max-h-[254px] min-h-8.5 bg-transparent text-title text-primary resize-none placeholder-secondary border-none outline-none leading-5"
             onKeyDown={handleComposerKeyDown}
             onPaste={handleComposerPaste}
           />

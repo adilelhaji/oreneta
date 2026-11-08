@@ -425,6 +425,33 @@ que el missatge amb `{n}` de les dreceres «Ves a l'element» de la subfinestra 
 correctament, que el diàleg es mostra en anglès i en català, i que la llengua canvia amb el diàleg obert.
 SET-02 continua `partial` i l'evidència nativa de Windows continua pendent. Cap parlant nadiu no ha
 revisat el text dels altres idiomes.
+El 2026-10-28 (#347, `docs/design/keyboard-zoom.md`), al 200 % de l'aplicació en una finestra de
+1025 px, on el lector fa 360 px (11,25 rem), la capçalera de la conversa conserva «Arxiva la
+conversa» i «Més accions» dins del lector (ADR-0068 §3), també amb la cerca a la conversa oberta:
+fins aleshores, arxivar s'hi amagava i «Més accions» acabava més enllà de la vora final del lector i
+quedava sota la tira de la barra lateral de l'aplicació (#361). La cerca oberta és a la barra de
+sota la capçalera quan la finestra fa menys de 900 px o la capçalera, menys de 34 rem, i rep el
+focus. Els botons que hi deixen espai (la cerca a la conversa, etiquetar, la paperera i els detalls)
+són al menú «Més accions» mentre estan amagats, amb les etiquetes en un submenú que comparteix el
+desament amb el botó d'etiquetar i que segueix la seva fila; el menú ja no és més ample que el
+lector ni més alt que l'espai que té a sota, i el que no hi cap s'hi desplaça. La resposta ràpida
+dona al text una fila pròpia quan el quadre fa menys de 16 rem (abans, el text feia 18 px
+d'amplada), i l'editor de missatges manté el peu, amb Envia i Descarta, a la vista, mentre la resta
+es desplaça; per sota de 20 rem, les eines del peu es desplacen amb els camps i al peu només queden
+les accions. La part de l'editor que es desplaça no ho fa mai cap als costats: la pista de Markdown
+hi és des de 900 px de finestra, com abans, i només quan la barra de format en té lloc, i el menú de plantilles no surt del peu. Al 100 %, a
+les amplades de les proves de límits, els botons de la capçalera, la resposta ràpida i l'editor es
+veuen com abans; només la cerca oberta passa a la barra de sota la capçalera quan la capçalera fa
+menys de 34 rem, com en una finestra de 1025 px. Les proves de límits, de dreta a esquerra, de zoom
+i d'axe es mantenen, i se n'hi afegeixen de noves: la comprovació de límits del correu al 200 % a
+1025 px, en clar i en fosc; la capçalera, el menú, el submenú d'etiquetes, la cerca i l'editor al
+200 % a 1025 px, en anglès i en àrab, amb axe; el menú i l'editor al 200 % en finestres de
+1025 × 768 i 1025 × 600 px, amb axe; la cerca al 100 % a 1440 i 1025 px; i unitàries del menú, de la
+cerca, de les etiquetes, del submenú i de l'editor estret. En aquest lector, el text dels missatges
+queda sota la capçalera de cada missatge i s'hi arriba desplaçant la conversa; perquè es vegi sense
+desplaçar la conversa, el propietari va decidir el 2026-10-28, a #347, compactar el lector quan és
+estret (opció B), en una PR pròpia. És una nota d'evidència: cap fila no canvia d'estat (S01-05,
+SET-27), i l'evidència nativa de Windows continua pendent.
 El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
 comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per

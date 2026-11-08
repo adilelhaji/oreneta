@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useState, type RefObject } from 'react'
 
 /**
  * The drawn width of an element (or of its parent), followed as it changes; 0
@@ -26,8 +26,30 @@ export function useElementWidth(ref: RefObject<Element | null>, ofParent = false
  * across a long list does not repaint it on every pixel.
  */
 export function useElementAtLeast(ref: RefObject<Element | null>, px: number, enabled = true): boolean | null {
+  return useAtLeast(useEffect, ref, px, enabled)
+}
+
+/**
+ * {@link useElementAtLeast}, measured before the browser paints: for a layout
+ * that moves controls when the element crosses `px` (the composer's footer,
+ * #347), so the first frame already has them where they belong.
+ */
+export function useElementAtLeastBeforePaint(
+  ref: RefObject<Element | null>,
+  px: number,
+  enabled = true,
+): boolean | null {
+  return useAtLeast(useLayoutEffect, ref, px, enabled)
+}
+
+function useAtLeast(
+  useMeasure: typeof useEffect,
+  ref: RefObject<Element | null>,
+  px: number,
+  enabled: boolean,
+): boolean | null {
   const [atLeast, setAtLeast] = useState<boolean | null>(null)
-  useEffect(() => {
+  useMeasure(() => {
     const element = ref.current
     if (!enabled || !element || typeof ResizeObserver === 'undefined') {
       setAtLeast(null)

@@ -55,7 +55,11 @@ export function TemplateMenu({ onPick }: { onPick: (template: Template) => void 
   }
 
   return (
-    <div ref={wrapRef} className="relative">
+    // Opens from its button where the footer has room for its 16 rem beside
+    // the buttons before it (21 rem); in a narrower footer (the app's 200 %
+    // in a 360 px reader, #347) from the footer's start edge, and no wider
+    // than the footer, so it stays inside the reader.
+    <div ref={wrapRef} className="relative @max-[21rem]:static">
       <IconButton
         icon={FileText}
         iconSize={16}
@@ -70,7 +74,7 @@ export function TemplateMenu({ onPick }: { onPick: (template: Template) => void 
         // The search field sits beside the menu, not in it: a menu holds only
         // items. Down from the field goes into the list.
         <div
-          className="absolute bottom-full start-0 z-50 mb-2 w-64 rounded-control border border-border bg-chats p-1 shadow-overlay"
+          className="absolute bottom-full start-0 z-50 mb-2 w-64 max-w-[100cqw] rounded-control border border-border bg-chats p-1 shadow-overlay"
           {...menuSurfaceProps}
         >
           {stored.length === 0 && (
