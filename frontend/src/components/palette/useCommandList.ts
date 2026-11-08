@@ -73,6 +73,7 @@ import {
   toggleStarWithUndo,
   markUnreadWithUndo,
 } from '../../states/mail'
+import { documentTabOf } from '../chat/activeConversation'
 import { compose$, openComposeTab, openReplyInFullEditor, closeMessageTab } from '../../states/compose'
 import { RAIL_SHORTCUT_IDS, type ShortcutId } from '../../lib/shortcuts'
 import type { Command, CommandArea } from './paletteCommands'
@@ -116,6 +117,10 @@ export function useCommandList(): Command[] {
   const accounts = useValue(accounts$)
   const folders = useValue(mail$.folders)
   const activeTab = useValue(compose$.activeTab)
+  const tabs = useValue(compose$.tabs)
+  // A reader or compose tab covers the conversation: the selection is not what
+  // is on screen, so no command acts on it (#374, as the hotkeys in #365).
+  const documentTab = !!documentTabOf(tabs, activeTab)
   const updatesSupported = useValue(update$.status.supported)
   const activeModule = useValue(ui$.module)
   const quiet = useQuietState().quiet
@@ -219,7 +224,7 @@ export function useCommandList(): Command[] {
         // #344). Then, as Ctrl/⌘+F in mail, the open conversation's search,
         // or else the top band's.
         run: run(() => {
-          const visible = !!selectedThread && (!activeBoardId || !!kanban$.paneThreadId.peek())
+          const visible = !!selectedThread && !documentTab && (!activeBoardId || !!kanban$.paneThreadId.peek())
           // Out of mail the conversation pane is not mounted yet: it opens
           // the search once it shows the conversation. Asked before mail is
           // shown, so it does not depend on when the pane renders.
@@ -419,8 +424,9 @@ export function useCommandList(): Command[] {
           )),
     ]
 
-    // Actions on the open conversation — only when one is on screen.
-    if (selectedThread && (!activeBoardId || !!kanban$.paneThreadId.peek())) {
+    // Actions on the open conversation — only when one is on screen, not under
+    // a reader or compose tab.
+    if (selectedThread && !documentTab && (!activeBoardId || !!kanban$.paneThreadId.peek())) {
       list.push(
         {
           id: 'reply.focus',
@@ -623,6 +629,7 @@ export function useCommandList(): Command[] {
     accounts,
     folders,
     activeTab,
+    documentTab,
     activeModule,
     quiet,
     syncing,

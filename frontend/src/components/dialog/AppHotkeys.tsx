@@ -54,9 +54,10 @@ import {
 } from '../../lib/shortcuts'
 
 // Whether the conversation pane (and thus its in-thread search) is on screen.
-// Only mail draws it: in another module a thread chosen in mail is not shown.
+// Only mail draws it: in another module a thread chosen in mail is not shown,
+// and a reader or compose tab covers it (#374).
 function threadSearchVisible(): boolean {
-  if (ui$.module.peek() !== 'mail' || !ui$.selectedThread.peek()) return false
+  if (ui$.module.peek() !== 'mail' || !ui$.selectedThread.peek() || documentTabShowing()) return false
   return !kanban$.activeBoardId.peek() || !!kanban$.paneThreadId.peek()
 }
 
@@ -164,8 +165,20 @@ function mailConversationShowing(): boolean {
 function removingKeyFocusAllowed(): boolean {
   const el = document.activeElement
   if (ui$.module.peek() !== 'mail') return false
-  // The list stays the target under a tab; the rest is the conversation's.
-  return inThreadList(el) || (!documentTabShowing() && (inConversation(el) || bodyFocused()))
+  // The list stays the target under a tab, but only through a row, whose id
+  // focusedRowIsOtherThread checks: a control in the list (folder switcher, Load
+  // more) would reach the selection under the tab (#374). The rest is the conversation's.
+  if (documentTabShowing()) return inThreadList(el) && listTargetUnderTab(el)
+  return inThreadList(el) || inConversation(el) || bodyFocused()
+}
+
+// Under a reader or compose tab, which focus in the thread list may reach the
+// selection (#374): a row (focusedRowIsOtherThread checks its id), anything
+// while a bulk selection is the target (its action bar), and on a board, where
+// activeThreadId() already follows the open card and the card's drag wrapper,
+// the row's parent, holds focus.
+function listTargetUnderTab(el: Element | null): boolean {
+  return !!kanban$.activeBoardId.peek() || selectedBulkItems().length > 0 || !!el?.closest('[data-thread-row]')
 }
 
 // A list row carries its conversation's id. Opening an RSS row from the Starred
@@ -205,6 +218,8 @@ function deleteKeyFocusAllowed(withConversation = false): boolean {
   if (ui$.module.peek() !== 'mail') return false
   const el = document.activeElement
   if (inThreadList(el)) {
+    // Under a reader or compose tab only a row is a target (#374).
+    if (documentTabShowing() && !listTargetUnderTab(el)) return false
     threadListDeleteScope = true
     return true
   }

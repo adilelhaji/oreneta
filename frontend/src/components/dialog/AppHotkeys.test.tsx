@@ -9,9 +9,11 @@ import {
   type ShortcutScheme,
 } from '../../lib/shortcuts'
 import { mail$ } from '../../states/mail'
-import { ui$, toggleBulkSelection } from '../../states/ui'
+import { ui$, toggleBulkSelection, selectedBulkItems } from '../../states/ui'
 import { compose$ } from '../../states/compose'
 import { kanban$ } from '../../states/kanban'
+import { accounts$ } from '../../states/accounts'
+import { thread$ } from '../../states/thread'
 import type { MessageTab } from '../../types'
 import { MenuList } from '../menu/Menu'
 import { MenuItem } from '../menu/MenuItem'
@@ -674,6 +676,26 @@ describe('Delete outside the conversation list', () => {
     })
   }
 
+  for (const { name, init } of guarded) {
+    it(`${name} from a list control that is not a row, under a reader tab, leaves the selection alone (#374)`, async () => {
+      compose$.tabs.set([readerTab()])
+      compose$.activeTab.set('reader-1')
+      const view = render(
+        <>
+          <AppHotkeys />
+          <section data-region="content" data-thread-list>
+            <button id="load-more">Load more</button>
+          </section>
+        </>,
+      )
+      const control = view.container.querySelector<HTMLElement>('#load-more')!
+      control.focus()
+      fireEvent.keyDown(control, init)
+      await nextTick()
+      expect(acted()).toEqual([])
+    })
+  }
+
   for (const { name, init, command } of guarded.slice(0, 2)) {
     it(`${name} on a board acts on the open card although focus is on another card`, async () => {
       kanban$.activeBoardId.set('board-1')
@@ -701,6 +723,125 @@ describe('Delete outside the conversation list', () => {
     fireEvent.keyDown(row('row-1'), { key: 'e' })
     await nextTick()
     expect(calls.filter((command) => command === 'mail.archive')).toHaveLength(1)
+  })
+
+  it('on a board, a drag wrapper around the row holding focus still acts on the open card (#374)', async () => {
+    kanban$.activeBoardId.set('board-1')
+    kanban$.paneThreadId.set('acc:inbox:thread:2')
+    compose$.tabs.set([readerTab()])
+    compose$.activeTab.set('reader-1')
+    const view = render(
+      <>
+        <AppHotkeys />
+        <section data-region="content" data-thread-list>
+          <div id="wrapper" tabIndex={0}>
+            <div data-thread-row="acc:inbox:thread:1">
+              <button>Card</button>
+            </div>
+          </div>
+        </section>
+      </>,
+    )
+    const wrapper = view.container.querySelector<HTMLElement>('#wrapper')!
+    wrapper.focus()
+    fireEvent.keyDown(wrapper, { key: 'e' })
+    await nextTick()
+    expect(calls).toContain('mail.archive')
+    calls.length = 0
+    setShortcutOverrides(SHORTCUT_SCHEMES.outlook)
+    fireEvent.keyDown(wrapper, { key: 'Delete' })
+    await nextTick()
+    expect(calls).toContain('mail.delete')
+  })
+
+  it('with a bulk selection, focus on a list control that is not a row still reaches it under a reader tab (#374)', async () => {
+    compose$.tabs.set([readerTab()])
+    compose$.activeTab.set('reader-1')
+    toggleBulkSelection(bulkItem(2) as never)
+    const view = render(
+      <>
+        <AppHotkeys />
+        <section data-region="content" data-thread-list>
+          <button id="bulk-bar">Mark read</button>
+        </section>
+      </>,
+    )
+    const bar = view.container.querySelector<HTMLElement>('#bulk-bar')!
+    bar.focus()
+    fireEvent.keyDown(bar, { key: 'e' })
+    await nextTick()
+    expect(calls).toContain('mail.archive')
+    calls.length = 0
+    if (selectedBulkItems().length === 0) toggleBulkSelection(bulkItem(2) as never)
+    setShortcutOverrides(SHORTCUT_SCHEMES.outlook)
+    fireEvent.keyDown(bar, { key: 'Delete' })
+    await nextTick()
+    expect(calls.length).toBeGreaterThan(0)
+  })
+
+  describe('conversation keys under a reader tab (#374)', () => {
+    const fire = (init: KeyboardEventInit) => fireEvent.keyDown(document.body, init)
+    const counters = () => ({
+      reply: ui$.replyFocus.peek(),
+      search: thread$.searchFocus.peek(),
+      global: ui$.globalSearchFocus.peek(),
+      tabs: compose$.tabs.peek().length,
+    })
+    beforeEach(() => {
+      accounts$.set([
+        {
+          id: 'acc',
+          email: 'me@example.com',
+          display_name: 'Me',
+          provider: 'imap',
+          auth_type: 'password',
+          imap_host: 'imap.example.com',
+          imap_port: 993,
+          smtp_host: 'smtp.example.com',
+          smtp_port: 465,
+          tls: true,
+          conversation_html: false,
+          load_remote_images: false,
+        },
+      ])
+    })
+    afterEach(() => {
+      thread$.searchOpen.set(false)
+      accounts$.set([])
+    })
+
+    for (const kind of ['reader', 'compose'] as const) {
+      it(`Ctrl+E, Ctrl+F and r leave the covered conversation alone under a ${kind} tab`, () => {
+        compose$.tabs.set([{ ...readerTab(), id: 't-1', kind }])
+        compose$.activeTab.set('t-1')
+        render(<AppHotkeys />)
+        const before = counters()
+        fire({ key: 'e', ctrlKey: true })
+        fire({ key: 'r' })
+        expect(counters()).toEqual(before)
+        fire({ key: 'f', ctrlKey: true })
+        const after = counters()
+        expect(after.search).toBe(before.search)
+        expect(after.global).toBe(before.global + 1)
+      })
+    }
+
+    for (const kind of ['', 'thread'] as const) {
+      it(`still act with ${kind ? 'a thread tab' : 'no tab'}`, () => {
+        if (kind) {
+          compose$.tabs.set([{ ...readerTab(), id: 't-1', kind }])
+          compose$.activeTab.set('t-1')
+        }
+        render(<AppHotkeys />)
+        const before = counters()
+        fire({ key: 'r' })
+        expect(ui$.replyFocus.peek()).toBe(before.reply + 1)
+        fire({ key: 'f', ctrlKey: true })
+        expect(thread$.searchFocus.peek()).toBe(before.search + 1)
+        fire({ key: 'e', ctrlKey: true })
+        expect(compose$.tabs.peek().length).toBe(before.tabs + 1)
+      })
+    }
   })
 
   it('a bulk selection is the target of a thread action with focus on a row', async () => {
