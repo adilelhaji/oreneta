@@ -187,9 +187,14 @@ describe('the task lists that come with an account (ADR-0070)', () => {
       })
       const view = render(<TasksView />)
       const notice = 'The list Feina of me@corp.example was added on its own when Oreneta was updated.'
-      await waitFor(() => expect(view.queryByText(notice)).not.toBeNull())
+      // Wait on the state first, then read the DOM once it has rendered: a
+      // waitFor that re-queries the whole view on every mutation starves the
+      // render it is waiting for (#334).
+      await waitFor(() => expect(tasks$.accountLists.get()[0]?.notified).toBe(false))
       await waitFor(() => expect(tasks$.syncing.get()).toBe(false))
+      await waitFor(() => expect(view.queryByText(notice)).not.toBeNull())
       fireEvent.click(button(view, 'OK'))
+      await waitFor(() => expect(tasks$.accountLists.get()[0]?.notified).toBe(true))
       await waitFor(() => expect(view.queryByText(notice)).toBeNull())
       expect(calls.find((c) => c.command === 'tasks.acknowledgeAccountList')!.payload).toEqual({
         account: 'acc',
@@ -202,6 +207,7 @@ describe('the task lists that come with an account (ADR-0070)', () => {
       await waitFor(() => expect(view.queryByText('Remove it')).not.toBeNull())
       fireEvent.click(button(view, 'Remove it'))
       await waitFor(() => expect(calls.some((c) => c.command === 'tasks.declineAccountList')).toBe(true))
+      await waitFor(() => expect(tasks$.items.get()).toEqual([]))
       await waitFor(() => expect(view.queryByText('Informe')).toBeNull())
       await waitFor(() => expect(view.queryByText(/Add a list/)).not.toBeNull())
       await settled()
