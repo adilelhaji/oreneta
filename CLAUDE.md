@@ -58,7 +58,8 @@ Project subagents live in `.claude/agents/`. Delegate by task type:
 
 - Before every push, run `code-reviewer` on the diff, and `catalan-reviewer` too when Catalan text changed.
 - Subagents do not see this conversation. Pass them the issue number, the files involved and the acceptance criteria.
-- Escalate to `fable` (`/model claude-fable-5-1`) only when Opus has failed on a task twice.
+- **Model policy** (decided by Adil on 2026-11-09 for all his repositories, brought here on 2026-11-10, #385). Large or delicate work runs on Opus at high effort. Fable (`claude-fable-5-2`) only for an issue labelled `modelo:fable`, set by hand on the most demanding work with the reason written in the issue, for example something Opus has already failed twice. Opus stands in when Fable is unavailable or out of quota. Raise the effort before changing the model.
+- The repository sets the effort, not whoever opens the session: `.claude/settings.json` → `modelSettings` (Fable and Opus high, Sonnet medium). Each subagent declares its own effort in its file.
 
 ## Workflow helpers
 
