@@ -13,7 +13,7 @@ Work on issue `$ARGUMENTS`. `CLAUDE.md` holds the rules and the subagent table; 
    - An architecture change needs an accepted ADR first. Shell work follows ADR-0068, ADR-0069 and ADR-0070, in the order of ADR-0068 §9.
    - An owner decision gets a `## DECISION REQUIRED` comment on the issue, with options and a recommendation. Stop that part and carry on with what does not depend on it.
 5. **Implement**: pick the subagent from the table in `CLAUDE.md` and pass it the issue number, the files and the acceptance criteria, since it does not see this conversation. Write a test for each acceptance criterion first and confirm that it fails.
-6. **Check**: run `scripts/comprobar.sh`. Exit code 3 means some checks could not run on this machine: say which ones and leave them to CI.
+6. **Check**: run `scripts/comprobar.sh`. Exit code 3 means some checks could not run on this machine: say which ones (CI is paused since 2026-11-12, so nobody else will run them: name them in the pull request).
 7. **Review**: run `/review-branch` and fix what blocks.
 8. **Open the pull request**: run `/open-pr`.
 

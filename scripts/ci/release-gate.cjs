@@ -1,5 +1,8 @@
 'use strict'
 
+// While CI is paused (decided by Adil on 2026-11-12, see CLAUDE.md), test.yml no longer runs on
+// push, so a run started by hand on main (workflow_dispatch) at the same SHA also counts.
+const VERIFYING_EVENTS = ['push', 'workflow_dispatch']
 const REQUIRED_JOBS = ['go', 'go-windows', 'rust', 'frontend', 'mobile', 'integration', 'workflow-policy']
 
 async function verifyRelease({ github, owner, repo, sha, tag, allowMissingTag = false }) {
@@ -10,12 +13,11 @@ async function verifyRelease({ github, owner, repo, sha, tag, allowMissingTag = 
     workflow_id: 'test.yml',
     head_sha: sha,
     branch: 'main',
-    event: 'push',
     per_page: 100,
   })
   // Do not fall back to an older green run after a newer failure or rerun.
   const runs = data.workflow_runs.filter(run =>
-    run.head_sha === sha && run.head_branch === 'main' && run.event === 'push' &&
+    run.head_sha === sha && run.head_branch === 'main' && VERIFYING_EVENTS.includes(run.event) &&
     run.path === '.github/workflows/test.yml')
   runs.sort((a, b) => b.run_number - a.run_number || b.run_attempt - a.run_attempt)
   const run = runs[0]

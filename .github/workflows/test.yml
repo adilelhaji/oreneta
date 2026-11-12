@@ -1,9 +1,16 @@
+# PAUSED since 2026-11-12: Adil decided to stop GitHub Actions until the app is in production, so
+# that it does not spend minutes. It no longer runs on its own, only by hand (Actions → test → Run
+# workflow, on main before a release: scripts/ci/release-gate.cjs accepts that run). Locally, the
+# same checks are scripts/comprobar.sh. To turn it back on, restore these triggers and the required
+# checks in the protection of main:
+#   on:
+#     push:
+#       branches: [main]
+#     pull_request:
 name: test
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   workflow-policy:
