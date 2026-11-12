@@ -22,7 +22,7 @@ function fixture() {
         listWorkflowRuns: async args => {
           assert.equal(args.head_sha, SHA)
           assert.equal(args.branch, 'main')
-          assert.equal(args.event, 'push')
+          assert.equal(args.event, undefined)
           assert.equal(args.workflow_id, 'test.yml')
           return { data: { workflow_runs: state.runs } }
         },
@@ -52,8 +52,14 @@ test('accepts a completed main run with all suites on the release SHA', async ()
   assert.equal((await check()).sha, SHA)
 })
 
+test('accepts a run started by hand on main while CI is paused', async () => {
+  const { state, check } = fixture()
+  state.runs[0].event = 'workflow_dispatch'
+  assert.equal((await check()).sha, SHA)
+})
+
 for (const patch of [
-  { head_sha: OTHER }, { head_branch: 'feature' }, { event: 'pull_request' },
+  { head_sha: OTHER }, { head_branch: 'feature' }, { event: 'pull_request' }, { event: 'schedule' },
   { path: '.github/workflows/other.yml' }, { status: 'in_progress' },
   { conclusion: 'failure' }, { conclusion: 'cancelled' },
 ]) {
